@@ -18,7 +18,10 @@ function readDotenv(): Record<string, string> {
 			if (idx === -1) continue;
 			const key = trimmed.slice(0, idx).trim();
 			let val = trimmed.slice(idx + 1).trim();
-			if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+			if (
+				(val.startsWith('"') && val.endsWith('"')) ||
+				(val.startsWith("'") && val.endsWith("'"))
+			) {
 				val = val.slice(1, -1);
 			}
 			out[key] = val;
@@ -36,38 +39,37 @@ const normalizedBase = rawBase
 	: '/';
 
 export default defineConfig({
-	base: normalizedBase,
 	plugins: [
-        openapiPlugin({
-        // OpenAPI info section
-        info: {
-            title: 'Scorpion API',
-            version: '2.0.0',
-            description: 'Documentation for the Scorpion API'
-        },
-        // OpenAPI servers configuration
-        servers: [
-            { url: 'https://scorpion.bi.denbi.de', description: 'Production' },
-            { url: 'http://localhost:5173', description: 'Development' }
-        ],
-        // Path to shared schema definitions
-        baseSchemasPath: 'src/lib/openapi/schemas.ts',
-        // Additional YAML files to include
-        yamlFiles: ['src/lib/extra-specs.yaml'],
-        // Path prefix for all routes
-        prependPath: '',
-        // Glob patterns to include
-        include: ['src/routes/**/{+server,+page.server}.{js,ts}'],
-        // Glob patterns to exclude
-        exclude: ['**/node_modules/**', '**/.svelte-kit/**'],
-        // Whether to fail on JSDoc parsing errors
-        failOnErrors: false,
-        // Output path for the spec file during build
-        outputPath: 'static/openapi.json',
-        // Debounce delay in milliseconds for file watching
-        debounceMs: 200
-        }),
-        tailwindcss(), 
-        sveltekit()
-    ]
+		openapiPlugin({
+			// OpenAPI info section
+			info: {
+				title: 'Scorpion API',
+				version: '2.0.0',
+				description: 'Documentation for the Scorpion API'
+			},
+			// OpenAPI servers configuration
+			servers: [
+				{ url: 'https://scorpion.bi.denbi.de', description: 'Production' },
+				{ url: 'http://localhost:5173', description: 'Development' }
+			],
+			// Path to shared schema definitions
+			baseSchemasPath: 'src/lib/openapi/schemas.ts',
+			// Additional YAML files to include
+			yamlFiles: ['src/lib/extra-specs.yaml'],
+			// Path prefix for all routes
+			prependPath: normalizedBase.slice(0, -1),
+			// Glob patterns to include
+			include: ['src/routes/**/{+server,+page.server}.{js,ts}'],
+			// Glob patterns to exclude
+			exclude: ['**/node_modules/**', '**/.svelte-kit/**'],
+			// Whether to fail on JSDoc parsing errors
+			failOnErrors: false,
+			// Output path for the spec file during build
+			outputPath: 'static/openapi.json',
+			// Debounce delay in milliseconds for file watching
+			debounceMs: 200
+		}),
+		tailwindcss(),
+		sveltekit()
+	]
 });

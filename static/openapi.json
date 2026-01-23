@@ -1,13 +1,13 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "My API",
-    "version": "1.0.0",
-    "description": "My API Description"
+    "title": "Scorpion API",
+    "version": "2.0.0",
+    "description": "Documentation for the Scorpion API"
   },
   "servers": [
     {
-      "url": "https://api.example.com",
+      "url": "https://scorpion.bi.denbi.de",
       "description": "Production"
     },
     {
@@ -16,7 +16,7 @@
     }
   ],
   "paths": {
-    "/api/users": {
+    "/denbi/api/users": {
       "get": {
         "summary": "Get all users",
         "tags": [
