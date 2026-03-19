@@ -1,0 +1,16 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Service",
+	"description": "Schema for a service object",
+	"type": "object",
+	"properties": {
+		"identifier": {
+			"type": "string"
+		},
+		"name": {
+			"type": "string"
+		}
+	},
+	"required": ["identifier", "name"],
+	"additionalProperties": false
+}

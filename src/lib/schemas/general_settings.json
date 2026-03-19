@@ -1,0 +1,14 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Maturity Model Schema",
+	"description": "Schema for a maturity model object",
+	"type": "object",
+	"properties": {
+		"Name": {
+			"type": "string"
+		},
+		"Mail Relay": {
+			"type": "string"
+		}
+	}
+}

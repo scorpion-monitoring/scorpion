@@ -61,10 +61,6 @@
 	});
 </script>
 
-<svelte:head>
-	<title>API Documentation</title>
-</svelte:head>
-
 <div class="swagger-container">
 	<div id="swagger-ui-container" bind:this={containerElement}></div>
 </div>

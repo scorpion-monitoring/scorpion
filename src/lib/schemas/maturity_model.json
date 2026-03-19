@@ -1,0 +1,28 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Maturity Model Schema",
+	"description": "Schema for a maturity model object",
+	"type": "object",
+	"properties": {
+		"name": {
+			"type": "string"
+		},
+		"domain": {
+			"type": "string"
+		},
+		"topic": {
+			"type": "string"
+		},
+		"description": {
+			"type": "string"
+		},
+		"levels": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		}
+	},
+	"required": ["topic"],
+	"additionalProperties": false
+}

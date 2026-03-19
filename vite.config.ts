@@ -44,8 +44,9 @@ export default defineConfig({
 			// OpenAPI info section
 			info: {
 				title: 'Scorpion API',
-				version: '2.0.0',
-				description: 'Documentation for the Scorpion API'
+				version: '1.0.0',
+				description:
+					'Documentation for the Scorpion API <br><a target="_blank" href="./openapi.json">openapi.json</a>'
 			},
 			// OpenAPI servers configuration
 			servers: [

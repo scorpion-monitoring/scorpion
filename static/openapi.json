@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Scorpion API",
-    "version": "2.0.0",
-    "description": "Documentation for the Scorpion API"
+    "version": "1.0.0",
+    "description": "Documentation for the Scorpion API <br><a target=\"_blank\" href=\"./openapi.json\">openapi.json</a>"
   },
   "servers": [
     {
@@ -16,11 +16,50 @@
     }
   ],
   "paths": {
-    "/denbi/api/users": {
+    "/denbi/api/v1/services": {
       "get": {
-        "summary": "Get all users",
+        "summary": "Get all services",
         "tags": [
-          "Users"
+          "V1 Endpoints"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "service",
+            "description": "Service abbreviation for filtering",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "description": "Provider abbreviation for filtering",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Page number for pagination (default is 0)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "description": "Number of items per page (default is 1000)",
+            "schema": {
+              "type": "integer"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -30,7 +69,300 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/User"
+                    "$ref": "#/components/schemas/ServiceResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/denbi/api/v1/providers": {
+      "get": {
+        "summary": "Get all providers",
+        "tags": [
+          "V1 Endpoints"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "is_member",
+            "description": "Filter providers by membership status",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Page number for pagination (default is 0)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "description": "Number of items per page (default is 1000)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/denbi/api/v1/measurements": {
+      "get": {
+        "summary": "Get all measurements",
+        "tags": [
+          "V1 Endpoints"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "service",
+            "required": true,
+            "description": "Service abbreviation to filter measurements",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "indicators",
+            "description": "Indicators abbreviation to filter measurements",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "description": "Start date to filter measurements",
+            "schema": {
+              "type": "string",
+              "format": "datetime"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stop",
+            "description": "Stop date to filter measurements",
+            "schema": {
+              "type": "string",
+              "format": "datetime"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Page number for pagination (default is 0)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "description": "Number of items per page (default is 1000)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MeasurementResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new measurement",
+        "tags": [
+          "V1 Endpoints"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "service",
+            "required": true,
+            "description": "Service abbreviation to associate with the measurement",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Measurement"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Measurement"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/denbi/api/v1/indicators": {
+      "get": {
+        "summary": "Get all indicators",
+        "tags": [
+          "V1 Endpoints"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category",
+            "description": "Category abbreviation to filter indicators",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "service",
+            "description": "Service abbreviation to filter indicators",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Page number for pagination (default is 0)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "description": "Number of items per page (default is 1000)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KPIResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/denbi/api/v1/categories": {
+      "get": {
+        "summary": "Get all categories",
+        "tags": [
+          "V1 Endpoints"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Page number for pagination (default is 0)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "description": "Number of items per page (default is 1000)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryResponse"
                   }
                 }
               }
@@ -42,33 +374,374 @@
   },
   "components": {
     "schemas": {
-      "User": {
+      "CategoryResponse": {
         "type": "object",
         "required": [
-          "id",
-          "email"
+          "metadata",
+          "result"
         ],
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Unique user identifier"
+          "metadata": {
+            "type": "object",
+            "required": [
+              "currentPage",
+              "pageSize",
+              "totalPages",
+              "totalCount"
+            ],
+            "properties": {
+              "currentPage": {
+                "type": "integer",
+                "description": "Current page number"
+              },
+              "pageSize": {
+                "type": "integer",
+                "description": "Number of items per page"
+              },
+              "totalPages": {
+                "type": "integer",
+                "description": "Total number of pages"
+              },
+              "totalCount": {
+                "type": "integer",
+                "description": "Total number of items"
+              }
+            }
           },
-          "email": {
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category",
+              "description": "Array of items of type T"
+            }
+          }
+        }
+      },
+      "KPIResponse": {
+        "type": "object",
+        "required": [
+          "metadata",
+          "result"
+        ],
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "required": [
+              "currentPage",
+              "pageSize",
+              "totalPages",
+              "totalCount"
+            ],
+            "properties": {
+              "currentPage": {
+                "type": "integer",
+                "description": "Current page number"
+              },
+              "pageSize": {
+                "type": "integer",
+                "description": "Number of items per page"
+              },
+              "totalPages": {
+                "type": "integer",
+                "description": "Total number of pages"
+              },
+              "totalCount": {
+                "type": "integer",
+                "description": "Total number of items"
+              }
+            }
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Indicator",
+              "description": "Array of items of type T"
+            }
+          }
+        }
+      },
+      "MeasurementResponse": {
+        "type": "object",
+        "required": [
+          "metadata",
+          "result"
+        ],
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "required": [
+              "currentPage",
+              "pageSize",
+              "totalPages",
+              "totalCount"
+            ],
+            "properties": {
+              "currentPage": {
+                "type": "integer",
+                "description": "Current page number"
+              },
+              "pageSize": {
+                "type": "integer",
+                "description": "Number of items per page"
+              },
+              "totalPages": {
+                "type": "integer",
+                "description": "Total number of pages"
+              },
+              "totalCount": {
+                "type": "integer",
+                "description": "Total number of items"
+              }
+            }
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Measurement",
+              "description": "Array of items of type T"
+            }
+          }
+        }
+      },
+      "ProviderResponse": {
+        "type": "object",
+        "required": [
+          "metadata",
+          "result"
+        ],
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "required": [
+              "currentPage",
+              "pageSize",
+              "totalPages",
+              "totalCount"
+            ],
+            "properties": {
+              "currentPage": {
+                "type": "integer",
+                "description": "Current page number"
+              },
+              "pageSize": {
+                "type": "integer",
+                "description": "Number of items per page"
+              },
+              "totalPages": {
+                "type": "integer",
+                "description": "Total number of pages"
+              },
+              "totalCount": {
+                "type": "integer",
+                "description": "Total number of items"
+              }
+            }
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provider",
+              "description": "Array of items of type T"
+            }
+          }
+        }
+      },
+      "ServiceResponse": {
+        "type": "object",
+        "required": [
+          "metadata",
+          "result"
+        ],
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "required": [
+              "currentPage",
+              "pageSize",
+              "totalPages",
+              "totalCount"
+            ],
+            "properties": {
+              "currentPage": {
+                "type": "integer",
+                "description": "Current page number"
+              },
+              "pageSize": {
+                "type": "integer",
+                "description": "Number of items per page"
+              },
+              "totalPages": {
+                "type": "integer",
+                "description": "Total number of pages"
+              },
+              "totalCount": {
+                "type": "integer",
+                "description": "Total number of items"
+              }
+            }
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Service",
+              "description": "Array of items of type T"
+            }
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
             "type": "string",
-            "format": "email",
-            "description": "User email address"
+            "description": "Full category name"
+          }
+        }
+      },
+      "Indicator": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Full indicator name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the indicator"
+          },
+          "selected": {
+            "type": "boolean",
+            "description": "Whether the indicator is selected for display"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "necessity"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "necessity": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Measurement": {
+        "type": "object",
+        "required": [
+          "kpi",
+          "date",
+          "value"
+        ],
+        "properties": {
+          "kpi": {
+            "type": "string",
+            "description": "KPI abbreviation"
+          },
+          "date": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Date of the measurement"
+          },
+          "value": {
+            "type": "number",
+            "description": "Value of the measurement"
+          }
+        }
+      },
+      "Provider": {
+        "type": "object",
+        "required": [
+          "abbreviation",
+          "name"
+        ],
+        "properties": {
+          "abbreviation": {
+            "type": "string",
+            "description": "Provider abbreviation"
           },
           "name": {
             "type": "string",
-            "description": "User full name"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Account creation timestamp"
+            "description": "Provider name"
           }
         }
+      },
+      "Service": {
+        "type": "object",
+        "required": [
+          "abbreviation",
+          "name",
+          "category",
+          "provider",
+          "license",
+          "consortia",
+          "stage"
+        ],
+        "properties": {
+          "abbreviation": {
+            "type": "string",
+            "description": "Service abbreviation"
+          },
+          "name": {
+            "type": "string",
+            "description": "Service name"
+          },
+          "category": {
+            "type": "string",
+            "description": "Service category"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Service provider"
+          },
+          "license": {
+            "type": "string",
+            "description": "Service license"
+          },
+          "consortia": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "abbreviation",
+                "name"
+              ],
+              "properties": {
+                "abbreviation": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "List of consortia associated with the service"
+          },
+          "stage": {
+            "type": "string",
+            "description": "Service stage"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
       }
     }
   }

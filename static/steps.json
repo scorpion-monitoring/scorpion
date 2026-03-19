@@ -1,0 +1,109 @@
+[
+    {
+        "title": "Please provide basic information about your service.",
+        "fields": [
+            {
+                "label": "Service Icon",
+                "type": "image",
+                "mapping": {
+                    "jsonPath": "icon"
+                }
+            },
+            {
+                "label": "Service Slug",
+                "type": "text",
+                "mapping": {
+                    "jsonPath": "shortName"
+                }
+            },
+            {
+                "label": "Service Name",
+                "type": "text",
+                "mapping": {
+                    "jsonPath": "name"
+                }
+            },
+            {
+                "label": "Service License",
+                "type": "license",
+                "mapping": {
+                    "jsonPath": "license"
+                }
+            },
+            {
+                "label": "Lifecycle Stage",
+                "type": "select",
+                "mapping": {
+                    "jsonPath": "metadata.stage",
+                    "options": [
+                        { "value": "DEV", "label": "Development" },
+                        { "value": "DEMO", "label": "Demonstrator" },
+                        { "value": "PROD", "label": "Production" }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "title": "Please provide information about the service provision.",
+        "fields": [
+            {
+                "label": "Service Provider",
+                "type": "provider",
+                "mapping": {
+                    "jsonPath": "provider"
+                }
+            },
+            {
+                "label": "Service Center",
+                "type": "multi-select",
+                "mapping": {
+                    "jsonPath": "consortia",
+                    "options": [
+                        {
+                            "label": "Bielefeld-Gießen Resource Center for Microbial Bioinformatics (BiGi)",
+                            "value": "BiGi"
+                        },
+                        {
+                            "label": "Bioinformatics for Proteomics (BioInfra.Prot)",
+                            "value": "BioInfra.Prot"
+                        },
+                        {
+                            "label": "Center for Biological Data (BioData)",
+                            "value": "BioData"
+                        },
+                        {
+                            "label": "Center for Integrative Bioinformatics (CIBI)",
+                            "value": "CIBI"
+                        },
+                        {
+                            "label": "de.NBI Systems Biology Service Center (de.NBI-SysBio)",
+                            "value": "de.NBI-SysBio"
+                        },
+                        {
+                            "label": "German Crop BioGreenformatics Network (GCBN)",
+                            "value": "GCBN"
+                        },
+                        {
+                            "label": "Heidelberg Center for Human Bioinformatics (HD-HuB)",
+                            "value": "HD-HuB"
+                        },
+                        {
+                            "label": "RNA Bioinformatics Center (RBC)",
+                            "value": "RBC"
+                        },
+                        {
+                            "label": "Associated Partners",
+                            "value": "associated"
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "title": "Please configure a KPI set for your service.",
+        "component": "kpi-set",
+        "jsonPath": "."
+    }
+]

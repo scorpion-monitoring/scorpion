@@ -1,0 +1,24 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Maturity Model Schema",
+	"description": "Schema for a maturity model object",
+	"type": "object",
+	"properties": {
+		"Endpoint": {
+			"type": "string"
+		},
+		"Region": {
+			"type": "string"
+		},
+		"Bucket": {
+			"type": "string"
+		},
+		"Access Key ID": {
+			"type": "string"
+		},
+		"Secret Access Key": {
+			"type": "string",
+			"description": "password"
+		}
+	}
+}

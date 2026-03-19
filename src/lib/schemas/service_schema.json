@@ -1,0 +1,45 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Service",
+	"description": "Schema for a service object",
+	"type": "object",
+	"properties": {
+		"category": {
+			"type": "string"
+		},
+		"shortName": {
+			"type": "string"
+		},
+		"name": {
+			"type": "string"
+		},
+		"license": {
+			"type": "string"
+		},
+		"metadata": {
+			"type": "object",
+			"description": "Arbitrary metadata for the service",
+			"additionalProperties": true
+		},
+		"optionalKpis": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			},
+			"description": "List of optional KPIs for the service"
+		},
+		"provider": {
+			"type": "string",
+			"description": "Abbreviation of the service provider",
+			"additionalProperties": true
+		},
+		"consortia": {
+			"type": "array",
+			"items": {
+				"$ref": "organization_schema.json"
+			}
+		}
+	},
+	"required": ["category", "shortName", "name", "license", "metadata", "provider", "consortia"],
+	"additionalProperties": false
+}

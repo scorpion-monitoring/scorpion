@@ -1,0 +1,22 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Maturity Model Schema",
+	"description": "Schema for a maturity model object",
+	"type": "object",
+	"properties": {
+		"OIDC Providers": {
+			"type": "array",
+			"items": {
+				"$ref": "oidc_provider"
+			}
+		},
+		"Local Accounts": {
+			"type": "string",
+			"enum": ["yes", "no"]
+		},
+		"Backup": {
+			"type": "object",
+			"$ref": "backup"
+		}
+	}
+}

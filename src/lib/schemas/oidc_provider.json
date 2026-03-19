@@ -1,0 +1,23 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Maturity Model Schema",
+	"description": "Schema for a maturity model object",
+	"type": "object",
+	"properties": {
+		"Display Icon": {
+			"type": "string"
+		},
+		"Name": {
+			"type": "string"
+		},
+		"Client ID": {
+			"type": "string"
+		},
+		"Client Secret": {
+			"type": "string"
+		},
+		"Specification URL": {
+			"type": "string"
+		}
+	}
+}
