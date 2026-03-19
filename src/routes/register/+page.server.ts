@@ -11,7 +11,7 @@ import { SESSION_TTL_MS } from '$lib/server/constants';
 export const load: PageServerLoad = async () => {
 	const securitySettings = await db.select().from(settings).where(eq(settings.key, 'security'));
 	return {
-		allowLocal: (securitySettings[0].value as { 'Local Accounts': any })['Local Accounts'] === 'yes'
+		allowLocal: securitySettings.length > 0 ? (securitySettings[0].value as { 'Local Accounts': any })['Local Accounts'] === 'yes' : true
 	};
 };
 

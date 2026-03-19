@@ -4,17 +4,34 @@ import { db } from './db';
 import { settings } from './db/schema';
 import { eq } from 'drizzle-orm';
 
-const mailRelay = ((await db
-	.select()
-	.from(settings)
-	.where(
-		eq(settings.key, 'general')
-	))[0] as { value: { 'Mail Relay': string } })?.value['Mail Relay'] as string;;
+let transporterPromise: Promise<nodemailer.Transporter> | null = null;
 
-const transporter = nodemailer.createTransport({
-	host: mailRelay,
-	port: 25
-});
+async function getTransporter() {
+	if (transporterPromise) {
+		return transporterPromise;
+	}
+
+	transporterPromise = (async () => {
+		const generalSettings = (await db
+			.select()
+			.from(settings)
+			.where(eq(settings.key, 'general')))[0] as
+			| { value?: { 'Mail Relay'?: string } }
+			| undefined;
+
+		const mailRelay = generalSettings?.value?.['Mail Relay'];
+		if (!mailRelay) {
+			throw new Error('Missing "Mail Relay" in general settings');
+		}
+
+		return nodemailer.createTransport({
+			host: mailRelay,
+			port: 25
+		});
+	})();
+
+	return transporterPromise;
+}
 
 export async function sendMail(
 	type: 'html' | 'plain',
@@ -26,10 +43,11 @@ export async function sendMail(
 		body: string;
 	}
 ) {
-	await transporter.verify();
+	try {
+		const transporter = await getTransporter();
+		await transporter.verify();
 
-	if (type === 'plain') {
-		try {
+		if (type === 'plain') {
 			await transporter.sendMail({
 				to: options.to,
 				from: options.from,
@@ -37,11 +55,7 @@ export async function sendMail(
 				subject: options.subject,
 				text: options.body
 			});
-		} catch (error) {
-			console.error(error);
-		}
-	} else {
-		try {
+		} else {
 			await transporter.sendMail({
 				to: options.to,
 				from: options.from,
@@ -49,8 +63,8 @@ export async function sendMail(
 				subject: options.subject,
 				html: options.body
 			});
-		} catch (error) {
-			console.error(error);
 		}
+	} catch (error) {
+		console.error(error);
 	}
 }

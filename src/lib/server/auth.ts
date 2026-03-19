@@ -118,6 +118,8 @@ export function generateUserId() {
 }
 
 export async function registerUser(username: string, email: string, password: string) {
+	const isFirstUser = (await db.select().from(table.user).limit(1)).length === 0;
+
 	const existingUser = await db
 		.select()
 		.from(table.user)
@@ -142,7 +144,8 @@ export async function registerUser(username: string, email: string, password: st
 		id: userId,
 		username,
 		email,
-		approved: false, // New users require admin approval
+		approved: isFirstUser, // New users require admin approval
+		role: isFirstUser ? 'Admin' : 'User', // First user is admin
 		createdAt: new Date().toUTCString()
 	} as any);
 

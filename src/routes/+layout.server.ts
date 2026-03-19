@@ -16,8 +16,8 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 		const JWT_SECRET_BYTES = new TextEncoder().encode(JWT_SECRET);
 		const { payload } = await (jose as any).jwtVerify(token, JWT_SECRET_BYTES);
 
-		const userIcon = await db
-			.select({ icon: user.icon })
+		const userDetail = await db
+			.select({ icon: user.icon, approved: user.approved })
 			.from(user)
 			.where(eq(user.id, (payload as any).userId));
 
@@ -25,7 +25,8 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 			user: {
 				id: (payload as any).userId ?? null,
 				username: (payload as any).username ?? null,
-				icon: userIcon[0]?.icon ?? null
+				icon: userDetail[0]?.icon ?? null,
+				approved: userDetail[0]?.approved ?? null
 			}
 		};
 	} catch (err) {

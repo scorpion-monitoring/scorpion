@@ -133,20 +133,29 @@
 						class="space-y-2 rounded border p-2"
 						style="border-color: color-mix(in oklab, var(--color-base-content) 20%, #0000);"
 					>
-						{#each Object.keys(settings[key]) as objKey}
+					<!-- <pre>{key}: {JSON.stringify(Object.keys(Schemas.getObjectFromSchema(securitySettingsSchema.properties[key]['$ref'])), null, 2)}</pre> -->
+						{#await Schemas.getObjectFromSchema((securitySettingsSchema.properties[key as keyof typeof securitySettingsSchema.properties] as { '$ref': string })['$ref'])}
+							<span>Loading schema...</span>
+						{:then emptyObj}
+						{#each Object.keys(emptyObj) as objKey}
 							<div class="grid grid-cols-[1fr_3fr] gap-4">
 								<span class="label mb-auto">{objKey}</span>
 								{#if objKey === 'Secret Access Key'}
 									<input type="password" class="input w-full" bind:value={settings[key][objKey]} />
-								{:else if typeof settings[key][objKey] === 'string'}
+								{:else if typeof emptyObj[objKey] === 'string'}
 									<input class="input w-full" bind:value={settings[key][objKey]} />
-								{:else if typeof settings[key][objKey] === 'number'}
+								{:else if typeof emptyObj[objKey] === 'number'}
 									<input type="number" class="input w-full" bind:value={settings[key][objKey]} />
 								{:else}
 									<pre>{JSON.stringify(settings[key][objKey], null, 2)}</pre>
 								{/if}
 							</div>
 						{/each}
+						{:catch error}
+							<span class="text-error">Error loading schema: {error.message}</span>
+							<pre>{JSON.stringify(error, null, 2)}</pre>
+						{/await}
+						
 					</div>
 				{/if}
 			</div>

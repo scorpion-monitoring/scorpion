@@ -36,11 +36,11 @@
 	}
 
 	async function saveConsortia() {
-		// await fetch(resolve("/api/consortia"), {
-		//     method: "POST",
-		//     headers: { "Content-Type": "application/json" },
-		//     body: JSON.stringify(consortia)
-		// });
+		await fetch(resolve("/api/consortia"), {
+		    method: "POST",
+		    headers: { "Content-Type": "application/json" },
+		    body: JSON.stringify(consortia)
+		});
 		refreshAll();
 	}
 

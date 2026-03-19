@@ -5,9 +5,7 @@
 	import Header from '$lib/components/layout/Header.svelte';
 	import Footer from '$lib/components/layout/Footer.svelte';
 
-	import { page } from '$app/state';
-
-	let { children } = $props();
+	let { children, data } = $props();
 
 	let prefersDark = $state(false);
 
@@ -33,8 +31,8 @@
 </svelte:head>
 
 <main class="min-h-svh">
-	{#if page.data.user}
-		<Header bind:prefersdark={prefersDark} user={page.data.user} />
+	{#if data.user && data.user.approved}
+		<Header bind:prefersdark={prefersDark} user={data.user} />
 	{/if}
 	{@render children()}
 </main>

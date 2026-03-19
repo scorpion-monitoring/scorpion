@@ -21,7 +21,7 @@ export const load: PageServerLoad = async () => {
 						})
 					)
 				: [],
-		allowLocal: (securitySettings[0].value as { 'Local Accounts': any })['Local Accounts'] === 'yes'
+		allowLocal: securitySettings.length > 0 ? (securitySettings[0].value as { 'Local Accounts': any })['Local Accounts'] === 'yes' : true
 	};
 };
 

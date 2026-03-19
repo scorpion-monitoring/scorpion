@@ -1,13 +1,31 @@
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://YOUR_DB_USER:YOUR_DB_PASSWORD@db:5432/YOUR_DB_NAME
+      ORIGIN: ${ORIGIN:-https://your-domain.example.com}
+      PROTOCOL_HEADER: ${PROTOCOL_HEADER:-x-forwarded-proto}
+      HOST_HEADER: ${HOST_HEADER:-x-forwarded-host}
+      PORT_HEADER: ${PORT_HEADER:-x-forwarded-port}
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+    ports:
+      - 80:80
   db:
     image: postgres
     restart: always
     ports:
       - 5432:5432
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: change_me_for_local_dev
-      POSTGRES_DB: local
+      POSTGRES_USER: YOUR_DB_USER
+      POSTGRES_PASSWORD: YOUR_DB_PASSWORD
+      POSTGRES_DB: YOUR_DB_NAME
     volumes:
       - pgdata:/var/lib/postgresql
 volumes:

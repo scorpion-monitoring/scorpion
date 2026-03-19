@@ -39,13 +39,13 @@
 		? dark_background
 		: light_background}); background-size: 40% auto; background-repeat: no-repeat; background-position: 0% 25%;"
 >
-	<div class="card w-full max-w-2xl bg-base-100 shadow-xl">
+	<div class="card w-full {data.allowLocal && data.oidc_providers.length > 0 ? 'max-w-2xl' : 'max-w-96'} bg-base-100 shadow-xl">
 		<div class="card-body">
 			<!-- <h2 class="card-title mb-6">Login / Register</h2> -->
 			<div class="flex gap-4">
 				<!-- Login Form -->
 				{#if data.allowLocal}
-					<form method="post" action="?/login" use:enhance class="h-fit w-1/2 space-y-4">
+					<form method="post" action="?/login" use:enhance class="h-fit {data.oidc_providers.length > 0 ? 'w-1/2' : 'w-full'} space-y-4">
 						<div>
 							<label for="username" class="label">
 								<span class="label-text">Username</span>
@@ -77,6 +77,7 @@
 				{#if data.oidc_providers.length > 0}
 					<div class="flex {data.allowLocal ? 'w-1/2' : 'w-full'} items-center justify-center">
 						{#if data.oidc_providers.length === 1}
+						{#if data.oidc_providers[0]['Display Icon']} <!-- If the single provider has a display icon, show it as a button -->
 							<button
 								class="hover:cursor-pointer"
 								onclick={() => handleLogin(data.oidc_providers[0])}
@@ -87,12 +88,29 @@
 									alt={data.oidc_providers[0]['Name']}
 								/>
 							</button>
+							{:else} <!-- Otherwise, show a regular button with the provider's name -->
+							<button
+								class="btn w-full btn-outline"
+								onclick={() => handleLogin(data.oidc_providers[0])}
+							>
+								{data.oidc_providers[0].Name}
+							</button>
+						{/if}
 						{:else}
 							<div class="grid grid-cols-2">
 								{#each data.oidc_providers as provider}
+								{#if provider['Display Icon']} <!-- Only show providers with a display icon -->
 									<button class="hover:cursor-pointer" onclick={() => handleLogin(provider)}>
 										<img class="w-full" src={provider['Display Icon']} alt={provider['Name']} />
 									</button>
+									{:else}
+									<button
+										class="btn w-full btn-outline"
+										onclick={() => handleLogin(provider)}
+									>
+										{provider.Name}
+									</button>
+								{/if}
 								{/each}
 							</div>
 						{/if}
