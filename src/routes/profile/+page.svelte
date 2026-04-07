@@ -5,7 +5,7 @@
 	import { resolve } from '$app/paths';
 	// @ts-ignore
 	import SvgIcon from '@jamescoyle/svelte-icon/src/svg-icon.svelte';
-	import { mdiContentCopy } from '@mdi/js';
+	import { mdiClose, mdiContentCopy } from '@mdi/js';
 
 	let { data }: PageProps = $props();
 	const pageSize: number = 5;
@@ -173,7 +173,7 @@
 								onclick={removeIcon}
 								title="Remove icon"
 							>
-								×
+								<SvgIcon type="mdi" path={mdiClose} class="h-3 w-3" />
 							</button>
 						{/if}
 					</div>
@@ -330,33 +330,19 @@
 							<div class="flex justify-between space-x-2">
 								<button
 									class="btn btn-sm"
-									onclick={() => (groupPage = Math.max(groupPage - 1, 0))}
-									disabled={groupPage === 0}>Previous</button
+									onclick={() => (userGroupPage = Math.max(userGroupPage - 1, 0))}
+									disabled={userGroupPage === 0}>Previous</button
 								>
 								<span
-									>Page {groupPage + 1} / {Math.ceil(
-										(data.providers ?? []).filter((p) => {
-											const q = (groupSearch || '').trim().toLowerCase();
-											return (
-												q === '' ||
-												(p.name || '').toLowerCase().includes(q) ||
-												(p.abbreviation || '').toLowerCase().includes(q)
-											);
-										}).length / pageSize
+									>Page {userGroupPage + 1} / {Math.ceil(
+										(user.providers ?? []).length / pageSize
 									)}</span
 								>
 								<button
 									class="btn btn-sm"
-									onclick={() => (groupPage = groupPage + 1)}
-									disabled={(groupPage + 1) * pageSize >=
-										(data.providers ?? []).filter((p) => {
-											const q = (groupSearch || '').trim().toLowerCase();
-											return (
-												q === '' ||
-												(p.name || '').toLowerCase().includes(q) ||
-												(p.abbreviation || '').toLowerCase().includes(q)
-											);
-										}).length}>Next</button
+									onclick={() => (userGroupPage = userGroupPage + 1)}
+									disabled={(userGroupPage + 1) * pageSize >=
+										(user.providers ?? []).length}>Next</button
 								>
 							</div>
 							{#if user.providers?.length === 0}
