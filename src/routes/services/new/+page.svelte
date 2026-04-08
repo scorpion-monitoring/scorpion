@@ -40,6 +40,8 @@
 			<li>Add Service</li>
 		</ul>
 	</div>
-	<Console />
+	{#if typeof window !== 'undefined' && window.location.hostname === 'localhost'}
+		<Console />
+	{/if}
 	<Questionnaire onfinish={storeService} />
 </div>

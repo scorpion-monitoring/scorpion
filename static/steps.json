@@ -59,44 +59,9 @@
                 "type": "multi-select",
                 "mapping": {
                     "jsonPath": "consortia",
-                    "options": [
-                        {
-                            "label": "Bielefeld-Gießen Resource Center for Microbial Bioinformatics (BiGi)",
-                            "value": "BiGi"
-                        },
-                        {
-                            "label": "Bioinformatics for Proteomics (BioInfra.Prot)",
-                            "value": "BioInfra.Prot"
-                        },
-                        {
-                            "label": "Center for Biological Data (BioData)",
-                            "value": "BioData"
-                        },
-                        {
-                            "label": "Center for Integrative Bioinformatics (CIBI)",
-                            "value": "CIBI"
-                        },
-                        {
-                            "label": "de.NBI Systems Biology Service Center (de.NBI-SysBio)",
-                            "value": "de.NBI-SysBio"
-                        },
-                        {
-                            "label": "German Crop BioGreenformatics Network (GCBN)",
-                            "value": "GCBN"
-                        },
-                        {
-                            "label": "Heidelberg Center for Human Bioinformatics (HD-HuB)",
-                            "value": "HD-HuB"
-                        },
-                        {
-                            "label": "RNA Bioinformatics Center (RBC)",
-                            "value": "RBC"
-                        },
-                        {
-                            "label": "Associated Partners",
-                            "value": "associated"
-                        }
-                    ]
+                    "config": {
+                        "endpoint": "/api/consortia"
+                    }
                 }
             }
         ]

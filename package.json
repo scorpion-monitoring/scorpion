@@ -67,6 +67,7 @@
 		"plotly.js-dist": "^3.3.1",
 		"postgres": "^3.4.7",
 		"sigma": "^3.0.2",
+		"svelecte": "^5.3.0",
 		"swagger-ui-dist": "^5.31.0"
 	}
 }
