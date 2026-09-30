@@ -1,0 +1,9 @@
+{
+  "name": "@scorpion/mod-b",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./public": "./public.ts"
+  }
+}

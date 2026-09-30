@@ -10,16 +10,29 @@
   },
   "scripts": {
     "typecheck": "tsc -b && pnpm --filter @scorpion/web check",
-    "check": "pnpm typecheck",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck",
     "db:generate": "node scripts/not-yet.ts M1 db:generate",
     "scorpion": "node scripts/not-yet.ts M1 scorpion",
     "test:contract": "node scripts/not-yet.ts M8 test:contract",
     "test": "node scripts/test.ts",
-    "test:e2e": "pnpm --filter @scorpion/web test:e2e"
+    "test:e2e": "pnpm --filter @scorpion/web test:e2e",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@scorpion/eslint-plugin": "workspace:*",
     "@types/node": "^24.19.0",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.23.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.57.1",
     "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.3"
   }
 }

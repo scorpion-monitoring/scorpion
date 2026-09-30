@@ -1,0 +1,19 @@
+{
+  "name": "@scorpion/eslint-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@types/estree": "^1.0.9",
+    "eslint": "^10.11.0"
+  },
+  "peerDependencies": {
+    "eslint": "^10.0.0"
+  }
+}

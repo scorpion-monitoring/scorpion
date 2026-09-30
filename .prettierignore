@@ -1,0 +1,13 @@
+pnpm-lock.yaml
+**/.svelte-kit/
+**/build/
+**/dist/
+**/coverage/
+**/test-results/
+**/playwright-report/
+
+# Source documents, kept verbatim as delivered.
+CLAUDE.md
+docs/FEATURES.md
+docs/architecture.md
+docs/implementation.md

@@ -1,0 +1,12 @@
+{
+  "name": "@scorpion/mod-a",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./public": "./public.ts"
+  },
+  "dependencies": {
+    "@scorpion/mod-b": "workspace:*"
+  }
+}

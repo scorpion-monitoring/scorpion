@@ -3,6 +3,7 @@ packages:
   - packages/*
   - modules/*
   - profiles
+  - tools/*
 
 # Install fails if Node or pnpm do not match `engines` in the root package.json.
 engineStrict: true
