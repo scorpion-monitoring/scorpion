@@ -64,12 +64,15 @@ describe('migrations', () => {
 
     const report = await kernel.migrate();
 
-    expect(Object.keys(report.applied)).toEqual(['fixture.b', 'fixture.a']);
+    expect(Object.keys(report.applied)).toEqual(['kernel', 'fixture.b', 'fixture.a']);
     expect(await tables(url)).toEqual([
       'fixture_a_note',
       'fixture_b_thing',
       'kernel_migrations_fixture_a',
       'kernel_migrations_fixture_b',
+      'kernel_migrations_kernel',
+      'kernel_outbox',
+      'kernel_outbox_delivery',
     ]);
   });
 
@@ -87,6 +90,7 @@ describe('migrations', () => {
     const url = await server.createDatabase();
     const kernel = await kernelFor('ab', url);
     expect(await kernel.pendingMigrations()).toEqual([
+      { module: 'kernel', pending: 1 },
       { module: 'fixture.b', pending: 1 },
       { module: 'fixture.a', pending: 1 },
     ]);
@@ -97,7 +101,8 @@ describe('migrations', () => {
   it('does not migrate a module that is not in the profile', async () => {
     const url = await server.createDatabase();
     await (await kernelFor('b-only', url)).migrate();
-    expect(await tables(url)).toEqual(['fixture_b_thing', 'kernel_migrations_fixture_b']);
+    expect(await tables(url)).not.toContain('fixture_a_note');
+    expect(await tables(url)).toContain('fixture_b_thing');
   });
 });
 
@@ -112,7 +117,7 @@ describe('two processes starting at the same time', () => {
       (sum, report) => sum + Object.values(report.applied).reduce((a, b) => a + b, 0),
       0,
     );
-    expect(appliedTotal).toBe(2); // one migration each for fixture.b and fixture.a, in one process
+    expect(appliedTotal).toBe(3); // one migration each for kernel, fixture.b and fixture.a, in one process
     expect(reports.filter((report) => Object.keys(report.applied).length > 0)).toHaveLength(1);
     expect(await query(url, 'select * from kernel_migrations_fixture_a')).toHaveLength(1);
     expect(await query(url, 'select * from kernel_migrations_fixture_b')).toHaveLength(1);
@@ -154,7 +159,10 @@ describe('the table-prefix rule', () => {
   it('leaves nothing behind: the module’s migration rolls back as a whole, journal included', async () => {
     const url = await server.createDatabase();
     await (await kernelFor('bad-prefix', url)).migrate().catch(() => undefined);
-    expect(await tables(url)).toEqual([]);
+    const found = await tables(url);
+    expect(found).not.toContain('stray_table');
+    expect(found).not.toContain('fixture_bad_prefix_fine');
+    expect(found).not.toContain('kernel_migrations_fixture_bad_prefix');
   });
 
   it('also checks the Drizzle schema before start() touches the database', async () => {
@@ -163,7 +171,7 @@ describe('the table-prefix rule', () => {
     await expect(kernel.start()).rejects.toThrowError(
       /table "stray_table" must start with "fixture_bad_prefix_"/,
     );
-    expect(await tables(url)).toEqual([]);
+    expect(await tables(url)).toEqual([]); // not even the kernel's tables: it failed first
   });
 
   it('stops the run at the failing module; the lock is released', async () => {

@@ -7,6 +7,15 @@ import type { ModuleContext } from './context.ts';
 import { createDb, createPool, type Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { childLogger, createLogger, type Logger } from './logger.ts';
+import { SYSTEM_READY, type DomainEvent } from './manifest.ts';
+import {
+  createDispatcher,
+  createEvents,
+  type Dispatcher,
+  type DispatcherOptions,
+  type Subscription,
+} from './outbox.ts';
+import { ids } from './ids.ts';
 import {
   KERNEL_MODULE,
   KERNEL_TABLE_PREFIX,
@@ -31,6 +40,19 @@ export interface KernelOptions {
   log?: Logger;
   /** Module id → package name. Default: the workspace's modules. */
   modulePackages?: Readonly<Record<string, string>>;
+  /** Tuning for the outbox dispatcher: attempts, backoff, polling. Defaults suit production. */
+  dispatcher?: Partial<
+    Pick<
+      DispatcherOptions,
+      | 'maxAttempts'
+      | 'backoffMs'
+      | 'leaseMs'
+      | 'batchSize'
+      | 'concurrency'
+      | 'handlerTimeoutMs'
+      | 'pollIntervalMs'
+    >
+  >;
   /** An existing pool to use (and not to close). Default: the kernel opens and owns one. */
   pool?: pg.Pool;
 }
@@ -50,7 +72,14 @@ export interface Kernel {
   pendingMigrations(): Promise<{ module: string; pending: number }[]>;
   /** Loader steps 2 to 6. */
   start(): Promise<void>;
-  /** Closes the pool if the kernel opened it. */
+  /** The outbox dispatcher. Started by `startWorkers()`; tests can call `dispatchOnce()`. */
+  readonly dispatcher: Dispatcher;
+  /**
+   * Starts the background work: the outbox dispatcher. `WORKER_MODE=inline` runs it in the web
+   * process; `scorpion worker` runs it alone.
+   */
+  startWorkers(): Promise<void>;
+  /** Stops the background work, waits for running handlers, closes the pool if the kernel opened it. */
   stop(): Promise<void>;
 }
 
@@ -102,9 +131,22 @@ export function createKernel(options: KernelOptions): Kernel {
   for (const note of composition.skipped) log.info(`skipped: ${note}`);
 
   const ownsPool = options.pool === undefined;
+  let poolClosed = false;
   const pool = options.pool ?? createPool(config);
   const db = createDb(pool);
   const services = new Map<string, unknown>();
+  const contexts = new Map<string, ModuleContext>();
+
+  // Event name → the modules that subscribe to it (composition has checked they may).
+  const subscribers = new Map<string, string[]>();
+  const subscriptions: Subscription[] = [];
+  for (const module of profile.modules) {
+    for (const [eventName, handler] of Object.entries(module.manifest.events?.on ?? {})) {
+      if (eventName === SYSTEM_READY || !composition.events.has(eventName)) continue;
+      subscribers.set(eventName, [...(subscribers.get(eventName) ?? []), module.id]);
+      subscriptions.push({ subscriber: module.id, eventName, handler });
+    }
+  }
 
   const targets = (): MigrationTarget[] => [
     { id: KERNEL_MODULE, migrations: KERNEL_MIGRATIONS, tablePrefix: KERNEL_TABLE_PREFIX },
@@ -132,11 +174,18 @@ export function createKernel(options: KernelOptions): Kernel {
   }
 
   function contextFor(module: ResolvedModule): ModuleContext {
+    const cached = contexts.get(module.id);
+    if (cached) return cached;
     const reachable = new Set([module.id, ...module.dependsOn, ...module.presentOptional]);
-    return {
+    const context: ModuleContext = {
       moduleId: module.id,
       db,
       log: childLogger(log, { module: module.id }),
+      events: createEvents({
+        moduleId: module.id,
+        schemas: new Map(Object.entries(module.manifest.events?.emits ?? {})),
+        subscribers,
+      }),
       config,
       deps: dependencyView(module, services),
       registry(name) {
@@ -151,7 +200,19 @@ export function createKernel(options: KernelOptions): Kernel {
         return Object.freeze(registry.entries.map((entry) => entry.value));
       },
     };
+    contexts.set(module.id, context);
+    return context;
   }
+
+  const moduleById = new Map(profile.modules.map((module) => [module.id, module]));
+  const dispatcher = createDispatcher({
+    ...options.dispatcher,
+    db,
+    connectionString: config.DATABASE_URL,
+    log: childLogger(log, { module: 'kernel' }),
+    subscriptions,
+    contextFor: (id) => contextFor(moduleById.get(id)!),
+  });
 
   async function migrate(): Promise<MigrationReport> {
     return runMigrations(pool, targets(), log);
@@ -169,7 +230,17 @@ export function createKernel(options: KernelOptions): Kernel {
       if (module.manifest.services)
         services.set(module.id, await module.manifest.services(contextFor(module)));
     }
-    // step 6 (routes, jobs, subscriptions, system.ready) is added with the parts it wires.
+    // step 6: subscriptions are wired (the dispatcher looks handlers up by module and event);
+    // routes and jobs join in with the parts they need.
+    const ready: DomainEvent = {
+      id: ids.uuidv7(),
+      name: SYSTEM_READY,
+      payload: {},
+      occurredAt: new Date(),
+    };
+    for (const module of profile.modules) {
+      await module.manifest.events?.on?.[SYSTEM_READY]?.(ready, contextFor(module));
+    }
   }
 
   return {
@@ -183,8 +254,14 @@ export function createKernel(options: KernelOptions): Kernel {
     migrate,
     pendingMigrations: () => pendingMigrations(pool, targets()),
     start,
+    dispatcher,
+    startWorkers: () => dispatcher.start(),
     stop: async () => {
-      if (ownsPool) await pool.end();
+      await dispatcher.stop();
+      if (ownsPool && !poolClosed) {
+        poolClosed = true;
+        await pool.end();
+      }
     },
   };
 }
