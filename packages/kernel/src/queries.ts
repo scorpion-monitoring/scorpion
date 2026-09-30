@@ -67,3 +67,59 @@ export async function outboxStats(db: Db): Promise<OutboxStats> {
     lagSeconds: Math.max(Number(row.lag ?? 0), 0),
   };
 }
+
+export interface JobRunRow {
+  id: string;
+  jobName: string;
+  module: string;
+  jobId: string;
+  attempt: number;
+  status: 'running' | 'succeeded' | 'failed';
+  startedAt: Date;
+  finishedAt: Date | null;
+  durationMs: number | null;
+  error: string | null;
+}
+
+export interface JobRunFilter {
+  jobName?: string;
+  status?: JobRunRow['status'];
+  limit?: number;
+  offset?: number;
+}
+
+/** The history of job runs, newest first. */
+export async function listJobRuns(db: Db, filter: JobRunFilter = {}): Promise<JobRunRow[]> {
+  const limit = Math.min(Math.max(filter.limit ?? 100, 1), 1000);
+  const offset = Math.max(filter.offset ?? 0, 0);
+  const { rows } = await db.execute<{
+    id: string;
+    job_name: string;
+    module: string;
+    job_id: string;
+    attempt: number;
+    status: JobRunRow['status'];
+    started_at: Date;
+    finished_at: Date | null;
+    duration_ms: number | null;
+    error: string | null;
+  }>(sql`
+    select id, job_name, module, job_id, attempt, status, started_at, finished_at, duration_ms, error
+      from kernel_job_run
+     where (${filter.jobName ?? null}::text is null or job_name = ${filter.jobName ?? null})
+       and (${filter.status ?? null}::text is null or status = ${filter.status ?? null})
+     order by started_at desc, id desc
+     limit ${limit} offset ${offset}`);
+  return rows.map((row) => ({
+    id: row.id,
+    jobName: row.job_name,
+    module: row.module,
+    jobId: row.job_id,
+    attempt: row.attempt,
+    status: row.status,
+    startedAt: new Date(row.started_at),
+    finishedAt: row.finished_at ? new Date(row.finished_at) : null,
+    durationMs: row.duration_ms,
+    error: row.error,
+  }));
+}

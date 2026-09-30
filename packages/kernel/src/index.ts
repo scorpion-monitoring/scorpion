@@ -78,3 +78,12 @@ export {
 } from './outbox.ts';
 export type { Dispatcher, DispatcherOptions, EventsApi, Subscription } from './outbox.ts';
 export { listDeadDeliveries, outboxStats, type DeadDelivery, type OutboxStats } from './queries.ts';
+export {
+  createJobs,
+  JobError,
+  type Jobs,
+  type JobsApi,
+  type JobsOptions,
+  type JobRunReport,
+} from './jobs.ts';
+export { listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';

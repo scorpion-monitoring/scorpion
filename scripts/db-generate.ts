@@ -3,7 +3,7 @@
 // its migrations in `migrations/`; the kernel uses `src/db/schema.ts` and `migrations/`.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { scanModulePackages } from '@scorpion/kernel';
 
@@ -33,15 +33,16 @@ if (!schema) {
   process.exit(2);
 }
 
+// drizzle-kit joins these onto its working directory, so they must be relative to it.
 const args = [
   'drizzle-kit',
   'generate',
   '--dialect',
   'postgresql',
   '--schema',
-  schema,
+  relative(root, schema),
   '--out',
-  join(pkg.dir, 'migrations'),
+  relative(root, join(pkg.dir, 'migrations')),
 ];
 if (values.name) args.push('--name', values.name);
 const result = spawnSync('pnpm', ['exec', ...args], { stdio: 'inherit', cwd: root });

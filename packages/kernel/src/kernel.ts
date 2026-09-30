@@ -16,6 +16,7 @@ import {
   type Subscription,
 } from './outbox.ts';
 import { ids } from './ids.ts';
+import { createJobs, type JobRunReport } from './jobs.ts';
 import {
   KERNEL_MODULE,
   KERNEL_TABLE_PREFIX,
@@ -53,6 +54,10 @@ export interface KernelOptions {
       | 'pollIntervalMs'
     >
   >;
+  /** Job tuning: polling interval, cron pass interval. Defaults suit production. */
+  jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
+  /** Called after every job attempt (the server turns this into metrics). */
+  onJobRun?: (report: JobRunReport) => void;
   /** An existing pool to use (and not to close). Default: the kernel opens and owns one. */
   pool?: pg.Pool;
 }
@@ -75,12 +80,15 @@ export interface Kernel {
   /** The outbox dispatcher. Started by `startWorkers()`; tests can call `dispatchOnce()`. */
   readonly dispatcher: Dispatcher;
   /**
-   * Starts the background work: the outbox dispatcher. `WORKER_MODE=inline` runs it in the web
-   * process; `scorpion worker` runs it alone.
+   * Starts the background work: the outbox dispatcher, the job workers and the cron schedules.
+   * `WORKER_MODE=inline` runs it in the web process; `scorpion worker` runs it alone.
    */
   startWorkers(): Promise<void>;
-  /** Stops the background work, waits for running handlers, closes the pool if the kernel opened it. */
-  stop(): Promise<void>;
+  /**
+   * Graceful shutdown: stops taking new work, lets running handlers finish for up to `timeoutMs`
+   * (default 30 s), then closes the pools the kernel opened. Safe to call twice.
+   */
+  stop(timeoutMs?: number): Promise<void>;
 }
 
 const KERNEL_MIGRATIONS = new URL('../migrations', import.meta.url);
@@ -136,6 +144,7 @@ export function createKernel(options: KernelOptions): Kernel {
   const db = createDb(pool);
   const services = new Map<string, unknown>();
   const contexts = new Map<string, ModuleContext>();
+  const moduleById = new Map(profile.modules.map((module) => [module.id, module]));
 
   // Event name → the modules that subscribe to it (composition has checked they may).
   const subscribers = new Map<string, string[]>();
@@ -173,6 +182,20 @@ export function createKernel(options: KernelOptions): Kernel {
       throw new KernelStartupError('Module schemas break the table-prefix rule:', problems);
   }
 
+  const jobs = createJobs({
+    db,
+    connectionString: config.DATABASE_URL,
+    log: childLogger(log, { module: 'kernel' }),
+    modules: profile.modules.map((module) => ({
+      id: module.id,
+      manifest: module.manifest,
+      reachable: new Set([module.id, ...module.dependsOn, ...module.presentOptional]),
+    })),
+    contextFor: (id) => contextFor(moduleById.get(id)!),
+    onRun: options.onJobRun,
+    ...options.jobs,
+  });
+
   function contextFor(module: ResolvedModule): ModuleContext {
     const cached = contexts.get(module.id);
     if (cached) return cached;
@@ -186,6 +209,7 @@ export function createKernel(options: KernelOptions): Kernel {
         schemas: new Map(Object.entries(module.manifest.events?.emits ?? {})),
         subscribers,
       }),
+      jobs: jobs.apiFor(module.id),
       config,
       deps: dependencyView(module, services),
       registry(name) {
@@ -204,7 +228,6 @@ export function createKernel(options: KernelOptions): Kernel {
     return context;
   }
 
-  const moduleById = new Map(profile.modules.map((module) => [module.id, module]));
   const dispatcher = createDispatcher({
     ...options.dispatcher,
     db,
@@ -255,9 +278,12 @@ export function createKernel(options: KernelOptions): Kernel {
     pendingMigrations: () => pendingMigrations(pool, targets()),
     start,
     dispatcher,
-    startWorkers: () => dispatcher.start(),
-    stop: async () => {
-      await dispatcher.stop();
+    startWorkers: async () => {
+      await jobs.startWorking();
+      await dispatcher.start();
+    },
+    stop: async (timeoutMs = 30_000) => {
+      await Promise.all([dispatcher.stop(timeoutMs), jobs.stop(timeoutMs)]);
       if (ownsPool && !poolClosed) {
         poolClosed = true;
         await pool.end();

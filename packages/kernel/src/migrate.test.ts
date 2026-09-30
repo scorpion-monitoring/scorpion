@@ -1,4 +1,5 @@
 import { startPostgres, type StartedPostgres } from '@scorpion/testing';
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -10,6 +11,15 @@ import { loadConfig } from './config.ts';
 import { KernelStartupError } from './errors.ts';
 import { createKernel, type Kernel } from './kernel.ts';
 import { createLogger } from './logger.ts';
+
+// However many migrations the kernel itself has; the tests should not need editing for each new one.
+const kernelMigrations = (
+  JSON.parse(
+    readFileSync(new URL('../migrations/meta/_journal.json', import.meta.url), 'utf8'),
+  ) as {
+    entries: unknown[];
+  }
+).entries.length;
 
 let server: StartedPostgres;
 const sources = await allFixtureSources();
@@ -68,6 +78,7 @@ describe('migrations', () => {
     expect(await tables(url)).toEqual([
       'fixture_a_note',
       'fixture_b_thing',
+      'kernel_job_run',
       'kernel_migrations_fixture_a',
       'kernel_migrations_fixture_b',
       'kernel_migrations_kernel',
@@ -90,7 +101,7 @@ describe('migrations', () => {
     const url = await server.createDatabase();
     const kernel = await kernelFor('ab', url);
     expect(await kernel.pendingMigrations()).toEqual([
-      { module: 'kernel', pending: 1 },
+      { module: 'kernel', pending: kernelMigrations },
       { module: 'fixture.b', pending: 1 },
       { module: 'fixture.a', pending: 1 },
     ]);
@@ -117,7 +128,7 @@ describe('two processes starting at the same time', () => {
       (sum, report) => sum + Object.values(report.applied).reduce((a, b) => a + b, 0),
       0,
     );
-    expect(appliedTotal).toBe(3); // one migration each for kernel, fixture.b and fixture.a, in one process
+    expect(appliedTotal).toBe(kernelMigrations + 2); // plus one each for fixture.b and fixture.a, in one process
     expect(reports.filter((report) => Object.keys(report.applied).length > 0)).toHaveLength(1);
     expect(await query(url, 'select * from kernel_migrations_fixture_a')).toHaveLength(1);
     expect(await query(url, 'select * from kernel_migrations_fixture_b')).toHaveLength(1);
