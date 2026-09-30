@@ -11,10 +11,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@testcontainers/postgresql": "^12.2.0"
+    "@testcontainers/postgresql": "^12.2.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.23.1",
-    "pg": "^8.23.0"
+    "@types/pg": "^8.23.1"
   }
 }

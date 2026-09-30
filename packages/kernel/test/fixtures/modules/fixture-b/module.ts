@@ -6,6 +6,8 @@ import type { ThingService } from './public.ts';
 export default defineModule<ThingService>({
   id: 'fixture.b',
   version: '1.0.0',
+  schema: () => import('./db/schema.ts'),
+  migrations: new URL('./migrations', import.meta.url),
   permissions: {
     'fixture.b.write': { scope: 'global', description: 'Write things' },
   },

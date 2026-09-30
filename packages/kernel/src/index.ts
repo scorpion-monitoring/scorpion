@@ -41,3 +41,31 @@ export {
   type ResolveOptions,
 } from './resolve.ts';
 export { WORKSPACE_MODULES, type ModuleId } from './workspace-modules.ts';
+export { loadConfig, mountPath, type Config } from './config.ts';
+export {
+  activeTransaction,
+  createDb,
+  createPool,
+  openDatabase,
+  type Db,
+  type DbTx,
+  type DatabaseHandle,
+} from './db.ts';
+export { ids } from './ids.ts';
+export { createKernel, type Kernel, type KernelOptions } from './kernel.ts';
+export {
+  childLogger,
+  createLogger,
+  type LogBindings,
+  type Logger,
+  type LoggerOptions,
+} from './logger.ts';
+export {
+  journalTable,
+  MIGRATION_LOCK,
+  pendingMigrations,
+  runMigrations,
+  type MigrationReport,
+  type MigrationTarget,
+} from './migrate.ts';
+export { maskSecrets, maskString, REDACTED } from './redact.ts';
