@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/kernel" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/ui-kit" },
+    { "path": "./packages/integrations" },
+    { "path": "./packages/testing" },
+    { "path": "./scripts" }
+  ]
+}

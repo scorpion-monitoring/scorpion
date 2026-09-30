@@ -1,0 +1,23 @@
+{
+  "name": "scorpion",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=10.34.0 <11"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "check": "pnpm typecheck",
+    "db:generate": "node scripts/not-yet.ts M1 db:generate",
+    "scorpion": "node scripts/not-yet.ts M1 scorpion",
+    "test:contract": "node scripts/not-yet.ts M8 test:contract"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
+  }
+}
