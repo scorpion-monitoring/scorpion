@@ -89,8 +89,9 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Job facade over pg-boss: declared jobs, cron schedules, retries, timeouts, and a run-history table.
 - `packages/contracts`: `createRoute()` wrapper around `@hono/zod-openapi` that **requires** `permission` (or `public: true`); the envelope and problem-details schemas.
 - Request pipeline skeleton in `apps/server`: security headers, request id, pino logging, error mapper.
-- CLI entry `scorpion` with `migrate` and `worker`.
-- `/healthz`, `/readyz`, `/metrics`.
+- CLI entry `scorpion` with `start`, `worker`, `migrate` and `profile:generate` (`seed` and `create-admin` come with the modules that need them).
+- `/healthz` (alive, no database), `/readyz` (database reachable and all migrations applied; 503 until then and while shutting down) and `/metrics` (Prometheus). Graceful shutdown on SIGTERM.
+- Each profile image holds only its profile's modules; CI checks it (ADR-0002).
 
 **Acceptance:** two dummy test modules (A depends on B) load, migrate, exchange an event through the outbox and run a scheduled job. A route without a permission fails at registration. A profile with a missing dependency refuses to start.
 

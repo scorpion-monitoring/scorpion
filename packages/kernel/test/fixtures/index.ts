@@ -18,6 +18,7 @@ export const FIXTURE_MODULE_PACKAGES: Record<string, string> = {
   'fixture.dup': '@scorpion/fixture-dup',
   'fixture.dup.inner': '@scorpion/fixture-dup-inner',
   'fixture.routes': '@scorpion/fixture-routes',
+  'example.notes': '@scorpion/example-notes',
   'fixture.no-permission': '@scorpion/fixture-no-permission',
 };
 
