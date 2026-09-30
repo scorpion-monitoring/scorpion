@@ -25,6 +25,7 @@
     "e2e/**/*.ts",
     "vite.config.ts",
     "playwright.config.ts",
-    "svelte.config.js"
+    "svelte.config.js",
+    "vitest.config.ts"
   ]
 }
