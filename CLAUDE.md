@@ -49,7 +49,9 @@ pnpm test --filter @scorpion/kpi-ingestion   # one module
 pnpm test:contract             # public API against OpenAPI
 pnpm test:e2e                  # Playwright
 pnpm db:generate --filter <module>           # new Drizzle migration for a module
-pnpm scorpion migrate | seed | create-admin | worker
+pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts (build time)
+pnpm scorpion migrate | start | worker | seed | create-admin
+pnpm modules:sync              # regenerate the module id list that defineProfile() checks against
 pnpm build --profile <name>    # build one profile image
 pnpm changeset                 # describe your change for CHANGELOG.md (--empty if none is needed)
 pnpm changeset version         # at a release only: bump the version, write CHANGELOG.md
@@ -60,7 +62,7 @@ Run `pnpm check` and the tests of every module you touched before you say a task
 ## Module rules (hard rules)
 
 1. **One module = one package** under `modules/`, with `module.ts` (a `defineModule` manifest) and `public.ts` (the only file other modules may import).
-2. **Declare dependencies.** Importing another module is allowed only through its `public.ts` and only if it is listed in `dependsOn`. The ESLint boundaries rule enforces this; never disable it.
+2. **Declare dependencies.** Importing another module is allowed only through its `public.ts` and only if it is declared in the module's `package.json` (`dependencies`, or optional `peerDependencies`); the manifest has no `dependsOn`, the loader derives it. The ESLint boundaries rule enforces this; never disable it.
 3. **Own your tables.** Table names are prefixed with the module (`kpi_measurement`). Never read or write another module's tables; call its public service instead. Foreign keys may point only to core tables or to declared dependencies.
 4. **Layers:** `ui/` → `routes/` → `service/` → `db/`. Each layer calls only the one below it. Route handlers are thin: parse, call one service method, map the result.
 5. **The service layer is the only way to change data.** UI, internal API, public API, jobs, adapters and the migration tool all go through it. Never write the same logic twice for two entry points.

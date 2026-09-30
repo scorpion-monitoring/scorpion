@@ -64,32 +64,40 @@ Every module, core or plugin, exports one `defineModule()` manifest. The kernel 
 export default defineModule({
   id: 'kpi.ingestion',
   version: '1.0.0',
-  dependsOn: ['kpi.framework', 'registry.services'],
+  // Dependencies are not repeated here. They come from this package's package.json:
+  // `dependencies` lists the required modules (@scorpion/kpi-framework, @scorpion/registry-services),
+  // optional `peerDependencies` the optional ones.
   permissions: {
-    'measurement.submit': { scope: 'service', description: 'Submit KPI values for a service' },
+    'kpi.ingestion.measurement.submit': { scope: 'service', description: 'Submit KPI values for a service' },
   },
   settings: ingestionSettingsSchema,       // Zod → JSON Schema → admin form
   schema: () => import('./db/schema'),      // Drizzle tables, prefixed kpi_ingestion_*
-  migrations: './migrations',
+  migrations: new URL('./migrations', import.meta.url),
   services: (ctx) => createIngestionService(ctx),
   routes: (r) => { r.internal(submitRoute); r.public('v1', measurementsRoutes); },
   jobs: [],
-  events: { emits: ['measurement.recorded'], on: {} },
+  events: { emits: { 'measurement.recorded@1': recordedPayloadSchema }, on: {} },
+  registries: { 'ingestion.adapter': adapterSchema },   // declared here, filled by contributions
   contributes: {
     'ingestion.adapter': [formAdapter, csvAdapter, xlsxAdapter],
-    'ui.nav': [{ section: 'services', label: 'Data Submission', href: '/submit', permission: 'measurement.submit' }],
+    'ui.nav': [{ section: 'services', label: 'Data Submission', href: '/submit', permission: 'kpi.ingestion.measurement.submit' }],
   },
   ui: () => import('./ui'),                 // Svelte routes and widgets
 });
 ```
 
+**Dependencies come from `package.json`.** A module's required dependencies are the `@scorpion/*` module packages in its `dependencies`. Its optional dependencies are module packages in `peerDependencies` that `peerDependenciesMeta` marks optional. The loader computes `dependsOn` and `optionalDependsOn` from them, and the ESLint boundaries rule reads the same source (ADR-0002). The manifest does not repeat them. Permission ids and job names start with the owning module's id.
+
 **Lifecycle.** The kernel runs these steps in order at startup:
 
-1. Load the profile and resolve the dependency graph. It refuses to start on a missing dependency or a cycle.
-2. Run each module's migrations in dependency order.
-3. Register permissions, settings schemas, events and registry contributions.
-4. Build each module's services with a context that holds only the services of its declared dependencies.
-5. Mount routes, schedule jobs, emit `system.ready`.
+1. Load the profile and resolve the dependency graph. It refuses to start on a missing dependency or a cycle and names the path.
+2. Run each module's migrations in dependency order, under one advisory lock.
+3. Register permissions, settings schemas, event schemas and registries.
+4. Validate contributions: the contributor must be the registry's owner or depend on it, and each entry must match the registry's schema.
+5. Build each module's services, in dependency order, with a context that holds only the services of its declared dependencies.
+6. Mount routes, schedule jobs, subscribe event handlers, emit `system.ready`.
+
+**Profiles and code generation.** A profile is `defineProfile({ name, modules })`, with module ids checked against the workspace. `pnpm scorpion profile:generate <name>` writes `apps/server/src/generated/profile.ts` with static imports of the profile's module manifests, and points the server's `package.json` at exactly those modules. The server imports modules only through that generated file. The file is committed for `full` and regenerated in the Docker build for the chosen `PROFILE`, so an image contains only its profile's modules.
 
 **Registries (extension points).** A module can declare a registry, and any module that depends on it can contribute entries. These are the registries from FEATURES.md §2 and §6:
 
