@@ -17,6 +17,8 @@ export const FIXTURE_MODULE_PACKAGES: Record<string, string> = {
   'fixture.foreign-contrib': '@scorpion/fixture-foreign-contrib',
   'fixture.dup': '@scorpion/fixture-dup',
   'fixture.dup.inner': '@scorpion/fixture-dup-inner',
+  'fixture.routes': '@scorpion/fixture-routes',
+  'fixture.no-permission': '@scorpion/fixture-no-permission',
 };
 
 /** Loads a fixture module by its directory name, for example `fixture-a`. */

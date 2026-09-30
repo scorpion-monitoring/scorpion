@@ -1,7 +1,8 @@
 import { getTableName, is } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import type pg from 'pg';
-import { buildComposition, type Composition } from './composition.ts';
+import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
+import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
 import type { Config } from './config.ts';
 import type { ModuleContext } from './context.ts';
 import { createDb, createPool, type Db } from './db.ts';
@@ -26,6 +27,7 @@ import {
   type MigrationTarget,
 } from './migrate.ts';
 import type { Profile } from './profile.ts';
+import { collectRoutes, type RegisteredRoute } from './routes.ts';
 import {
   resolveProfile,
   type ModuleSource,
@@ -69,6 +71,13 @@ export interface Kernel {
   readonly log: Logger;
   readonly db: Db;
   readonly pool: pg.Pool;
+  /** The routes modules registered, once `start()` has run. The server mounts them. */
+  readonly routes: readonly RegisteredRoute[];
+  /**
+   * The authoriser for non-public routes: the one entry of `kernel.authorizer` (filled by
+   * `core.authz` from M3 on), or a deny-all until there is one (ADR 0005).
+   */
+  readonly authorizer: Authorizer;
   /** Public service objects by module id, once `start()` has built them. */
   readonly services: ReadonlyMap<string, unknown>;
   /** Loader step 2 alone: apply pending migrations. */
@@ -143,6 +152,7 @@ export function createKernel(options: KernelOptions): Kernel {
   const pool = options.pool ?? createPool(config);
   const db = createDb(pool);
   const services = new Map<string, unknown>();
+  let routes: readonly RegisteredRoute[] = [];
   const contexts = new Map<string, ModuleContext>();
   const moduleById = new Map(profile.modules.map((module) => [module.id, module]));
 
@@ -216,7 +226,7 @@ export function createKernel(options: KernelOptions): Kernel {
         const registry = composition.registries.get(name);
         if (!registry)
           throw new KernelStartupError(`Unknown registry "${name}":`, [`no module declares it`]);
-        if (!reachable.has(registry.owner)) {
+        if (registry.owner !== KERNEL_OWNER && !reachable.has(registry.owner)) {
           throw new KernelStartupError(`Module "${module.id}" cannot read registry "${name}":`, [
             `it belongs to ${registry.owner}, which is not a dependency`,
           ]);
@@ -253,8 +263,10 @@ export function createKernel(options: KernelOptions): Kernel {
       if (module.manifest.services)
         services.set(module.id, await module.manifest.services(contextFor(module)));
     }
-    // step 6: subscriptions are wired (the dispatcher looks handlers up by module and event);
-    // routes and jobs join in with the parts they need.
+    // step 6: mount routes (registered here, mounted by the server), subscriptions are wired
+    // (the dispatcher looks handlers up by module and event); jobs are scheduled by
+    // startWorkers().
+    routes = collectRoutes(profile.modules, contextFor, (id) => services.get(id));
     const ready: DomainEvent = {
       id: ids.uuidv7(),
       name: SYSTEM_READY,
@@ -266,9 +278,18 @@ export function createKernel(options: KernelOptions): Kernel {
     }
   }
 
+  const authorizerEntry = composition.registries.get(AUTHORIZER_REGISTRY)!.entries[0];
+  const authorizer: Authorizer = authorizerEntry
+    ? (authorizerEntry.value as { authorize: Authorizer }).authorize
+    : denyByDefault;
+
   return {
     profile,
     composition,
+    get routes() {
+      return routes;
+    },
+    authorizer,
     config,
     log,
     db,

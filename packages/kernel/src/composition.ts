@@ -2,6 +2,7 @@
 // contributions against them. Everything here is pure, so it is tested without a database.
 import type { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
+import { AUTHORIZER_REGISTRY, authorizerEntrySchema } from './authz.ts';
 import { SYSTEM_READY, type PermissionDef } from './manifest.ts';
 import type { ResolvedModule, ResolvedProfile } from './resolve.ts';
 
@@ -49,6 +50,9 @@ export function tablePrefixOf(module: Pick<ResolvedModule, 'id' | 'manifest'>): 
 function reachable(module: ResolvedModule): Set<string> {
   return new Set([module.id, ...module.dependsOn, ...module.presentOptional]);
 }
+
+/** Owner of the registries the kernel itself declares. Every module may contribute to them. */
+export const KERNEL_OWNER = 'kernel';
 
 export function buildComposition(profile: ResolvedProfile): Composition {
   const problems: string[] = [];
@@ -112,8 +116,18 @@ export function buildComposition(profile: ResolvedProfile): Composition {
     }
   }
 
-  // Registries: unique names.
-  const registries = new Map<string, RegisteredRegistry>();
+  // Registries: unique names. The kernel owns `kernel.authorizer`, which any module may fill.
+  const registries = new Map<string, RegisteredRegistry>([
+    [
+      AUTHORIZER_REGISTRY,
+      {
+        name: AUTHORIZER_REGISTRY,
+        owner: KERNEL_OWNER,
+        schema: authorizerEntrySchema,
+        entries: [],
+      },
+    ],
+  ]);
   for (const module of profile.modules) {
     for (const [name, schema] of Object.entries(module.manifest.registries ?? {})) {
       const existing = registries.get(name);
@@ -159,7 +173,7 @@ export function buildComposition(profile: ResolvedProfile): Composition {
           );
         continue;
       }
-      if (!allowed.has(registry.owner)) {
+      if (registry.owner !== KERNEL_OWNER && !allowed.has(registry.owner)) {
         problems.push(
           `${module.id}: contributes to registry "${name}" of ${registry.owner}, which is not a declared dependency`,
         );
@@ -177,6 +191,13 @@ export function buildComposition(profile: ResolvedProfile): Composition {
         }
       });
     }
+  }
+
+  const authorizers = registries.get(AUTHORIZER_REGISTRY)!.entries;
+  if (authorizers.length > 1) {
+    problems.push(
+      `more than one module contributes to "${AUTHORIZER_REGISTRY}": ${authorizers.map((e) => e.module).join(', ')}`,
+    );
   }
 
   if (problems.length > 0) {

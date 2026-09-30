@@ -87,3 +87,10 @@ export {
   type JobRunReport,
 } from './jobs.ts';
 export { listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';
+export {
+  AUTHORIZER_REGISTRY,
+  denyByDefault,
+  type AuthorizationRequest,
+  type Authorizer,
+} from './authz.ts';
+export { collectRoutes, type RegisteredRoute, type RouteSurface } from './routes.ts';
