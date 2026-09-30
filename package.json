@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up -d --wait && pnpm --parallel --filter @scorpion/server --filter @scorpion/web dev",
     "build": "node scripts/build.ts",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm generated:check",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -21,13 +21,16 @@
     "test:contract": "node scripts/not-yet.ts M8 test:contract",
     "test:e2e": "pnpm --filter @scorpion/web test:e2e",
     "db:generate": "node scripts/not-yet.ts M1 db:generate",
-    "scorpion": "node scripts/not-yet.ts M1 scorpion",
-    "changeset:check": "node scripts/changeset-check.ts"
+    "scorpion": "node apps/server/src/cli.ts",
+    "changeset:check": "node scripts/changeset-check.ts",
+    "modules:sync": "node scripts/sync-workspace-modules.ts",
+    "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
     "@scorpion/eslint-plugin": "workspace:*",
+    "@scorpion/kernel": "workspace:*",
     "@types/node": "^24.19.0",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
