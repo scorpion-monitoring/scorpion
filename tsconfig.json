@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./apps/server" },
     { "path": "./packages/kernel" },
     { "path": "./packages/contracts" },
     { "path": "./packages/ui-kit" },
