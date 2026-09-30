@@ -69,7 +69,7 @@ jobs:
     name: Image (${{ matrix.profile }})
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     # The image needs a database to become ready: the smoke test starts it against this one.
     services:
       postgres:
@@ -88,7 +88,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [full, denbi-registry, nfdi-onboarding, kpi-tracker]
+        include:
+          - profile: full
+          - profile: denbi-registry
+          - profile: nfdi-onboarding
+          - profile: kpi-tracker
+          # The real profiles are still empty, so a fixture profile proves the mechanism: an image
+          # holds exactly the modules of its profile (fixture.a and fixture.b, not fixture.opt).
+          - profile: fixture-ab
+            profile_file: packages/kernel/test/fixtures/profiles/ab.ts
+            modules_root: packages/kernel/test/fixtures/modules
+    env:
+      IMAGE: scorpion:ci-${{ matrix.profile }}
+      PROFILE: ${{ matrix.profile }}
+      PROFILE_FILE: ${{ matrix.profile_file }}
+      MODULES_ROOT: ${{ matrix.modules_root || 'modules' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -98,17 +112,64 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
-          build-args: PROFILE=${{ matrix.profile }}
+          build-args: |
+            PROFILE=${{ matrix.profile }}
+            PROFILE_FILE=${{ matrix.profile_file }}
+            MODULE_ROOTS=${{ matrix.modules_root || 'modules' }}
           tags: scorpion:ci-${{ matrix.profile }}
           load: true
           cache-from: type=gha,scope=image-${{ matrix.profile }}
           cache-to: type=gha,mode=max,scope=image-${{ matrix.profile }}
 
+      # The checks below run scripts of the repository, which need the workspace installed.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Lists every @scorpion package in the image (as a link in node_modules and as a package
+      # directory) and fails if a module outside the profile is there, or one of the profile is not.
+      - name: The image holds only the modules of its profile
+        run: |
+          node scripts/check-image-modules.ts "$IMAGE" --profile "$PROFILE" \
+            ${PROFILE_FILE:+--profile-file "$PROFILE_FILE"} --modules-root "$MODULES_ROOT"
+
+      # The check must be able to fail. Two images that break the rule, made from the fixture image:
+      # a module linked into node_modules, and a module directory. Both must be reported; and the
+      # fixture image checked against a profile that does not list `fixture.a` must fail too.
+      - name: The check fails on an image with a module outside its profile
+        if: matrix.profile == 'fixture-ab'
+        run: |
+          docker build -t scorpion:ci-polluted-link - <<EOF
+          FROM $IMAGE
+          USER root
+          RUN mkdir -p /app/node_modules/@scorpion && ln -s /app/apps/server /app/node_modules/@scorpion/fixture-opt
+          EOF
+          docker build -t scorpion:ci-polluted-dir - <<EOF
+          FROM $IMAGE
+          USER root
+          RUN mkdir -p /app/modules/leak && echo '{"name": "@scorpion/fixture-opt"}' > /app/modules/leak/package.json
+          EOF
+          for polluted in scorpion:ci-polluted-link scorpion:ci-polluted-dir; do
+            if node scripts/check-image-modules.ts "$polluted" --profile "$PROFILE" \
+              --profile-file "$PROFILE_FILE" --modules-root "$MODULES_ROOT"; then
+              echo "the check passed an image with a module outside its profile: $polluted" >&2
+              exit 1
+            fi
+          done
+          if node scripts/check-image-modules.ts "$IMAGE" --profile fixture-b-only \
+            --profile-file packages/kernel/test/fixtures/profiles/b-only.ts --modules-root "$MODULES_ROOT"; then
+            echo "the check passed an image against a profile that lacks one of its modules" >&2
+            exit 1
+          fi
+
       # The image applies its migrations when it starts. /healthz says the process is alive;
       # /readyz says the database answers and every migration is applied.
       - name: Smoke test /healthz, /readyz and /metrics
-        env:
-          IMAGE: scorpion:ci-${{ matrix.profile }}
         run: |
           docker run -d --rm --network host --name scorpion-smoke \
             -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
@@ -116,7 +177,7 @@ jobs:
           for _ in $(seq 1 60); do
             if curl -fsS localhost:3000/healthz && curl -fsS localhost:3000/readyz; then
               curl -fsS localhost:3000/metrics | grep -q '^scorpion_outbox_lag_seconds'
-              docker stop --time 20 scorpion-smoke
+              docker stop --timeout 20 scorpion-smoke
               exit 0
             fi
             sleep 1
@@ -125,8 +186,6 @@ jobs:
           exit 1
 
       - name: Smoke test `scorpion migrate` and the profile check
-        env:
-          IMAGE: scorpion:ci-${{ matrix.profile }}
         run: |
           docker run --rm --network host \
             -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
