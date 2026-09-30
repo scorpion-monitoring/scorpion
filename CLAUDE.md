@@ -50,7 +50,8 @@ pnpm test:contract             # public API against OpenAPI
 pnpm test:e2e                  # Playwright
 pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a module (from db/schema.ts)
 pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts (build time)
-pnpm scorpion migrate | start | worker | seed | create-admin
+pnpm scorpion start | worker | migrate   # web server, jobs and events only, migrations only
+                               # (seed and create-admin arrive with the modules that need them)
 pnpm modules:sync              # regenerate the module id list that defineProfile() checks against
 pnpm build --profile <name>    # build one profile image
 pnpm changeset                 # describe your change for CHANGELOG.md (--empty if none is needed)
