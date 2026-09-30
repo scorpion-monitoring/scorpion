@@ -1,9 +1,11 @@
 name: CI
 
+# Branch policy: CONTRIBUTING.md, "Branches".
 on:
   push:
-    branches: [main]
+    branches: [main, dev, 'release/**', 'hotfix/**']
   pull_request:
+    branches: [main, dev, 'release/**']
 
 permissions:
   contents: read
@@ -32,6 +34,13 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Branch policy
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: node scripts/branch-policy.ts "$HEAD_REF" "$BASE_REF"
 
       # Every pull request adds a changeset (or an empty one); see .changeset/README.md.
       - if: github.event_name == 'pull_request'
