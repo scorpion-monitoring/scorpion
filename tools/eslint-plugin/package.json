@@ -16,5 +16,8 @@
   },
   "peerDependencies": {
     "eslint": "^10.0.0"
+  },
+  "dependencies": {
+    "@scorpion/kernel": "workspace:*"
   }
 }
