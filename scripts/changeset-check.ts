@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 
 const base =
   process.argv[2] ??
-  (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/main');
+  (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/dev');
 
 const git = (...args: string[]) =>
   execFileSync('git', args, { encoding: 'utf8' }).split('\n').filter(Boolean);
