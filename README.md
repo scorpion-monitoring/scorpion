@@ -70,7 +70,8 @@ docker/          Dockerfile
 ## Changelog
 
 [CHANGELOG.md](CHANGELOG.md) is generated from changesets at each release. Every pull request
-adds one with `pnpm changeset`; see [CONTRIBUTING.md](CONTRIBUTING.md).
+adds one with `pnpm changeset`. `main` holds released code only; work happens on `feature/*`
+branches from `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and release policy.
 
 ## Further reading
 

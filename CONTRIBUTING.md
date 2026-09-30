@@ -14,8 +14,27 @@ This file summarises how work gets into `main`.
 
 ## Branches
 
-- `main` is always releasable. Work happens on short-lived branches that are merged into
-  `main` only with CI green.
+| Branch            | Created from  | Merged into                  | Purpose                                                                  |
+| ----------------- | ------------- | ---------------------------- | ------------------------------------------------------------------------ |
+| `main`            |               |                              | Released code only. Every merge is a release and is tagged `v<version>`. |
+| `dev`             | `main` (once) |                              | Integration branch. Always green; release branches are cut from it.      |
+| `feature/<topic>` | `dev`         | `dev`                        | All regular work: features, fixes, refactoring, docs.                    |
+| `release/<x.y.z>` | `dev`         | `main`, then back into `dev` | Prepares a release: `changeset version`, final fixes.                    |
+| `hotfix/<x.y.z>`  | `main`        | `main`, then back into `dev` | Urgent fix for a released version.                                       |
+
+- `<topic>` is lower-case kebab case and starts with the milestone where there is one:
+  `feature/m1-module-loader`, `feature/m7-wizard-steps`. Only `main`, `dev` and the three
+  prefixes above are allowed.
+- Nobody commits to `main` or `dev` directly. Every change arrives through a pull request with
+  CI green. CI checks the branch names and the direction of the merge
+  (`scripts/branch-policy.ts`).
+- A fix found while stabilising a release goes into the release branch from a
+  `feature/*` branch; the release branch carries it back into `dev`.
+- Keep feature branches short-lived: rebase on `dev` before opening the pull request. Merge with
+  a merge commit, not a squash, so the small commits described below stay intact.
+- Delete a branch once it is merged. Release and hotfix history lives on in the tags.
+- On GitHub, protect `main` and `dev`: require a pull request and the CI checks, and forbid
+  force pushes and deletion.
 - Public API v1 changes must be additive. A breaking change goes to v2 and needs an ADR.
 
 ## Commits
@@ -48,11 +67,22 @@ The internal `@scorpion/*` packages are not versioned separately. The root packa
 
 ## Releases
 
-1. On a release branch, run `pnpm changeset version`. It consumes the pending changesets,
-   bumps `version` in the root `package.json` and writes `CHANGELOG.md`.
-2. Review the changelog, then merge the branch (CI skips the changeset check for it).
-3. Tag the merge commit `v<version>` and build the profile images as
-   `scorpion:<version>-<profile>`.
+Each milestone ends with a release. Before `v1.0.0` (M18), a milestone is a `minor` release
+(M0 is `0.1.0`) and a fix is a `patch`; do not use `major` before then.
+
+1. Branch `release/<x.y.z>` from `dev`. `<x.y.z>` is the version that
+   `pnpm changeset status` announces.
+2. Run `pnpm changeset version`. It consumes the pending changesets, sets `version` in the root
+   `package.json` and writes `CHANGELOG.md`. Review both and commit
+   (`release: v<x.y.z>`).
+3. Open a pull request into `main`. CI skips the changeset check for it because it changes
+   `CHANGELOG.md`.
+4. After the merge, tag the merge commit on `main` with an annotated tag `v<x.y.z>` and build
+   the profile images as `scorpion:<x.y.z>-<profile>`.
+5. Merge `main` back into `dev`, so `dev` has the new version and changelog.
+
+A hotfix follows the same steps, but starts from `main` as `hotfix/<x.y.z>`: commit the fix
+with its changeset, then run `pnpm changeset version`.
 
 ## Before you push
 
@@ -69,8 +99,9 @@ pnpm changeset                              # or: pnpm changeset --empty
 From [docs/implementation.md](docs/implementation.md) §1. A milestone is **done** only when
 all of the following hold:
 
-1. Code is merged to `main` with CI green: lint, type check, unit, integration, contract, and
-   E2E tests for any affected journey.
+1. Code is merged to `dev` through pull requests with CI green (lint, type check, unit,
+   integration, contract, and E2E tests for any affected journey), and the milestone is
+   released: a `release/*` branch merged into `main` and tagged `v<version>`.
 2. Every new route declares a `permission` and has a test for a denied request.
 3. Every multi-row write runs in one transaction and has a rollback test.
 4. Every input is validated by Zod. Invalid input returns 422 (problem+json) and never 500.

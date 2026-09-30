@@ -116,6 +116,7 @@ These are FEATURES §5; each has a regression test. Do not bring these patterns 
 
 - Keep changes inside the current milestone's scope. Put anything else in `docs/backlog.md` rather than implementing it.
 - Small, reviewable commits. Commit messages: `<module>: <imperative summary>` (for example `kpi-ingestion: add XLSX adapter`).
+- **Branches:** never commit to `main` or `dev` directly. Work on `feature/<topic>` from `dev` (lower-case kebab case, milestone first: `feature/m1-module-loader`) and open the pull request into `dev`. Only `release/<x.y.z>` and `hotfix/<x.y.z>` branches merge into `main`. See CONTRIBUTING.md, "Branches" and "Releases".
 - **Every pull request adds a changeset** (`pnpm changeset`, package `scorpion`; `pnpm changeset --empty` for tests, CI, refactoring or internal docs). Write it for operators and API users. Never edit `CHANGELOG.md` by hand; `changeset version` writes it at a release. CI fails a pull request without a changeset.
 - When a manifest changes (permissions, settings, events, registries, jobs), update the module's `README.md` in the same commit.
 - If a requirement in FEATURES.md looks wrong or conflicts with the architecture, stop and ask rather than guessing; record the answer in an ADR.
