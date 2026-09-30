@@ -293,7 +293,8 @@ The `kpi-tracker` profile needs `registry.services` because KPIs attach to servi
 - Structured JSON logs with request id and actor id; OpenTelemetry traces; Prometheus `/metrics`.
 - A CLI (`scorpion migrate | seed | create-admin | rotate-secrets | backup | restore`).
 - Config: env for bootstrap and secrets (`DATABASE_URL`, `SECRETS_KEY`, `ORIGIN`, `BASE_PATH`, `PROFILE`), everything else in settings. The legacy `PUBLIC_*` variables become branding settings.
-- CI (GitHub Actions): lint, type check, unit and integration tests, OpenAPI diff against the last release, and one image build per profile.
+- CI (GitHub Actions): lint, type check, unit and integration tests, OpenAPI diff against the last release, a changeset check on every pull request, and one image build per profile.
+- Versioning and changelog: one product version for the whole monorepo (the root `scorpion` package), used in the image tags and the release tag `v<version>`. Every pull request adds a changeset; at a release, Changesets bumps the version and writes `CHANGELOG.md`. The internal `@scorpion/*` packages are not versioned separately.
 
 ## Repository layout
 
@@ -320,6 +321,8 @@ scorpion/
   tools/
     migrate-legacy/      # one-time import from the current Scorpion database
   docker/  .github/workflows/
+  .changeset/            # pending changesets; `changeset version` turns them into CHANGELOG.md
+  CHANGELOG.md
 ```
 
 The `ui-kit` package is where today's declarative pieces live on in general form: `SchemaForm` renders any JSON Schema (settings, wizard steps, onboarding additional fields), and `Wizard` takes a step config and the `service.fieldType` registry.

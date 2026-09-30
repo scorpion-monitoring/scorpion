@@ -34,6 +34,7 @@ packages/testing   Testcontainers setup, factories, contract-test helpers
 modules/<id>/      one package per module (core-*, registry-*, kpi-*, maturity, ...)
 profiles/*.ts      full, denbi-registry, nfdi-onboarding, kpi-tracker
 tools/migrate-legacy  one-time import from the old Scorpion database
+.changeset/        pending changesets; CHANGELOG.md is generated from them
 ```
 
 ## Commands
@@ -50,6 +51,8 @@ pnpm test:e2e                  # Playwright
 pnpm db:generate --filter <module>           # new Drizzle migration for a module
 pnpm scorpion migrate | seed | create-admin | worker
 pnpm build --profile <name>    # build one profile image
+pnpm changeset                 # describe your change for CHANGELOG.md (--empty if none is needed)
+pnpm changeset version         # at a release only: bump the version, write CHANGELOG.md
 ```
 
 Run `pnpm check` and the tests of every module you touched before you say a task is finished.
@@ -113,5 +116,6 @@ These are FEATURES §5; each has a regression test. Do not bring these patterns 
 
 - Keep changes inside the current milestone's scope. Put anything else in `docs/backlog.md` rather than implementing it.
 - Small, reviewable commits. Commit messages: `<module>: <imperative summary>` (for example `kpi-ingestion: add XLSX adapter`).
+- **Every pull request adds a changeset** (`pnpm changeset`, package `scorpion`; `pnpm changeset --empty` for tests, CI, refactoring or internal docs). Write it for operators and API users. Never edit `CHANGELOG.md` by hand; `changeset version` writes it at a release. CI fails a pull request without a changeset.
 - When a manifest changes (permissions, settings, events, registries, jobs), update the module's `README.md` in the same commit.
 - If a requirement in FEATURES.md looks wrong or conflicts with the architecture, stop and ask rather than guessing; record the answer in an ADR.
