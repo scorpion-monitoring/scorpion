@@ -19,7 +19,7 @@ A milestone is **done** only when all of the following hold:
 6. Every defect from FEATURES.md §5 that the milestone touches has a named regression test (`defect-NN.*.test.ts`).
 7. The public OpenAPI diff shows no breaking change, or the milestone explicitly bumps the API version.
 8. Module docs (`modules/<id>/README.md`) are updated: permissions, settings keys, events, registries, jobs.
-9. Every merged pull request carries a changeset (`pnpm changeset`, or `pnpm changeset --empty` for changes that operators and API users do not notice). `CHANGELOG.md` is written by `changeset version` at a release and never edited by hand.
+9. Every merged pull request carries a changeset (`pnpm changeset`, or `pnpm changeset --empty` for changes that operators and API users do not notice), except docs-only pull requests (`docs/**`, `**/*.md` other than `CHANGELOG.md`, `.github/ISSUE_TEMPLATE/**`). `CHANGELOG.md` is written by `changeset version` at a release and never edited by hand.
 
 Terms used below come from the architecture: **kernel**, **manifest** (`defineModule`), **registry**, **profile**, **service layer**, **outbox**.
 
