@@ -37,7 +37,11 @@ export interface ResolveOptions {
   profile: Profile;
   /** The pool the profile draws from: every module the build made available. */
   sources: readonly ModuleSource[];
-  /** Module id → package name for all modules of the workspace. Default: `WORKSPACE_MODULES`. */
+  /**
+   * Module id → package name for the modules of the workspace, including those that are not in the
+   * pool (they make a missing dependency recognisable). Default: `WORKSPACE_MODULES`. The pool's own
+   * modules are always added.
+   */
   modulePackages?: Readonly<Record<string, string>>;
 }
 
@@ -51,7 +55,16 @@ export function resolveProfile({
   modulePackages = WORKSPACE_MODULES,
 }: ResolveOptions): ResolvedProfile {
   const problems: string[] = [];
-  const idByPackage = new Map(Object.entries(modulePackages).map(([id, name]) => [name, id]));
+  // The modules of the workspace, plus the ones supplied here, so a module that is not in the
+  // generated workspace list (a test fixture, an out-of-tree module) is still recognised.
+  const supplied = sources.flatMap((source) =>
+    typeof (source.manifest as { id?: unknown } | null)?.id === 'string'
+      ? [[source.manifest.id, source.packageJson.name] as const]
+      : [],
+  );
+  const idByPackage = new Map(
+    [...Object.entries(modulePackages), ...supplied].map(([id, name]) => [name, id]),
+  );
   const isModulePackage = (name: string) => idByPackage.has(name);
 
   const listed = new Set<string>();
