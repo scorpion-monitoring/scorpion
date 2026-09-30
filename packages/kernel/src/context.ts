@@ -2,6 +2,7 @@
 import type { Config } from './config.ts';
 import type { Db } from './db.ts';
 import type { Logger } from './logger.ts';
+import type { JobsApi } from './jobs.ts';
 import type { EventsApi } from './outbox.ts';
 
 /**
@@ -26,6 +27,8 @@ export interface ModuleContext<
   readonly log: Logger;
   /** Emit domain events into the transactional outbox. */
   readonly events: EventsApi;
+  /** Queue runs of declared jobs. */
+  readonly jobs: JobsApi;
   /** The validated environment configuration. Contains no secrets other than `DATABASE_URL`. */
   readonly config: Config;
   /**

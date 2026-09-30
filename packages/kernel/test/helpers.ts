@@ -21,7 +21,7 @@ export interface TestKernels {
   newDatabase: () => Promise<string>;
 }
 
-export type TestKernelOptions = Partial<Pick<KernelOptions, 'dispatcher'>> & {
+export type TestKernelOptions = Partial<Pick<KernelOptions, 'dispatcher' | 'jobs'>> & {
   databaseUrl?: string;
 };
 
@@ -56,6 +56,7 @@ export function useKernels(): TestKernels {
         config: loadConfig({ DATABASE_URL: await databaseUrl(options) }),
         log: createLogger({ level: 'silent' }),
         dispatcher: options?.dispatcher,
+        jobs: options?.jobs,
       });
       open.push(kernel);
       return kernel;
@@ -85,6 +86,7 @@ export function useKernels(): TestKernels {
         config: loadConfig({ DATABASE_URL: await databaseUrl(options) }),
         log: createLogger({ level: 'silent' }),
         dispatcher: options?.dispatcher,
+        jobs: options?.jobs,
       });
       open.push(kernel);
       return kernel;

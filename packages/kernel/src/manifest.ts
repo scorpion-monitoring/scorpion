@@ -18,9 +18,9 @@ export interface PermissionDef {
 export interface JobDef<C = ModuleContext> {
   /** Prefixed with the module id: `kpi.ingestion.reminder`. */
   name: string;
-  /** Cron expression (five fields), in UTC. */
+  /** Cron expression in UTC (five fields). A new schedule also runs once right after it is created. */
   schedule?: string;
-  /** Validates the data passed to `ctx.jobs.enqueue()`. Defaults to "no data". */
+  /** Validates the data passed to `ctx.jobs.enqueue()`. Without it the job takes no data. */
   data?: z.ZodType;
   handler: (job: JobRun, ctx: C) => Promise<void>;
   retry: { limit: number; delaySeconds: number; backoff?: boolean };
@@ -34,6 +34,8 @@ export interface JobRun<Data = unknown> {
   data: Data;
   /** 1 for the first attempt. */
   attempt: number;
+  /** Aborted when the job times out or the process is shutting down. */
+  signal: AbortSignal;
 }
 
 export interface DomainEvent<Payload = unknown> {

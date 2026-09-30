@@ -1,7 +1,9 @@
 export interface AService {
   describe(): string;
-  /** The notes written by the handler of `fixture.thing.created@1`. */
-  notes(): Promise<{ id: string; thingId: string }[]>;
+  /** The notes written by the event handler (`created`) and the jobs (`tick`, or a ping's message). */
+  notes(): Promise<{ id: string; thingId: string; body: string }[]>;
+  /** Queues `fixture.a.ping`; the job writes `message` as a note. Returns the job id. */
+  ping(message: string): Promise<string>;
 }
 
 declare module '@scorpion/kernel' {

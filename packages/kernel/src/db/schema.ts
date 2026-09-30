@@ -63,3 +63,35 @@ export const outboxDelivery = pgTable(
     ),
   ],
 );
+
+/** History of job runs: one row per attempt, written by the kernel around every handler. */
+export const jobRun = pgTable(
+  'kernel_job_run',
+  {
+    id: uuid().primaryKey(),
+    /** Full job name, `kpi.ingestion.reminder`. */
+    jobName: text('job_name').notNull(),
+    /** Id of the module that declares the job. */
+    module: text().notNull(),
+    /** The pg-boss job id; the attempts of one job share it. */
+    jobId: text('job_id').notNull(),
+    /** 1 for the first attempt. */
+    attempt: integer().notNull(),
+    /** `running`, then `succeeded` or `failed`. */
+    status: text().notNull().default('running'),
+    /** How long the handler may run; a `running` row older than this belongs to a dead process. */
+    timeoutSeconds: integer('timeout_seconds').notNull(),
+    startedAt: timestamptz('started_at').notNull().defaultNow(),
+    finishedAt: timestamptz('finished_at'),
+    durationMs: integer('duration_ms'),
+    error: text(),
+  },
+  (table) => [
+    index('kernel_job_run_job_started_idx').on(table.jobName, table.startedAt),
+    index('kernel_job_run_started_idx').on(table.startedAt),
+    check(
+      'kernel_job_run_status_check',
+      sql`${table.status} in ('running', 'succeeded', 'failed')`,
+    ),
+  ],
+);

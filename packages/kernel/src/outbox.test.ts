@@ -190,12 +190,16 @@ describe('delivery', () => {
     await second.start();
     await second.startWorkers();
 
-    const a = service<{ notes(): Promise<{ thingId: string }[]> }>(second, 'fixture.a');
+    const a = service<{ notes(): Promise<{ thingId: string; body: string }[]> }>(
+      second,
+      'fixture.a',
+    );
     await vi.waitFor(
-      async () => expect(await a.notes()).toEqual([expect.objectContaining({ thingId })]),
-      {
-        timeout: 10_000,
-      },
+      async () =>
+        expect((await a.notes()).filter((note) => note.body === 'created')).toEqual([
+          expect.objectContaining({ thingId }),
+        ]),
+      { timeout: 10_000 },
     );
   });
 
