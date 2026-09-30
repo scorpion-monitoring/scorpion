@@ -27,6 +27,16 @@ const violation = (messageId: string) => ({
 });
 
 describe('module boundaries', () => {
+  it('reads dependencies as the loader does: an optional peer dependency counts, a dev dependency does not', async () => {
+    const optional = await lint('mod-c/src/optional-import.ts');
+    expect(optional).toEqual([]);
+    expect(await lint('mod-c/src/dev-import.ts')).toEqual([violation('undeclared')]);
+  });
+
+  it('lets only the generated profile file import a module manifest', async () => {
+    expect(await lint('mod-c/src/manifest-import.ts')).toEqual([violation('manifest')]);
+  });
+
   it('allows an import through @scorpion/mod-b/public', async () => {
     expect(await lint('mod-a/src/public-import.ts')).toEqual([]);
   });

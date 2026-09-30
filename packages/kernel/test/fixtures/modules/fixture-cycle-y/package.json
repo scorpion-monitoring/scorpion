@@ -1,0 +1,16 @@
+{
+  "name": "@scorpion/fixture-cycle-y",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@scorpion/fixture-cycle-x": "workspace:*",
+    "@scorpion/kernel": "workspace:*"
+  }
+}

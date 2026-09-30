@@ -9,5 +9,8 @@
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@scorpion/kernel": "workspace:*"
   }
 }

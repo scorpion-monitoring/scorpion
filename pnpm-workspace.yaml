@@ -7,6 +7,9 @@ packages:
   - modules/*
   - profiles
   - tools/*
+  # Fixture modules for the kernel tests and the per-profile image check. They are workspace
+  # packages so that they resolve like real modules, but they are not part of any real profile.
+  - packages/kernel/test/fixtures/modules/*
 
 # Install fails if Node or pnpm do not match `engines` in the root package.json.
 engineStrict: true

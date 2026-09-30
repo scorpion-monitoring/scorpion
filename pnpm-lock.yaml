@@ -17,6 +17,9 @@ importers:
       '@scorpion/eslint-plugin':
         specifier: workspace:*
         version: link:tools/eslint-plugin
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:packages/kernel
       '@types/node':
         specifier: ^24.19.0
         version: 24.19.0
@@ -56,6 +59,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.3
         version: 2.1.3(hono@4.13.12)
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
       hono:
         specifier: ^4.13.12
         version: 4.13.12
@@ -100,7 +106,86 @@ importers:
 
   packages/integrations: {}
 
-  packages/kernel: {}
+  packages/kernel:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  packages/kernel/test/fixtures/modules/fixture-a:
+    dependencies:
+      '@scorpion/fixture-b':
+        specifier: workspace:*
+        version: link:../fixture-b
+      '@scorpion/fixture-opt':
+        specifier: workspace:*
+        version: link:../fixture-opt
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  packages/kernel/test/fixtures/modules/fixture-b:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  packages/kernel/test/fixtures/modules/fixture-cycle-x:
+    dependencies:
+      '@scorpion/fixture-cycle-y':
+        specifier: workspace:*
+        version: link:../fixture-cycle-y
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+
+  packages/kernel/test/fixtures/modules/fixture-cycle-y:
+    dependencies:
+      '@scorpion/fixture-cycle-x':
+        specifier: workspace:*
+        version: link:../fixture-cycle-x
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+
+  packages/kernel/test/fixtures/modules/fixture-dup:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+
+  packages/kernel/test/fixtures/modules/fixture-dup-inner:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+
+  packages/kernel/test/fixtures/modules/fixture-foreign-contrib:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+
+  packages/kernel/test/fixtures/modules/fixture-missing:
+    dependencies:
+      '@scorpion/fixture-b':
+        specifier: workspace:*
+        version: link:../fixture-b
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
+
+  packages/kernel/test/fixtures/modules/fixture-opt:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../../..
 
   packages/testing:
     dependencies:
@@ -117,9 +202,17 @@ importers:
 
   packages/ui-kit: {}
 
-  profiles: {}
+  profiles:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../packages/kernel
 
   tools/eslint-plugin:
+    dependencies:
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
     devDependencies:
       '@types/estree':
         specifier: ^1.0.9
@@ -2330,6 +2423,9 @@ packages:
     resolution: {integrity: sha512-zK7YHHz4ZXpW89AHXUPbQVGKI7uvkd3hzusTdotCg1UxyaVtg0zFJSTfW/Dq5f7OBBVnq6cZIaC8Ti4hb6dtCA==}
     engines: {node: '>= 14'}
 
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+
 snapshots:
 
   '@balena/dockerignore@1.0.2': {}
@@ -4408,3 +4504,5 @@ snapshots:
       archiver-utils: 5.0.2
       compress-commons: 6.0.2
       readable-stream: 4.7.0
+
+  zod@4.6.5: {}

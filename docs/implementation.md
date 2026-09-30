@@ -80,8 +80,8 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 **Goal:** modules can be declared, resolved, migrated and wired.
 
-- `defineModule()` and manifest types: id, version, dependsOn, permissions, settings, schema, migrations, services, routes, jobs, events, contributes, ui.
-- Profile loader (`profiles/*.ts`) with dependency graph resolution. Startup fails with a clear message on a missing dependency or a cycle.
+- `defineModule()` and manifest types: id, version, permissions, settings, schema, migrations, services, routes, jobs, events, registries, contributes, ui. Dependencies are not in the manifest: the loader derives them from each module's `package.json` (ADR-0002).
+- `defineProfile()` and the profile loader (`profiles/*.ts`) with dependency graph resolution. Startup fails with a clear message on a missing dependency or a cycle. `scorpion profile:generate` composes the server for one profile at build time.
 - Migration runner: per-module Drizzle migrations in dependency order, under a Postgres advisory lock.
 - DI context: `ctx.db` (with `tx()`), `ctx.log`, `ctx.config`, `ctx.events`, `ctx.jobs`, plus the public services of declared dependencies only.
 - Registry mechanism: a module declares a registry, dependents contribute entries, and entries are validated against the registry's Zod schema.
