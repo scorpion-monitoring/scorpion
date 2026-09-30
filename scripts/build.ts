@@ -8,12 +8,16 @@ const { values } = parseArgs({
   options: {
     profile: { type: 'string', default: 'full' },
     tag: { type: 'string' },
+    // For the test fixtures: a profile file outside profiles/, and where its modules live.
+    'profile-file': { type: 'string' },
+    'modules-root': { type: 'string', multiple: true },
   },
 });
 
 const profile = values.profile;
-if (!existsSync(`profiles/${profile}.ts`)) {
-  console.error(`Unknown profile '${profile}': profiles/${profile}.ts does not exist.`);
+const profileFile = values['profile-file'] ?? `profiles/${profile}.ts`;
+if (!existsSync(profileFile)) {
+  console.error(`Unknown profile '${profile}': ${profileFile} does not exist.`);
   process.exit(2);
 }
 
@@ -24,6 +28,10 @@ const args = [
   'docker/Dockerfile',
   '--build-arg',
   `PROFILE=${profile}`,
+  ...(values['profile-file'] ? ['--build-arg', `PROFILE_FILE=${values['profile-file']}`] : []),
+  ...(values['modules-root']
+    ? ['--build-arg', `MODULE_ROOTS=${values['modules-root'].join(' ')}`]
+    : []),
   '-t',
   tag,
   '.',

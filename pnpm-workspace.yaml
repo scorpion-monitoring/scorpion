@@ -20,3 +20,7 @@ ignoredBuiltDependencies:
   - cpu-features
   - protobufjs
   - ssh2
+
+# Optional peer dependencies (a module's optional module dependencies) are linked only when the
+# profile depends on them itself; nothing installs them on its own.
+autoInstallPeers: false

@@ -1,7 +1,7 @@
 lockfileVersion: '9.0'
 
 settings:
-  autoInstallPeers: true
+  autoInstallPeers: false
   excludeLinksFromLockfile: false
 
 importers:
@@ -177,9 +177,6 @@ importers:
       '@scorpion/fixture-b':
         specifier: workspace:*
         version: link:../fixture-b
-      '@scorpion/fixture-opt':
-        specifier: workspace:*
-        version: link:../fixture-opt
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../../..

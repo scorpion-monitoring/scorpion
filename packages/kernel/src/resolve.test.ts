@@ -68,6 +68,15 @@ describe('resolveProfile with the fixture modules', () => {
   });
 });
 
+describe('resolveProfile without a module map', () => {
+  it('recognises the modules it is given, so a fixture or out-of-tree module needs no entry in the workspace list', async () => {
+    const resolved = resolveProfile({ profile: await fixtureProfile('ab'), sources });
+    const a = resolved.modules.find((m) => m.id === 'fixture.a')!;
+    expect(a.dependsOn).toEqual(['fixture.b']);
+    expect(resolved.modules.map((m) => m.id)).toEqual(['fixture.b', 'fixture.a']);
+  });
+});
+
 describe('resolveProfile problems', () => {
   const b = sources.find((s) => s.manifest.id === 'fixture.b')!;
   const profile = { name: 'p', modules: ['fixture.b'] };
