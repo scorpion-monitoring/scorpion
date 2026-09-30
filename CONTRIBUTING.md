@@ -45,7 +45,8 @@ This file summarises how work gets into `main`.
   (`repo`, `ci`, `docker`, `docs`, `server`, `web`, `testing`).
 - When a module manifest changes (permissions, settings, events, registries, jobs), update that
   module's `README.md` in the same commit.
-- Every pull request adds a changeset (see below). CI fails a pull request without one.
+- Every pull request adds a changeset (see below), unless it only changes documentation. CI fails
+  a pull request without one.
 - Say in the PR description why any new runtime dependency is needed. Never add Redis or
   another stateful service: Postgres is the only required one.
 
@@ -60,6 +61,10 @@ edit it by hand.
 - `pnpm changeset --empty`: for changes nobody outside the team notices (tests, CI,
   refactoring, internal docs).
 - Commit the generated `.changeset/*.md` file with your change.
+- **Docs-only exemption:** a pull request needs no changeset when every changed file matches
+  `docs/**`, `**/*.md` (except `CHANGELOG.md`) or `.github/ISSUE_TEMPLATE/**`. One other file, for
+  example a workflow or a script, brings the requirement back. Tests, CI and refactoring still
+  need `pnpm changeset --empty`.
 - `pnpm changeset:check` runs the same check as CI.
 
 The internal `@scorpion/*` packages are not versioned separately. The root package
@@ -114,5 +119,5 @@ all of the following hold:
 8. Module docs (`modules/<id>/README.md`) are updated: permissions, settings keys, events,
    registries, jobs.
 9. Every merged pull request carries a changeset (`pnpm changeset`, or `pnpm changeset --empty`
-   for changes that operators and API users do not notice). `CHANGELOG.md` is written by
+   for changes that operators and API users do not notice), except docs-only pull requests. `CHANGELOG.md` is written by
    `changeset version` at a release and never edited by hand.
