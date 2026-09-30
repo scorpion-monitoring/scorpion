@@ -1,6 +1,7 @@
 {
   "name": "@scorpion/profiles",
   "version": "0.0.0",
+  "license": "ISC",
   "private": true,
   "type": "module",
   "exports": {
