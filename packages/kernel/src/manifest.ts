@@ -1,0 +1,202 @@
+import { z } from 'zod';
+import { KernelStartupError } from './errors.ts';
+import type { ModuleContext, ModuleServices } from './context.ts';
+
+/** `kpi.ingestion`, `core.ui-shell`, `maturity`: dot-separated segments of lower-case kebab case. */
+export const MODULE_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*)*$/;
+/** `service.created@1`. The version is part of the name. */
+export const EVENT_NAME = /^[a-z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)+@[1-9][0-9]*$/;
+/** Lifecycle event emitted by the kernel after startup. Not versioned, not stored in the outbox. */
+export const SYSTEM_READY = 'system.ready';
+
+export interface PermissionDef {
+  /** What the permission is checked against; `global` when omitted. */
+  scope?: string;
+  description: string;
+}
+
+export interface JobDef<C = ModuleContext> {
+  /** Prefixed with the module id: `kpi.ingestion.reminder`. */
+  name: string;
+  /** Cron expression (five fields), in UTC. */
+  schedule?: string;
+  /** Validates the data passed to `ctx.jobs.enqueue()`. Defaults to "no data". */
+  data?: z.ZodType;
+  handler: (job: JobRun, ctx: C) => Promise<void>;
+  retry: { limit: number; delaySeconds: number; backoff?: boolean };
+  /** Seconds before a running handler is considered failed. */
+  timeoutSeconds: number;
+}
+
+export interface JobRun<Data = unknown> {
+  id: string;
+  name: string;
+  data: Data;
+  /** 1 for the first attempt. */
+  attempt: number;
+}
+
+export interface DomainEvent<Payload = unknown> {
+  id: string;
+  /** `service.created@1`. */
+  name: string;
+  payload: Payload;
+  occurredAt: Date;
+}
+
+export type EventHandler<C = ModuleContext> = (event: DomainEvent, ctx: C) => Promise<void>;
+
+/** What a module's `routes(r)` receives. Concrete route types arrive with `packages/contracts`. */
+export interface RouteRegistrar {
+  /** Routes under `/api/internal` for the SvelteKit UI. */
+  internal(...routes: unknown[]): void;
+  /** Routes of a public API version, for example `r.public('v1', route)`. */
+  public(version: 'v1', ...routes: unknown[]): void;
+}
+
+export interface ModuleManifest<Services = unknown, C = ModuleContext> {
+  /** Dotted id. The package name is `@scorpion/<id with dots as dashes>`. */
+  id: string;
+  version: string;
+  /**
+   * Prefix of the module's table names. Defaults to the id with dots and dashes as underscores
+   * plus `_` (`kpi.ingestion` → `kpi_ingestion_`). See ADR 0004.
+   */
+  tablePrefix?: string;
+  /** Permission ids, each starting with `<id>.`. */
+  permissions?: Record<string, PermissionDef>;
+  /** Validates the module's settings JSON. */
+  settings?: z.ZodType;
+  /** Drizzle tables (lazy import). */
+  schema?: () => Promise<Record<string, unknown>>;
+  /** Folder with the module's Drizzle migrations: an absolute path or a `file:` URL. */
+  migrations?: string | URL;
+  services?: (ctx: C) => Services | Promise<Services>;
+  routes?: (r: RouteRegistrar) => void;
+  jobs?: JobDef<C>[];
+  events?: {
+    /** Event name → payload schema. */
+    emits?: Record<string, z.ZodType>;
+    /** Event name → handler. Only events of the module itself or of its dependencies. */
+    on?: Record<string, EventHandler<C>>;
+  };
+  /** Registries this module declares: name → schema of one entry. */
+  registries?: Record<string, z.ZodType>;
+  /** Entries for registries: registry name → entries. */
+  contributes?: Record<string, readonly unknown[]>;
+  /** Lazy import of the module's UI. Stored only; the shell uses it from M5. */
+  ui?: () => Promise<unknown>;
+}
+
+const zodType = z.custom<z.ZodType>((value) => value instanceof z.ZodType, 'expected a Zod schema');
+const fn = z.custom<(...args: never[]) => unknown>(
+  (value) => typeof value === 'function',
+  'expected a function',
+);
+const recordOf = <T extends z.ZodType>(value: T) => z.record(z.string(), value);
+
+const manifestSchema = z.strictObject({
+  id: z
+    .string()
+    .regex(MODULE_ID, 'must be dot-separated lower-case kebab case, e.g. "kpi.ingestion"'),
+  version: z.string().regex(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/, 'must be a semantic version'),
+  tablePrefix: z
+    .string()
+    .regex(/^[a-z][a-z0-9]*(_[a-z0-9]+)*_$/, 'must be lower-case snake case ending in "_"')
+    .optional(),
+  permissions: recordOf(
+    z.strictObject({ scope: z.string().min(1).optional(), description: z.string().min(1) }),
+  ).optional(),
+  settings: zodType.optional(),
+  schema: fn.optional(),
+  migrations: z.union([z.string().min(1), z.instanceof(URL)]).optional(),
+  services: fn.optional(),
+  routes: fn.optional(),
+  jobs: z
+    .array(
+      z.strictObject({
+        name: z.string().min(1),
+        schedule: z.string().min(1).optional(),
+        data: zodType.optional(),
+        handler: fn,
+        retry: z.strictObject({
+          limit: z.number().int().min(0).max(100),
+          delaySeconds: z.number().int().min(0),
+          backoff: z.boolean().optional(),
+        }),
+        timeoutSeconds: z.number().int().min(1),
+      }),
+    )
+    .optional(),
+  events: z
+    .strictObject({
+      emits: recordOf(zodType).optional(),
+      on: recordOf(fn).optional(),
+    })
+    .optional(),
+  registries: recordOf(zodType).optional(),
+  contributes: recordOf(z.array(z.unknown())).optional(),
+  ui: fn.optional(),
+});
+
+/**
+ * Declares a module. Validated by the loader at startup; see `validateManifest`.
+ *
+ * Name the dependencies you use as type arguments so that `ctx.deps` is typed from their
+ * `public.ts`: `defineModule<Service, 'kpi.framework', 'kpi.impact'>({ ... })` for one required
+ * and one optional dependency. The type arguments only shape `ctx.deps`; the dependencies
+ * themselves come from package.json (ADR 0002).
+ */
+export function defineModule<
+  Services = unknown,
+  Required extends keyof ModuleServices = never,
+  Optional extends keyof ModuleServices = never,
+>(manifest: ModuleManifest<Services, ModuleContext<Required, Optional>>): ModuleManifest {
+  return manifest as unknown as ModuleManifest;
+}
+
+function describeIssues(error: z.ZodError): string[] {
+  return error.issues.map((issue) => {
+    const path = issue.path.map(String).join('.');
+    return path ? `${path}: ${issue.message}` : issue.message;
+  });
+}
+
+/** Checks the shape of a manifest and the rules that need no other module. */
+export function validateManifest(manifest: unknown, source: string): ModuleManifest {
+  const parsed = manifestSchema.safeParse(manifest);
+  if (!parsed.success) {
+    const id = (manifest as { id?: unknown } | null)?.id;
+    const who = typeof id === 'string' ? `module "${id}"` : `manifest of ${source}`;
+    throw new KernelStartupError(`Invalid ${who}:`, describeIssues(parsed.error));
+  }
+  const value = manifest as ModuleManifest;
+  const problems: string[] = [];
+
+  for (const id of Object.keys(value.permissions ?? {})) {
+    if (!id.startsWith(`${value.id}.`) || id.length === value.id.length + 1) {
+      problems.push(`permission "${id}" must be prefixed with the module id ("${value.id}.")`);
+    }
+  }
+  for (const job of value.jobs ?? []) {
+    if (!job.name.startsWith(`${value.id}.`)) {
+      problems.push(`job "${job.name}" must be prefixed with the module id ("${value.id}.")`);
+    }
+  }
+  const jobNames = (value.jobs ?? []).map((job) => job.name);
+  for (const name of jobNames.filter((name, index) => jobNames.indexOf(name) !== index)) {
+    problems.push(`job "${name}" is declared twice`);
+  }
+  for (const name of Object.keys(value.events?.emits ?? {})) {
+    if (!EVENT_NAME.test(name)) {
+      problems.push(`event "${name}" must be versioned, for example "service.created@1"`);
+    }
+  }
+  for (const name of Object.keys(value.events?.on ?? {})) {
+    if (name !== SYSTEM_READY && !EVENT_NAME.test(name)) {
+      problems.push(`subscription "${name}" must be a versioned event name or "${SYSTEM_READY}"`);
+    }
+  }
+  if (problems.length > 0) throw new KernelStartupError(`Invalid module "${value.id}":`, problems);
+  return value;
+}
