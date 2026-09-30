@@ -37,7 +37,21 @@ modules:sync` generates it and `pnpm check` fails if it is stale. It also gives 
   `apps/server/package.json` to exactly the profile's modules. The server imports modules only
   through the generated file; a lint option (`manifestImporters`) allows the `/module` import
   there and nowhere else. The committed file is the one for `full`; the Docker build regenerates
-  it for its `PROFILE` (the image build is described in the M1 image pull request).
+  it for its `PROFILE`.
+- **The image holds only the profile's modules.** The Docker build runs `profile:generate`, updates
+  the lockfile (versions are all reused; only the server's workspace links change), and installs
+  with a frozen, filtered install (`--prod --filter @scorpion/server...`). `scripts/image-tree.ts`
+  then copies the server's closure (following `dependencies` from `apps/server`, which the
+  generator set to the profile's modules) and nothing else into the runtime image: no other
+  module, no tests, no dev tools. `autoInstallPeers: false` in `pnpm-workspace.yaml` is what keeps
+  a module's _optional_ dependencies out of the image unless the profile lists them. Workspace
+  packages stay directories that `node_modules` links to (`pnpm deploy` would copy them into
+  `node_modules`, where Node refuses to run TypeScript by type stripping). CI lists every
+  `@scorpion/*` package in each image (`scripts/check-image-modules.ts`) and fails if a module
+  outside the profile is there or one of the profile is missing. Because the real profiles are
+  still empty, a fixture profile (`fixture.a` and `fixture.b`, without their optional `fixture.opt`)
+  is built and started against Postgres too, and the check is shown to fail on images that were
+  made to break the rule.
 - **Module packages export three entries**: `./module` (the manifest, default export), `./public`
   (what other modules may import) and `./package.json`.
 - **Permission ids and job names start with the owning module's id** (`kpi.ingestion.measurement.submit`,

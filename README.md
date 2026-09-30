@@ -118,4 +118,4 @@ branches from `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and r
 
 ## Licence
 
-Not chosen yet; see [LICENSE](LICENSE).
+This project is licensed under the ISC License. See [LICENSE](LICENSE).

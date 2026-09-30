@@ -97,7 +97,7 @@ export default defineModule({
 5. Build each module's services, in dependency order, with a context that holds only the services of its declared dependencies.
 6. Mount routes, schedule jobs, subscribe event handlers, emit `system.ready`.
 
-**Profiles and code generation.** A profile is `defineProfile({ name, modules })`, with module ids checked against the workspace. `pnpm scorpion profile:generate <name>` writes `apps/server/src/generated/profile.ts` with static imports of the profile's module manifests, and points the server's `package.json` at exactly those modules. The server imports modules only through that generated file. The file is committed for `full` and regenerated in the Docker build for the chosen `PROFILE`, so an image contains only its profile's modules.
+**Profiles and code generation.** A profile is `defineProfile({ name, modules })`, with module ids checked against the workspace. `pnpm scorpion profile:generate <name>` writes `apps/server/src/generated/profile.ts` with static imports of the profile's module manifests, and points the server's `package.json` at exactly those modules. The server imports modules only through that generated file. The file is committed for `full` and regenerated in the Docker build for the chosen `PROFILE`, so an image contains only its profile's modules: the build installs the server's dependencies again for the profile and copies only that closure into the runtime image, and CI checks the result.
 
 **Registries (extension points).** A module can declare a registry, and any module that depends on it can contribute entries. These are the registries from FEATURES.md §2 and §6:
 
