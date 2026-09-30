@@ -70,6 +70,21 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The image needs a database to become ready: the smoke test starts it against this one.
+    services:
+      postgres:
+        image: postgres:16.15-alpine
+        env:
+          POSTGRES_USER: scorpion
+          POSTGRES_PASSWORD: scorpion
+          POSTGRES_DB: scorpion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scorpion -d scorpion"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     strategy:
       fail-fast: false
       matrix:
@@ -89,16 +104,36 @@ jobs:
           cache-from: type=gha,scope=image-${{ matrix.profile }}
           cache-to: type=gha,mode=max,scope=image-${{ matrix.profile }}
 
-      - name: Smoke test /healthz
-        if: matrix.profile == 'full'
+      # The image applies its migrations when it starts. /healthz says the process is alive;
+      # /readyz says the database answers and every migration is applied.
+      - name: Smoke test /healthz, /readyz and /metrics
+        env:
+          IMAGE: scorpion:ci-${{ matrix.profile }}
         run: |
-          docker run -d --rm -p 3000:3000 --name scorpion-smoke scorpion:ci-full
-          for _ in $(seq 1 30); do
-            if curl -fsS localhost:3000/healthz; then
-              docker stop scorpion-smoke
+          docker run -d --rm --network host --name scorpion-smoke \
+            -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
+            "$IMAGE"
+          for _ in $(seq 1 60); do
+            if curl -fsS localhost:3000/healthz && curl -fsS localhost:3000/readyz; then
+              curl -fsS localhost:3000/metrics | grep -q '^scorpion_outbox_lag_seconds'
+              docker stop --time 20 scorpion-smoke
               exit 0
             fi
             sleep 1
           done
           docker logs scorpion-smoke
           exit 1
+
+      - name: Smoke test `scorpion migrate` and the profile check
+        env:
+          IMAGE: scorpion:ci-${{ matrix.profile }}
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
+            "$IMAGE" node apps/server/src/cli.ts migrate
+          if docker run --rm --network host -e PROFILE=not-this-one \
+            -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
+            "$IMAGE" node apps/server/src/cli.ts start; then
+            echo "an image must refuse a PROFILE it was not built for" >&2
+            exit 1
+          fi

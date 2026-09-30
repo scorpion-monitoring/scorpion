@@ -1,4 +1,7 @@
 # Backing services for local development (`pnpm dev`). Not for production.
+#
+# `docker compose -f docker-compose.dev.yml --profile app up --build` also builds and runs the server
+# image for PROFILE (default `full`), to try what CI builds: it applies its migrations when it starts.
 name: scorpion-dev
 
 services:
@@ -28,6 +31,26 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # Only with `--profile app`; `pnpm dev` runs the server from source instead.
+  server:
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PROFILE: ${PROFILE:-full}
+    environment:
+      DATABASE_URL: postgres://scorpion:scorpion@postgres:5432/scorpion
+      PROFILE: ${PROFILE:-full}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_MODE: inline
+      ORIGIN: http://localhost:3000
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres-data:
