@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history, so the changeset check can diff against the base branch.
+          fetch-depth: 0
 
       # Version comes from `packageManager` in package.json.
       - uses: pnpm/action-setup@v6
@@ -29,6 +32,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Every pull request adds a changeset (or an empty one); see .changeset/README.md.
+      - if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: pnpm changeset:check "origin/$BASE_REF"
 
       - run: pnpm check
 
