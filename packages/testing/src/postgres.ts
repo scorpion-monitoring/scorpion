@@ -1,6 +1,6 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
-export const POSTGRES_IMAGE = 'postgres:16-alpine';
+export const POSTGRES_IMAGE = 'postgres:16.15-alpine';
 
 export interface StartedPostgres {
   /** Connection URL, e.g. `postgres://user:pass@127.0.0.1:32768/db`. */
