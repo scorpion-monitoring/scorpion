@@ -30,7 +30,11 @@ function project(dir: string): TestProjectConfiguration {
 
 export default defineConfig({
   test: {
-    projects: packageDirs().map(project),
+    projects: [
+      ...packageDirs().map(project),
+      // Repository scripts (branch policy, changeset check) are not a package.
+      { test: { name: 'scripts', root: resolve('scripts') } },
+    ],
     passWithNoTests: true,
   },
 });

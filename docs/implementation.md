@@ -3,7 +3,7 @@
 Status: approved architecture, 2026-09-30
 Inputs: `FEATURES.md` (requirements baseline) and *Scorpion Rebuild: Overall Architecture* (approved design)
 
-This plan turns the approved architecture into 19 milestones (M0–M18). They are grouped into the four roadmap phases, and each phase ends at a gate. Every milestone leaves `main` releasable. The plan gives no calendar dates because team size and start date are not fixed yet. Each milestone has a relative size instead: S ≈ 1 week, M ≈ 2–3 weeks, L ≈ 4+ weeks for one developer.
+This plan turns the approved architecture into 19 milestones (M0–M18). They are grouped into the four roadmap phases, and each phase ends at a gate. Every milestone ends with a release: work is integrated on `dev`, and a `release/*` branch merges it into `main` with a version tag (M0 is `v0.1.0`). The plan gives no calendar dates because team size and start date are not fixed yet. Each milestone has a relative size instead: S ≈ 1 week, M ≈ 2–3 weeks, L ≈ 4+ weeks for one developer.
 
 ---
 
@@ -11,7 +11,7 @@ This plan turns the approved architecture into 19 milestones (M0–M18). They ar
 
 A milestone is **done** only when all of the following hold:
 
-1. Code is merged to `main` with CI green: lint, type check, unit, integration, contract, and E2E tests for any affected journey.
+1. Code is merged to `dev` through pull requests with CI green (lint, type check, unit, integration, contract, and E2E tests for any affected journey), and the milestone is released: a `release/*` branch merged into `main` and tagged `v<version>`.
 2. Every new route declares a `permission` and has a test for a denied request.
 3. Every multi-row write runs in one transaction and has a rollback test.
 4. Every input is validated by Zod. Invalid input returns 422 (problem+json) and never 500.
@@ -70,6 +70,7 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Playwright config for `apps/web`.
 - Docker: multi-stage build that takes a `PROFILE` build argument; `docker-compose.dev.yml` with Postgres 16 and Mailpit.
 - GitHub Actions: install, lint, type check, test, build one image per profile (matrix).
+- Branch policy: `main` (releases only), `dev` (integration), `feature/*` from `dev`, `release/<x.y.z>` from `dev` into `main`, `hotfix/<x.y.z>` from `main`. CI rejects pull requests that break it.
 - Changesets for the changelog: a root `CHANGELOG.md`, the `scorpion` root package carries the product version, and CI fails a pull request that adds no changeset.
 - `CLAUDE.md`, `README.md`, `CONTRIBUTING.md`, ADR folder (`docs/adr/`) with ADR-001 "Modular monolith, build-time composition".
 
