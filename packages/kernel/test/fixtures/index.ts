@@ -13,6 +13,7 @@ export const FIXTURE_MODULE_PACKAGES: Record<string, string> = {
   'fixture.cycle-x': '@scorpion/fixture-cycle-x',
   'fixture.cycle-y': '@scorpion/fixture-cycle-y',
   'fixture.missing': '@scorpion/fixture-missing',
+  'fixture.bad-prefix': '@scorpion/fixture-bad-prefix',
   'fixture.foreign-contrib': '@scorpion/fixture-foreign-contrib',
   'fixture.dup': '@scorpion/fixture-dup',
   'fixture.dup.inner': '@scorpion/fixture-dup-inner',
