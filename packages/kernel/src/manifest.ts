@@ -1,3 +1,4 @@
+import type { AnyHandler, AppRoute } from '@scorpion/contracts';
 import { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
 import type { ModuleContext, ModuleServices } from './context.ts';
@@ -48,12 +49,14 @@ export interface DomainEvent<Payload = unknown> {
 
 export type EventHandler<C = ModuleContext> = (event: DomainEvent, ctx: C) => Promise<void>;
 
-/** What a module's `routes(r)` receives. Concrete route types arrive with `packages/contracts`. */
+/** What a module's `routes(r, ctx)` receives. Every route is checked when it is registered. */
 export interface RouteRegistrar {
-  /** Routes under `/api/internal` for the SvelteKit UI. */
-  internal(...routes: unknown[]): void;
-  /** Routes of a public API version, for example `r.public('v1', route)`. */
-  public(version: 'v1', ...routes: unknown[]): void;
+  /** A route under `/api/internal` for the SvelteKit UI. */
+  internal<R extends AppRoute>(route: R, handler: AnyHandler): void;
+  /** A route of a public API version, for example `r.public('v1', route, handler)`. */
+  public<R extends AppRoute>(version: 'v1', route: R, handler: AnyHandler): void;
+  /** The service object this module's `services()` returned. Handlers call it; they hold no logic. */
+  service<T = unknown>(): T;
 }
 
 export interface ModuleManifest<Services = unknown, C = ModuleContext> {
@@ -74,7 +77,7 @@ export interface ModuleManifest<Services = unknown, C = ModuleContext> {
   /** Folder with the module's Drizzle migrations: an absolute path or a `file:` URL. */
   migrations?: string | URL;
   services?: (ctx: C) => Services | Promise<Services>;
-  routes?: (r: RouteRegistrar) => void;
+  routes?: (r: RouteRegistrar, ctx: C) => void;
   jobs?: JobDef<C>[];
   events?: {
     /** Event name → payload schema. */
