@@ -1,0 +1,16 @@
+{
+  "name": "@scorpion/fixture-bad-prefix",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@scorpion/kernel": "workspace:*",
+    "drizzle-orm": "^0.45.3"
+  }
+}

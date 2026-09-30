@@ -4,9 +4,11 @@ Scorpion is a service registry and KPI tracker for research infrastructures (de.
 This repository is the rebuild as a **modular monolith**: one server, one PostgreSQL database,
 many modules. A deployment **profile** selects the modules at build time.
 
-Status: milestone **M0** (repository and toolchain bootstrap). The server answers only
-`GET /healthz`, and the web app shows a placeholder page. See
-[docs/implementation.md](docs/implementation.md) for the milestone plan.
+Status: milestone **M1** (the kernel). Modules can be declared, resolved, migrated and wired
+together, but no real module exists yet, so the server serves only its probes (`/healthz`,
+`/readyz`, `/metrics`) and the web app shows a placeholder page. See
+[docs/implementation.md](docs/implementation.md) for the milestone plan and
+[packages/kernel/README.md](packages/kernel/README.md) for the module-author guide.
 
 ## Prerequisites
 
@@ -19,8 +21,11 @@ Status: milestone **M0** (repository and toolchain bootstrap). The server answer
 ```bash
 pnpm i
 pnpm dev          # Postgres + Mailpit (Docker), server on :3000, web on :5173
-curl localhost:3000/healthz
+curl localhost:3000/readyz
 ```
+
+`pnpm dev` creates `.env` from `.env.example` when it is missing, starts Postgres and Mailpit,
+and runs the server (which applies pending migrations on start) and the web app.
 
 Mailpit's web UI runs on <http://localhost:8025> (SMTP on port 1025).
 
@@ -46,13 +51,45 @@ never loaded at runtime ([ADR-0001](docs/adr/0001-modular-monolith-build-time-co
 | `kpi-tracker`     | KPI collection and analytics                                       |
 
 The module lists for each profile are in the comments of the profile files, and the full
-matrix is in [docs/architecture.md](docs/architecture.md). In M0 every profile's module list is
+matrix is in [docs/architecture.md](docs/architecture.md). Until M2 every profile's module list is
 still empty.
 
 ```bash
 PROFILE=kpi-tracker pnpm dev
 docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
 ```
+
+## Running it
+
+The image (`scorpion:<version>-<profile>`) starts with `node apps/server/src/cli.ts start`. It is
+configured through the environment; unknown or invalid values stop the start with the full list of
+what is wrong, and secrets never appear in logs.
+
+| Variable       | Default                  | Meaning                                                                    |
+| -------------- | ------------------------ | -------------------------------------------------------------------------- |
+| `DATABASE_URL` | none, required           | PostgreSQL 16 connection URL                                               |
+| `PROFILE`      | the profile of the build | Must match the build; an image refuses another profile                     |
+| `PORT`         | `3000`                   | Port to listen on                                                          |
+| `BASE_PATH`    | `/`                      | Path prefix, `/` or `/a/b` (any depth, no trailing slash)                  |
+| `LOG_LEVEL`    | `info`                   | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`             |
+| `WORKER_MODE`  | `inline`                 | `inline`: this process also runs jobs and events; `separate`: use a worker |
+| `ORIGIN`       | `http://localhost:$PORT` | Public origin (scheme, host, port), without a path                         |
+
+| Command                     | What it does                                                         |
+| --------------------------- | -------------------------------------------------------------------- |
+| `scorpion start`            | Migrates, then serves (and runs workers when `WORKER_MODE=inline`)   |
+| `scorpion worker`           | Migrates, then runs jobs and the event dispatcher only, without HTTP |
+| `scorpion migrate`          | Applies pending migrations of every module and exits                 |
+| `scorpion profile:generate` | Build time: composes the server for a profile                        |
+
+`GET /healthz` says the process is alive and never touches the database. `GET /readyz` answers 503
+until the database answers and every migration is applied, and again while shutting down.
+`GET /metrics` serves Prometheus metrics (process, HTTP duration by route, outbox lag, job
+durations); restrict it at the proxy if the network is not trusted. On SIGTERM the server stops
+accepting requests, lets running requests, jobs and event handlers finish (up to 30 s), and closes
+its connections.
+
+To try an image locally: `docker compose -f docker-compose.dev.yml --profile app up --build`.
 
 ## Repository layout
 
@@ -81,4 +118,4 @@ branches from `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and r
 
 ## Licence
 
-Not chosen yet; see [LICENSE](LICENSE).
+This project is licensed under the ISC License. See [LICENSE](LICENSE).

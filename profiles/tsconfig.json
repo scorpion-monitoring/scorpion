@@ -4,5 +4,6 @@
     "rootDir": ".",
     "outDir": "../node_modules/.cache/tsc/profiles"
   },
-  "include": ["*.ts"]
+  "include": ["*.ts"],
+  "references": [{ "path": "../packages/kernel" }]
 }

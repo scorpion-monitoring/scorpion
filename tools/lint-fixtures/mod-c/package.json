@@ -1,0 +1,20 @@
+{
+  "name": "@scorpion/mod-c",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./public": "./public.ts"
+  },
+  "peerDependencies": {
+    "@scorpion/mod-b": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@scorpion/mod-b": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@scorpion/mod-a": "workspace:*"
+  }
+}

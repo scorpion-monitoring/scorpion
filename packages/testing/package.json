@@ -1,6 +1,7 @@
 {
   "name": "@scorpion/testing",
   "version": "0.0.0",
+  "license": "ISC",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,10 +11,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@testcontainers/postgresql": "^12.2.0"
+    "@testcontainers/postgresql": "^12.2.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.23.1",
-    "pg": "^8.23.0"
+    "@types/pg": "^8.23.1"
   }
 }

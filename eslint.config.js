@@ -53,7 +53,14 @@ export default defineConfig(
   {
     plugins: { '@scorpion': scorpion },
     rules: {
-      '@scorpion/module-boundaries': ['error', { moduleRoots: ['modules', 'tools/lint-fixtures'] }],
+      '@scorpion/module-boundaries': [
+        'error',
+        {
+          moduleRoots: ['modules', 'tools/lint-fixtures', 'packages/kernel/test/fixtures/modules'],
+          // Written by `scorpion profile:generate`; the only file that imports module manifests.
+          manifestImporters: ['apps/server/src/generated/profile.ts'],
+        },
+      ],
     },
   },
 );

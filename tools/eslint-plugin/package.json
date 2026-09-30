@@ -1,6 +1,7 @@
 {
   "name": "@scorpion/eslint-plugin",
   "version": "0.0.0",
+  "license": "ISC",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,5 +16,8 @@
   },
   "peerDependencies": {
     "eslint": "^10.0.0"
+  },
+  "dependencies": {
+    "@scorpion/kernel": "workspace:*"
   }
 }

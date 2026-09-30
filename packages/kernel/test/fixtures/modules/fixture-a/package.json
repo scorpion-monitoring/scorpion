@@ -1,0 +1,26 @@
+{
+  "name": "@scorpion/fixture-a",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@scorpion/fixture-b": "workspace:*",
+    "@scorpion/kernel": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "@scorpion/fixture-opt": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@scorpion/fixture-opt": {
+      "optional": true
+    }
+  }
+}
