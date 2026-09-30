@@ -2,6 +2,7 @@
 import type { Config } from './config.ts';
 import type { Db } from './db.ts';
 import type { Logger } from './logger.ts';
+import type { EventsApi } from './outbox.ts';
 
 /**
  * Public service objects by module id. Each module's `public.ts` adds its own entry:
@@ -23,6 +24,8 @@ export interface ModuleContext<
   readonly db: Db;
   /** A logger that carries `module`, and `requestId` or `jobId` when there is one. */
   readonly log: Logger;
+  /** Emit domain events into the transactional outbox. */
+  readonly events: EventsApi;
   /** The validated environment configuration. Contains no secrets other than `DATABASE_URL`. */
   readonly config: Config;
   /**

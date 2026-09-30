@@ -69,3 +69,12 @@ export {
   type MigrationTarget,
 } from './migrate.ts';
 export { maskSecrets, maskString, REDACTED } from './redact.ts';
+export {
+  createDispatcher,
+  createEvents,
+  defaultBackoffMs,
+  EventError,
+  NOTIFY_CHANNEL,
+} from './outbox.ts';
+export type { Dispatcher, DispatcherOptions, EventsApi, Subscription } from './outbox.ts';
+export { listDeadDeliveries, outboxStats, type DeadDelivery, type OutboxStats } from './queries.ts';
