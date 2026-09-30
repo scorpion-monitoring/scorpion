@@ -1,4 +1,7 @@
+# The root package (`scorpion`) is listed so Changesets can version it: it carries the product
+# version and CHANGELOG.md. The internal packages are not versioned separately.
 packages:
+  - .
   - apps/*
   - packages/*
   - modules/*

@@ -67,6 +67,11 @@ docs/            FEATURES.md, architecture.md, implementation.md, adr/, backlog.
 docker/          Dockerfile
 ```
 
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md) is generated from changesets at each release. Every pull request
+adds one with `pnpm changeset`; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Further reading
 
 - [CONTRIBUTING.md](CONTRIBUTING.md): conventions and the definition of done

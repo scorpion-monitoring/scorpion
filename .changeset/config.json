@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "baseBranch": "main",
+  "privatePackages": { "version": true, "tag": true },
+  "updateInternalDependencies": "patch",
+  "ignore": ["@scorpion/*"]
+}
