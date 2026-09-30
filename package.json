@@ -9,12 +9,13 @@
     "pnpm": ">=10.34.0 <11"
   },
   "scripts": {
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && pnpm --filter @scorpion/web check",
     "check": "pnpm typecheck",
     "db:generate": "node scripts/not-yet.ts M1 db:generate",
     "scorpion": "node scripts/not-yet.ts M1 scorpion",
     "test:contract": "node scripts/not-yet.ts M8 test:contract",
-    "test": "node scripts/test.ts"
+    "test": "node scripts/test.ts",
+    "test:e2e": "pnpm --filter @scorpion/web test:e2e"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",
