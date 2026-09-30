@@ -13,7 +13,8 @@
     "check": "pnpm typecheck",
     "db:generate": "node scripts/not-yet.ts M1 db:generate",
     "scorpion": "node scripts/not-yet.ts M1 scorpion",
-    "test:contract": "node scripts/not-yet.ts M8 test:contract"
+    "test:contract": "node scripts/not-yet.ts M8 test:contract",
+    "test": "node scripts/test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",

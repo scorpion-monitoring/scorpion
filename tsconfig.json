@@ -6,6 +6,7 @@
     { "path": "./packages/ui-kit" },
     { "path": "./packages/integrations" },
     { "path": "./packages/testing" },
-    { "path": "./scripts" }
+    { "path": "./scripts" },
+    { "path": "./tsconfig.config.json" }
   ]
 }

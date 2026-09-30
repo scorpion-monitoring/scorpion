@@ -6,3 +6,10 @@ packages:
 
 # Install fails if Node or pnpm do not match `engines` in the root package.json.
 engineStrict: true
+
+# Install scripts are blocked by default. These are optional native add-ons pulled in by
+# Testcontainers (Docker over SSH) and a version-check hook; none is needed here.
+ignoredBuiltDependencies:
+  - cpu-features
+  - protobufjs
+  - ssh2
