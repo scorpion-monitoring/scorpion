@@ -11,8 +11,18 @@ import { Forbidden, Unauthorized } from '@scorpion/contracts';
 import { describe, expect, it } from 'vitest';
 import { useKernels } from '../../../packages/kernel/test/helpers.ts';
 import { createApp, SURFACE_PREFIX, type AppOptions } from './app.ts';
+import { createMetrics } from './metrics.ts';
 
 const kernels = useKernels();
+
+const probes = {
+  readiness: () =>
+    Promise.resolve({
+      ready: true,
+      checks: { database: 'ok', migrations: 'complete', kernel: 'started' } as const,
+    }),
+  metrics: createMetrics(),
+};
 
 const config = loadConfig({ DATABASE_URL: 'postgres://unused@localhost/unused' });
 
@@ -43,6 +53,7 @@ async function fixtureApp(
     log,
     routes: kernel.routes,
     authorizer: denyByDefault,
+    probes,
     ...extra,
   });
   const prefix = base === '/' ? '' : base;
@@ -513,6 +524,7 @@ describe('BASE_PATH', () => {
       log: capture().log,
       routes: kernel.routes,
       authorizer: allow,
+      probes,
     });
     for (const path of [
       '/healthz',

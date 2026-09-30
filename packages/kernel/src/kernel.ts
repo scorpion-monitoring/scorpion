@@ -248,11 +248,11 @@ export function createKernel(options: KernelOptions): Kernel {
   });
 
   async function migrate(): Promise<MigrationReport> {
+    await checkSchemas(); // no side effects, so it runs before the database is touched
     return runMigrations(pool, targets(), log);
   }
 
   async function start(): Promise<void> {
-    await checkSchemas(); // no side effects, so it runs before the database is touched
     await migrate(); // step 2
     log.info(
       { profile: profile.name, modules: profile.modules.map((module) => module.id) },

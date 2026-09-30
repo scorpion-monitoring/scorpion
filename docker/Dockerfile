@@ -3,8 +3,8 @@
 # One image per deployment profile:
 #   docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
 #
-# M0: the image runs only the API server. The profile's modules (M1) and the web UI (M5) are
-# added to this build later.
+# The image runs the API server (`scorpion start`). The web UI (M5) is added to this build later.
+# DATABASE_URL is required at run time; see .env.example for the other variables.
 
 ARG NODE_VERSION=24
 
@@ -23,7 +23,11 @@ RUN test -f "profiles/${PROFILE}.ts" || { echo "Unknown profile '${PROFILE}' (no
 # cache mount, so rebuilds do not download packages again. (`pnpm fetch` is not used: it would
 # put every production dependency of the whole workspace into node_modules.)
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod --filter "@scorpion/server..."
+    pnpm install --frozen-lockfile --prod --filter "@scorpion/server..." --filter "@scorpion/profiles"
+
+# Compose the server for the chosen profile: write apps/server/src/generated/profile.ts with the
+# profile's modules. (Installing only those modules is refined in the per-profile image change.)
+RUN node apps/server/src/cli.ts profile:generate "${PROFILE}"
 
 FROM node:${NODE_VERSION}-slim AS runtime
 ARG PROFILE=full
@@ -40,6 +44,10 @@ COPY --from=build --chown=node:node /repo/profiles ./profiles
 
 USER node
 EXPOSE 3000
+# /healthz answers as long as the process runs, also while migrations are still running. It lives
+# under BASE_PATH like every route, so the check builds the URL from it. Worker containers, which do
+# not listen, override the command and disable this check.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-CMD ["node", "apps/server/src/main.ts"]
+  CMD ["node", "-e", "const base = (process.env.BASE_PATH || '/').replace(/\\/$/, ''); fetch('http://127.0.0.1:' + process.env.PORT + base + '/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+# `start` applies pending migrations, then serves. `worker` runs jobs and events without HTTP.
+CMD ["node", "apps/server/src/cli.ts", "start"]

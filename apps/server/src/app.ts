@@ -1,6 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { Hono } from 'hono';
-import { createRoute, Invalid, z, type AppEnv, type AppRoute } from '@scorpion/contracts';
+import { Invalid, problemResponse, type AppEnv, type AppRoute } from '@scorpion/contracts';
 import {
   mountPath,
   type Authorizer,
@@ -14,6 +14,7 @@ import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.t
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
 import { requestId } from './pipeline/request-id.ts';
 import { securityHeaders } from './pipeline/security-headers.ts';
+import { healthz, metricsRoute, readyz, type SystemProbes } from './system-routes.ts';
 
 export const SURFACE_PREFIX = { internal: '/api/internal', v1: '/api/v1' } as const;
 
@@ -28,23 +29,14 @@ export interface AppOptions {
   maxBodyBytes?: number;
   /** Called after every request; the metrics use it. */
   onRequest?: (info: RequestInfo) => void;
+  /** What `/readyz` and `/metrics` report. */
+  probes: SystemProbes;
+  /**
+   * The kernel is still starting: serve the probes and answer everything else with 503. The server
+   * listens from the first moment, so `/readyz` can say "not yet" while migrations run.
+   */
+  booting?: boolean;
 }
-
-const healthz = createRoute({
-  method: 'get',
-  path: '/healthz',
-  public: true,
-  publicReason:
-    'Liveness probe for the container runtime and load balancers; reveals only that the process runs.',
-  responses: {
-    200: {
-      description: 'The process is alive.',
-      content: {
-        'application/json': { schema: z.object({ status: z.literal('ok'), profile: z.string() }) },
-      },
-    },
-  },
-});
 
 /**
  * The HTTP application. Every request passes the same steps, in this order:
@@ -91,8 +83,49 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   };
 
   mount(healthz, '/healthz', (c) => c.json({ status: 'ok', profile: config.PROFILE }), 'server');
+  mount(
+    readyz,
+    '/readyz',
+    async (c) => {
+      const result = await options.probes.readiness();
+      c.header('cache-control', 'no-store');
+      return c.json(
+        {
+          status: result.ready ? ('ready' as const) : ('unavailable' as const),
+          checks: result.checks,
+        },
+        result.ready ? 200 : 503,
+      );
+    },
+    'server',
+  );
+  mount(
+    metricsRoute,
+    '/metrics',
+    async (c) => {
+      c.header('cache-control', 'no-store');
+      return c.text(await options.probes.metrics.render(), 200, {
+        'content-type': options.probes.metrics.contentType,
+      });
+    },
+    'server',
+  );
   for (const { module, surface, route, handler } of options.routes) {
     mount(route, `${SURFACE_PREFIX[surface]}${route.path}`, handler, module);
+  }
+  if (options.booting) {
+    app.all('*', (c) =>
+      problemResponse(
+        {
+          type: 'about:blank',
+          title: 'Service Unavailable',
+          status: 503,
+          detail: 'The server is starting. Try again in a moment.',
+          requestId: c.get('requestId'),
+        },
+        { 'retry-after': '5' },
+      ),
+    );
   }
 
   app.onError(errorMapper(log));
