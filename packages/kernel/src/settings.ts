@@ -14,7 +14,10 @@ export interface SettingsStore {
 }
 
 export const settingsStoreEntrySchema = z.strictObject({
-  read: z.custom<SettingsStore['read']>((value) => typeof value === 'function', 'expected a function'),
+  read: z.custom<SettingsStore['read']>(
+    (value) => typeof value === 'function',
+    'expected a function',
+  ),
 });
 
 /** What `ctx.settings` is: the settings of the module that owns the context. */
@@ -65,7 +68,8 @@ export function resolveSettings(schema: z.ZodType, stored: unknown): ResolvedSet
     }
   }
   const empty = schema.safeParse({});
-  if (empty.success) return { value: empty.data, dropped: Object.keys(isPlainObject(stored) ? stored : {}) };
+  if (empty.success)
+    return { value: empty.data, dropped: Object.keys(isPlainObject(stored) ? stored : {}) };
   throw new Error(
     `The settings have no valid value: ${empty.error.issues
       .map((issue) => issue.path.map(String).join('.') || '(root)')

@@ -3,6 +3,7 @@
 export const WORKSPACE_MODULES = {
   'core.authz': '@scorpion/core-authz',
   'core.identity': '@scorpion/core-identity',
+  'core.settings': '@scorpion/core-settings',
 } as const satisfies Record<string, string>;
 
 export type ModuleId = keyof typeof WORKSPACE_MODULES;

@@ -6,6 +6,15 @@ export {
 } from './authorizer.ts';
 export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
 export {
+  makePreference,
+  makeSecret,
+  makeSecretsKey,
+  makeSetting,
+  type MakePreference,
+  type MakeSecret,
+  type MakeSetting,
+} from './settings.ts';
+export {
   hashSecret,
   makeAuthMethod,
   makeSession,
