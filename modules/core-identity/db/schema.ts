@@ -41,6 +41,10 @@ export const user = pgTable(
     status: text().notNull().default('pending'),
     /** Soft delete: the row stays, the account cannot sign in. */
     deletedAt: timestamptz('deleted_at'),
+    /** What the person calls themselves; shown next to the username. Plain text, at most 100 characters. */
+    displayName: text('display_name'),
+    /** A few lines about themselves. Plain text (a UI shows it as text, never as HTML), at most 2000 characters. */
+    bio: text(),
     /** The blob store arrives with core.settings (M3); nothing sets this before. */
     avatarBlobId: uuid('avatar_blob_id'),
     /**
@@ -62,6 +66,8 @@ export const user = pgTable(
     index('identity_user_email_idx').on(sql`lower(${table.email})`),
     check('identity_user_username_format', sql`${table.username} ~ '^[a-z0-9_-]{3,31}$'`),
     check('identity_user_status_known', sql`${table.status} in ('pending', 'active', 'rejected')`),
+    check('identity_user_display_name_length', sql`char_length(${table.displayName}) <= 100`),
+    check('identity_user_bio_length', sql`char_length(${table.bio}) <= 2000`),
     check(
       'identity_user_verified_has_email',
       sql`${table.emailVerifiedAt} is null or ${table.email} is not null`,
