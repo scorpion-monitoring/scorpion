@@ -20,9 +20,11 @@
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.12",
     "jose": "^6.2.12",
+    "nodemailer": "^10.0.13",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@scorpion/testing": "workspace:*"
+    "@scorpion/testing": "workspace:*",
+    "@types/nodemailer": "^8.0.2"
   }
 }
