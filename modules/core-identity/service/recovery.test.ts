@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { failOutbox, tokenFrom } from '../test/mail.ts';
 import { useIdentity } from '../test/harness.ts';
 import { hashMailToken } from './mail-tokens.ts';
+import { TooManyRequests } from './errors.ts';
 import { createMemoryMailer } from './mailer.ts';
 import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
@@ -529,6 +530,15 @@ describe('email verification', () => {
     await expect(recovery.resendVerification(ANONYMOUS)).rejects.toBeInstanceOf(Unauthorized);
     await expect(recovery.resendVerification(actorOf(user, 'token'))).rejects.toBeInstanceOf(
       Forbidden,
+    );
+  });
+
+  it('answers 429 to the sixth request for a link within an hour (a limit of the caller, not of an address)', async () => {
+    const { recovery, withPassword } = await start();
+    const user = await withPassword({ email: 'alice@example.org' });
+    for (let i = 0; i < 5; i++) await recovery.resendVerification(actorOf(user));
+    await expect(recovery.resendVerification(actorOf(user))).rejects.toBeInstanceOf(
+      TooManyRequests,
     );
   });
 

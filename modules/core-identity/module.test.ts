@@ -25,6 +25,8 @@ describe('the module', () => {
       'core.identity.email.verify',
       'core.identity.me.read',
       'core.identity.password.change',
+      'core.identity.profile.read',
+      'core.identity.profile.update',
       'core.identity.session.manage',
       'core.identity.token.manage',
       'core.identity.token.read',
@@ -39,6 +41,7 @@ describe('the module', () => {
       'identity.password.changed@1',
       'identity.password.reset@1',
       'identity.password.resetRequested@1',
+      'identity.profile.updated@1',
       'identity.token.created@1',
       'identity.token.revoked@1',
       'identity.token.rotated@1',
@@ -102,7 +105,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(5); // 0000 to 0004, each once
+    expect(journal.rows).toHaveLength(6); // 0000 to 0005, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {

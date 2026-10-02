@@ -154,3 +154,44 @@ export const changePasswordInput = z.strictObject({
   newPassword: password,
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordInput>;
+
+export const DISPLAY_NAME_MAX = 100;
+export const BIO_MAX = 2000;
+
+/** Text for a profile field: trimmed, no control characters (a bio may hold line breaks and tabs). */
+const profileText = (max: number, multiline: boolean) =>
+  z
+    .string()
+    .max(max * 2) // a cheap bound before the trim and the character checks
+    .transform((value) => value.replace(/\r\n?/g, '\n').trim())
+    .pipe(
+      z
+        .string()
+        .max(max)
+        .refine(
+          (value) => !(multiline ? /[\p{Cc}&&[^\n\t]]/v : /\p{Cc}/u).test(value),
+          'may not contain control characters',
+        ),
+    );
+
+/**
+ * `PATCH /account/profile`: every field is optional, none may be missing altogether. `null` or an
+ * empty text clears a name or a bio. Only these fields: a `username`, `status` or `userId` in the
+ * body is a 422, so a profile edit can never change anything else (nobody edits another account).
+ */
+export const updateProfileInput = z
+  .strictObject({
+    displayName: profileText(DISPLAY_NAME_MAX, false)
+      .nullable()
+      .transform((value) => (value === '' ? null : value))
+      .optional(),
+    bio: profileText(BIO_MAX, true)
+      .nullable()
+      .transform((value) => (value === '' ? null : value))
+      .optional(),
+    email: email.optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'must change at least one field',
+  });
+export type UpdateProfileInput = z.input<typeof updateProfileInput>;

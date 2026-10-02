@@ -7,6 +7,7 @@ import { createAccountService } from './service/accounts.ts';
 import { createBootstrapService, type BootstrapService } from './service/bootstrap.ts';
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
+import { createProfileService, type ProfileService } from './service/profile.ts';
 import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
 import { mailerFromEnvironment, type Mailer } from './service/mailer.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
@@ -34,6 +35,7 @@ export interface IdentityInternals extends IdentityService {
   bootstrap: BootstrapService;
   loginStates: LoginStateService;
   oidc: OidcService;
+  profile: ProfileService;
   recovery: RecoveryService;
   sessions: SessionService;
   tokens: TokenService;
@@ -117,6 +119,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'core.identity.auth-method.link': {
         description: 'Add a sign-in provider (OIDC) to your own account',
       },
+      'core.identity.profile.read': { description: 'Read your own profile' },
+      'core.identity.profile.update': { description: 'Edit your own profile' },
       'core.identity.password.change': { description: 'Change your own password' },
       'core.identity.email.verify': {
         description: 'Ask for a new confirmation mail for your own address',
@@ -159,6 +163,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.password.reset@1': userEvent,
         'identity.password.changed@1': userEvent,
         'identity.email.verified@1': userEvent,
+        // Which fields changed, never their values. `email` means a change was asked for.
+        'identity.profile.updated@1': userEvent.extend({
+          fields: z.array(z.enum(['displayName', 'bio', 'email'])).min(1),
+        }),
         'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
         'identity.token.revoked@1': tokenEvent,
@@ -210,6 +218,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       });
       return {
         bootstrap,
+        profile: createProfileService(ctx, { recovery }),
         recovery,
         loginStates,
         oidc,
@@ -222,9 +231,17 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, oidc, recovery, tokens } =
+      const { accounts, approval, bootstrap, oidc, profile, recovery, tokens } =
         r.service<IdentityInternals>();
-      registerIdentityRoutes(r, { accounts, approval, bootstrap, oidc, recovery, tokens });
+      registerIdentityRoutes(r, {
+        accounts,
+        approval,
+        bootstrap,
+        oidc,
+        profile,
+        recovery,
+        tokens,
+      });
     },
   });
 }

@@ -31,6 +31,7 @@ import {
 } from './mail-tokens.ts';
 import { resetMail, verificationMail, type MailContext } from './mail-messages.ts';
 import { dispatch, type Mail, type Mailer } from './mailer.ts';
+import { TooManyRequests } from './errors.ts';
 import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { requireSession } from './require-user.ts';
@@ -307,7 +308,8 @@ export function createRecoveryService(
         .limit(1);
       if (!account?.email) throw new Conflict('This account has no email address.');
       const budget = await limiter.consume(`identity.verify:${userId}`, MAIL_BUDGET_PER_USER);
-      if (!budget.allowed) return;
+      if (!budget.allowed)
+        throw new TooManyRequests('Too many confirmation mails. Try again later.');
       // The address to confirm: a new one that is waiting, else the current one.
       const [waiting] = await ctx.db
         .select({ email: mailToken.email })
