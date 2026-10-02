@@ -107,6 +107,50 @@ const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sam
     kind: 'admin',
     sample: ({ id }) => ({ method: 'DELETE', path: `/users/${id}/roles/admin` }),
   },
+  // core.settings (M3 sprint 3). Configuration and secrets are Admin's; preferences are your own.
+  'GET /settings': { kind: 'admin', sample: () => ({ method: 'GET', path: '/settings' }) },
+  'GET /settings/{module}': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/settings/core.identity' }),
+  },
+  'GET /settings/{module}/schema': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/settings/core.identity/schema' }),
+  },
+  'PUT /settings/{module}': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'PUT',
+      path: '/settings/core.identity',
+      body: { version: 0, values: { localAccounts: false } },
+    }),
+  },
+  'GET /secrets': { kind: 'admin', sample: () => ({ method: 'GET', path: '/secrets' }) },
+  'PUT /secrets/{name}': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'PUT',
+      path: '/secrets/oidc.evil.client-secret',
+      body: { value: 'attacker-chosen-secret' },
+    }),
+  },
+  'DELETE /secrets/{name}': {
+    kind: 'admin',
+    sample: () => ({ method: 'DELETE', path: '/secrets/oidc.evil.client-secret' }),
+  },
+  'GET /preferences': { kind: 'self', sample: () => ({ method: 'GET', path: '/preferences' }) },
+  'PUT /preferences/{key}': {
+    kind: 'self',
+    sample: () => ({
+      method: 'PUT',
+      path: '/preferences/nobody.registered.this',
+      body: { value: 1 },
+    }),
+  },
+  'DELETE /preferences/{key}': {
+    kind: 'self',
+    sample: () => ({ method: 'DELETE', path: '/preferences/nobody.registered.this' }),
+  },
 };
 
 const send = (s: Started, sample: Sample, auth: { cookie?: string; csrf?: string } = {}) =>
@@ -194,6 +238,13 @@ describe('defect 1: the route table', () => {
     expect(
       (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'authz.%'")).rows,
     ).toEqual([]);
+    // Nor did the settings and secrets routes change anything.
+    for (const table of ['settings_setting', 'settings_secret']) {
+      expect((await s.kernel.pool.query(`select 1 from ${table}`)).rows, table).toEqual([]);
+    }
+    expect(
+      (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'settings.%'")).rows,
+    ).toEqual([]);
   });
 
   it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
@@ -220,22 +271,29 @@ describe('defect 1: the route table', () => {
       'core.authz.role.assign',
       'core.authz.role.manage',
       'core.identity.token.manage-any',
+      'core.settings.read',
+      'core.settings.write',
+      'core.settings.secret.write',
     ];
-    const made = await s.post('/tokens', {
-      ...session(plain),
-      body: { name: 'wide', scopes: [...ALL_USER_SCOPES, ...permissions] },
-    });
-    expect(made.status).toBe(201); // a scope that names a permission the owner lacks is allowed ...
-    const { token } = made.body as { token: string };
+    // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
+    const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 11)], permissions.slice(11)];
     const victim = await register(s, 'victim');
-    for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
-      if (kind !== 'admin') continue;
-      const request = sample({ id: victim });
-      const reply = await s.call(request.method, request.path, {
-        headers: bearer(token),
-        body: request.body,
+    for (const [index, scopes] of wide.entries()) {
+      const made = await s.post('/tokens', {
+        ...session(plain),
+        body: { name: `wide${index}`, scopes },
       });
-      expect(reply.status, `${key}: ... but it grants nothing`).toBe(403);
+      expect(made.status).toBe(201); // a scope that names a permission the owner lacks is allowed ...
+      const { token } = made.body as { token: string };
+      for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
+        if (kind !== 'admin') continue;
+        const request = sample({ id: victim });
+        const reply = await s.call(request.method, request.path, {
+          headers: bearer(token),
+          body: request.body,
+        });
+        expect(reply.status, `${key}: ... but it grants nothing`).toBe(403);
+      }
     }
     expect(await statusOf(s, victim)).toBe('pending');
     expect(await rolesOf(s, victim)).toEqual([]);
@@ -535,5 +593,97 @@ describe('defect 1: administrators', () => {
       (await s.call('DELETE', `/users/${root.user.id}/roles/admin`, session(root))).status,
     ).toBe(403);
     expect(await rolesOf(s, root.user.id)).toEqual(['admin']);
+  });
+});
+
+describe('defect 1: settings, secrets and preferences', () => {
+  it('lets a plain User change no setting and no secret, and read none, whatever they send', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const attempts = [
+      {
+        method: 'PUT',
+        path: '/settings/core.identity',
+        body: { version: 0, values: { localAccounts: false } },
+      },
+      { method: 'PUT', path: '/settings/core.settings', body: { version: 0, values: {} } },
+      {
+        method: 'PUT',
+        path: '/secrets/oidc.evil.client-secret',
+        body: { value: 'attacker-secret' },
+      },
+      { method: 'DELETE', path: '/secrets/oidc.evil.client-secret' },
+      { method: 'GET', path: '/settings' },
+      { method: 'GET', path: '/secrets' },
+    ];
+    for (const attempt of attempts) {
+      const reply = await send(s, attempt, session(plain));
+      expect(reply.status, `${attempt.method} ${attempt.path}`).toBe(403);
+    }
+    for (const table of ['settings_setting', 'settings_secret']) {
+      expect((await s.kernel.pool.query(`select 1 from ${table}`)).rows, table).toEqual([]);
+    }
+  });
+
+  it('keeps a token that names the settings scopes at what its owner holds', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const admin = await s.signedIn('boss', { roles: ['admin'] });
+    const scopes = ['core.settings.read', 'core.settings.write', 'core.settings.secret.write'];
+    const wide = (await s.post('/tokens', { ...session(plain), body: { name: 'wide', scopes } }))
+      .body as { token: string };
+    const narrow = (
+      await s.post('/tokens', {
+        ...session(admin),
+        body: { name: 'read-only', scopes: ['core.settings.read'] },
+      })
+    ).body as { token: string };
+    const write = { version: 0, values: { localAccounts: false } };
+    // A plain User's token grants nothing, even with the scopes; an Admin's token is limited to its scopes.
+    expect((await s.call('GET', '/settings', { headers: bearer(wide.token) })).status).toBe(403);
+    expect(
+      (await s.call('PUT', '/settings/core.identity', { headers: bearer(wide.token), body: write }))
+        .status,
+    ).toBe(403);
+    expect((await s.call('GET', '/settings', { headers: bearer(narrow.token) })).status).toBe(200);
+    expect(
+      (
+        await s.call('PUT', '/settings/core.identity', {
+          headers: bearer(narrow.token),
+          body: write,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await s.call('PUT', '/secrets/a.b', { headers: bearer(narrow.token), body: { value: 'x' } }))
+        .status,
+    ).toBe(403);
+    expect((await s.kernel.pool.query('select 1 from settings_setting')).rows).toEqual([]);
+  });
+
+  it('keeps Reviewer out: the role holds no settings permission unless an administrator gives it', async () => {
+    const s = await start();
+    const reviewer = await s.signedIn('reviewer', { roles: ['reviewer'] });
+    for (const [method, path] of [
+      ['GET', '/settings'],
+      ['GET', '/secrets'],
+    ] as const) {
+      expect((await s.call(method, path, session(reviewer))).status, path).toBe(403);
+    }
+  });
+
+  it('lets nobody read another user’s preferences: there is no route that names a user', async () => {
+    const s = await start();
+    const admin = await s.signedIn('boss', { roles: ['admin'] });
+    // Even an Admin sees only their own list.
+    const preferenceRoutes = [...s.kernel.routes]
+      .filter((entry) => entry.route.path.startsWith('/preferences'))
+      .map((entry) => entry.route.path);
+    expect(preferenceRoutes.sort()).toEqual([
+      '/preferences',
+      '/preferences/{key}',
+      '/preferences/{key}',
+    ]);
+    expect((await s.get('/preferences', session(admin))).status).toBe(200);
   });
 });

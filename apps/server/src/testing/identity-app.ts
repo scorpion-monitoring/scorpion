@@ -19,7 +19,13 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
-import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
+import {
+  createKernel,
+  createLogger,
+  loadConfig,
+  type Kernel,
+  type ModuleManifest,
+} from '@scorpion/kernel';
 import {
   makeRole,
   makeRoleAssignment,
@@ -30,6 +36,7 @@ import {
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createApp, SURFACE_PREFIX, type AppOptions } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
+import { limitsFromSettings } from '../pipeline/rate-limit.ts';
 
 export { createMemoryMailer } from '@scorpion/core-identity/module';
 export const API = SURFACE_PREFIX.internal;
@@ -61,6 +68,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   secretsKeyNext?: string;
   /** Start over a database that another app already uses (a second server process). */
   databaseUrl?: string;
+  /** Fixture modules that depend on core.settings, for example one that registers user preferences. */
+  extraModules?: { id: string; manifest: ModuleManifest }[];
   /** Use the limits stored in core.settings (as the server does) instead of the constants. */
   storedRateLimits?: boolean;
 }
@@ -113,7 +122,12 @@ export function useIdentityApp() {
       const kernel = createKernel({
         profile: {
           name: 'identity-http',
-          modules: ['core.authz', 'core.settings', 'core.identity'],
+          modules: [
+            'core.authz',
+            'core.settings',
+            'core.identity',
+            ...(options.extraModules ?? []).map((extra) => extra.id),
+          ] as never,
         },
         sources: [
           { manifest: authzModule, packageJson: authzPackage },
@@ -128,11 +142,24 @@ export function useIdentityApp() {
             packageJson: settingsPackage,
           },
           { manifest: createIdentityModule(options), packageJson },
+          ...(options.extraModules ?? []).map((extra) => ({
+            manifest: extra.manifest,
+            packageJson: {
+              name: `@scorpion/${extra.id.replaceAll('.', '-')}`,
+              dependencies: { '@scorpion/core-settings': 'workspace:*' },
+            },
+          })),
         ],
         modulePackages: {
           'core.authz': '@scorpion/core-authz',
           'core.settings': '@scorpion/core-settings',
           'core.identity': '@scorpion/core-identity',
+          ...Object.fromEntries(
+            (options.extraModules ?? []).map((extra) => [
+              extra.id,
+              `@scorpion/${extra.id.replaceAll('.', '-')}`,
+            ]),
+          ),
         },
         config: loadConfig({
           DATABASE_URL: databaseUrl,
@@ -151,8 +178,12 @@ export function useIdentityApp() {
         routes: kernel.routes,
         authenticator: kernel.authenticator,
         authorizer: kernel.authorizer,
-        rateLimiter: options.rateLimits ? kernel.rateLimiter : undefined,
+        rateLimiter:
+          options.rateLimits || options.storedRateLimits ? kernel.rateLimiter : undefined,
         rateLimits: options.rateLimits,
+        storedRateLimits: options.storedRateLimits
+          ? async () => limitsFromSettings(await kernel.settingsOf('core.settings').get())
+          : undefined,
         probes: {
           readiness: () =>
             Promise.resolve({

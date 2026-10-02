@@ -6,11 +6,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any --
    the bodies of the responses are read as plain JSON */
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
-import { startPostgres, type StartedPostgres } from '@scorpion/testing';
+import { makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createApp, SURFACE_PREFIX } from './app.ts';
 import { moduleIds, profileName, sources } from './generated/profile.ts';
 import { createMetrics } from './metrics.ts';
+
+// The generated profile has core.settings, which will not start without a key (ADR 0016).
+process.env.SECRETS_KEY = makeSecretsKey();
 
 let server: StartedPostgres;
 const open: Kernel[] = [];
@@ -107,7 +110,7 @@ async function boot() {
 describe('a fresh full-profile instance, end to end, on the real authoriser', () => {
   it('goes from create-admin to a limited personal access token', async () => {
     const { kernel, call, login, bootstrap, logs } = await boot();
-    expect(moduleIds).toEqual(['core.authz', 'core.identity']);
+    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.identity']);
 
     // 1. The first administrator, as `scorpion create-admin` makes it: Admin, given by the system.
     const created = await bootstrap.createAdmin({

@@ -44,11 +44,13 @@ const settings = (clientId = KEYCLOAK_CLIENT_ID) =>
   });
 
 async function startApp(options: Parameters<typeof app.start>[0] = {}) {
-  const started = await app.start({
-    settings: settings(),
-    clientSecret: (id) => (id === PROVIDER_ID ? KEYCLOAK_CLIENT_SECRET : undefined),
-    ...options,
-  });
+  // The client secret is in the encrypted secrets store, as `scorpion set-secret` puts it there
+  // (ADR 0016); the module's default lookup reads it from there, with no environment variable.
+  const started = await app.start({ settings: settings(), ...options });
+  await started.settings.secrets.setAsSystem(
+    `oidc.${PROVIDER_ID}.client-secret`,
+    KEYCLOAK_CLIENT_SECRET,
+  );
   expect(started.kernel.config.ORIGIN).toBe('http://localhost:3000'); // what the realm registered
   const count = async (table: string) =>
     Number(
