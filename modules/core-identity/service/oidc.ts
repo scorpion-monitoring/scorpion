@@ -1,11 +1,12 @@
-// OIDC login (ADR 0011): start a login and complete it at the callback. Everything that changes
-// data goes through here.
+// OIDC login (ADR 0011): start a login, complete it at the callback, and link a provider to a
+// signed-in account. Everything that changes data goes through here.
 import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
-import { Forbidden, NotFound, Unauthorized } from '@scorpion/contracts';
-import type { ModuleContext } from '@scorpion/kernel';
+import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
+import { ids, type ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
+import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
 import {
   challengeOf,
   constantTimeEqual,
@@ -16,8 +17,10 @@ import { BadRequest, InvalidIdToken, ProviderUnavailable } from './oidc-errors.t
 import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
 import { verifyIdToken, type IdentityClaims } from './oidc-token.ts';
+import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
 import type { IdentitySettings, OidcProvider } from './settings.ts';
+import { usernameBase, usernameCandidates } from './username.ts';
 
 /** Where the internal API is mounted; the callback URL registered at the provider ends in `/auth/oidc/<id>/callback`. */
 const INTERNAL_PREFIX = '/api/internal';
@@ -31,7 +34,8 @@ export interface StartedLogin {
   cookie: { value: string; maxAgeSeconds: number };
 }
 
-export type CompletedLogin = { kind: 'login'; sessionId: string; expiresAt: Date };
+export type CompletedLogin =
+  { kind: 'login'; sessionId: string; expiresAt: Date } | { kind: 'linked' };
 
 export interface CompleteInput {
   providerId: string;
@@ -50,7 +54,9 @@ export interface OidcService {
   readonly landing: string;
   /** Starts a login for anyone. 404 for a provider that is not configured, 502 when it cannot be reached. */
   start(providerId: string): Promise<StartedLogin>;
-  /** Completes the login that this browser started. */
+  /** Starts the flow that adds a provider to the signed-in caller's account. Session only. */
+  startLink(actor: Actor, providerId: string): Promise<StartedLogin>;
+  /** Completes the login (or the link) that this browser started. */
   complete(input: CompleteInput): Promise<CompletedLogin>;
 }
 
@@ -104,10 +110,10 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     ctx.log.warn({ provider: providerId, reason, ...extra }, 'oidc login refused');
   }
 
-  async function begin(providerId: string): Promise<StartedLogin> {
+  async function begin(providerId: string, linkUserId?: string): Promise<StartedLogin> {
     const provider = await providerOrThrow(providerId);
     const discovery = await providers.discovery(provider);
-    const fresh = await states.create(provider.id);
+    const fresh = await states.create(provider.id, linkUserId);
     const url = clientFor(provider).createAuthorizationURLWithPKCE(
       discovery.authorizationEndpoint,
       fresh.state,
@@ -120,6 +126,12 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       authorizationUrl: url.toString(),
       cookie: { value: fresh.verifier, maxAgeSeconds: 600 },
     };
+  }
+
+  function policyFor(id: string): ApprovalPolicyEntry | undefined {
+    return (ctx.registry(APPROVAL_POLICY_REGISTRY) as readonly ApprovalPolicyEntry[]).find(
+      (entry) => entry.id === id,
+    );
   }
 
   /** The same refusals as a password login: a pending account waits, a rejected or deleted one is simply refused. */
@@ -143,6 +155,79 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     return created;
   }
 
+  async function addIdentity(
+    found: User,
+    provider: string,
+    subject: string,
+    via: 'email' | 'profile',
+  ) {
+    await ctx.db.tx(async (tx) => {
+      const [sameSubject] = await tx
+        .select({ id: authMethod.id })
+        .from(authMethod)
+        .where(and(eq(authMethod.provider, provider), eq(authMethod.subject, subject)))
+        .limit(1);
+      const [sameProvider] = await tx
+        .select({ id: authMethod.id })
+        .from(authMethod)
+        .where(and(eq(authMethod.userId, found.id), eq(authMethod.provider, provider)))
+        .limit(1);
+      if (sameSubject || sameProvider) {
+        throw new Conflict('This sign-in is already linked to an account.');
+      }
+      await tx.insert(authMethod).values({ id: ids.uuidv7(), userId: found.id, provider, subject });
+      await ctx.events.emit('identity.authMethod.linked@1', {
+        userId: found.id,
+        username: found.username,
+        provider,
+        via,
+      });
+    });
+  }
+
+  async function provision(provider: OidcProvider, claims: IdentityClaims): Promise<User> {
+    const email = claims.emailVerified ? claims.email : undefined;
+    const { approvalPolicy } = await settings.get();
+    const base = usernameBase({ preferredUsername: claims.preferredUsername, email });
+    const policy = policyFor(approvalPolicy);
+    if (!policy) {
+      ctx.log.warn({ policy: approvalPolicy }, 'the configured approval policy is not installed');
+    }
+
+    for (const candidate of usernameCandidates(base, provider.id, claims.subject)) {
+      if (await users.findByUsername(candidate)) continue;
+      const decision = (await policy?.decide({
+        username: candidate,
+        email,
+        emailVerified: email !== undefined,
+        provider: provider.id,
+      })) ?? { status: 'pending' as const };
+      try {
+        // The user, its auth method and the event are one write.
+        return await ctx.db.tx(async () => {
+          const created = await users.createUser({
+            username: candidate,
+            email,
+            emailVerified: email !== undefined,
+            status: decision.status,
+            auth: { provider: provider.id, subject: claims.subject },
+          });
+          await ctx.events.emit('identity.user.registered@1', {
+            userId: created.id,
+            username: created.username,
+            status: created.status,
+          });
+          return created;
+        });
+      } catch (error) {
+        // Somebody took this name between the check and the insert: try the next one.
+        if (error instanceof Conflict && (await users.findByUsername(candidate))) continue;
+        throw error;
+      }
+    }
+    throw new Conflict('Could not create an account for this sign-in. Try again.');
+  }
+
   async function login(
     provider: OidcProvider,
     claims: IdentityClaims,
@@ -160,18 +245,48 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       if (!account) throw new Unauthorized(GENERIC_REFUSAL);
       assertMaySignIn(account);
     } else {
-      // An account is created from a first login, or linked by a verified address, in the next step.
-      throw new Unauthorized(GENERIC_REFUSAL);
+      const sameEmail =
+        claims.emailVerified && claims.email ? await users.findByEmail(claims.email) : undefined;
+      if (sameEmail) {
+        // Both sides must have proved the address. A password account whose owner has not
+        // confirmed it is never taken over: they sign in as before and link from their profile.
+        if (!sameEmail.emailVerified) {
+          throw new Conflict(
+            'An account with this email address already exists. Sign in the usual way, then link this provider from your profile.',
+          );
+        }
+        if (sameEmail.deletedAt !== null || sameEmail.status === 'rejected') {
+          throw new Unauthorized(GENERIC_REFUSAL);
+        }
+        await addIdentity(sameEmail, provider.id, claims.subject, 'email');
+        account = sameEmail;
+      } else {
+        account = await provision(provider, claims);
+      }
+      assertMaySignIn(account);
     }
 
     const session = await startSession(account.id, provider.id, previousSessionId);
     return { kind: 'login', sessionId: session.id, expiresAt: session.expiresAt };
   }
 
+  async function link(provider: OidcProvider, claims: IdentityClaims, userId: string) {
+    const found = await users.findById(userId);
+    if (!found || found.deletedAt !== null || found.status !== 'active') {
+      throw new Unauthorized(GENERIC_REFUSAL);
+    }
+    await addIdentity(found, provider.id, claims.subject, 'profile');
+  }
+
   return {
     landing: ctx.config.BASE_PATH === '/' ? '/' : `${ctx.config.BASE_PATH}/`,
 
     start: (providerId) => begin(providerId),
+
+    async startLink(actor, providerId) {
+      const caller = requireSession(actor, 'Linking a sign-in provider');
+      return begin(providerId, caller.userId);
+    },
 
     async complete(input) {
       const provider = await providerOrThrow(input.providerId);
@@ -194,12 +309,6 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       if (input.error !== undefined || input.code === undefined) {
         refuse(provider.id, input.error === undefined ? 'no-code' : 'provider-error');
         throw new BadRequest('The provider did not complete the sign-in.');
-      }
-
-      // A state made for linking (the next step) is not a login.
-      if (stored.linkUserId !== null) {
-        refuse(provider.id, 'state-is-for-linking');
-        throw new BadRequest('This sign-in link is not valid or has expired. Start again.');
       }
 
       const discovery = await providers.discovery(provider);
@@ -262,6 +371,10 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         throw error;
       }
 
+      if (stored.linkUserId !== null) {
+        await link(provider, claims, stored.linkUserId);
+        return { kind: 'linked' };
+      }
       return login(provider, claims, input.previousSessionId);
     },
   };

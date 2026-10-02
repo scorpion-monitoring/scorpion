@@ -21,6 +21,7 @@ describe('the module', () => {
   it('declares itself: id, prefix, permissions, settings, events, the policy registry and its routes', () => {
     expect(manifest).toMatchObject({ id: 'core.identity', tablePrefix: 'identity_' });
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+      'core.identity.auth-method.link',
       'core.identity.me.read',
       'core.identity.session.manage',
       'core.identity.token.manage',
@@ -31,6 +32,7 @@ describe('the module', () => {
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
       'identity.admin.created@1',
+      'identity.authMethod.linked@1',
       'identity.token.created@1',
       'identity.token.revoked@1',
       'identity.token.rotated@1',
