@@ -22,6 +22,13 @@
       "when": 1790929612522,
       "tag": "0002_graceful_major_mapleleaf",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790931606812,
+      "tag": "0003_lovely_frightful_four",
+      "breakpoints": true
     }
   ]
 }

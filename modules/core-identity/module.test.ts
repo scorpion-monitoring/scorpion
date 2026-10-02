@@ -59,7 +59,11 @@ describe('the module', () => {
 
   it('declares localAccounts (default true) and the approval policy in its settings schema', () => {
     const settings = manifest.settings as { parse(input: unknown): unknown };
-    expect(settings.parse({})).toEqual({ localAccounts: true, approvalPolicy: 'manual' });
+    expect(settings.parse({})).toEqual({
+      localAccounts: true,
+      approvalPolicy: 'manual',
+      oidcProviders: [],
+    });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
@@ -89,7 +93,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(3); // 0000 to 0002, each once
+    expect(journal.rows).toHaveLength(4); // 0000 to 0003, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -318,22 +322,25 @@ describe('the constraints of the tables', () => {
     }
   });
 
-  it('has a login-state table with a unique hash and an expiry, and nothing else about the login', async () => {
+  it('has a login-state table with a unique hash and an expiry, and only hashes about the login', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ column_name: string }>(
       `select column_name from information_schema.columns where table_name = 'identity_login_state' order by 1`,
     );
     expect(rows.map((r) => r.column_name)).toEqual([
+      'binding_hash',
       'created_at',
       'expires_at',
       'id',
+      'link_user_id',
+      'nonce_hash',
       'provider_id',
       'state_hash',
     ]);
     const insert = () =>
       kernel.pool.query(
-        `insert into identity_login_state (id, provider_id, state_hash, expires_at)
-         values (gen_random_uuid(), 'idp', 'same', now() + interval '10 minutes')`,
+        `insert into identity_login_state (id, provider_id, state_hash, nonce_hash, binding_hash, expires_at)
+         values (gen_random_uuid(), 'idp', 'same', 'n', 'b', now() + interval '10 minutes')`,
       );
     await insert();
     expect(await refused(insert())).toBe('identity_login_state_hash_uidx');

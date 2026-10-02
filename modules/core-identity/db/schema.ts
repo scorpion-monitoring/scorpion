@@ -126,15 +126,29 @@ export const session = pgTable(
   ],
 );
 
-/** The state of one OIDC login in progress: single use, short-lived (10 minutes). */
+/**
+ * The state of one OIDC login in progress: single use, short-lived (10 minutes). It holds hashes
+ * only (ADR 0011): the PKCE verifier and the browser binding live in a cookie of the browser that
+ * started the login, and the nonce is compared against its hash.
+ */
 export const loginState = pgTable(
   'identity_login_state',
   {
     id: uuid().primaryKey(),
-    /** The provider the login was started for; the only thing the state says about the login. */
+    /** The provider the login was started for. */
     providerId: text('provider_id').notNull(),
     /** SHA-256 of the random `state` value sent to the provider. */
     stateHash: text('state_hash').notNull(),
+    /** SHA-256 of the `nonce` sent to the provider; the id_token must carry the same nonce. */
+    nonceHash: text('nonce_hash').notNull(),
+    /**
+     * The PKCE `code_challenge` (SHA-256 of the verifier). The verifier is in the browser's login
+     * cookie; at the callback its hash must equal this, which ties the callback to the browser
+     * that started the login.
+     */
+    bindingHash: text('binding_hash').notNull(),
+    /** Set when a signed-in user started the flow to add this provider to their account. */
+    linkUserId: uuid('link_user_id').references(() => user.id, { onDelete: 'cascade' }),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     expiresAt: timestamptz('expires_at').notNull(),
   },

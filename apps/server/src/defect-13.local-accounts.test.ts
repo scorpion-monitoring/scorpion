@@ -6,7 +6,10 @@ import { PASSWORD, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 const off = {
-  settings: { get: () => Promise.resolve({ localAccounts: false, approvalPolicy: 'manual' }) },
+  settings: {
+    get: () =>
+      Promise.resolve({ localAccounts: false, approvalPolicy: 'manual', oidcProviders: [] }),
+  },
 };
 const registration = { username: 'alice', email: 'alice@example.org', password: PASSWORD };
 
