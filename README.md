@@ -65,24 +65,26 @@ The image (`scorpion:<version>-<profile>`) starts with `node apps/server/src/cli
 configured through the environment; unknown or invalid values stop the start with the full list of
 what is wrong, and secrets never appear in logs.
 
-| Variable          | Default                  | Meaning                                                                                                                                                                                  |
-| ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`    | none, required           | PostgreSQL 16 connection URL                                                                                                                                                             |
-| `PROFILE`         | the profile of the build | Must match the build; an image refuses another profile                                                                                                                                   |
-| `PORT`            | `3000`                   | Port to listen on                                                                                                                                                                        |
-| `BASE_PATH`       | `/`                      | Path prefix, `/` or `/a/b` (any depth, no trailing slash)                                                                                                                                |
-| `LOG_LEVEL`       | `info`                   | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                           |
-| `WORKER_MODE`     | `inline`                 | `inline`: this process also runs jobs and events; `separate`: use a worker                                                                                                               |
-| `ORIGIN`          | `http://localhost:$PORT` | Public origin (scheme, host, port), without a path                                                                                                                                       |
-| `TRUSTED_PROXIES` | none                     | Comma-separated IPs or CIDR ranges of the reverse proxies in front of the server. Only their `X-Forwarded-For` is believed, for the rate limit; with none set the socket address is used |
+| Variable           | Default                             | Meaning                                                                                                                                                                                                  |
+| ------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`     | none, required                      | PostgreSQL 16 connection URL                                                                                                                                                                             |
+| `PROFILE`          | the profile of the build            | Must match the build; an image refuses another profile                                                                                                                                                   |
+| `PORT`             | `3000`                              | Port to listen on                                                                                                                                                                                        |
+| `BASE_PATH`        | `/`                                 | Path prefix, `/` or `/a/b` (any depth, no trailing slash)                                                                                                                                                |
+| `LOG_LEVEL`        | `info`                              | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                                           |
+| `WORKER_MODE`      | `inline`                            | `inline`: this process also runs jobs and events; `separate`: use a worker                                                                                                                               |
+| `ORIGIN`           | `http://localhost:$PORT`            | Public origin (scheme, host, port), without a path                                                                                                                                                       |
+| `SECRETS_KEY`      | none, required with `core.settings` | 32 random bytes, base64 (`openssl rand -base64 32`): encrypts the stored secrets. Profiles with `core.settings` (and `core.identity`) stop with a message if it is missing; back it up with the database |
+| `SECRETS_KEY_NEXT` | none                                | Only while rotating the key with `scorpion rotate-secrets` ([core.settings](modules/core-settings/README.md#rotating-the-key))                                                                           |
+| `TRUSTED_PROXIES`  | none                                | Comma-separated IPs or CIDR ranges of the reverse proxies in front of the server. Only their `X-Forwarded-For` is believed, for the rate limit; with none set the socket address is used                 |
 
-| Command                     | What it does                                                         |
-| --------------------------- | -------------------------------------------------------------------- |
-| `scorpion start`            | Migrates, then serves (and runs workers when `WORKER_MODE=inline`)   |
-| `scorpion worker`           | Migrates, then runs jobs and the event dispatcher only, without HTTP |
-| `scorpion migrate`          | Applies pending migrations of every module and exits                 |
-| `scorpion profile:generate` | Build time: composes the server for a profile                        |
-| `scorpion <command>`        | A command a module of the build contributes, e.g. `create-admin`     |
+| Command                     | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `scorpion start`            | Migrates, then serves (and runs workers when `WORKER_MODE=inline`)                          |
+| `scorpion worker`           | Migrates, then runs jobs and the event dispatcher only, without HTTP                        |
+| `scorpion migrate`          | Applies pending migrations of every module and exits                                        |
+| `scorpion profile:generate` | Build time: composes the server for a profile                                               |
+| `scorpion <command>`        | A command a module of the build contributes: `create-admin`, `set-secret`, `rotate-secrets` |
 
 `GET /healthz` says the process is alive and never touches the database. `GET /readyz` answers 503
 until the database answers and every migration is applied, and again while shutting down.
