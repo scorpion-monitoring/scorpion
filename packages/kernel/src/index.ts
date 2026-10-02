@@ -111,3 +111,11 @@ export {
   type RateLimiter,
   type RateLimiterOptions,
 } from './rate-limit.ts';
+export {
+  createSettingsPort,
+  resolveSettings,
+  SETTINGS_STORE_REGISTRY,
+  type ResolvedSettings,
+  type SettingsPort,
+  type SettingsStore,
+} from './settings.ts';
