@@ -34,6 +34,12 @@ export type AppRouteConfig = RouteConfig &
   RouteAccess & {
     /** Default: `default`. */
     rateLimit?: RateLimitGroup;
+    /**
+     * The largest request body this route accepts, in bytes, where the server-wide limit (1 MiB) is
+     * too small: an upload. A route can only raise the limit by naming the number; a request over
+     * it is refused with 413 before the body is read.
+     */
+    maxBodyBytes?: number;
     /** Write an audit entry for every call (`core.audit`, M4). */
     audit?: boolean;
   };
@@ -43,6 +49,7 @@ export type AppRoute = RouteConfig & {
   public?: boolean;
   publicReason?: string;
   rateLimit?: RateLimitGroup;
+  maxBodyBytes?: number;
   audit?: boolean;
 };
 
