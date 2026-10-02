@@ -12,6 +12,13 @@
   start, not before migrations.
 - Make the image build's lockfile step reproducible: it reuses every locked version, but it does
   rewrite `pnpm-lock.yaml` inside the build stage for non-`full` profiles.
+- Release image workflow: CI builds only throwaway `scorpion:ci-<profile>` images and has no tag
+  trigger, so the release step "build the profile images as `scorpion:<x.y.z>-<profile>`"
+  (CONTRIBUTING.md, "Releases") is manual (`pnpm build --profile <name> --tag scorpion:<x.y.z>-<name>`).
+  Add a workflow that runs on `v*` tags: check that the tag matches the root `package.json` version,
+  build every release profile (not `fixture-ab`) with `docker/Dockerfile`, run the same smoke tests as
+  CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
+  repository secrets) needs a decision first; record it in an ADR.
 
 ## Later
 
