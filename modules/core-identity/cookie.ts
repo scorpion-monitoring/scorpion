@@ -21,3 +21,20 @@ export function clearSessionCookie(c: Context): void {
 /** Methods that cannot change state; everything else needs the CSRF token. */
 export const isSafeMethod = (method: string): boolean =>
   method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
+/**
+ * The login cookie of an OIDC flow in progress (ADR 0011): its value is the PKCE verifier, and the
+ * server keeps only the hash. It is not the session cookie and lives for the 10 minutes a login may take.
+ * `SameSite=Lax` sends it on the provider's top-level redirect back to the callback.
+ */
+export const LOGIN_COOKIE = '__Host-oidc-login';
+
+export const readLoginCookie = (c: Context): string | undefined => getCookie(c, LOGIN_COOKIE);
+
+export function writeLoginCookie(c: Context, verifier: string, maxAgeSeconds: number): void {
+  setCookie(c, LOGIN_COOKIE, verifier, { ...attributes, maxAge: maxAgeSeconds });
+}
+
+export function clearLoginCookie(c: Context): void {
+  deleteCookie(c, LOGIN_COOKIE, { path: '/', secure: true });
+}

@@ -120,3 +120,17 @@ export const redeemFirstRunInput = z.strictObject({
   email,
   password,
 });
+
+/** `:provider` in the OIDC routes. A malformed id is a 422; whether it exists is the service's 404. */
+export const oidcProviderParam = z.object({ provider: providerId.max(32) });
+
+/**
+ * The callback's query. The provider sends `code` and `state`, or `error` and `state`. Unknown
+ * parameters (`iss`, `session_state`, `error_description`) are ignored and never read. Missing or
+ * oversized values are a 422; whether the state is good is the service's 400.
+ */
+export const oidcCallbackQuery = z.object({
+  state: z.string().min(1).max(128),
+  code: z.string().min(1).max(2048).optional(),
+  error: z.string().min(1).max(64).optional(),
+});
