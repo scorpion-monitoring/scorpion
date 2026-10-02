@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
 
@@ -33,6 +34,36 @@ const port = z
   .transform(Number)
   .pipe(z.number().min(1).max(65535));
 
+/** One address or CIDR range, such as `10.0.0.1`, `10.0.0.0/8` or `fd00::/8`. */
+function isAddressOrRange(value: string): boolean {
+  const [address, prefix, ...rest] = value.split('/');
+  const family = isIP(address ?? '');
+  if (family === 0 || rest.length > 0) return false;
+  if (prefix === undefined) return true;
+  return /^\d{1,3}$/.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
+}
+
+/** A comma-separated list of the proxies whose `X-Forwarded-For` the server trusts. Empty: none. */
+const trustedProxies = z
+  .string()
+  .transform((value) =>
+    value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== ''),
+  )
+  .superRefine((entries, ctx) => {
+    for (const entry of entries) {
+      if (!isAddressOrRange(entry)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'must be a comma-separated list of IP addresses or CIDR ranges',
+        });
+        return; // the entry is not echoed back
+      }
+    }
+  });
+
 /** The environment variables the kernel reads. Everything else is configuration in settings. */
 const envSchema = z.object({
   DATABASE_URL: databaseUrl,
@@ -45,6 +76,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   WORKER_MODE: z.enum(['inline', 'separate']).default('inline'),
   ORIGIN: origin.optional(),
+  TRUSTED_PROXIES: trustedProxies.default([]),
 });
 
 export type Config = Readonly<Omit<z.output<typeof envSchema>, 'ORIGIN'> & { ORIGIN: string }>;

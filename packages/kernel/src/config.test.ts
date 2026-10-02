@@ -24,6 +24,7 @@ describe('loadConfig', () => {
       LOG_LEVEL: 'info',
       WORKER_MODE: 'inline',
       ORIGIN: 'http://localhost:3000',
+      TRUSTED_PROXIES: [],
     });
   });
 
@@ -37,6 +38,7 @@ describe('loadConfig', () => {
         LOG_LEVEL: 'debug',
         WORKER_MODE: 'separate',
         ORIGIN: 'https://scorpion.example.org',
+        TRUSTED_PROXIES: '10.0.0.0/8',
       }),
     ).toEqual({
       ...base,
@@ -46,6 +48,7 @@ describe('loadConfig', () => {
       LOG_LEVEL: 'debug',
       WORKER_MODE: 'separate',
       ORIGIN: 'https://scorpion.example.org',
+      TRUSTED_PROXIES: ['10.0.0.0/8'],
     });
   });
 
@@ -56,6 +59,14 @@ describe('loadConfig', () => {
   it('treats an empty variable as not set', () => {
     const config = loadConfig({ ...base, PORT: '', WORKER_MODE: '', BASE_PATH: '' });
     expect(config).toMatchObject({ PORT: 3000, WORKER_MODE: 'inline', BASE_PATH: '/' });
+  });
+
+  it.each([
+    ['', []],
+    ['10.0.0.1', ['10.0.0.1']],
+    [' 10.0.0.0/8 , fd00::/8,,::1', ['10.0.0.0/8', 'fd00::/8', '::1']],
+  ])('reads TRUSTED_PROXIES %j', (value, expected) => {
+    expect(loadConfig({ ...base, TRUSTED_PROXIES: value }).TRUSTED_PROXIES).toEqual(expected);
   });
 
   it('ignores variables it does not know', () => {
@@ -90,6 +101,16 @@ describe('loadConfig', () => {
       'a BASE_PATH with an empty segment',
       { ...base, BASE_PATH: '/a//b' },
       'BASE_PATH: must be "/" or a path',
+    ],
+    [
+      'a TRUSTED_PROXIES entry that is no address',
+      { ...base, TRUSTED_PROXIES: 'proxy.local' },
+      'TRUSTED_PROXIES: must be a comma-separated list',
+    ],
+    [
+      'a TRUSTED_PROXIES prefix that is too long',
+      { ...base, TRUSTED_PROXIES: '10.0.0.0/33' },
+      'TRUSTED_PROXIES: must be a comma-separated list',
     ],
     ['an unknown LOG_LEVEL', { ...base, LOG_LEVEL: 'loud' }, 'LOG_LEVEL: '],
     ['an unknown WORKER_MODE', { ...base, WORKER_MODE: 'both' }, 'WORKER_MODE: '],
