@@ -11,11 +11,11 @@ export interface UserActor {
   kind: 'user';
   userId: string;
   username: string;
-  /** Role ids. Roles are data owned by `core.authz` (M3); until then this is empty. */
+  /** Not trusted for decisions: `core.authz` resolves the roles of `userId` itself. The authenticator leaves it empty. */
   roles: readonly string[];
   /** How the caller proved who they are. */
   via: 'session' | 'token';
-  /** What a token may do (`read:kpi`); `undefined` for a session, which is not limited by scopes. */
+  /** What a token may do (permission ids such as `core.identity.me.read`); `undefined` for a session, which is not limited by scopes. */
   scopes?: readonly string[];
 }
 

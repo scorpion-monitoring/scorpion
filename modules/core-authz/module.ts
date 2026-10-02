@@ -1,3 +1,4 @@
+import { z } from '@scorpion/contracts';
 import { defineModule, type AuthorizationRequest } from '@scorpion/kernel';
 import type { AuthzService } from './public.ts';
 import { createAuthzService, type AuthzInternals } from './service/authz.ts';
@@ -9,6 +10,12 @@ import {
 } from './service/registries.ts';
 
 export type { AuthzInternals } from './service/authz.ts';
+
+const roleEvent = z.strictObject({
+  userId: z.string(),
+  roleKey: z.string(),
+  actorId: z.string().nullable(),
+});
 
 export interface AuthzModuleOptions {
   /** For tests: how long one process trusts the permissions it has resolved. */
@@ -43,6 +50,14 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
 
+    events: {
+      // User id, role key and who did it (`null` for the system); never a permission list or a secret.
+      emits: {
+        'authz.role.assigned@1': roleEvent,
+        'authz.role.removed@1': roleEvent,
+      },
+    },
+
     registries: {
       [DEFAULT_ROLE_REGISTRY]: defaultRoleEntrySchema,
       [RESOURCE_POLICY_REGISTRY]: resourcePolicyEntrySchema,
@@ -50,7 +65,7 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
     contributes: {
       'kernel.authorizer': [
         {
-          // ADR 0005 and 0014. Token scopes are intersected in sprint 2 (see service/authz.ts).
+          // ADR 0005, 0014 and 0015. A token passes only for scope ∩ owner (see service/authz.ts).
           authorize: ({ actor, permission }: AuthorizationRequest) =>
             serviceOrThrow().authorizeRoute(actor, permission),
         },

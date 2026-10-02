@@ -54,3 +54,25 @@ export function effectivePermissions(
 export function undeclared(wanted: readonly string[], declared: ReadonlySet<string>): string[] {
   return [...new Set(wanted)].filter((permission) => !declared.has(permission));
 }
+
+/** How a caller proved who they are, and what a token may do. A session has no scopes. */
+export interface Caller {
+  via: 'session' | 'token';
+  scopes?: readonly string[];
+}
+
+/**
+ * Whether a token may use `permission` at all. A scope is the id of a permission, compared exactly
+ * (ADR 0015); a token without scopes may use nothing. A session is not limited by scopes.
+ */
+export function withinScopes(caller: Caller, permission: string): boolean {
+  return caller.via !== 'token' || (caller.scopes?.includes(permission) ?? false);
+}
+
+/**
+ * Whether the caller holds `permission`: the owner must hold it (`held`, from their roles) and,
+ * for a token, a scope must name it. The effective permissions of a token are scope ∩ owner.
+ */
+export function grants(held: ReadonlySet<string>, caller: Caller, permission: string): boolean {
+  return held.has(permission) && withinScopes(caller, permission);
+}

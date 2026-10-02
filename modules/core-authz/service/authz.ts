@@ -22,7 +22,9 @@ import type { AuthzService, RoleInfo } from '../public.ts';
 import {
   ADMIN_ROLE_KEY,
   effectivePermissions,
+  grants,
   SYSTEM_ROLES,
+  withinScopes,
   undeclared,
   type RoleGrant,
 } from './permissions.ts';
@@ -137,7 +139,10 @@ export function createAuthzService(
     }
     // Built-in protection first, so it holds for Admin and no policy can undo it.
     if (resource?.approval && resource.requestedBy === actor.userId) return 'deny';
-    if ((await permissionsOf(actor.userId, fresh)).has(permission)) return 'allow';
+    // A token passes only for what its scopes name AND its owner holds (scope ∩ owner, ADR 0015).
+    // The scope gate also covers resource policies, so a token cannot reach what it was not given.
+    if (!withinScopes(actor, permission)) return 'deny';
+    if (grants(await permissionsOf(actor.userId, fresh), actor, permission)) return 'allow';
     if (resource && info.scope !== undefined && resource.type === info.scope) {
       const policies = policyEntries().filter((entry) => entry.resourceType === resource.type);
       for (const policy of policies) {
@@ -290,14 +295,20 @@ export function createAuthzService(
           .values({ id: ids.uuidv7(), userId, roleId: target.id, assignedBy: caller.userId })
           .onConflictDoNothing()
           .returning({ id: roleAssignment.id });
-        return inserted.length > 0;
+        if (inserted.length === 0) return false;
+        await ctx.events.emit('authz.role.assigned@1', {
+          userId,
+          roleKey: target.key,
+          actorId: caller.userId,
+        });
+        return true;
       });
       invalidate(userId);
       return changed;
     },
 
     async removeRole(actor, input) {
-      const { userId } = await requireRoleChange(actor, input.userId);
+      const { caller, userId } = await requireRoleChange(actor, input.userId);
       const roleKey = input.roleKey;
       const changed = await ctx.db.tx(async (tx) => {
         // The lock on the role row makes removals of one role take turns, so two at once cannot both
@@ -316,10 +327,59 @@ export function createAuthzService(
           if ((counted?.holders ?? 0) <= 1) throw new Conflict('The last Admin cannot be removed.');
         }
         await tx.delete(roleAssignment).where(eq(roleAssignment.id, held.id));
+        await ctx.events.emit('authz.role.removed@1', {
+          userId,
+          roleKey: target.key,
+          actorId: caller.userId,
+        });
         return true;
       });
       invalidate(userId);
       return changed;
+    },
+
+    async assignRoleAsSystem(tx, input) {
+      const userId = input.userId.toLowerCase();
+      if (!UUID.test(userId)) {
+        throw new Invalid('The user id is not valid.', [
+          { path: 'userId', message: 'Not a UUID.' },
+        ]);
+      }
+      const target = await findRole(tx, input.roleKey);
+      const inserted = await tx
+        .insert(roleAssignment)
+        .values({ id: ids.uuidv7(), userId, roleId: target.id, assignedBy: null })
+        .onConflictDoNothing()
+        .returning({ id: roleAssignment.id });
+      invalidate(userId);
+      if (inserted.length === 0) return false;
+      await ctx.events.emit('authz.role.assigned@1', {
+        userId,
+        roleKey: target.key,
+        actorId: null,
+      });
+      return true;
+    },
+
+    async removeAllAssignments(tx, userId) {
+      const id = userId.toLowerCase();
+      if (!UUID.test(id)) return 0;
+      const removed = await tx
+        .delete(roleAssignment)
+        .where(eq(roleAssignment.userId, id))
+        .returning({ id: roleAssignment.id });
+      invalidate(id);
+      return removed.length;
+    },
+
+    async hasHolders(roleKey, tx = ctx.db) {
+      const [found] = await tx
+        .select({ id: roleAssignment.id })
+        .from(roleAssignment)
+        .innerJoin(role, eq(role.id, roleAssignment.roleId))
+        .where(eq(role.key, roleKey))
+        .limit(1);
+      return found !== undefined;
     },
 
     async setRolePermissions(actor, roleKey, permissions) {

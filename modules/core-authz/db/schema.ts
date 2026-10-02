@@ -1,8 +1,9 @@
 // The tables of core.authz. Every name starts with `authz_` (the manifest's `tablePrefix`, ADR 0004).
 // Create a migration after a change: `pnpm db:generate --filter @scorpion/core-authz`.
 //
-// The module is user-agnostic (ADR 0014): `user_id` is an opaque id with no foreign key to
-// `identity_user`, so a purge of a user is never blocked by an assignment and authz needs no identity.
+// The module is user-agnostic (ADR 0014): `user_id` is an opaque id with no foreign key to the
+// user table of core.identity, so a purge of a user is never blocked by an assignment and authz
+// needs no identity.
 import { sql } from 'drizzle-orm';
 import {
   boolean,
