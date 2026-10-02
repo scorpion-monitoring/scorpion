@@ -28,6 +28,7 @@ import { createRoleService, type RoleService } from './service/roles.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import {
   settingsSchema,
+  type BrandingSource,
   type IdentitySettings,
   type IdentitySettingsValues,
 } from './service/settings.ts';
@@ -56,6 +57,11 @@ export interface IdentityInternals extends IdentityService {
 export interface IdentityModuleOptions {
   /** Where the settings come from. Default: `ctx.settings`, the values saved through core.settings. */
   settings?: IdentitySettings;
+  /**
+   * Where the instance name and the mail sender come from. Default: `getBranding()` of core.settings,
+   * which owns them (ADR-0018).
+   */
+  branding?: BrandingSource;
   /** For tests: how long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
   /** For tests: how long a verified access token is trusted without verifying it again. */
@@ -93,6 +99,7 @@ export const USER_PERMISSIONS = [
   'core.identity.session.manage',
   'core.identity.profile.read',
   'core.identity.profile.update',
+  'core.identity.avatar.update',
   'core.identity.password.change',
   'core.identity.email.verify',
   'core.identity.auth-method.link',
@@ -157,7 +164,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
 
   return defineModule<
     IdentityInternals,
-    'core.authz' | 'core.settings',
+    'core.authz' | 'core.settings' | 'core.blob',
     never,
     IdentitySettingsValues
   >({
@@ -177,6 +184,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       },
       'core.identity.profile.read': { description: 'Read your own profile' },
       'core.identity.profile.update': { description: 'Edit your own profile' },
+      'core.identity.avatar.update': { description: 'Set and remove your own avatar' },
       'core.identity.password.change': { description: 'Change your own password' },
       'core.identity.email.verify': {
         description: 'Ask for a new confirmation mail for your own address',
@@ -248,7 +256,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         // After the retention period (ADR 0013): subscribers delete or anonymise what refers to the user.
         'identity.user.purged@1': userEvent,
         'identity.profile.updated@1': userEvent.extend({
-          fields: z.array(z.enum(['displayName', 'bio', 'email'])).min(1),
+          fields: z.array(z.enum(['displayName', 'bio', 'email', 'avatar'])).min(1),
         }),
         'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
@@ -276,6 +284,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const authz = ctx.deps['core.authz'];
       const settings: IdentitySettings = options.settings ?? { get: () => ctx.settings.get() };
       const clientSecret = options.clientSecret ?? clientSecretFrom(ctx.deps['core.settings']);
+      const branding: BrandingSource = options.branding ?? {
+        get: () => ctx.deps['core.settings'].getBranding(),
+      };
+      const blob = ctx.deps['core.blob'];
       currentSettings = settings;
       currentSecret = clientSecret;
       const users = createUserService(ctx);
@@ -308,15 +320,16 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const recovery = createRecoveryService(ctx, {
         sessions,
         settings,
+        branding,
         mailer: options.mailer ?? mailerFromEnvironment(process.env),
         authz,
       });
-      const cleanup = createCleanupService(ctx, { authz, settings });
+      const cleanup = createCleanupService(ctx, { authz, blob, settings });
       currentCleanup = cleanup;
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery, authz, settings }),
+        profile: createProfileService(ctx, { recovery, authz, blob, settings }),
         roles: createRoleService({ authz, users }),
         recovery,
         loginStates,

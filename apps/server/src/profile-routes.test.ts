@@ -32,6 +32,7 @@ describe('GET and PATCH /account/profile', () => {
       emailVerified: false,
       pendingEmail: null,
       bio: null,
+      avatarHash: null,
     });
 
     const changed = await patch(s, alice, {

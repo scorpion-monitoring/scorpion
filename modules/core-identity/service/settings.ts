@@ -34,10 +34,6 @@ export const oidcProviderSchema = z.strictObject({
 
 export type OidcProvider = z.infer<typeof oidcProviderSchema>;
 
-/** What a mail says when the settings do not name the instance or the sender. */
-export const DEFAULT_INSTANCE_NAME = 'Scorpion';
-export const DEFAULT_MAIL_FROM = 'no-reply@localhost';
-
 const DAY_MS = 24 * 3600 * 1000;
 
 /** What the cleanup job keeps and how much it removes at once (README, "Cleanup"). */
@@ -61,13 +57,6 @@ const mailBudget = z.strictObject({
 export const settingsSchema = z.strictObject({
   /** Whether people may register and sign in with a password. Enforced on the server (defect 13). */
   localAccounts: z.boolean().default(true),
-  /**
-   * How mails from core.identity name the instance and who they come from. Until core.settings
-   * (M3) and core.notifications (M4) own branding and the sender address, they live here; no
-   * mail text hard-codes either.
-   */
-  instanceName: z.string().trim().min(1).max(100).optional(),
-  mailFrom: z.string().trim().min(3).max(254).optional(),
   /**
    * How long the hourly cleanup keeps things. A soft-deleted account keeps its username and address
    * for `purgeAfterDays` before it is purged (ADR 0013); an expired or revoked access token is shown
@@ -113,6 +102,14 @@ export type IdentitySettingsValues = z.infer<typeof settingsSchema>;
 
 export interface IdentitySettings {
   get(): Promise<IdentitySettingsValues>;
+}
+
+/**
+ * What the module needs of the instance's branding: the name that mails use and the sender. The
+ * default reads `getBranding()` of core.settings, which owns both (ADR-0018); tests pass their own.
+ */
+export interface BrandingSource {
+  get(): Promise<{ instanceName: string; mailFrom: string }>;
 }
 
 /** The token bucket for a mail budget. */

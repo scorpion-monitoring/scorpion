@@ -53,6 +53,8 @@ export interface SettingsAdminService {
 export interface SettingsInternals extends SettingsAdminService {
   /** What the kernel's `ctx.settings` reads. */
   store: SettingsStore;
+  /** The stored JSON of one module, straight from the database (no cache, and the cache is not filled). */
+  readFresh(moduleId: string): Promise<unknown>;
   /** Empties the cache of this process. */
   invalidate(moduleId?: string): void;
 }
@@ -133,6 +135,7 @@ export function createSettingsService(
 
   return {
     store: { read: (moduleId) => stored(moduleId) },
+    readFresh: (moduleId) => stored(moduleId, true),
     invalidate,
 
     async list(actor) {

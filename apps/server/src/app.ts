@@ -20,7 +20,7 @@ import {
 } from '@scorpion/kernel';
 import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
-import { DEFAULT_MAX_BODY_BYTES, limitBody } from './pipeline/body-limit.ts';
+import { DEFAULT_MAX_BODY_BYTES, limitBodyPerRoute } from './pipeline/body-limit.ts';
 import { createClientIpResolver } from './pipeline/client-ip.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
@@ -97,7 +97,23 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.use('*', requestId());
   app.use('*', securityHeaders());
   app.use('*', requestLogging(log, options.onRequest));
-  app.use('*', limitBody(options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES));
+  app.use(
+    '*',
+    limitBodyPerRoute(
+      options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
+      options.routes.flatMap(({ surface, route }) =>
+        route.maxBodyBytes === undefined
+          ? []
+          : [
+              {
+                method: route.method,
+                path: `${base}${SURFACE_PREFIX[surface]}${route.path}`,
+                maxBytes: route.maxBodyBytes,
+              },
+            ],
+      ),
+    ),
+  );
 
   const clientIp = createClientIpResolver(config.TRUSTED_PROXIES ?? []);
   const limitFor = (group: RateLimitGroup) => async (): Promise<RateLimit> => {

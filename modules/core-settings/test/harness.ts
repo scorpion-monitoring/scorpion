@@ -37,6 +37,12 @@ export const widgetSettings = z.strictObject({
   nested: z.strictObject({ on: z.boolean().default(false) }).default({ on: false }),
 });
 
+/**
+ * The keys `fix.widgets` reports as in use, for the usage check it registers on two vocabularies.
+ * A test adds to it and `useSettings()` empties it after each test.
+ */
+export const termsInUse = new Set<string>();
+
 export interface Widgets {
   settings(): Promise<z.output<typeof widgetSettings>>;
 }
@@ -54,6 +60,21 @@ export function widgetsModule(id = 'fix.widgets'): { id: string; manifest: Modul
       settings: widgetSettings,
       services: (ctx) => ({ settings: () => ctx.settings.get() }),
       contributes: {
+        vocabulary: [
+          // Its own vocabulary, with terms and a usage check ...
+          {
+            id: `${id}.size`,
+            description: 'Sizes of a widget',
+            terms: [
+              { key: 'S', labels: { en: 'Small', de: 'Klein' } },
+              { key: 'M', labels: { en: 'Medium' } },
+              { key: 'L', labels: { en: 'Large' }, sortOrder: 5 },
+            ],
+            usage: (key: string) => Promise.resolve(termsInUse.has(`${id}.size:${key}`)),
+          },
+          // ... and a usage check on a vocabulary core.settings declares (what registry.services does for `stage`).
+          { id: 'stage', usage: (key: string) => Promise.resolve(termsInUse.has(`stage:${key}`)) },
+        ],
         'settings.userPreference': [
           { key: `${id}.theme`, description: 'Colour scheme', schema: z.enum(['light', 'dark']) },
           {
@@ -107,6 +128,7 @@ export function useSettings(): SettingsHarness {
     server = await startPostgres();
   }, 120_000);
   afterEach(async () => {
+    termsInUse.clear();
     await Promise.all(open.splice(0).map((kernel) => kernel.stop()));
   });
   afterAll(async () => {

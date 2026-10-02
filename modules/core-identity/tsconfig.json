@@ -10,6 +10,7 @@
     { "path": "../../packages/contracts" },
     { "path": "../../packages/testing" },
     { "path": "../core-authz" },
+    { "path": "../core-blob" },
     { "path": "../core-settings" }
   ]
 }
