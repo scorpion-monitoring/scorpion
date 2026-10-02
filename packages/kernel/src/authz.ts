@@ -1,7 +1,7 @@
 // The authorisation extension point (ADR 0005). The kernel owns the registry `kernel.authorizer`;
 // `core.authz` contributes the one entry in M3. Until an entry exists, every non-public route is
 // denied.
-import type { Context } from '@scorpion/contracts';
+import type { Actor, Context } from '@scorpion/contracts';
 import { Forbidden } from '@scorpion/contracts';
 import { z } from 'zod';
 
@@ -11,6 +11,8 @@ export const AUTHORIZER_REGISTRY = 'kernel.authorizer';
 export interface AuthorizationRequest {
   /** The request, after input validation. Read the caller's credentials from it. */
   context: Context;
+  /** Who is calling, as the authentication step resolved it (`anonymous` without credentials). */
+  actor: Actor;
   /** The module that owns the route. */
   module: string;
   /** The permission the route declares. */

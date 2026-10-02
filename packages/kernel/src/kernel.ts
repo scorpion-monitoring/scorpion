@@ -1,6 +1,7 @@
 import { getTableName, is } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import type pg from 'pg';
+import { anonymousOnly, AUTHENTICATOR_REGISTRY, type Authenticator } from './authn.ts';
 import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
 import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
 import type { Config } from './config.ts';
@@ -78,6 +79,11 @@ export interface Kernel {
    * `core.authz` from M3 on), or a deny-all until there is one (ADR 0005).
    */
   readonly authorizer: Authorizer;
+  /**
+   * Resolves the credentials of a request to an `Actor`: the one entry of `kernel.authenticator`
+   * (filled by `core.identity`), or one that leaves every caller anonymous (ADR 0006).
+   */
+  readonly authenticator: Authenticator;
   /** Public service objects by module id, once `start()` has built them. */
   readonly services: ReadonlyMap<string, unknown>;
   /** Loader step 2 alone: apply pending migrations. */
@@ -283,6 +289,11 @@ export function createKernel(options: KernelOptions): Kernel {
     ? (authorizerEntry.value as { authorize: Authorizer }).authorize
     : denyByDefault;
 
+  const authenticatorEntry = composition.registries.get(AUTHENTICATOR_REGISTRY)!.entries[0];
+  const authenticator: Authenticator = authenticatorEntry
+    ? (authenticatorEntry.value as { authenticate: Authenticator }).authenticate
+    : anonymousOnly;
+
   return {
     profile,
     composition,
@@ -290,6 +301,7 @@ export function createKernel(options: KernelOptions): Kernel {
       return routes;
     },
     authorizer,
+    authenticator,
     config,
     log,
     db,

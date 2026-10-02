@@ -1,6 +1,7 @@
 import { createRoute, z, type AppRoute } from '@scorpion/contracts';
 import { describe, expect, it } from 'vitest';
 import { useKernels } from '../test/helpers.ts';
+import { anonymousOnly, AUTHENTICATOR_REGISTRY, type Authenticator } from './authn.ts';
 import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
 import { KernelStartupError } from './errors.ts';
 import { defineModule } from './manifest.ts';
@@ -252,6 +253,56 @@ describe('the authorisation extension point', () => {
       });
     expect(await problemsOf(kernels.inline([authz('one'), authz('two')]))).toEqual([
       'more than one module contributes to "kernel.authorizer": one, two',
+    ]);
+  });
+});
+
+describe('the authentication extension point (ADR 0006)', () => {
+  const nobody: Authenticator = () => undefined;
+
+  it('leaves every caller anonymous until a module contributes an authenticator', async () => {
+    const kernel = await kernels.inline([defineModule({ id: 'mine', version: '1.0.0' })]);
+    await kernel.start();
+    expect(kernel.authenticator).toBe(anonymousOnly);
+    expect(kernel.authenticator({} as never)).toBeUndefined();
+  });
+
+  it('uses the authenticator a module contributes, without that module depending on the kernel', async () => {
+    const kernel = await kernels.inline([
+      defineModule({
+        id: 'identity',
+        version: '1.0.0',
+        contributes: { [AUTHENTICATOR_REGISTRY]: [{ authenticate: nobody }] },
+      }),
+    ]);
+    await kernel.start();
+    expect(kernel.authenticator).toBe(nobody);
+  });
+
+  it('rejects an entry that is not a function', async () => {
+    const problems = await problemsOf(
+      kernels.inline([
+        defineModule({
+          id: 'identity',
+          version: '1.0.0',
+          contributes: { [AUTHENTICATOR_REGISTRY]: [{ authenticate: 'yes' }] },
+        }),
+      ]),
+    );
+    expect(problems[0]).toMatch(
+      /^identity: registry "kernel.authenticator" entry 0.authenticate: /,
+    );
+  });
+
+  it('refuses two authenticators', async () => {
+    const identity = (id: string) =>
+      defineModule({
+        id,
+        version: '1.0.0',
+        contributes: { [AUTHENTICATOR_REGISTRY]: [{ authenticate: nobody }] },
+      });
+    expect(await problemsOf(kernels.inline([identity('one'), identity('two')]))).toEqual([
+      'more than one module contributes to "kernel.authenticator": one, two',
     ]);
   });
 });
