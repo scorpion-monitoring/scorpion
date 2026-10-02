@@ -13,6 +13,8 @@ import type { IdentityModuleOptions } from '@scorpion/core-identity/module';
 import packageJson from '@scorpion/core-identity/package.json' with { type: 'json' };
 import authzModule from '@scorpion/core-authz/module';
 import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
+import blobModule from '@scorpion/core-blob/module';
+import blobPackage from '@scorpion/core-blob/package.json' with { type: 'json' };
 import {
   createSettingsModule,
   type SettingsInternalsBundle,
@@ -77,7 +79,10 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
 export interface Reply {
   res: Response;
   status: number;
+  /** The parsed JSON body; `undefined` for an empty body and for one that is not JSON (see `bytes`). */
   body: unknown;
+  /** The body as received, for files. */
+  bytes: Buffer;
   /** The session cookie value this response set, `''` when it cleared it, `undefined` when it did nothing. */
   cookie: string | undefined;
   setCookie: string | undefined;
@@ -125,6 +130,7 @@ export function useIdentityApp() {
           modules: [
             'core.authz',
             'core.settings',
+            'core.blob',
             'core.identity',
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
@@ -141,6 +147,7 @@ export function useIdentityApp() {
             }),
             packageJson: settingsPackage,
           },
+          { manifest: blobModule, packageJson: blobPackage },
           { manifest: createIdentityModule(options), packageJson },
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
@@ -153,6 +160,7 @@ export function useIdentityApp() {
         modulePackages: {
           'core.authz': '@scorpion/core-authz',
           'core.settings': '@scorpion/core-settings',
+          'core.blob': '@scorpion/core-blob',
           'core.identity': '@scorpion/core-identity',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
@@ -200,8 +208,9 @@ export function useIdentityApp() {
         options: RequestOptions = {},
       ): Promise<Reply> {
         const headers: Record<string, string> = { ...options.headers };
+        const binary = options.body instanceof Uint8Array;
         if (options.body !== undefined && !headers['content-type']) {
-          headers['content-type'] = 'application/json';
+          headers['content-type'] = binary ? 'application/octet-stream' : 'application/json';
         }
         if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
         if (options.csrf !== undefined) headers['x-csrf-token'] = options.csrf;
@@ -213,13 +222,15 @@ export function useIdentityApp() {
             body:
               options.body === undefined
                 ? undefined
-                : typeof options.body === 'string'
-                  ? options.body
+                : binary || typeof options.body === 'string'
+                  ? (options.body as string | Uint8Array)
                   : JSON.stringify(options.body),
           },
           { incoming: { socket: { remoteAddress: options.peer ?? '203.0.113.7' } } },
         );
-        const text = await res.text();
+        const bytes = Buffer.from(await res.arrayBuffer());
+        const isJson = /json/.test(res.headers.get('content-type') ?? '');
+        const text = isJson ? bytes.toString('utf8') : '';
         const setCookie = res.headers
           .getSetCookie()
           .find((value) => value.startsWith(`${COOKIE}=`));
@@ -227,6 +238,7 @@ export function useIdentityApp() {
           res,
           status: res.status,
           body: text ? (JSON.parse(text) as unknown) : undefined,
+          bytes,
           cookie: setCookie ? setCookie.slice(COOKIE.length + 1).split(';')[0] : undefined,
           setCookie,
         };

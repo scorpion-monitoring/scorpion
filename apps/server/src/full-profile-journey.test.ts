@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any --
    the bodies of the responses are read as plain JSON */
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
-import { makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
+import { makePng, makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createApp, SURFACE_PREFIX } from './app.ts';
 import { moduleIds, profileName, sources } from './generated/profile.ts';
@@ -28,6 +28,7 @@ afterAll(async () => {
 });
 
 const PASSWORD = 'correct horse battery';
+const SECRET = 'journey-client-secret-7f3a9c';
 const COOKIE = '__Host-session';
 
 async function boot() {
@@ -70,10 +71,17 @@ async function boot() {
   async function call(
     method: string,
     path: string,
-    options: { body?: unknown; cookie?: string; csrf?: string; token?: string } = {},
+    options: {
+      body?: unknown;
+      cookie?: string;
+      csrf?: string;
+      token?: string;
+      raw?: Uint8Array;
+    } = {},
   ) {
     const headers: Record<string, string> = {};
     if (options.body !== undefined) headers['content-type'] = 'application/json';
+    if (options.raw) headers['content-type'] = 'application/octet-stream';
     if (options.cookie) headers.cookie = `${COOKIE}=${options.cookie}`;
     if (options.csrf) headers['x-csrf-token'] = options.csrf;
     if (options.token) headers.authorization = `Bearer ${options.token}`;
@@ -82,14 +90,17 @@ async function boot() {
       {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body:
+          options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
       },
       { incoming: { socket: { remoteAddress: '203.0.113.7' } } },
     );
-    const text = await res.text();
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const text = /json/.test(res.headers.get('content-type') ?? '') ? bytes.toString('utf8') : '';
     const setCookie = res.headers.getSetCookie().find((value) => value.startsWith(`${COOKIE}=`));
     return {
       status: res.status,
+      bytes,
       body: (text ? JSON.parse(text) : undefined) as Record<string, any> | undefined,
       cookie: setCookie?.slice(COOKIE.length + 1).split(';')[0],
     };
@@ -110,7 +121,7 @@ async function boot() {
 describe('a fresh full-profile instance, end to end, on the real authoriser', () => {
   it('goes from create-admin to a limited personal access token', async () => {
     const { kernel, call, login, bootstrap, logs } = await boot();
-    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.identity']);
+    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.blob', 'core.identity']);
 
     // 1. The first administrator, as `scorpion create-admin` makes it: Admin, given by the system.
     const created = await bootstrap.createAdmin({
@@ -167,6 +178,38 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
       expect(reply.status, `${method} ${path}`).toBe(403);
     }
 
+    // 4b. The administrator changes a setting and stores a secret; both take effect and neither
+    // shows the secret again.
+    const current = await call('GET', '/settings/core.settings', root);
+    const renamed = await call('PUT', '/settings/core.settings', {
+      ...root,
+      body: {
+        version: current.body!.version,
+        values: { ...current.body!.values, branding: { instanceName: 'Journey Registry' } },
+      },
+    });
+    expect(renamed.status).toBe(200);
+    expect((await call('GET', '/branding')).body).toMatchObject({
+      instanceName: 'Journey Registry',
+    });
+    const stored = await call('PUT', '/secrets/oidc.journey.client-secret', {
+      ...root,
+      body: { value: SECRET },
+    });
+    expect(stored.status).toBe(200);
+    expect(JSON.stringify(stored.body)).not.toContain(SECRET);
+    expect(JSON.stringify((await call('GET', '/secrets', root)).body)).not.toContain(SECRET);
+
+    // 4c. Alice uploads an avatar; it is hers, and the file is served to anyone.
+    const png = makePng(32);
+    const avatar = await call('PUT', '/account/avatar', { ...alice, raw: png });
+    expect(avatar.status).toBe(200);
+    const avatarHash = avatar.body!.avatarHash as string;
+    const file = await call('GET', `/files/${avatarHash}`);
+    expect(file.status).toBe(200);
+    expect(file.bytes.subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    expect((await call('GET', '/account/profile', root)).body!.avatarHash).toBeNull(); // root's own
+
     // 5. A personal access token with a limited scope: it works, and only for what it names.
     const made = await call('POST', '/tokens', {
       ...alice,
@@ -180,6 +223,7 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
     });
     expect((await call('GET', '/account/profile', { token })).status).toBe(403); // not in its scopes
     expect((await call('GET', '/tokens', { token })).status).toBe(403); // never for a token
+    expect((await call('PUT', '/account/avatar', { token, raw: png })).status).toBe(403); // nor the avatar
     expect((await call('GET', '/users/pending', { token })).status).toBe(403);
 
     // 6. Even a scope wider than alice's permissions grants nothing she does not hold.
@@ -209,8 +253,15 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
     expect((await call('GET', '/roles', { token: rootToken })).status).toBe(403);
     expect((await call('POST', `/users/${aliceId}/reject`, { token: rootToken })).status).toBe(403);
 
-    // 8. The log holds no password and no token.
-    for (const secret of [PASSWORD, token, wideToken, rootToken]) {
+    // 8. Alice logs out: the cookie she copied before is dead, and so is her CSRF token.
+    const copied = { cookie: alice.cookie, csrf: alice.csrf };
+    expect((await call('GET', '/auth/me', copied)).status).toBe(200);
+    expect((await call('POST', '/auth/logout', alice)).status).toBe(204);
+    expect((await call('GET', '/auth/me', copied)).status).toBe(401);
+    expect((await call('PUT', '/account/avatar', { ...copied, raw: png })).status).toBe(401);
+
+    // 9. The log holds no password, no token and no secret.
+    for (const secret of [PASSWORD, token, wideToken, rootToken, SECRET]) {
       expect(logs()).not.toContain(secret);
     }
   });

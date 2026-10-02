@@ -138,6 +138,46 @@ const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sam
     kind: 'admin',
     sample: () => ({ method: 'DELETE', path: '/secrets/oidc.evil.client-secret' }),
   },
+  // core.settings vocabularies (M3 sprint 4). Reading the terms is self-service (forms need them);
+  // changing them is Admin's.
+  'GET /vocabularies': { kind: 'self', sample: () => ({ method: 'GET', path: '/vocabularies' }) },
+  'GET /vocabularies/{vocabulary}/terms': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/vocabularies/stage/terms' }),
+  },
+  'POST /vocabularies/{vocabulary}/terms': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'POST',
+      path: '/vocabularies/stage/terms',
+      body: { key: 'EVIL', labels: { en: 'Evil' } },
+    }),
+  },
+  'PATCH /vocabularies/{vocabulary}/terms/{key}': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'PATCH',
+      path: '/vocabularies/stage/terms/PROD',
+      body: { active: false },
+    }),
+  },
+  'DELETE /vocabularies/{vocabulary}/terms/{key}': {
+    kind: 'admin',
+    sample: () => ({ method: 'DELETE', path: '/vocabularies/stage/terms/PROD' }),
+  },
+  // core.blob: the generic upload is Admin's (logos). The avatar is the caller's own.
+  'POST /files': {
+    kind: 'admin',
+    sample: () => ({ method: 'POST', path: '/files', body: 'not an image' }),
+  },
+  'PUT /account/avatar': {
+    kind: 'self',
+    sample: () => ({ method: 'PUT', path: '/account/avatar', body: 'not an image' }),
+  },
+  'DELETE /account/avatar': {
+    kind: 'self',
+    sample: () => ({ method: 'DELETE', path: '/account/avatar' }),
+  },
   'GET /preferences': { kind: 'self', sample: () => ({ method: 'GET', path: '/preferences' }) },
   'PUT /preferences/{key}': {
     kind: 'self',
@@ -239,12 +279,20 @@ describe('defect 1: the route table', () => {
       (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'authz.%'")).rows,
     ).toEqual([]);
     // Nor did the settings and secrets routes change anything.
-    for (const table of ['settings_setting', 'settings_secret']) {
+    for (const table of ['settings_setting', 'settings_secret', 'blob_blob']) {
       expect((await s.kernel.pool.query(`select 1 from ${table}`)).rows, table).toEqual([]);
     }
     expect(
       (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'settings.%'")).rows,
     ).toEqual([]);
+    // ... nor the vocabularies: the seeded terms are as they were.
+    expect(
+      (
+        await s.kernel.pool.query(
+          "select count(*)::int as n from settings_vocabulary_term where key = 'EVIL' or not active",
+        )
+      ).rows,
+    ).toEqual([{ n: 0 }]);
   });
 
   it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
@@ -274,9 +322,11 @@ describe('defect 1: the route table', () => {
       'core.settings.read',
       'core.settings.write',
       'core.settings.secret.write',
+      'core.settings.vocabulary.write',
+      'core.blob.manage',
     ];
     // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
-    const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 11)], permissions.slice(11)];
+    const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 10)], permissions.slice(10)];
     const victim = await register(s, 'victim');
     for (const [index, scopes] of wide.entries()) {
       const made = await s.post('/tokens', {
@@ -620,7 +670,7 @@ describe('defect 1: settings, secrets and preferences', () => {
       const reply = await send(s, attempt, session(plain));
       expect(reply.status, `${attempt.method} ${attempt.path}`).toBe(403);
     }
-    for (const table of ['settings_setting', 'settings_secret']) {
+    for (const table of ['settings_setting', 'settings_secret', 'blob_blob']) {
       expect((await s.kernel.pool.query(`select 1 from ${table}`)).rows, table).toEqual([]);
     }
   });

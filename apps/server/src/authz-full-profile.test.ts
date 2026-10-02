@@ -77,7 +77,7 @@ async function boot() {
 
 describe('profile full with core.authz', () => {
   it('contains core.authz before core.identity', () => {
-    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.identity']);
+    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.blob', 'core.identity']);
   });
 
   it('answers 403 to a signed-in user without roles on a non-public route', async () => {
