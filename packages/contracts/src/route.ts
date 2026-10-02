@@ -5,6 +5,7 @@ import {
   type RouteConfig,
   type RouteHandler,
 } from '@hono/zod-openapi';
+import type { Actor } from './actor.ts';
 import { PROBLEM_CONTENT_TYPE, problemSchema } from './problem.ts';
 
 /** Who may call a route: a permission id, or everyone (with the reason written down). */
@@ -23,8 +24,16 @@ export type RouteAccess =
       permission?: never;
     };
 
+/**
+ * The rate-limit bucket a route draws from (pipeline step 2). `strict` is for routes an attacker
+ * gains from by repeating them: login, register, token use and creation, onboarding submission.
+ */
+export type RateLimitGroup = 'default' | 'strict';
+
 export type AppRouteConfig = RouteConfig &
   RouteAccess & {
+    /** Default: `default`. */
+    rateLimit?: RateLimitGroup;
     /** Write an audit entry for every call (`core.audit`, M4). */
     audit?: boolean;
   };
@@ -33,6 +42,7 @@ export type AppRoute = RouteConfig & {
   permission?: string;
   public?: boolean;
   publicReason?: string;
+  rateLimit?: RateLimitGroup;
   audit?: boolean;
 };
 
@@ -112,5 +122,7 @@ export interface AppEnv {
   Variables: {
     /** The id of this request (`X-Request-Id`), also in the logs and in every problem response. */
     requestId: string;
+    /** Who is calling: set by the authentication step, `anonymous` without credentials. */
+    actor: Actor;
   };
 }

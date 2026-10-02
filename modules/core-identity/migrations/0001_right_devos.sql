@@ -1,0 +1,2 @@
+DROP INDEX "identity_token_user_name_uidx";--> statement-breakpoint
+CREATE UNIQUE INDEX "identity_token_user_name_uidx" ON "identity_token" USING btree ("user_id","name") WHERE "identity_token"."revoked_at" is null;

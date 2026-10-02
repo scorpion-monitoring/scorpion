@@ -10,11 +10,15 @@ export type { ModuleContext, ModuleServices } from './context.ts';
 export { KernelStartupError } from './errors.ts';
 export { resolveOrder, type GraphNode } from './graph.ts';
 export {
+  COMMAND_NAME,
   defineModule,
   EVENT_NAME,
+  RESERVED_COMMANDS,
   MODULE_ID,
   SYSTEM_READY,
   validateManifest,
+  type CommandDef,
+  type CommandIo,
   type DomainEvent,
   type EventHandler,
   type JobDef,
@@ -52,7 +56,7 @@ export {
   type DatabaseHandle,
 } from './db.ts';
 export { ids } from './ids.ts';
-export { createKernel, type Kernel, type KernelOptions } from './kernel.ts';
+export { createKernel, type Kernel, type KernelOptions, type RegisteredCommand } from './kernel.ts';
 export {
   childLogger,
   createLogger,
@@ -94,3 +98,16 @@ export {
   type Authorizer,
 } from './authz.ts';
 export { collectRoutes, type RegisteredRoute, type RouteSurface } from './routes.ts';
+export {
+  anonymousOnly,
+  AUTHENTICATOR_REGISTRY,
+  type AuthenticationRequest,
+  type Authenticator,
+} from './authn.ts';
+export {
+  createRateLimiter,
+  type RateDecision,
+  type RateLimit,
+  type RateLimiter,
+  type RateLimiterOptions,
+} from './rate-limit.ts';

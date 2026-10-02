@@ -8,17 +8,30 @@ import {
   type Config,
   type Logger,
 } from '@scorpion/kernel';
+import { terminalIo } from './cli-io.ts';
 import { moduleIds, profileName, sources } from './generated/profile.ts';
 import { generateProfile } from './profile-generate.ts';
 import {
   migrate,
   profileMismatch,
+  runModuleCommand,
   startServer,
   startWorker,
   type RuntimeOptions,
 } from './runtime.ts';
 
-const USAGE = `Usage: scorpion <command>
+/** The commands the modules of this build contribute, for the usage text. */
+function moduleCommandLines(): string {
+  const lines = sources.flatMap(({ manifest }) =>
+    (manifest.commands ?? []).map((command) => ({
+      usage: command.usage ?? command.name,
+      description: command.description,
+    })),
+  );
+  return lines.map(({ usage, description }) => `  ${usage}\n      ${description}\n`).join('');
+}
+
+const USAGE = () => `Usage: scorpion <command>
 
 Commands:
   start                      Run the web server (and, with WORKER_MODE=inline, the workers).
@@ -27,6 +40,7 @@ Commands:
   profile:generate <name> [--check] [--profile-file <path>] [--modules-root <dir>]...
                              Write apps/server/src/generated/profile.ts for a profile (build time).
 
+${moduleCommandLines()}
 Environment: DATABASE_URL (required), PROFILE, PORT, BASE_PATH, LOG_LEVEL, WORKER_MODE
 (inline | separate), ORIGIN. See .env.example.
 `;
@@ -126,9 +140,23 @@ async function main(argv: string[]): Promise<number> {
       );
       return 0;
     }
-    default:
-      console.error(command ? `Unknown command "${command}"\n\n${USAGE}` : USAGE);
+    default: {
+      // A command a module of this build contributes, if there is one by that name.
+      const contributed = sources.some(({ manifest }) =>
+        (manifest.commands ?? []).some((candidate) => candidate.name === command),
+      );
+      if (command && contributed) {
+        const options = runtimeOptions();
+        const io = terminalIo({
+          stdin: process.stdin,
+          stdout: process.stdout,
+          stderr: process.stderr,
+        });
+        return runModuleCommand(options, command, args, io);
+      }
+      console.error(command ? `Unknown command "${command}"\n\n${USAGE()}` : USAGE());
       return 2;
+    }
   }
 }
 

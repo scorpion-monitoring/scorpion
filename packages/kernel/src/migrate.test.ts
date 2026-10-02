@@ -84,6 +84,7 @@ describe('migrations', () => {
       'kernel_migrations_kernel',
       'kernel_outbox',
       'kernel_outbox_delivery',
+      'kernel_rate_bucket',
     ]);
   });
 

@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import {
   createKernel,
+  type CommandIo,
   type Config,
   type Kernel,
   type Logger,
@@ -118,7 +119,13 @@ export function startServer(options: RuntimeOptions): RunningServer {
 
   let state: ReadinessResult['checks']['kernel'] = 'starting';
   const probes: SystemProbes = { readiness: () => readiness(kernel, () => state), metrics };
-  const common = { config, log, probes, onRequest: metrics.onRequest };
+  const common = {
+    config,
+    log,
+    probes,
+    onRequest: metrics.onRequest,
+    rateLimiter: kernel.rateLimiter,
+  };
 
   let current = createApp({ ...common, routes: [], authorizer: kernel.authorizer, booting: true });
   const server = serve(
@@ -133,7 +140,12 @@ export function startServer(options: RuntimeOptions): RunningServer {
   const ready = (async () => {
     await kernel.start();
     if (config.WORKER_MODE === 'inline') await kernel.startWorkers();
-    current = createApp({ ...common, routes: kernel.routes, authorizer: kernel.authorizer });
+    current = createApp({
+      ...common,
+      routes: kernel.routes,
+      authenticator: kernel.authenticator,
+      authorizer: kernel.authorizer,
+    });
     state = 'started';
     log.info(
       { modules: kernel.profile.modules.map((m) => m.id), workers: config.WORKER_MODE },
@@ -209,6 +221,24 @@ export async function migrate(options: RuntimeOptions): Promise<MigrationReport>
   const kernel = newKernel(options);
   try {
     return await kernel.migrate();
+  } finally {
+    await kernel.stop();
+  }
+}
+
+/**
+ * `scorpion <command>` for a command a module contributes: migrations, the module's services, the
+ * command, and a clean shutdown. Returns the command's exit code.
+ */
+export async function runModuleCommand(
+  options: RuntimeOptions,
+  name: string,
+  args: readonly string[],
+  io: CommandIo,
+): Promise<number> {
+  const kernel = newKernel(options);
+  try {
+    return await kernel.runCommand(name, args, io);
   } finally {
     await kernel.stop();
   }

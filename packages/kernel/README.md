@@ -14,6 +14,7 @@ what a module does is up to the module.
 - [Events](#events)
 - [Jobs](#jobs)
 - [Registries](#registries)
+- [CLI commands](#cli-commands)
 - [Routes](#routes)
 - [Profiles](#profiles)
 - [Testing a module](#testing-a-module)
@@ -278,6 +279,7 @@ starts; a wrong field is reported with its name.
 | `services(ctx)`  | Builds the module's service object (sync or async). Other modules get it as `ctx.deps['<id>']`.                                                                                                                               |
 | `routes(r, ctx)` | Registers routes: `r.internal(route, handler)`, `r.public('v1', route, handler)`, and `r.service<T>()` for the module's own service.                                                                                          |
 | `jobs`           | `{ name, schedule?, data?, handler, retry, timeoutSeconds }[]`. Names start with the module id.                                                                                                                               |
+| `commands`       | `{ name, description, usage?, run(args, io, ctx) }[]`: commands of the `scorpion` CLI. See [CLI commands](#cli-commands).                                                                                                     |
 | `events`         | `{ emits: { 'name@1': ZodSchema }, on: { 'name@1': handler, 'system.ready': handler } }`.                                                                                                                                     |
 | `registries`     | `{ [name]: ZodSchema }`: registries this module declares (the schema of one entry).                                                                                                                                           |
 | `contributes`    | `{ [registry name]: entries[] }`: entries for registries of this module or of a dependency.                                                                                                                                   |
@@ -326,16 +328,16 @@ export default defineModule<MyService, 'kpi.framework', 'kpi.impact'>({
 
 ## `ctx`: what a module receives
 
-| Member               | What it gives you                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `ctx.moduleId`       | The id of the module.                                                                                            |
-| `ctx.db`             | Drizzle over one shared `pg` pool. `ctx.db.tx(fn)` runs `fn(tx)` in one transaction.                             |
-| `ctx.log`            | A pino logger with `module` bound (and `jobId` inside a job). Secrets are redacted.                              |
-| `ctx.config`         | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`. |
-| `ctx.events`         | `emit(name, payload)` into the outbox.                                                                           |
-| `ctx.jobs`           | `enqueue(name, data?)`.                                                                                          |
-| `ctx.registry(name)` | The validated entries of a registry of this module or of a dependency (frozen).                                  |
-| `ctx.deps`           | The public service objects of the declared dependencies.                                                         |
+| Member               | What it gives you                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.moduleId`       | The id of the module.                                                                                                               |
+| `ctx.db`             | Drizzle over one shared `pg` pool. `ctx.db.tx(fn)` runs `fn(tx)` in one transaction.                                                |
+| `ctx.log`            | A pino logger with `module` bound (and `jobId` inside a job). Secrets are redacted.                                                 |
+| `ctx.config`         | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`, `TRUSTED_PROXIES`. |
+| `ctx.events`         | `emit(name, payload)` into the outbox.                                                                                              |
+| `ctx.jobs`           | `enqueue(name, data?)`.                                                                                                             |
+| `ctx.registry(name)` | The validated entries of a registry of this module or of a dependency (frozen).                                                     |
+| `ctx.deps`           | The public service objects of the declared dependencies.                                                                            |
 
 `ctx.deps` reaches nothing else: asking for the id of a module that is not a declared dependency
 throws (`Module "x" cannot reach "y"`), also for a dependency of a dependency. An absent optional
@@ -418,8 +420,37 @@ registry entries, not `if` branches in the owner.
 - If a module has an optional dependency that is not in the profile, contributions and subscriptions
   to names that no module in the profile provides are skipped (and logged), because they may belong
   to that absent module. Without such a dependency they are errors.
-- The kernel declares one registry itself, `kernel.authorizer`, which any module may contribute to
-  (see Routes). Exactly one entry may exist.
+- The kernel declares two registries itself, `kernel.authenticator` and `kernel.authorizer`, which any
+  module may contribute to (see Routes). At most one entry may exist in each.
+
+## CLI commands
+
+A module can add a command to the `scorpion` CLI ([ADR-0009](../../docs/adr/0009-module-cli-commands.md)):
+
+```ts
+commands: [
+  {
+    name: 'create-admin', // lower-case kebab case; unique in the profile; not start, worker, migrate, profile:generate, help
+    description: 'Create an active administrator account.',
+    usage: 'create-admin --username <name> --email <address>',
+    async run(args, io, ctx) {
+      const password = await io.readSecret('Password: '); // terminal prompt, or one line of stdin
+      io.out('Created.');
+      return 0; // the exit code; returning nothing is 0
+    },
+  },
+],
+```
+
+- `scorpion <name>` runs it. The CLI knows the commands from the manifests of the build, so a profile
+  without the module has neither the command nor its line in the usage text. `kernel.commands` lists them
+  without touching the database.
+- `kernel.runCommand(name, args, io)` applies pending migrations and builds every module's services, then
+  calls `run` with the module's own `ctx`. No routes are registered, no workers start, and **`system.ready`
+  is not emitted**, so a command never triggers start-up behaviour.
+- `io` is `out`, `err` and `readSecret`. **Never take a secret from `args`**: the process list and the shell
+  history keep it. Never print one either; a command that has to is the exception to explain in its README.
+- A command is an entry point like a route: it calls the module's service and holds no logic of its own.
 
 ## Routes
 
@@ -441,11 +472,21 @@ publicReason)`. A permission of another module, a duplicate method and path, and
   `{ metadata: { currentPage, pageSize, totalCount, totalPages }, result }` with 0-based pages and a
   stable order (sort by a key, then by id).
 
-Every request passes the pipeline in this order: request id → security headers → logging → body
-size limit (413) → Zod validation (422) → **authorisation hook** → handler → error mapper. The hook
-is the registry `kernel.authorizer`; until `core.authz` contributes to it (M3) every route that is not
-public answers 403 ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)). In the service
-layer, check resource-scoped permissions again (`ctx.authz.require`, M3).
+Every request passes the pipeline in this order: request id → security headers → logging →
+**authentication** → body size limit (413) → Zod validation (422) → **authorisation hook** → handler →
+error mapper.
+
+- Authentication is the registry `kernel.authenticator`: `core.identity` contributes the entry that turns a
+  session cookie or a token into an `Actor` (`@scorpion/contracts`). With no credentials the actor is
+  `anonymous`, which a `public: true` route accepts. Bad credentials are a 401 on any other route; on a
+  public route they only mean "not signed in". Read the actor in a handler with `c.get('actor')`
+  ([ADR-0006](../../docs/adr/0006-actor-authenticator-interim-authorisation.md)).
+- The authorisation hook is the registry `kernel.authorizer`; until `core.authz` contributes to it (M3)
+  every route that is not public answers 403
+  ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)). It receives the actor too. Tests that
+  need to get through use `testAuthorizer()` from `@scorpion/testing`.
+
+In the service layer, check resource-scoped permissions again (`ctx.authz.require`, M3).
 
 ## Profiles
 

@@ -2,6 +2,7 @@
 // contributions against them. Everything here is pure, so it is tested without a database.
 import type { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
+import { AUTHENTICATOR_REGISTRY, authenticatorEntrySchema } from './authn.ts';
 import { AUTHORIZER_REGISTRY, authorizerEntrySchema } from './authz.ts';
 import { SYSTEM_READY, type PermissionDef } from './manifest.ts';
 import type { ResolvedModule, ResolvedProfile } from './resolve.ts';
@@ -116,6 +117,17 @@ export function buildComposition(profile: ResolvedProfile): Composition {
     }
   }
 
+  // CLI command names: unique across modules.
+  const commandOwner = new Map<string, string>();
+  for (const module of profile.modules) {
+    for (const command of module.manifest.commands ?? []) {
+      const other = commandOwner.get(command.name);
+      if (other)
+        problems.push(`command "${command.name}" is declared by both ${other} and ${module.id}`);
+      else commandOwner.set(command.name, module.id);
+    }
+  }
+
   // Registries: unique names. The kernel owns `kernel.authorizer`, which any module may fill.
   const registries = new Map<string, RegisteredRegistry>([
     [
@@ -124,6 +136,15 @@ export function buildComposition(profile: ResolvedProfile): Composition {
         name: AUTHORIZER_REGISTRY,
         owner: KERNEL_OWNER,
         schema: authorizerEntrySchema,
+        entries: [],
+      },
+    ],
+    [
+      AUTHENTICATOR_REGISTRY,
+      {
+        name: AUTHENTICATOR_REGISTRY,
+        owner: KERNEL_OWNER,
+        schema: authenticatorEntrySchema,
         entries: [],
       },
     ],
@@ -197,6 +218,13 @@ export function buildComposition(profile: ResolvedProfile): Composition {
   if (authorizers.length > 1) {
     problems.push(
       `more than one module contributes to "${AUTHORIZER_REGISTRY}": ${authorizers.map((e) => e.module).join(', ')}`,
+    );
+  }
+
+  const authenticators = registries.get(AUTHENTICATOR_REGISTRY)!.entries;
+  if (authenticators.length > 1) {
+    problems.push(
+      `more than one module contributes to "${AUTHENTICATOR_REGISTRY}": ${authenticators.map((e) => e.module).join(', ')}`,
     );
   }
 

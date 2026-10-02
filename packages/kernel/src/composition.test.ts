@@ -160,6 +160,15 @@ describe('buildComposition', () => {
     ]);
   });
 
+  it('rejects a command name that two modules both declare', () => {
+    const command = { name: 'tidy', description: 'x', run: async () => {} };
+    const one = defineModule({ id: 'one', version: '1.0.0', commands: [command] });
+    const two = defineModule({ id: 'two', version: '1.0.0', commands: [command] });
+    expect(problemsOfInline([one, two])).toEqual([
+      'command "tidy" is declared by both one and two',
+    ]);
+  });
+
   it('rejects overlapping table prefixes and the kernel prefix', () => {
     const a = defineModule({ id: 'kpi', version: '1.0.0', tablePrefix: 'kpi_' });
     const b = defineModule({ id: 'kpi.ingestion', version: '1.0.0' });

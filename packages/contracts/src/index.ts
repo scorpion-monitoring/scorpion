@@ -1,3 +1,4 @@
+export { ANONYMOUS, isUser, type Actor, type AnonymousActor, type UserActor } from './actor.ts';
 export { Conflict, DomainError, Forbidden, Invalid, NotFound, Unauthorized } from './errors.ts';
 export type { FieldProblem } from './errors.ts';
 export {
@@ -27,6 +28,7 @@ export {
   type AppEnv,
   type AppRoute,
   type AppRouteConfig,
+  type RateLimitGroup,
   type RouteAccess,
   type AnyHandler,
   type Context,
