@@ -49,6 +49,7 @@ const create = createRoute({
   method: 'post',
   path: '/things',
   permission: 'fixture.routes.write',
+  rateLimit: 'strict',
   request: {
     body: { required: true, content: json(z.strictObject({ name: z.string().min(1).max(20) })) },
   },
