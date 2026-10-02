@@ -1,6 +1,6 @@
 # M3 Sprint Plan: `core.authz` + `core.settings`
 
-Status: draft, 2026-10-02. Decisions 1 to 4 answered the same day (§10).
+Status: approved, 2026-10-02 (§11 is in `implementation.md`). Decisions 1 to 4 answered the same day (§10). Sprint 1 is in PR #38.
 Scope source: [implementation.md](implementation.md) §3, M3. Closes defect 1 (FEATURES §5). Releases as `0.4.0`.
 
 M3 is size M (about 3 weeks for one developer), but it is the riskiest security milestone: it replaces
@@ -14,7 +14,7 @@ reviewable size) and one pull request into `dev`. M3 is released once, after spr
 1. Merge #35 (`main` back into `dev`) and #36 (backlog entry) so `dev` carries 0.3.0.
 2. The four decisions in §10 are answered. Write ADR-0014 (dependency direction and the bootstrap exception) as the
    first commit of sprint 1.
-3. Add the lines in §11 to M3's scope in `implementation.md` (needs your approval; this plan does not edit it). FEATURES §2
+3. Add the lines in §11 to M3's scope in `implementation.md` (approved and done in PR #38). FEATURES §2
    is derived from the defective legacy app; where it conflicts with the architecture or this plan (the
    authz → identity arrow), the architecture wins and the ADR records it.
 
@@ -266,7 +266,7 @@ second process within the TTL; rotation never leaves an undecryptable row; hosti
 4. **No environment fallback for secrets.** The secrets store is the only source for OIDC client secrets from 0.4.0 on;
    security wins over a smooth upgrade (0.3.0 could not have been used in production, ADR-0005). The release notes say it.
 
-## 11. Proposed additions to M3's scope in `implementation.md` (to approve)
+## 11. Additions to M3's scope in `implementation.md` (approved 2026-10-02)
 
 - `authz.defaultRole` and `authz.resourcePolicy` registries, and the route-table walker test.
 - `scorpion set-secret`, next to `rotate-secrets`.

@@ -117,16 +117,19 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 **Goal:** deny-by-default authorisation and data-driven configuration.
 
-- `core.authz`: permission registry filled from manifests; roles stored as data (Admin, Reviewer, User seeded); role → permission mapping editable by admins; `ctx.authz.require(actor, permission, resource?)`; resource policies registered by modules (for example `service.member`).
+- `core.authz`: permission registry filled from manifests; roles stored as data (Admin, Reviewer, User seeded); role → permission mapping editable by admins; `ctx.authz.require(actor, permission, resource?)`; resource policies registered by modules (for example `service.member`). Modules contribute default role permissions through the registry `authz.defaultRole` and resource policies through `authz.resourcePolicy`. A walker test fails if a non-public route has no entry in the "denied for a plain User" matrix.
+- Dependency order: `core.authz` → `core.settings` → `core.blob` → `core.identity` (ADR-0014). `core.authz` is user-agnostic; `core.identity` depends on it. The blob store is its own module, `core.blob`.
+- Token scopes are intersected with the owner's permissions (effective permission = scope ∩ owner). Approving an account takes the role to assign (default `User`), in one transaction with the status change.
 - Built-in protections: nobody can change their own role or approve their own requests, and role assignment needs `identity.role.assign` (defect 1).
 - Pipeline step: the route's `permission` is checked before the handler runs; the service layer checks again for resource-scoped permissions.
-- `core.settings`: `settings` (per-module JSON validated by that module's Zod schema, defaults from the schema), `user_preferences`, `secrets` (AES-256-GCM, key from `SECRETS_KEY`; values write-only through the API; `scorpion rotate-secrets`).
+- `core.settings`: `settings` (per-module JSON validated by that module's Zod schema, defaults from the schema), `user_preferences`, `secrets` (AES-256-GCM, key from `SECRETS_KEY`; values write-only through the API; `scorpion set-secret` and `scorpion rotate-secrets`).
+- M2 hand-offs: identity reads its settings through the settings port (`ctx.settings`); the OIDC client secrets come only from the secrets store (no environment fallback); the retention, rate-limit and mail-budget numbers become settings; user purge calls the authz service inside its transaction; avatar upload goes through the blob service.
 - `vocabulary` + `vocabulary_term` tables and a `vocabulary` registry. Seeds: stages (DEV, DEMO, PROD, TERM), thematic categories, necessity levels, sender types, aggregates.
 - Blob store: `blob` table (bytea, sha256, MIME, size), `/files/:hash` with a strict CSP, `sharp` re-encoding of rasters, DOMPurify for SVG, size limit from settings.
 - Branding settings: instance name, logos, product name, sender address, contact email, imprint URL, legal texts (Markdown). These replace the hard-coded values listed in FEATURES §3.3.
 - The seed migration maps the temporary `identity_user.isBootstrapAdmin` column (added in M2) to the Admin role assignment and then drops the column completely; no code reads it afterwards.
 
-**Acceptance:** the defect-1 regression suite passes: a plain User calling each admin endpoint gets 403, including role changes, self-approval, KPI-set edits, announcement deletion, log reads and revoking another user's token. Secrets never appear in API responses or logs. A test proves that `identity_user.isBootstrapAdmin` no longer exists and that former bootstrap admins hold the Admin role.
+**Acceptance:** the defect-1 regression suite passes: a plain User calling each admin endpoint gets 403, including role changes, self-approval, KPI-set edits, announcement deletion, log reads and revoking another user's token. Secrets never appear in API responses or logs. A test proves that `identity_user.isBootstrapAdmin` no longer exists and that former bootstrap admins hold the Admin role. A fresh `full` instance works end to end without a test authorizer: `create-admin`, a second person registers and is approved with a role, and a scoped personal access token is limited to its scopes.
 
 ### M4: `core.notifications` + `core.audit` (M)
 
