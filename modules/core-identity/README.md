@@ -4,21 +4,22 @@ Users, the ways they sign in, sessions, personal access tokens and approval. Pac
 `@scorpion/core-identity`, id `core.identity`, table prefix `identity_` (set in the manifest, so the tables
 are `identity_user` and not `core_identity_user`; ADR-0004).
 
-This is **sprint 1 of M2** ([sprint plan](../../docs/m2-sprint-plan.md)): the schema, the validation
-rules, password hashing and a user service skeleton. There are no routes yet, no sessions and no tokens in
-use. The module has no effect on a running instance except for its tables.
+This is **sprint 2 of M2, part 1** ([sprint plan](../../docs/m2-sprint-plan.md)): the schema, the validation
+rules, password hashing, a user service skeleton, and now the session service, the `__Host-session` cookie,
+CSRF protection and the authenticator that turns the cookie into an `Actor`. There are no routes yet (register,
+login and approval follow in part 2) and no tokens in use, so no request can carry a valid cookie before then.
 
 ## Manifest
 
-| Part         | Now                             | Later                                                                                            |
-| ------------ | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Permissions  | none                            | sprint 2: approve and reject users, list pending; M3 adds `identity.role.assign`                 |
-| Settings     | none                            | sprint 2: `localAccounts` (default `true`, enforced on the server)                               |
-| Events       | none emitted, none handled      | `identity.user.registered@1`, `.approved@1`, `.rejected@1`, through the outbox (sprints 2 and 5) |
-| Registries   | none declared, none contributed | declares `auth.approvalPolicy` (sprint 2); contributes to `kernel.authenticator` (sprints 2, 3)  |
-| Jobs         | none                            | hourly cleanup of expired sessions, login states and tokens (sprint 5)                           |
-| CLI commands | none                            | `create-admin` (sprint 3)                                                                        |
-| Routes       | none                            | register, login, logout, `GET /me`, tokens (sprints 2 and 3)                                     |
+| Part         | Now                                                     | Later                                                                                            |
+| ------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Permissions  | none                                                    | sprint 2: approve and reject users, list pending; M3 adds `identity.role.assign`                 |
+| Settings     | none                                                    | sprint 2: `localAccounts` (default `true`, enforced on the server)                               |
+| Events       | none emitted, none handled                              | `identity.user.registered@1`, `.approved@1`, `.rejected@1`, through the outbox (sprints 2 and 5) |
+| Registries   | contributes the session entry to `kernel.authenticator` | declares `auth.approvalPolicy` (part 2); the entry also reads tokens (sprint 3)                  |
+| Jobs         | none                                                    | hourly cleanup of expired sessions, login states and tokens (sprint 5)                           |
+| CLI commands | none                                                    | `create-admin` (sprint 3)                                                                        |
+| Routes       | none                                                    | register, login, logout, `GET /me`, tokens (sprints 2 and 3)                                     |
 
 The README changes together with the manifest.
 
@@ -41,6 +42,27 @@ It marks the administrator that `scorpion create-admin` or the first-run token c
 are data seeded only in M3. **Nothing reads it:** the service does not select it, no route uses it, a test fails
 if a file other than the schema mentions it. M3's seed migration turns it into an Admin role assignment and
 **drops the column completely**, with a test that it is gone ([ADR-0006](../../docs/adr/0006-actor-authenticator-interim-authorisation.md)).
+
+## Sessions, the cookie and CSRF
+
+[ADR-0007](../../docs/adr/0007-session-cookie-and-csrf.md) has the reasoning. In short:
+
+- The session id is 256 random bits (43 base64url characters). Only its SHA-256 is stored. A session lives 7 days
+  from its last use (sliding; the database is written at most once a minute per session, and the cookie is then
+  sent again).
+- Cookie `__Host-session`: `Secure; HttpOnly; SameSite=Lax; Path=/`, no `Domain`.
+- The authenticator (`authenticator.ts`, the entry in `kernel.authenticator`) reads only headers. No cookie: the
+  caller is anonymous. A cookie the session service refuses: `Unauthorized`. A good cookie: `Actor`
+  `{ kind: 'user', via: 'session', roles: [] }` (roles arrive with core.authz in M3). A session also ends when
+  its user is no longer `active` or is soft-deleted.
+- **CSRF.** A request with the session cookie and a method other than GET, HEAD or OPTIONS must send
+  `X-CSRF-Token`, the session's token (a hash of the session id under its own label; the login and `me`
+  responses return it). Otherwise it is a 401.
+- **Cache and the staleness bound.** The session service keeps verified sessions in memory for **5 seconds**
+  (`SESSION_CACHE_TTL_MS`). Logout and "log out everywhere" revoke in the database and drop the entries of
+  _this_ process at once. **With several server processes another process can accept a revoked session for at most
+  5 seconds**, the time its cache entry lives. Tests set the TTL to 0 for strict behaviour. Unknown ids are never
+  cached.
 
 ## Public API (`public.ts`)
 
