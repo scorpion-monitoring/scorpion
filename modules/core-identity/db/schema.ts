@@ -145,7 +145,7 @@ export const token = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    /** The user's own label. Unique per user. */
+    /** The user's own label. Unique per user among the tokens that are not revoked. */
     name: text().notNull(),
     /** The 8 characters after `scp_`; not secret, used to find the row. */
     prefix: text().notNull(),
@@ -163,7 +163,11 @@ export const token = pgTable(
   },
   (table) => [
     uniqueIndex('identity_token_prefix_uidx').on(table.prefix),
-    uniqueIndex('identity_token_user_name_uidx').on(table.userId, table.name),
+    // Unique among the live tokens: a revoked token keeps its row but frees its name, so rotating
+    // (revoke, then create under the same name) and re-creating a token work.
+    uniqueIndex('identity_token_user_name_uidx')
+      .on(table.userId, table.name)
+      .where(sql`${table.revokedAt} is null`),
     index('identity_token_expires_idx').on(table.expiresAt),
     check('identity_token_prefix_format', sql`${table.prefix} ~ '^[A-Za-z0-9]{8}$'`),
   ],

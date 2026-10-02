@@ -23,11 +23,16 @@ describe('the module', () => {
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
       'core.identity.me.read',
       'core.identity.session.manage',
+      'core.identity.token.manage',
+      'core.identity.token.read',
       'core.identity.user.approve',
       'core.identity.user.list-pending',
       'core.identity.user.reject',
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'identity.token.created@1',
+      'identity.token.revoked@1',
+      'identity.token.rotated@1',
       'identity.user.approved@1',
       'identity.user.registered@1',
       'identity.user.rejected@1',
@@ -80,7 +85,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(1);
+    expect(journal.rows).toHaveLength(2); // 0000 and 0001, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -221,7 +226,7 @@ describe('the constraints of the tables', () => {
     );
   });
 
-  it('keeps a token prefix unique and a token name unique per user', async () => {
+  it('keeps a token prefix unique and a live token name unique per user', async () => {
     const { kernel } = await identity.start();
     const [one, two] = [await makeUser(kernel.pool), await makeUser(kernel.pool)];
     const { row } = await makeToken(kernel.pool, one, { name: 'ci' });
@@ -229,6 +234,9 @@ describe('the constraints of the tables', () => {
       'identity_token_user_name_uidx',
     );
     await expect(makeToken(kernel.pool, two, { name: 'ci' })).resolves.toBeTruthy();
+    // A revoked token frees its name (rotation relies on it).
+    await kernel.pool.query('update identity_token set revoked_at = now() where id = $1', [row.id]);
+    await expect(makeToken(kernel.pool, one, { name: 'ci' })).resolves.toBeTruthy();
     expect(
       await refused(
         kernel.pool.query(`update identity_token set prefix = $1 where id <> $2`, [

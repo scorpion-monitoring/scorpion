@@ -1,6 +1,6 @@
 import { z } from '@scorpion/contracts';
 import { defineModule } from '@scorpion/kernel';
-import { createSessionAuthenticator } from './authenticator.ts';
+import { createAuthenticator } from './authenticator.ts';
 import type { IdentityService } from './public.ts';
 import { registerIdentityRoutes } from './routes.ts';
 import { createAccountService } from './service/accounts.ts';
@@ -12,6 +12,7 @@ import {
 } from './service/approval-policy.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import { defaultSettings, settingsSchema, type IdentitySettings } from './service/settings.ts';
+import { createTokenService, type TokenService } from './service/tokens.ts';
 import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
@@ -20,6 +21,7 @@ export interface IdentityInternals extends IdentityService {
   accounts: AccountService;
   approval: ApprovalService;
   sessions: SessionService;
+  tokens: TokenService;
 }
 
 export interface IdentityModuleOptions {
@@ -27,20 +29,29 @@ export interface IdentityModuleOptions {
   settings?: IdentitySettings;
   /** For tests: how long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
+  /** For tests: how long a verified access token is trusted without verifying it again. */
+  tokenCacheTtlMs?: number;
 }
 
 const userEvent = z.strictObject({ userId: z.string(), username: z.string() });
+// No token, prefix, hash or scope in an event: it says who did what to which token.
+const tokenEvent = z.strictObject({ userId: z.string(), tokenId: z.string(), name: z.string() });
 
 /**
  * Builds the manifest. The default export is the one a profile uses; tests build their own to
- * inject settings. Each manifest keeps its own session service, which the authenticator entry
- * (fixed in the manifest) reaches through `current`.
+ * inject settings. Each manifest keeps its own session and token services, which the authenticator
+ * entry (fixed in the manifest) reaches through closures.
  */
 export function createIdentityModule(options: IdentityModuleOptions = {}) {
   let current: SessionService | undefined;
+  let currentTokens: TokenService | undefined;
   const sessionsOrThrow = (): SessionService => {
     if (!current) throw new Error('core.identity: the session service is not ready');
     return current;
+  };
+  const tokensOrThrow = (): TokenService => {
+    if (!currentTokens) throw new Error('core.identity: the token service is not ready');
+    return currentTokens;
   };
 
   return defineModule<IdentityInternals>({
@@ -55,6 +66,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'core.identity.user.list-pending': { description: 'List accounts waiting for approval' },
       'core.identity.user.approve': { description: 'Approve a pending account' },
       'core.identity.user.reject': { description: 'Reject a pending account' },
+      'core.identity.token.read': { description: 'List your own access tokens' },
+      'core.identity.token.manage': {
+        description: 'Create, revoke and rotate your own access tokens',
+      },
     },
     settings: settingsSchema,
 
@@ -68,31 +83,41 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         }),
         'identity.user.approved@1': userEvent.extend({ approvedBy: z.string() }),
         'identity.user.rejected@1': userEvent.extend({ rejectedBy: z.string() }),
+        'identity.token.created@1': tokenEvent,
+        'identity.token.revoked@1': tokenEvent,
+        'identity.token.rotated@1': tokenEvent.extend({ previousTokenId: z.string() }),
       },
     },
 
     registries: { [APPROVAL_POLICY_REGISTRY]: approvalPolicyEntrySchema },
     contributes: {
       [APPROVAL_POLICY_REGISTRY]: [manualPolicy],
-      'kernel.authenticator': [{ authenticate: createSessionAuthenticator(sessionsOrThrow) }],
+      'kernel.authenticator': [
+        {
+          authenticate: createAuthenticator({ sessions: sessionsOrThrow, tokens: tokensOrThrow }),
+        },
+      ],
     },
 
     services: (ctx) => {
       const settings = options.settings ?? defaultSettings;
       const users = createUserService(ctx);
       const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
+      const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs });
       current = sessions;
+      currentTokens = tokens;
       return {
         users,
         sessions,
+        tokens,
         accounts: createAccountService(ctx, { users, sessions, settings }),
         approval: createApprovalService(ctx, { sessions }),
       };
     },
 
     routes: (r) => {
-      const { accounts, approval } = r.service<IdentityInternals>();
-      registerIdentityRoutes(r, { accounts, approval });
+      const { accounts, approval, tokens } = r.service<IdentityInternals>();
+      registerIdentityRoutes(r, { accounts, approval, tokens });
     },
   });
 }
