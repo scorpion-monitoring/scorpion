@@ -28,6 +28,7 @@ export {
   type AppEnv,
   type AppRoute,
   type AppRouteConfig,
+  type RateLimitGroup,
   type RouteAccess,
   type AnyHandler,
   type Context,

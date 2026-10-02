@@ -19,6 +19,7 @@ import {
 } from './outbox.ts';
 import { ids } from './ids.ts';
 import { createJobs, type JobRunReport } from './jobs.ts';
+import { createRateLimiter, type RateLimiter } from './rate-limit.ts';
 import {
   KERNEL_MODULE,
   KERNEL_TABLE_PREFIX,
@@ -84,6 +85,8 @@ export interface Kernel {
    * (filled by `core.identity`), or one that leaves every caller anonymous (ADR 0006).
    */
   readonly authenticator: Authenticator;
+  /** The token-bucket store the server's rate limit (pipeline step 2) charges. */
+  readonly rateLimiter: RateLimiter;
   /** Public service objects by module id, once `start()` has built them. */
   readonly services: ReadonlyMap<string, unknown>;
   /** Loader step 2 alone: apply pending migrations. */
@@ -302,6 +305,7 @@ export function createKernel(options: KernelOptions): Kernel {
     },
     authorizer,
     authenticator,
+    rateLimiter: createRateLimiter(db),
     config,
     log,
     db,

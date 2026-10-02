@@ -100,3 +100,10 @@ export {
   type AuthenticationRequest,
   type Authenticator,
 } from './authn.ts';
+export {
+  createRateLimiter,
+  type RateDecision,
+  type RateLimit,
+  type RateLimiter,
+  type RateLimiterOptions,
+} from './rate-limit.ts';
