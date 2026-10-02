@@ -4,24 +4,78 @@ Users, the ways they sign in, sessions, personal access tokens and approval. Pac
 `@scorpion/core-identity`, id `core.identity`, table prefix `identity_` (set in the manifest, so the tables
 are `identity_user` and not `core_identity_user`; ADR-0004).
 
-This is **sprint 2 of M2, part 1** ([sprint plan](../../docs/m2-sprint-plan.md)): the schema, the validation
-rules, password hashing, a user service skeleton, and now the session service, the `__Host-session` cookie,
-CSRF protection and the authenticator that turns the cookie into an `Actor`. There are no routes yet (register,
-login and approval follow in part 2) and no tokens in use, so no request can carry a valid cookie before then.
+This is **sprint 2 of M2** ([sprint plan](../../docs/m2-sprint-plan.md)): local accounts, sessions and approval.
+People can register with a password, sign in and out, and an approver can approve or reject new accounts.
+Personal access tokens, `create-admin`, OIDC, password reset and the profile follow in sprints 3 to 5.
+
+**Nothing is reachable in a real deployment yet.** Production denies every route that is not public until
+`core.authz` exists in M3 ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)), so register and login
+work, and everything behind a session answers 403. Tests use `testAuthorizer()` from `@scorpion/testing`.
 
 ## Manifest
 
-| Part         | Now                                                     | Later                                                                                            |
-| ------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Permissions  | none                                                    | sprint 2: approve and reject users, list pending; M3 adds `identity.role.assign`                 |
-| Settings     | none                                                    | sprint 2: `localAccounts` (default `true`, enforced on the server)                               |
-| Events       | none emitted, none handled                              | `identity.user.registered@1`, `.approved@1`, `.rejected@1`, through the outbox (sprints 2 and 5) |
-| Registries   | contributes the session entry to `kernel.authenticator` | declares `auth.approvalPolicy` (part 2); the entry also reads tokens (sprint 3)                  |
-| Jobs         | none                                                    | hourly cleanup of expired sessions, login states and tokens (sprint 5)                           |
-| CLI commands | none                                                    | `create-admin` (sprint 3)                                                                        |
-| Routes       | none                                                    | register, login, logout, `GET /me`, tokens (sprints 2 and 3)                                     |
+| Part         | Now                                                                                                                                                                                                | Later                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Permissions  | `core.identity.session.manage`, `core.identity.me.read`, `core.identity.user.list-pending`, `core.identity.user.approve`, `core.identity.user.reject`                                              | M3 adds the role-assignment permission                                 |
+| Settings     | `localAccounts` (default `true`, enforced on the server), `approvalPolicy` (default `manual`)                                                                                                      | M3: stored settings replace the defaults                               |
+| Events       | emits `identity.user.registered@1`, `identity.user.approved@1`, `identity.user.rejected@1` through the outbox; handles none                                                                        | handlers arrive with core.notifications (M4)                           |
+| Registries   | declares `auth.approvalPolicy`, contributes `manual` to it; contributes the session entry to `kernel.authenticator`                                                                                | the entry also reads tokens (sprint 3)                                 |
+| Jobs         | none                                                                                                                                                                                               | hourly cleanup of expired sessions, login states and tokens (sprint 5) |
+| CLI commands | none                                                                                                                                                                                               | `create-admin` (sprint 3)                                              |
+| Routes       | internal API: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`, `GET /users/pending`, `POST /users/{id}/approve`, `POST /users/{id}/reject` | tokens (sprint 3), password reset, profile (sprint 5)                  |
 
 The README changes together with the manifest.
+
+### Routes
+
+All are under `/api/internal`. Bodies are JSON only; anything else is refused (415 or 422), which also keeps a
+cross-site HTML form from reaching them ([ADR-0007](../../docs/adr/0007-session-cookie-and-csrf.md)).
+
+| Route                      | Access                            | Notes                                                                                                                                                                                                                                            |
+| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /auth/register`      | public (strict rate limit)        | `{ username, email, password }` → 201 `{ user }`, status `pending` under the manual policy. 403 when `localAccounts` is off, 409 when the name or address is taken, 422 for bad input                                                            |
+| `POST /auth/login`         | public (strict rate limit)        | `{ username, password }` → 200 `{ user, csrfToken }` and the cookie. 401 for an unknown user, a wrong password, a rejected or deleted account (same answer); 403 for a pending account (after the right password) or when `localAccounts` is off |
+| `POST /auth/logout`        | `core.identity.session.manage`    | 204, ends the caller's session, clears the cookie                                                                                                                                                                                                |
+| `POST /auth/logout-all`    | `core.identity.session.manage`    | `{ revoked }`, ends every session of the caller                                                                                                                                                                                                  |
+| `GET /auth/me`             | `core.identity.me.read`           | `{ user, roles, csrfToken }`; roles are empty until M3                                                                                                                                                                                           |
+| `GET /users/pending`       | `core.identity.user.list-pending` | list envelope, oldest first                                                                                                                                                                                                                      |
+| `POST /users/{id}/approve` | `core.identity.user.approve`      | pending → active. 404 unknown, 409 not pending, 403 your own account                                                                                                                                                                             |
+| `POST /users/{id}/reject`  | `core.identity.user.reject`       | pending → rejected and soft-deleted (the username stays reserved). Same refusals                                                                                                                                                                 |
+
+The last three are not in plan §5 item 6, which lists five routes. The plan's definition of done asks for a
+denied-permission test for approve and reject, and before `ctx.authz` exists (M3) the route's `permission` is the only
+place that can be checked. The service still refuses an anonymous caller and your own account.
+
+Registering and signing in tell a caller when a username or address is taken (409) and, after the right password,
+that an account is pending; they do not tell whether a username exists when signing in.
+
+### Events (decision)
+
+CLAUDE.md rule 6 says a write that touches more than one row emits its domain events through the outbox in the same
+transaction, and registering is one: the user and its auth method. So the three events are emitted **from sprint 2**,
+not left to sprint 5, which only completes this README. `register` emits `identity.user.registered@1`
+`{ userId, username, status }`; `approve` and `reject` emit `identity.user.approved@1` `{ userId, username, approvedBy }`
+and `identity.user.rejected@1` `{ userId, username, rejectedBy }`, each in the transaction that changes the status. No
+event holds an email address, a password or a hash. A test reads the outbox row and another proves a failing outbox
+rolls the write back.
+
+### Settings
+
+`localAccounts` and `approvalPolicy` are declared in the manifest (`service/settings.ts`). The kernel only validates
+and stores a module's settings today and `ctx` has no settings access, so the module reads them through one internal
+port, `IdentitySettings`, whose default implementation is `settingsSchema.parse({})`. **M3 replaces that default and
+nothing else.** The server enforces `localAccounts` (defect 13): register and login answer 403 when it is off, whatever
+the UI shows. Existing sessions and logout are not affected.
+
+### Approval policies (`auth.approvalPolicy`)
+
+The registry entry is `{ id, description?, decide(registration) }`; `decide` receives
+`{ username, email, emailVerified, provider }` and returns `{ status: 'pending' | 'active' }`. The `approvalPolicy`
+setting names the entry in force. `manual` (contributed here) returns `pending` for everyone. A policy decides from the
+registration context, so `auto-by-email-domain` and `invite-only` (`docs/backlog.md`) are contributions from other
+modules that depend on `core.identity`, and need no change here; a test contributes one from a second module. If the
+configured policy is not installed the account stays `pending` and a warning is logged, so a typo never approves anyone.
+Approving only flips the status; roles are assigned in M3.
 
 ## Tables
 
@@ -72,8 +126,12 @@ if a file other than the schema mentions it. M3's seed migration turns it into a
   whatever way its holder signs in, case-insensitive) or an identity that is already linked (409 `Conflict`), then
   writes the user and its auth method in one transaction. A race is stopped by the unique indexes and is also a 409.
   The result never holds a hash or an internal flag.
+- `findById(id)`: `undefined` when there is no such user, also for text that is not a UUID.
 - `findByUsername(name)` and `findByEmail(address)`: case-insensitive, `undefined` when there is no match,
   soft-deleted users included (the caller refuses their login).
+
+The register, login, session and approval services are internal to the module; the routes call them through
+`r.service()`. Other modules read users and, in M3, ask `core.authz` about permissions.
 
 ## Rules for input (`validation.ts`)
 
@@ -92,3 +150,8 @@ The parameters are in one place; a unit test pins them. Under `NODE_ENV=test` on
 `pnpm test --filter @scorpion/core-identity` needs Docker (Testcontainers). Use the factories `makeUser`,
 `makeAuthMethod`, `makeSession` and `makeToken` from `@scorpion/testing`, and `testAuthorizer()` when a test must get
 through the pipeline before `core.authz` exists.
+
+The routes are tested through the whole pipeline, on real Postgres, in `apps/server/src` (a module cannot import the
+server): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, with
+`useIdentityApp()` from `src/testing/identity-app.ts`. A test builds its own manifest with
+`createIdentityModule({ settings, sessionCacheTtlMs })` to change a setting or the cache TTL.
