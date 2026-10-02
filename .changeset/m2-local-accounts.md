@@ -1,5 +1,0 @@
----
-'scorpion': minor
----
-
-People can now register and sign in with a password. New internal API endpoints: `POST /api/internal/auth/register`, `/auth/login`, `/auth/logout`, `/auth/logout-all`, `GET /auth/me`, and for approvers `GET /users/pending`, `POST /users/{id}/approve` and `/users/{id}/reject`. New accounts wait for approval (`approvalPolicy` is `manual`); rejecting one soft-deletes it. Signing in sets the `__Host-session` cookie (it needs HTTPS or `localhost`) and returns a `csrfToken` to send as `X-CSRF-Token` on writes. Register and login use the strict rate limit. The `localAccounts` setting (default on) is enforced by the server: when it is off, register and login answer 403. New permissions: `core.identity.session.manage`, `core.identity.me.read`, `core.identity.user.list-pending`, `core.identity.user.approve` and `core.identity.user.reject`. The events `identity.user.registered@1`, `identity.user.approved@1` and `identity.user.rejected@1` are written to the outbox. Until `core.authz` arrives in M3, every route except register and login still answers 403 in a real deployment.

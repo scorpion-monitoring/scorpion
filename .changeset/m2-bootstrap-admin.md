@@ -1,5 +1,0 @@
----
-'scorpion': minor
----
-
-A fresh install gets its first administrator without the "first registrant" rule. New command `scorpion create-admin --username <name> --email <address>` (profiles with `core.identity`) creates an active administrator account; the password is read from the terminal prompt or from standard input (`printf '%s\n' "$PASSWORD" | scorpion create-admin …`), never from an argument, and appears in no output. Modules can now add commands to the `scorpion` CLI; the usage text lists those of your build. When the server or worker starts on an install that has no active user, it prints a one-time first-run token (`sfr_…`, valid for 1 hour) once to standard error as a plain-text block (not a log line, and never repeated); redeem it with `POST /api/internal/bootstrap/first-admin` and `{ "token", "username", "email", "password" }` to create the first administrator. It is single use, rate limited like login, and a taken username or a weak password does not use it up. Make sure the console output of the first start is captured, or use `create-admin`. New event `identity.admin.created@1`; new migration (table `identity_first_run_token`).
