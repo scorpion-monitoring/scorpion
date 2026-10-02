@@ -17,3 +17,4 @@ export {
   type Queryable,
   type UserRow,
 } from './identity.ts';
+export { startStubIdp, type StubIdp, type StubLogin, type TokenFaults } from './oidc-provider.ts';
