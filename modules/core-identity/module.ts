@@ -7,6 +7,7 @@ import { createAccountService } from './service/accounts.ts';
 import { createBootstrapService, type BootstrapService } from './service/bootstrap.ts';
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
+import { createCleanupService, type CleanupService } from './service/cleanup.ts';
 import { createProfileService, type ProfileService } from './service/profile.ts';
 import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
 import { mailerFromEnvironment, type Mailer } from './service/mailer.ts';
@@ -33,6 +34,7 @@ export interface IdentityInternals extends IdentityService {
   accounts: AccountService;
   approval: ApprovalService;
   bootstrap: BootstrapService;
+  cleanup: CleanupService;
   loginStates: LoginStateService;
   oidc: OidcService;
   profile: ProfileService;
@@ -99,6 +101,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     if (!currentBootstrap) throw new Error('core.identity: the bootstrap service is not ready');
     return currentBootstrap;
   };
+  let currentCleanup: CleanupService | undefined;
+  const cleanupOrThrow = (): CleanupService => {
+    if (!currentCleanup) throw new Error('core.identity: the cleanup service is not ready');
+    return currentCleanup;
+  };
   const tokensOrThrow = (): TokenService => {
     if (!currentTokens) throw new Error('core.identity: the token service is not ready');
     return currentTokens;
@@ -137,6 +144,20 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
 
     commands: [createAdminCommand(bootstrapOrThrow)],
 
+    jobs: [
+      {
+        name: 'core.identity.cleanup',
+        schedule: '0 * * * *', // hourly, UTC
+        retry: { limit: 2, delaySeconds: 60 },
+        timeoutSeconds: 300,
+        handler: async (_job, ctx) => {
+          const result = await cleanupOrThrow().run();
+          // Counts only: no id, username or address.
+          ctx.log.info(result, 'identity cleanup finished');
+        },
+      },
+    ],
+
     events: {
       // A fresh install shows its first-run token once, when it has no active user. It must not
       // stop the start-up if that fails: `scorpion create-admin` still works.
@@ -164,6 +185,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.password.changed@1': userEvent,
         'identity.email.verified@1': userEvent,
         // Which fields changed, never their values. `email` means a change was asked for.
+        // After the retention period (ADR 0013): subscribers delete or anonymise what refers to the user.
+        'identity.user.purged@1': userEvent,
         'identity.profile.updated@1': userEvent.extend({
           fields: z.array(z.enum(['displayName', 'bio', 'email'])).min(1),
         }),
@@ -216,8 +239,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         settings,
         mailer: options.mailer ?? mailerFromEnvironment(process.env),
       });
+      const cleanup = createCleanupService(ctx);
+      currentCleanup = cleanup;
       return {
         bootstrap,
+        cleanup,
         profile: createProfileService(ctx, { recovery }),
         recovery,
         loginStates,

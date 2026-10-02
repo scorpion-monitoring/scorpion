@@ -30,6 +30,8 @@ export interface StartOptions {
     exchangeTimeoutMs?: number;
     now?: () => number;
   };
+  /** Job tuning: how often workers poll and the cron schedule is checked. */
+  jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
   /** Environment variables for the kernel's config (BASE_PATH, ORIGIN, ...). */
   env?: Record<string, string>;
   /** Another module of the profile that depends on core.identity, for example a policy contributor. */
@@ -103,6 +105,7 @@ export function useIdentity(): IdentityHarness {
           ...options?.env,
         }),
         log: createLogger({ level: 'silent' }),
+        jobs: options?.jobs,
       });
       open.push(kernel);
       await kernel.start();

@@ -46,6 +46,7 @@ describe('the module', () => {
       'identity.token.revoked@1',
       'identity.token.rotated@1',
       'identity.user.approved@1',
+      'identity.user.purged@1',
       'identity.user.registered@1',
       'identity.user.rejected@1',
     ]);
@@ -57,7 +58,7 @@ describe('the module', () => {
     expect(manifest.routes).toBeDefined();
     expect(manifest.commands?.map((command) => command.name)).toEqual(['create-admin']);
     expect(Object.keys(manifest.events?.on ?? {})).toEqual(['system.ready']);
-    expect(manifest.jobs).toBeUndefined();
+    expect(manifest.jobs?.map((job) => job.name)).toEqual(['core.identity.cleanup']);
   });
 
   it('contributes the manual policy and exactly one authenticator', async () => {

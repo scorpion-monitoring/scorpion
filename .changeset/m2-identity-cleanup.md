@@ -1,0 +1,5 @@
+---
+'scorpion': minor
+---
+
+New hourly job `core.identity.cleanup`, run by `scorpion worker` (or by the web process in `WORKER_MODE=inline`). It removes expired and revoked sessions, expired OIDC login states, used and expired password-reset and email-confirmation tokens and expired first-run tokens, removes access tokens that expired or were revoked more than 30 days ago, and **purges accounts that were soft-deleted (rejected) more than 30 days ago**: their username and email address become free again, and the account's sessions, tokens and sign-in methods go with it. Each purge emits the new event `identity.user.purged@1` (user id and username) in the same transaction, for modules that keep rows about users. A run is one transaction and logs counts only. There is no lockout after failed logins: the per-address rate limit stays the protection (decision and reasons in the `core.identity` README and ADR-0013). Production still denies every route that is not public until `core.authz` arrives in M3.
