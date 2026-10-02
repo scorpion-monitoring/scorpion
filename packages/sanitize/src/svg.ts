@@ -67,7 +67,7 @@ export function sanitizeSvg(source: string): string {
   // The prolog, doctype and comments are dropped: a doctype can declare entities, and the output is
   // a fresh document.
   const body = source
-    .replace(/^﻿/, '')
+    .replace(/^\uFEFF/, '')
     .replace(/<\?xml[\s\S]*?\?>/gi, '')
     .replace(/<!DOCTYPE[\s\S]*?(\[[\s\S]*?\])?\s*>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '')

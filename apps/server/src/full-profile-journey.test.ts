@@ -91,7 +91,8 @@ async function boot() {
         method,
         headers,
         body:
-          options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
+          (options.raw as BodyInit | undefined) ??
+          (options.body === undefined ? undefined : JSON.stringify(options.body)),
       },
       { incoming: { socket: { remoteAddress: '203.0.113.7' } } },
     );
@@ -184,8 +185,11 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
     const renamed = await call('PUT', '/settings/core.settings', {
       ...root,
       body: {
-        version: current.body!.version,
-        values: { ...current.body!.values, branding: { instanceName: 'Journey Registry' } },
+        version: current.body!.version as number,
+        values: {
+          ...(current.body!.values as object),
+          branding: { instanceName: 'Journey Registry' },
+        },
       },
     });
     expect(renamed.status).toBe(200);

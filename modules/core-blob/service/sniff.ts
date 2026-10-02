@@ -30,7 +30,9 @@ export function sniff(bytes: Uint8Array): Sniffed | undefined {
     return 'webp';
   }
   // SVG is text: after an optional BOM, whitespace, prolog, doctype and comments comes `<svg`.
-  const head = Buffer.from(bytes.subarray(0, 4096)).toString('utf8').replace(/^﻿/, '');
+  const head = Buffer.from(bytes.subarray(0, 4096))
+    .toString('utf8')
+    .replace(/^\uFEFF/, '');
   const withoutPreamble = head
     .replace(/^\s+/, '')
     .replace(

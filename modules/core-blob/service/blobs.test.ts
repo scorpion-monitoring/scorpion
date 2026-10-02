@@ -8,7 +8,6 @@ import { matchesEtag } from '../routes.ts';
 import { REFERENCE } from './blobs.ts';
 
 const harness = useBlob();
-const HOUR = 3_600_000;
 
 async function setup() {
   const started = await harness.start();

@@ -187,7 +187,7 @@ describe('validateTerm', () => {
     await expect(settings.validateTerm('stage', 'PROD')).resolves.toBeUndefined();
     await expect(settings.validateTerm('stage', 'LIVE', { path: 'stage' })).rejects.toMatchObject({
       status: 422,
-      errors: [{ path: 'stage', message: expect.stringContaining('not a term') }],
+      errors: [{ path: 'stage', message: expect.stringContaining('not a term') as unknown }],
     });
     await service.updateTerm(admin, 'stage', 'PROD', { active: false });
     await expect(settings.validateTerm('stage', 'PROD')).rejects.toBeInstanceOf(Invalid);

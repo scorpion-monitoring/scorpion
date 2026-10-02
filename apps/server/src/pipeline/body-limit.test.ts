@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { createRoute, z, type AppEnv, type AppRoute } from '@scorpion/contracts';
-import { createLogger, denyByDefault, loadConfig, type RegisteredRoute } from '@scorpion/kernel';
+import { createRoute, z, type AppEnv } from '@scorpion/contracts';
+import { createLogger, loadConfig, type RegisteredRoute } from '@scorpion/kernel';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
@@ -33,8 +33,8 @@ const handler = (async (c: {
   json(v: unknown): Response;
 }) => c.json({ received: (await c.req.arrayBuffer()).byteLength })) as never;
 const routes: RegisteredRoute[] = [
-  { module: 'x', surface: 'internal', route: upload as AppRoute, handler },
-  { module: 'x', surface: 'internal', route: other as AppRoute, handler },
+  { module: 'x', surface: 'internal', route: upload, handler },
+  { module: 'x', surface: 'internal', route: other, handler },
 ];
 
 function app(basePath = '/') {

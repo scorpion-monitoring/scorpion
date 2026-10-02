@@ -223,7 +223,7 @@ export function useIdentityApp() {
               options.body === undefined
                 ? undefined
                 : binary || typeof options.body === 'string'
-                  ? (options.body as string | Uint8Array)
+                  ? (options.body as BodyInit)
                   : JSON.stringify(options.body),
           },
           { incoming: { socket: { remoteAddress: options.peer ?? '203.0.113.7' } } },

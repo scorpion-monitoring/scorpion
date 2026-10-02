@@ -7,5 +7,5 @@ type Purifier = ReturnType<typeof createDOMPurify>;
 
 /** A fresh instance. Hooks are per instance, so each kind of sanitising gets its own. */
 export function createPurifier(): Purifier {
-  return createDOMPurify(new JSDOM('').window as unknown as Parameters<typeof createDOMPurify>[0]);
+  return createDOMPurify(new JSDOM('').window);
 }

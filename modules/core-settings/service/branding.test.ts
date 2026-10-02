@@ -4,7 +4,6 @@ import { useSettings } from '../test/harness.ts';
 
 const harness = useSettings();
 const HASH = 'a'.repeat(64);
-const OTHER_HASH = 'b'.repeat(64);
 
 async function setup(options: Parameters<typeof harness.start>[0] = {}) {
   const started = await harness.start(options);

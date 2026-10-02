@@ -477,7 +477,8 @@ export function registerSettingsRoutes(
   }) satisfies RouteHandler<typeof removeTermRoute, AppEnv>);
 
   r.internal(brandingRoute, (async (c) => {
-    const { mailFrom: _private, ...open } = await branding.get();
+    const { mailFrom, ...open } = await branding.get();
+    void mailFrom; // the sender address is not for the public
     c.header('cache-control', 'public, max-age=30');
     return c.json(open, 200);
   }) satisfies RouteHandler<typeof brandingRoute, AppEnv>);
