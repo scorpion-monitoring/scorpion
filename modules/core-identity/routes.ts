@@ -198,6 +198,20 @@ export const oidcStartRoute = createRoute({
   },
 });
 
+export const oidcLinkRoute = createRoute({
+  method: 'post',
+  path: '/auth/oidc/{provider}/link',
+  permission: 'core.identity.auth-method.link',
+  rateLimit: 'strict',
+  request: { params: oidcProviderParam },
+  responses: {
+    200: ok('Send the browser to `authorizationUrl`. The login cookie is set.', startedSchema),
+    403: { description: 'The caller is using an access token, not a session.' },
+    404: { description: 'No such sign-in provider.' },
+    502: { description: 'The provider could not be reached.' },
+  },
+});
+
 export const oidcCallbackRoute = createRoute({
   method: 'get',
   path: '/auth/oidc/{provider}/callback',
@@ -207,7 +221,7 @@ export const oidcCallbackRoute = createRoute({
   rateLimit: 'strict',
   request: { params: oidcProviderParam, query: oidcCallbackQuery },
   responses: {
-    302: { description: 'Signed in. The session cookie is set.' },
+    302: { description: 'Signed in (or linked). The session cookie is set when signing in.' },
     400: {
       description:
         'The state is unknown, expired, used or from another browser, or the provider refused.',
@@ -215,6 +229,10 @@ export const oidcCallbackRoute = createRoute({
     401: { description: 'The id_token did not pass validation, or the account may not sign in.' },
     403: { description: 'The account is waiting for approval.' },
     404: { description: 'No such sign-in provider.' },
+    409: {
+      description:
+        'The address belongs to an account that has not confirmed it, or the sign-in is already linked.',
+    },
     502: { description: 'The provider could not be reached or answered unexpectedly.' },
   },
 });
@@ -377,6 +395,13 @@ export function registerIdentityRoutes(
     c.header('cache-control', 'no-store');
     return c.json({ authorizationUrl: started.authorizationUrl }, 200);
   }) satisfies RouteHandler<typeof oidcStartRoute, AppEnv>);
+
+  r.internal(oidcLinkRoute, (async (c) => {
+    const started = await oidc.startLink(c.get('actor'), c.req.valid('param').provider);
+    writeLoginCookie(c, started.cookie.value, started.cookie.maxAgeSeconds);
+    c.header('cache-control', 'no-store');
+    return c.json({ authorizationUrl: started.authorizationUrl }, 200);
+  }) satisfies RouteHandler<typeof oidcLinkRoute, AppEnv>);
 
   r.internal(oidcCallbackRoute, (async (c) => {
     const query = c.req.valid('query');
