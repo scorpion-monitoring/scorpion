@@ -506,6 +506,11 @@ publicReason)`. A permission of another module, a duplicate method and path, and
   errors `NotFound`, `Conflict`, `Forbidden`, `Unauthorized`, `Invalid` from `@scorpion/contracts`; the
   error mapper turns them into RFC 9457 `application/problem+json`. Anything else that is thrown is a
   500 that shows only the request id.
+- The request body is limited to 1 MiB. An upload route raises the limit for itself with
+  `maxBodyBytes: <bytes>` in `createRoute()`; the limit is looked up by method and path, can only
+  go up, and applies to that route alone (a request over it is 413, before the body is read). A
+  binary body is declared with `content: { 'application/octet-stream': ... }` and read in the handler
+  with `c.req.arrayBuffer()`; Zod does not validate it, so the service checks the bytes.
 - Lists use `listEnvelope(itemSchema)`, `paginationQuery()` and `paginate()`: the v1 envelope
   `{ metadata: { currentPage, pageSize, totalCount, totalPages }, result }` with 0-based pages and a
   stable order (sort by a key, then by id).

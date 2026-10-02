@@ -1,6 +1,6 @@
 # M3 Sprint Plan: `core.authz` + `core.settings`
 
-Status: approved, 2026-10-02 (§11 is in `implementation.md`). Decisions 1 to 4 answered the same day (§10). Sprint 1 is in PR #38; sprint 2's decisions are in §13 and ADR-0015; sprint 3's are in §14, ADR-0016 and ADR-0017.
+Status: approved, 2026-10-02 (§11 is in `implementation.md`). Decisions 1 to 4 answered the same day (§10). Sprint 1 is in PR #38; sprint 2's decisions are in §13 and ADR-0015; sprint 3's are in §14, ADR-0016 and ADR-0017; sprint 4's are in §15 and ADR-0018.
 Scope source: [implementation.md](implementation.md) §3, M3. Closes defect 1 (FEATURES §5). Releases as `0.4.0`.
 
 M3 is size M (about 3 weeks for one developer), but it is the riskiest security milestone: it replaces
@@ -220,16 +220,22 @@ Work items
 
 ## 8. Acceptance (from implementation.md) mapped to tests
 
-| Acceptance criterion                                                                  | Where it is proved                                              |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Defect-1 suite: a plain User calling each admin endpoint gets 403                     | `defect-01.privilege-escalation` (sprint 2), route-table walker |
-| …including role changes, self-approval, revoking another user's token                 | same file, one test per case                                    |
-| …KPI-set edits, announcement deletion, log reads                                      | M9, M17, M4 add their cases to the same file when they ship     |
-| Secrets never appear in API responses or logs                                         | secrets and settings route tests, log-grep test (sprint 3)      |
-| `identity_user.isBootstrapAdmin` no longer exists; former bootstrap admins hold Admin | bootstrap migration test (sprint 2)                             |
+| Acceptance criterion                                                                  | Where it is proved                                                                                                          |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Defect-1 suite: a plain User calling each admin endpoint gets 403                     | `defect-01.privilege-escalation` (sprint 2), route-table walker                                                             |
+| …including role changes, self-approval, revoking another user's token                 | same file, one test per case                                                                                                |
+| …KPI-set edits, announcement deletion, log reads                                      | M9, M17, M4 add their cases to the same file when they ship                                                                 |
+| …vocabulary edits, the generic upload, the avatar routes                              | same file: matrix entries for the five new routes (sprint 4)                                                                |
+| Secrets never appear in API responses or logs                                         | secrets and settings route tests, log-grep test (sprint 3)                                                                  |
+| `identity_user.isBootstrapAdmin` no longer exists; former bootstrap admins hold Admin | bootstrap migration test (sprint 2)                                                                                         |
+| A fresh `full` instance works end to end, a scoped token is limited to its scopes     | `full-profile-journey.test.ts` (sprints 2 and 4: settings, secret, avatar, log out)                                         |
+| Seeds: stages DEV, DEMO, PROD, TERM, categories, necessity, sender types, aggregates  | `service/vocabularies.test.ts` ("the built-in vocabularies"); `no-pg-enum.test.ts`                                          |
+| Blob store: strict CSP, nosniff, hash validator; hostile inputs                       | `apps/server/src/blob-routes.test.ts`; `core-blob/service/images.test.ts`                                                   |
+| Branding replaces the hard-coded values of FEATURES §3.3; legal pages need no login   | `no-hardcoded-branding.test.ts`; `vocabulary-routes.test.ts` ("GET /branding and GET /legal"); `branding-migration.test.ts` |
+| Avatar: session only, own account only, old file released                             | `core-identity/service/avatar.test.ts`; `blob-routes.test.ts`                                                               |
 
 Additional gates this plan adds: every route has a denied-request test; the route-table walker; settings changes reach a
-second process within the TTL; rotation never leaves an undecryptable row; hostile blob inputs.
+second process within the TTL; rotation never leaves an undecryptable row; hostile blob inputs (`images.test.ts`); a settings change reaches the logo references (`blobs.test.ts`).
 
 ## 9. Out of scope (goes to `docs/backlog.md` if not there)
 
@@ -340,3 +346,30 @@ Recorded in [ADR-0016](adr/0016-secrets-store-and-key-rotation.md) (secrets) and
     `manifestImporters`. `modules/core-settings/test/harness.ts` is added to `manifestImporters` because it composes
     `core.authz` and `core.settings` for a test. `identity-app.ts` can start a second app over the same database, which is how
     the "second process" cases are tested with a fake clock for the cache.
+
+## 15. Decisions taken in sprint 4 (2026-10-02)
+
+Recorded in [ADR-0018](adr/0018-vocabularies-blob-store-and-branding.md). Where they differ from §7:
+
+1. **Branding is the `branding` group of the settings of `core.settings`**, read by other modules through
+   `getBranding()` on its public service. No new kernel port; `ctx.settings` stays a module's own (ADR-0017). Identity
+   reads it through a small `BrandingSource` port.
+2. **Logos are stored as the hash of the uploaded file, not as a blob id.** The file is served by hash, and
+   `core.settings` cannot resolve an id without depending on `core.blob`. `core.blob` keeps the references of the logos in
+   step by listening to `settings.changed@1`.
+3. **`instanceName` and `mailFrom` move by a data migration of `core.settings`** (`0002_branding_from_identity`), which
+   touches only its own table. A value already in `branding` wins. Identity's schema no longer knows the keys.
+4. **Legal texts use a small Markdown subset written in `packages/sanitize`**, then DOMPurify. The sprint allowed no
+   dependency beyond `sharp` and DOMPurify; a CommonMark parser is in the backlog. Raw HTML in a legal text shows as text.
+5. **The sanitising code is a package, `@scorpion/sanitize`,** that `core.settings` and `core.blob` both use. New runtime
+   dependencies: `sharp` (core.blob), `dompurify` and `jsdom` (the sanitise package, used by core.settings and core.blob).
+6. **References and release:** an upload is unreferenced for a grace period (default 24 h); `setReference(ref, id|null)` keeps
+   a file alive inside the caller's transaction; the hourly `core.blob.cleanup` job deletes the rest.
+7. **`GET /files/{hash}` is `/api/internal/files/{hash}`** (the registry has no root surface), public, `Cross-Origin-Resource-Policy:
+cross-origin`. The generic upload `POST /files` is Admin's (`core.blob.manage`); the avatar goes through identity.
+   Uploads take raw bytes; routes can raise the body limit with `maxBodyBytes` (8 MiB ceiling, the setting only lowers it).
+8. **Vocabularies:** a vocabulary exists because a module declares it; a seeded term is never deleted, only deactivated (the
+   seed would bring it back); a term in use is deactivated through a `usage` check the owning module registers. Reading
+   terms is self-service (the role `user`), writing is Admin's.
+9. **Permissions added:** `core.settings.vocabulary.read` (User) and `.write`, `core.blob.upload` (User) and `core.blob.manage`,
+   `core.identity.avatar.update` (User). The `kpi-tracker` profile gets `core.blob` too, because it has identity (§10.2).
