@@ -16,3 +16,9 @@
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.
+
+## Identity follow-ups
+
+- Approval policies `auto-by-email-domain` and `invite-only` (architecture lists them; M2 ships `manual` only).
+  Invite-only needs an invitation table and email delivery (M4) and admin permissions (M3).
+- Avatar upload endpoint for the profile (needs the blob store from M3). The `avatarBlobId` column exists from M2.

@@ -124,8 +124,9 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - `vocabulary` + `vocabulary_term` tables and a `vocabulary` registry. Seeds: stages (DEV, DEMO, PROD, TERM), thematic categories, necessity levels, sender types, aggregates.
 - Blob store: `blob` table (bytea, sha256, MIME, size), `/files/:hash` with a strict CSP, `sharp` re-encoding of rasters, DOMPurify for SVG, size limit from settings.
 - Branding settings: instance name, logos, product name, sender address, contact email, imprint URL, legal texts (Markdown). These replace the hard-coded values listed in FEATURES §3.3.
+- The seed migration maps the temporary `identity_user.isBootstrapAdmin` column (added in M2) to the Admin role assignment and then drops the column completely; no code reads it afterwards.
 
-**Acceptance:** the defect-1 regression suite passes: a plain User calling each admin endpoint gets 403, including role changes, self-approval, KPI-set edits, announcement deletion, log reads and revoking another user's token. Secrets never appear in API responses or logs.
+**Acceptance:** the defect-1 regression suite passes: a plain User calling each admin endpoint gets 403, including role changes, self-approval, KPI-set edits, announcement deletion, log reads and revoking another user's token. Secrets never appear in API responses or logs. A test proves that `identity_user.isBootstrapAdmin` no longer exists and that former bootstrap admins hold the Admin role.
 
 ### M4: `core.notifications` + `core.audit` (M)
 
