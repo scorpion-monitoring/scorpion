@@ -4,6 +4,8 @@ import { createAuthenticator } from './authenticator.ts';
 import type { IdentityService } from './public.ts';
 import { registerIdentityRoutes } from './routes.ts';
 import { createAccountService } from './service/accounts.ts';
+import { createBootstrapService, type BootstrapService } from './service/bootstrap.ts';
+import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
 import {
   APPROVAL_POLICY_REGISTRY,
@@ -20,6 +22,7 @@ import type { ApprovalService } from './service/approval.ts';
 export interface IdentityInternals extends IdentityService {
   accounts: AccountService;
   approval: ApprovalService;
+  bootstrap: BootstrapService;
   sessions: SessionService;
   tokens: TokenService;
 }
@@ -31,7 +34,18 @@ export interface IdentityModuleOptions {
   sessionCacheTtlMs?: number;
   /** For tests: how long a verified access token is trusted without verifying it again. */
   tokenCacheTtlMs?: number;
+  /**
+   * Where the first-run token is shown (default: the process's standard error, as plain text).
+   * Under `NODE_ENV=test` the default shows nothing, so a test run prints no secret; a test that
+   * wants the token passes its own function.
+   */
+  announce?: (text: string) => void;
+  /** For tests: how long a first-run token lives. */
+  firstRunTtlMs?: number;
 }
+
+const toConsole = (text: string) => void process.stderr.write(`${text}\n`);
+const toNowhere = () => undefined;
 
 const userEvent = z.strictObject({ userId: z.string(), username: z.string() });
 // No token, prefix, hash or scope in an event: it says who did what to which token.
@@ -48,6 +62,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
   const sessionsOrThrow = (): SessionService => {
     if (!current) throw new Error('core.identity: the session service is not ready');
     return current;
+  };
+  let currentBootstrap: BootstrapService | undefined;
+  const bootstrapOrThrow = (): BootstrapService => {
+    if (!currentBootstrap) throw new Error('core.identity: the bootstrap service is not ready');
+    return currentBootstrap;
   };
   const tokensOrThrow = (): TokenService => {
     if (!currentTokens) throw new Error('core.identity: the token service is not ready');
@@ -76,13 +95,27 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
 
+    commands: [createAdminCommand(bootstrapOrThrow)],
+
     events: {
+      // A fresh install shows its first-run token once, when it has no active user. It must not
+      // stop the start-up if that fails: `scorpion create-admin` still works.
+      on: {
+        'system.ready': async (_event, ctx) => {
+          try {
+            await bootstrapOrThrow().issueFirstRunToken();
+          } catch (err) {
+            ctx.log.warn({ err }, 'could not issue a first-run token');
+          }
+        },
+      },
       emits: {
         'identity.user.registered@1': userEvent.extend({
           status: z.enum(['pending', 'active']),
         }),
         'identity.user.approved@1': userEvent.extend({ approvedBy: z.string() }),
         'identity.user.rejected@1': userEvent.extend({ rejectedBy: z.string() }),
+        'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
         'identity.token.revoked@1': tokenEvent,
         'identity.token.rotated@1': tokenEvent.extend({ previousTokenId: z.string() }),
@@ -106,7 +139,14 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs });
       current = sessions;
       currentTokens = tokens;
+      const bootstrap = createBootstrapService(ctx, {
+        users,
+        announce: options.announce ?? (process.env.NODE_ENV === 'test' ? toNowhere : toConsole),
+        ttlMs: options.firstRunTtlMs,
+      });
+      currentBootstrap = bootstrap;
       return {
+        bootstrap,
         users,
         sessions,
         tokens,
@@ -116,8 +156,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     routes: (r) => {
-      const { accounts, approval, tokens } = r.service<IdentityInternals>();
-      registerIdentityRoutes(r, { accounts, approval, tokens });
+      const { accounts, approval, bootstrap, tokens } = r.service<IdentityInternals>();
+      registerIdentityRoutes(r, { accounts, approval, bootstrap, tokens });
     },
   });
 }

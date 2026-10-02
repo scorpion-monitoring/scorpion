@@ -20,6 +20,13 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode
 /** The provider id of the password account that every user can have. */
 export const LOCAL_PROVIDER = 'local';
 
+/**
+ * What `create-admin` and the first-run token write to mark the administrator they create: the
+ * only place in the code that sets the temporary marker, so the file list that may mention it stays
+ * this one (ADR 0006). It is write-only: nothing reads the column, and nothing decides by it.
+ */
+export const BOOTSTRAP_ADMIN_MARK = { isBootstrapAdmin: true } as const;
+
 /** A person. How they sign in is in `identity_auth_method`, so one user can have several ways. */
 export const user = pgTable(
   'identity_user',
@@ -171,4 +178,23 @@ export const token = pgTable(
     index('identity_token_expires_idx').on(table.expiresAt),
     check('identity_token_prefix_format', sql`${table.prefix} ~ '^[A-Za-z0-9]{8}$'`),
   ],
+);
+
+/**
+ * The one-time token a fresh install prints to its console so the first administrator can be
+ * created without the "first registrant" rule. Single use, short-lived, kept only as a SHA-256
+ * hash of 256 random bits (so a leaked table is no way in).
+ */
+export const firstRunToken = pgTable(
+  'identity_first_run_token',
+  {
+    id: uuid().primaryKey(),
+    /** SHA-256 of the token that was printed. */
+    secretHash: text('secret_hash').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    /** Set when it was used, or when an administrator was created another way; either ends it. */
+    redeemedAt: timestamptz('redeemed_at'),
+  },
+  (table) => [uniqueIndex('identity_first_run_token_hash_uidx').on(table.secretHash)],
 );

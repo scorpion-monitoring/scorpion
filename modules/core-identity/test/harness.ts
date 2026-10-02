@@ -15,6 +15,9 @@ export interface StartOptions {
   sessionCacheTtlMs?: number;
   /** How long a verified access token is trusted without verifying it again. */
   tokenCacheTtlMs?: number;
+  /** Where the first-run token is shown; the default shows nothing under test. */
+  announce?: (text: string) => void;
+  firstRunTtlMs?: number;
   /** Another module of the profile that depends on core.identity, for example a policy contributor. */
   extraModule?: { manifest: ModuleManifest; id: string };
 }
@@ -50,6 +53,8 @@ export function useIdentity(): IdentityHarness {
         settings: options?.settings,
         sessionCacheTtlMs: options?.sessionCacheTtlMs,
         tokenCacheTtlMs: options?.tokenCacheTtlMs,
+        announce: options?.announce,
+        firstRunTtlMs: options?.firstRunTtlMs,
       });
       const extra = options?.extraModule;
       const kernel = createKernel({
