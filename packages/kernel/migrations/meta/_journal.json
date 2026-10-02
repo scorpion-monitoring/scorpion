@@ -15,6 +15,13 @@
       "when": 1790776160378,
       "tag": "0001_job_run",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790923104724,
+      "tag": "0002_rate_bucket",
+      "breakpoints": true
     }
   ]
 }

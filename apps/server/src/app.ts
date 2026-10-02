@@ -1,17 +1,27 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { Hono } from 'hono';
-import { Invalid, problemResponse, type AppEnv, type AppRoute } from '@scorpion/contracts';
+import {
+  Invalid,
+  problemResponse,
+  type AppEnv,
+  type AppRoute,
+  type RateLimitGroup,
+} from '@scorpion/contracts';
 import {
   mountPath,
   type Authorizer,
   type Config,
   type Logger,
+  type RateLimit,
+  type RateLimiter,
   type RegisteredRoute,
 } from '@scorpion/kernel';
 import { withAuthorization } from './pipeline/authorize.ts';
 import { DEFAULT_MAX_BODY_BYTES, limitBody } from './pipeline/body-limit.ts';
+import { createClientIpResolver } from './pipeline/client-ip.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
+import { RATE_LIMITS, rateLimit } from './pipeline/rate-limit.ts';
 import { requestId } from './pipeline/request-id.ts';
 import { securityHeaders } from './pipeline/security-headers.ts';
 import { healthz, metricsRoute, readyz, type SystemProbes } from './system-routes.ts';
@@ -19,12 +29,19 @@ import { healthz, metricsRoute, readyz, type SystemProbes } from './system-route
 export const SURFACE_PREFIX = { internal: '/api/internal', v1: '/api/v1' } as const;
 
 export interface AppOptions {
-  config: Pick<Config, 'BASE_PATH' | 'PROFILE'>;
+  config: Pick<Config, 'BASE_PATH' | 'PROFILE'> & Partial<Pick<Config, 'TRUSTED_PROXIES'>>;
   log: Logger;
   /** The routes the modules registered (`kernel.routes`). */
   routes: readonly RegisteredRoute[];
   /** Decides non-public routes (`kernel.authorizer`). */
   authorizer: Authorizer;
+  /**
+   * Charges the rate-limit buckets of every module route (`kernel.rateLimiter`). Without it nothing
+   * is limited, which only tests want.
+   */
+  rateLimiter?: RateLimiter;
+  /** Limits per route group, for tests. Default: `RATE_LIMITS`. */
+  rateLimits?: Partial<Record<RateLimitGroup, RateLimit>>;
   /** Largest accepted request body. Default 1 MiB. */
   maxBodyBytes?: number;
   /** Called after every request; the metrics use it. */
@@ -41,13 +58,15 @@ export interface AppOptions {
 /**
  * The HTTP application. Every request passes the same steps, in this order:
  *
- *  1. request id           4. body size limit      7. handler
- *  2. security headers     5. input validation     8. error mapper
- *  3. request logging      6. authorisation hook
+ *  1. request id           5. body size limit      8. handler
+ *  2. security headers     6. input validation     9. error mapper
+ *  3. request logging      7. authorisation hook
+ *  4. rate limit
  *
- * Steps 1 to 4 are middleware; 5 to 7 run per route (Zod validation, then the hook, then the
- * handler); 8 catches whatever any step throws. Routes are mounted under `BASE_PATH`, which may
- * have any number of segments.
+ * Steps 1 to 3 and 5 are middleware for every request; step 4 is added per route, because its
+ * bucket is the route's group, and runs before the body is read; 6 to 8 run per route (Zod
+ * validation, then the hook, then the handler); 9 catches whatever any step throws. Routes are
+ * mounted under `BASE_PATH`, which may have any number of segments.
  */
 export function createApp(options: AppOptions): Hono<AppEnv> {
   const { config, log } = options;
@@ -70,12 +89,24 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.use('*', requestLogging(log, options.onRequest));
   app.use('*', limitBody(options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES));
 
+  const clientIp = createClientIpResolver(config.TRUSTED_PROXIES ?? []);
+  const limits = { ...RATE_LIMITS, ...options.rateLimits };
+
   const mount = (
     route: AppRoute,
     path: string,
     handler: RegisteredRoute['handler'],
     module: string,
+    limited = false,
   ) => {
+    if (limited && options.rateLimiter) {
+      const group = route.rateLimit ?? 'default';
+      app.on(
+        route.method.toUpperCase(),
+        `${base}${path}`.replace(/\{(\w+)\}/g, ':$1'),
+        rateLimit({ limiter: options.rateLimiter, group, limit: limits[group], clientIp, log }),
+      );
+    }
     app.openapi(
       { ...route, path: `${base}${path}` } as never,
       withAuthorization({ module, route, path }, handler, options.authorizer) as never,
@@ -111,7 +142,7 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
     'server',
   );
   for (const { module, surface, route, handler } of options.routes) {
-    mount(route, `${SURFACE_PREFIX[surface]}${route.path}`, handler, module);
+    mount(route, `${SURFACE_PREFIX[surface]}${route.path}`, handler, module, true);
   }
   if (options.booting) {
     app.all('*', (c) =>

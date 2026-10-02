@@ -65,15 +65,16 @@ The image (`scorpion:<version>-<profile>`) starts with `node apps/server/src/cli
 configured through the environment; unknown or invalid values stop the start with the full list of
 what is wrong, and secrets never appear in logs.
 
-| Variable       | Default                  | Meaning                                                                    |
-| -------------- | ------------------------ | -------------------------------------------------------------------------- |
-| `DATABASE_URL` | none, required           | PostgreSQL 16 connection URL                                               |
-| `PROFILE`      | the profile of the build | Must match the build; an image refuses another profile                     |
-| `PORT`         | `3000`                   | Port to listen on                                                          |
-| `BASE_PATH`    | `/`                      | Path prefix, `/` or `/a/b` (any depth, no trailing slash)                  |
-| `LOG_LEVEL`    | `info`                   | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`             |
-| `WORKER_MODE`  | `inline`                 | `inline`: this process also runs jobs and events; `separate`: use a worker |
-| `ORIGIN`       | `http://localhost:$PORT` | Public origin (scheme, host, port), without a path                         |
+| Variable          | Default                  | Meaning                                                                                                                                                                                  |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`    | none, required           | PostgreSQL 16 connection URL                                                                                                                                                             |
+| `PROFILE`         | the profile of the build | Must match the build; an image refuses another profile                                                                                                                                   |
+| `PORT`            | `3000`                   | Port to listen on                                                                                                                                                                        |
+| `BASE_PATH`       | `/`                      | Path prefix, `/` or `/a/b` (any depth, no trailing slash)                                                                                                                                |
+| `LOG_LEVEL`       | `info`                   | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                           |
+| `WORKER_MODE`     | `inline`                 | `inline`: this process also runs jobs and events; `separate`: use a worker                                                                                                               |
+| `ORIGIN`          | `http://localhost:$PORT` | Public origin (scheme, host, port), without a path                                                                                                                                       |
+| `TRUSTED_PROXIES` | none                     | Comma-separated IPs or CIDR ranges of the reverse proxies in front of the server. Only their `X-Forwarded-For` is believed, for the rate limit; with none set the socket address is used |
 
 | Command                     | What it does                                                         |
 | --------------------------- | -------------------------------------------------------------------- |

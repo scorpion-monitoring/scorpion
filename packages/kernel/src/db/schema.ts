@@ -1,7 +1,9 @@
 // The kernel's own tables. Every name starts with `kernel_` (ADR 0004). Migrations for this file
 // live in packages/kernel/migrations; create one with `pnpm db:generate --filter @scorpion/kernel`.
 import {
+  boolean,
   check,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -94,4 +96,21 @@ export const jobRun = pgTable(
       sql`${table.status} in ('running', 'succeeded', 'failed')`,
     ),
   ],
+);
+
+/**
+ * Token buckets of the rate limiter, one row per key (`ip:<group>:<address>`). The bucket holds
+ * `tokens` as of `updated_at`; it refills continuously, so nothing has to run to top it up. Rows
+ * that have not been touched for a day are full again and are pruned.
+ */
+export const rateBucket = pgTable(
+  'kernel_rate_bucket',
+  {
+    key: text().primaryKey(),
+    tokens: doublePrecision().notNull(),
+    /** Whether the last request that touched the bucket took a token. */
+    allowed: boolean().notNull(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (table) => [index('kernel_rate_bucket_updated_at_idx').on(table.updatedAt)],
 );

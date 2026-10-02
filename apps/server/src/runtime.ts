@@ -118,7 +118,13 @@ export function startServer(options: RuntimeOptions): RunningServer {
 
   let state: ReadinessResult['checks']['kernel'] = 'starting';
   const probes: SystemProbes = { readiness: () => readiness(kernel, () => state), metrics };
-  const common = { config, log, probes, onRequest: metrics.onRequest };
+  const common = {
+    config,
+    log,
+    probes,
+    onRequest: metrics.onRequest,
+    rateLimiter: kernel.rateLimiter,
+  };
 
   let current = createApp({ ...common, routes: [], authorizer: kernel.authorizer, booting: true });
   const server = serve(

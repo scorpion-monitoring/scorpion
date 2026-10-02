@@ -94,3 +94,10 @@ export {
   type Authorizer,
 } from './authz.ts';
 export { collectRoutes, type RegisteredRoute, type RouteSurface } from './routes.ts';
+export {
+  createRateLimiter,
+  type RateDecision,
+  type RateLimit,
+  type RateLimiter,
+  type RateLimiterOptions,
+} from './rate-limit.ts';
