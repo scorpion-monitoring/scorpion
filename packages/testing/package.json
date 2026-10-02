@@ -13,6 +13,7 @@
   "dependencies": {
     "@scorpion/contracts": "workspace:*",
     "@testcontainers/postgresql": "^12.2.0",
+    "jose": "^6.2.12",
     "pg": "^8.23.0"
   },
   "devDependencies": {

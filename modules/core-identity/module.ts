@@ -8,6 +8,9 @@ import { createBootstrapService, type BootstrapService } from './service/bootstr
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
+import { createOidcService, type OidcService } from './service/oidc.ts';
+import { clientSecretFor, type ClientSecretLookup } from './service/oidc-secret.ts';
+import { createProviderClient } from './service/oidc-provider.ts';
 import {
   APPROVAL_POLICY_REGISTRY,
   approvalPolicyEntrySchema,
@@ -25,6 +28,7 @@ export interface IdentityInternals extends IdentityService {
   approval: ApprovalService;
   bootstrap: BootstrapService;
   loginStates: LoginStateService;
+  oidc: OidcService;
   sessions: SessionService;
   tokens: TokenService;
 }
@@ -44,6 +48,18 @@ export interface IdentityModuleOptions {
   announce?: (text: string) => void;
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
+  /**
+   * Where an OIDC client secret comes from. The default reads `OIDC_<ID>_CLIENT_SECRET` from the
+   * environment (`service/oidc-secret.ts`); M3 changes that default to the secrets store.
+   */
+  clientSecret?: ClientSecretLookup;
+  /** For tests: the HTTP client and timeouts used to talk to OIDC providers. */
+  oidcHttp?: {
+    fetch?: typeof fetch;
+    timeoutMs?: number;
+    exchangeTimeoutMs?: number;
+    now?: () => number;
+  };
 }
 
 const toConsole = (text: string) => void process.stderr.write(`${text}\n`);
@@ -147,9 +163,24 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         ttlMs: options.firstRunTtlMs,
       });
       currentBootstrap = bootstrap;
+      const loginStates = createLoginStateService(ctx);
+      const oidc = createOidcService(ctx, {
+        users,
+        sessions,
+        settings,
+        states: loginStates,
+        providers: createProviderClient({
+          fetch: options.oidcHttp?.fetch,
+          timeoutMs: options.oidcHttp?.timeoutMs,
+          now: options.oidcHttp?.now,
+        }),
+        clientSecret: options.clientSecret ?? clientSecretFor,
+        exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
+      });
       return {
         bootstrap,
-        loginStates: createLoginStateService(ctx),
+        loginStates,
+        oidc,
         users,
         sessions,
         tokens,
