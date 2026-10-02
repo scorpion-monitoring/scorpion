@@ -6,6 +6,7 @@ import {
   KEYCLOAK_CLIENT_SECRET,
   KEYCLOAK_USERS,
   KEYCLOAK_WRONG_AUDIENCE_CLIENT_ID,
+  makeRoleAssignment,
   makeUser,
   startKeycloak,
   type KeycloakUser,
@@ -86,8 +87,9 @@ describe('against Keycloak', { timeout: 60_000 }, () => {
       { id: expect.any(String) as unknown, email: alice.email, verified: true },
     ]);
 
-    // Once an approver activates it, the same login gives a session.
+    // Once an approver activates it (status and role, as approval does), the same login gives a session.
     await kernel.pool.query("update identity_user set status = 'active'");
+    await makeRoleAssignment(kernel.pool, { id: rows[0]!.id }, 'user');
     const second = await web.login(alice);
     expect(second.reply.status).toBe(302);
     expect(second.reply.res.headers.get('location')).toBe('/');

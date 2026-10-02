@@ -77,11 +77,11 @@ export type LoginInput = z.infer<typeof loginInput>;
 
 export const TOKEN_NAME_MAX = 64;
 
-/** A scope is `read:` or `write:` and a dotted kebab-case resource. Which resources exist is up to the modules (M3). */
+/** A scope is the id of a permission, for example `core.identity.me.read` (ADR 0015). */
 export const scope = z
   .string()
   .max(SCOPE_MAX_LENGTH)
-  .regex(SCOPE, 'must look like "read:kpi" or "write:registry.services"');
+  .regex(SCOPE, 'must be the id of a permission, like "core.identity.me.read"');
 
 const tokenName = z
   .string()
@@ -92,6 +92,8 @@ const tokenName = z
 
 const scopes = z
   .array(scope)
+  // A token without scopes could do nothing, so it cannot be made by accident.
+  .min(1, 'name at least one permission')
   .max(SCOPES_MAX)
   .transform((list) => [...new Set(list)].sort());
 
@@ -100,7 +102,7 @@ const expiresAt = z.iso.datetime({ offset: true }).transform((value) => new Date
 /** The body of `POST /tokens`. `expiresAt` is optional (no expiry) and must lie in the future. */
 export const createTokenInput = z.strictObject({
   name: tokenName,
-  scopes: scopes.default([]),
+  scopes,
   expiresAt: expiresAt.nullish().transform((value) => value ?? null),
 });
 export type CreateTokenInput = z.input<typeof createTokenInput>;
@@ -195,3 +197,19 @@ export const updateProfileInput = z
     message: 'must change at least one field',
   });
 export type UpdateProfileInput = z.input<typeof updateProfileInput>;
+
+/** A role key as core.authz stores it (lower-case letters, digits and `-`). */
+export const roleKey = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{0,62}$/, 'must be a role key like "reviewer"');
+
+/** The body of `POST /users/{id}/approve`: the role to give, `user` when it is left out. */
+export const approveInput = z.strictObject({ role: roleKey.optional() });
+export type ApproveInput = z.infer<typeof approveInput>;
+
+/** The body of `POST /users/{id}/roles`. */
+export const assignRoleInput = z.strictObject({ role: roleKey });
+export type AssignRoleInput = z.infer<typeof assignRoleInput>;
+
+/** The path of `DELETE /users/{id}/roles/{role}`. */
+export const roleParam = z.object({ id: z.uuid(), role: roleKey });

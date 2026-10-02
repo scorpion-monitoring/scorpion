@@ -7,38 +7,57 @@ import {
   Unauthorized,
   type Actor,
 } from '@scorpion/contracts';
-import { makeToken, makeUser } from '@scorpion/testing';
+import { makeRoleAssignment, makeToken, makeUser } from '@scorpion/testing';
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { useIdentity } from '../test/harness.ts';
 import { parseToken } from './token-format.ts';
-import { TOKENS_PER_USER } from './tokens.ts';
+import { TOKENS_PER_USER, type TokenService } from './tokens.ts';
 
 const identity = useIdentity();
 
 const actorOf = (user: { id: string; username: string }, via: 'session' | 'token' = 'session') =>
   ({ kind: 'user', userId: user.id, username: user.username, roles: [], via }) as Actor;
+/** A user who holds the role `user`, as an approved account does. */
+const holder = async (
+  pool: Parameters<typeof makeUser>[0],
+  overrides?: Parameters<typeof makeUser>[1],
+) => {
+  const made = await makeUser(pool, overrides);
+  await makeRoleAssignment(pool, made, 'user');
+  return made;
+};
+/** The scopes of ordinary tests: a permission that exists and that a plain user holds. */
+const SCOPE = 'core.identity.me.read';
+const OTHER_SCOPE = 'core.identity.profile.read';
 type Pool = { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }> };
 const rows = async (kernel: { pool: Pool }, sql: string, values?: unknown[]) =>
   (await kernel.pool.query(sql, values)).rows as Record<string, unknown>[];
 const page = { page: 0, pageSize: 50 };
 const future = () => new Date(Date.now() + 86_400_000).toISOString();
 
+/** `create` with a default scope: a token needs at least one, and most tests are not about scopes. */
+const withScopes = (tokens: TokenService): TokenService => ({
+  ...tokens,
+  create: (actor, input) => tokens.create(actor, { scopes: [SCOPE], ...(input as object) }),
+});
+
 async function start() {
   const started = await identity.start({ tokenCacheTtlMs: 0 });
-  const owner = await makeUser(started.kernel.pool);
-  return { ...started, owner, actor: actorOf(owner), tokens: started.identity.tokens };
+  const owner = await holder(started.kernel.pool);
+  return { ...started, owner, actor: actorOf(owner), tokens: withScopes(started.identity.tokens) };
 }
 
 describe('create', () => {
   it('returns the token once, stores only an argon2id hash of its secret, and emits an event without it', async () => {
     const { kernel, tokens, actor, owner } = await start();
-    const created = await tokens.create(actor, { name: 'ci', scopes: ['read:kpi'] });
+    const created = await tokens.create(actor, { name: 'ci', scopes: [SCOPE] });
 
     const parsed = parseToken(created.token)!;
     expect(parsed.prefix).toBe(created.prefix);
     expect(created).toMatchObject({
       name: 'ci',
-      scopes: ['read:kpi'],
+      scopes: [SCOPE],
       expiresAt: null,
       lastUsedAt: null,
     });
@@ -62,7 +81,7 @@ describe('create', () => {
     const { kernel, tokens, actor } = await start();
     await tokens.create(actor, { name: 'ci' });
     await expect(tokens.create(actor, { name: 'ci' })).rejects.toBeInstanceOf(Conflict);
-    const other = actorOf(await makeUser(kernel.pool));
+    const other = actorOf(await holder(kernel.pool));
     await expect(tokens.create(other, { name: 'ci' })).resolves.toBeTruthy();
   });
 
@@ -138,7 +157,7 @@ describe('list', () => {
   it('never shows another user’s tokens', async () => {
     const { kernel, tokens, actor } = await start();
     await tokens.create(actor, { name: 'mine' });
-    const other = await makeUser(kernel.pool);
+    const other = await holder(kernel.pool);
     await makeToken(kernel.pool, other, { name: 'theirs' });
     expect((await tokens.list(actor, page)).tokens.map((t) => t.name)).toEqual(['mine']);
     expect((await tokens.list(actorOf(other), page)).tokens.map((t) => t.name)).toEqual(['theirs']);
@@ -179,7 +198,7 @@ describe('revoke', () => {
 
   it('answers the same for someone else’s token as for an unknown id, and leaves the token alone', async () => {
     const { kernel, tokens, actor } = await start();
-    const other = await makeUser(kernel.pool);
+    const other = await holder(kernel.pool);
     const theirs = await tokens.create(actorOf(other), { name: 'theirs' });
     const asked = async (id: string) =>
       tokens.revoke(actor, id).then(
@@ -219,17 +238,17 @@ describe('rotate', () => {
     const { kernel, tokens, actor } = await start();
     const old = await tokens.create(actor, {
       name: 'ci',
-      scopes: ['read:kpi'],
+      scopes: [SCOPE],
       expiresAt: future(),
     });
 
     const next = await tokens.rotate(actor, old.id, {});
 
-    expect(next).toMatchObject({ name: 'ci', scopes: ['read:kpi'], expiresAt: old.expiresAt });
+    expect(next).toMatchObject({ name: 'ci', scopes: [SCOPE], expiresAt: old.expiresAt });
     expect(next.id).not.toBe(old.id);
     expect(next.token).not.toBe(old.token);
     expect(await tokens.authenticate(old.token)).toBeUndefined();
-    expect(await tokens.authenticate(next.token)).toMatchObject({ scopes: ['read:kpi'] });
+    expect(await tokens.authenticate(next.token)).toMatchObject({ scopes: [SCOPE] });
     expect((await tokens.list(actor, page)).tokens.map((t) => t.id)).toEqual([next.id]);
     const [event] = await rows(
       kernel,
@@ -273,7 +292,7 @@ describe('rotate', () => {
 
   it('answers the same for someone else’s, an unknown and a revoked token, and does not touch the other user’s', async () => {
     const { kernel, tokens, actor } = await start();
-    const other = await makeUser(kernel.pool);
+    const other = await holder(kernel.pool);
     const theirs = await tokens.create(actorOf(other), { name: 'theirs' });
     const mine = await tokens.create(actor, { name: 'mine' });
     await tokens.revoke(actor, mine.id);
@@ -302,11 +321,11 @@ describe('rotate', () => {
 describe('authenticate', () => {
   it('knows a good token: who, and with which scopes', async () => {
     const { tokens, actor, owner } = await start();
-    const { token } = await tokens.create(actor, { name: 'ci', scopes: ['read:kpi', 'write:kpi'] });
+    const { token } = await tokens.create(actor, { name: 'ci', scopes: [SCOPE, OTHER_SCOPE] });
     expect(await tokens.authenticate(token)).toMatchObject({
       userId: owner.id,
       username: owner.username,
-      scopes: ['read:kpi', 'write:kpi'],
+      scopes: [SCOPE, OTHER_SCOPE],
     });
   });
 
@@ -338,7 +357,7 @@ describe('authenticate', () => {
     ['soft-deleted', { deleted: true }],
   ])('refuses a token whose owner is %s', async (_name, state) => {
     const { kernel, tokens } = await start();
-    const owner = await makeUser(kernel.pool);
+    const owner = await holder(kernel.pool);
     const created = await tokens.create(actorOf(owner), { name: 'ci' });
     expect(await tokens.authenticate(created.token)).toBeDefined();
     await kernel.pool.query('update identity_user set status = $2, deleted_at = $3 where id = $1', [
@@ -383,8 +402,13 @@ describe('authenticate', () => {
 describe('the cache of verified tokens', () => {
   async function cached() {
     const started = await identity.start({ tokenCacheTtlMs: 60_000 });
-    const owner = await makeUser(started.kernel.pool);
-    return { ...started, owner, actor: actorOf(owner), tokens: started.identity.tokens };
+    const owner = await holder(started.kernel.pool);
+    return {
+      ...started,
+      owner,
+      actor: actorOf(owner),
+      tokens: withScopes(started.identity.tokens),
+    };
   }
 
   it('drops the entry at once when this process revokes or rotates', async () => {
@@ -444,3 +468,81 @@ async function failOutbox(kernel: { pool: Pool }) {
     create trigger identity_test_fail before insert on kernel_outbox
       for each row execute function identity_test_fail();`);
 }
+
+describe('scopes are permission ids', () => {
+  it('needs at least one scope, and every scope must be a permission some loaded module declares', async () => {
+    const { kernel, identity: id, actor } = await start();
+    // The raw service, without the default scope.
+    const raw = id.tokens;
+    await expect(raw.create(actor, { name: 'a' })).rejects.toBeInstanceOf(Invalid);
+    await expect(raw.create(actor, { name: 'a', scopes: [] })).rejects.toBeInstanceOf(Invalid);
+    await expect(raw.create(actor, { name: 'a', scopes: ['read:kpi'] })).rejects.toBeInstanceOf(
+      Invalid,
+    );
+    await expect(
+      raw.create(actor, { name: 'a', scopes: [SCOPE, 'core.identity.nothing.here'] }),
+    ).rejects.toMatchObject({
+      errors: [
+        {
+          path: 'scopes',
+          message: expect.stringContaining('core.identity.nothing.here') as unknown,
+        },
+      ],
+    });
+    expect(await rows(kernel, 'select * from identity_token')).toEqual([]);
+    await expect(
+      raw.create(actor, { name: 'a', scopes: [SCOPE, OTHER_SCOPE] }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('accepts a scope the owner does not hold: it simply grants nothing', async () => {
+    const { identity: id, actor } = await start();
+    await expect(
+      id.tokens.create(actor, { name: 'admin-only', scopes: ['core.identity.role.assign'] }),
+    ).resolves.toMatchObject({ scopes: ['core.identity.role.assign'] });
+  });
+});
+
+describe('the second check, with core.authz', () => {
+  it('denies a user without the role on every token method, and changes nothing', async () => {
+    const { kernel, identity: id } = await identity.start({ tokenCacheTtlMs: 0 });
+    const roleless = await makeUser(kernel.pool);
+    const actor = actorOf(roleless);
+    await expect(id.tokens.create(actor, { name: 'a', scopes: [SCOPE] })).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(id.tokens.list(actor, page)).rejects.toBeInstanceOf(Forbidden);
+    await expect(id.tokens.revoke(actor, randomUUID())).rejects.toBeInstanceOf(Forbidden);
+    await expect(id.tokens.rotate(actor, randomUUID(), {})).rejects.toBeInstanceOf(Forbidden);
+    expect(await rows(kernel, 'select * from identity_token')).toEqual([]);
+    expect(await rows(kernel, 'select * from kernel_outbox')).toEqual([]);
+  });
+
+  it('lets only core.identity.token.manage-any revoke the token of somebody else, and says who did it', async () => {
+    const { kernel, identity: id, owner, actor } = await start();
+    const created = await id.tokens.create(actor, { name: 'mine', scopes: [SCOPE] });
+    const plain = actorOf(await holder(kernel.pool));
+    // A plain user: the same 404 as for an unknown id, and the token still works.
+    await expect(id.tokens.revoke(plain, created.id)).rejects.toBeInstanceOf(NotFound);
+    expect(await id.tokens.authenticate(created.token)).toBeDefined();
+
+    const adminUser = await holder(kernel.pool);
+    await makeRoleAssignment(kernel.pool, adminUser, 'admin');
+    await id.tokens.revoke(actorOf(adminUser), created.id);
+    expect(await id.tokens.authenticate(created.token)).toBeUndefined();
+    const events = await rows(
+      kernel,
+      "select payload from kernel_outbox where name = 'identity.token.revoked@1'",
+    );
+    expect(events).toEqual([
+      {
+        payload: { userId: owner.id, tokenId: created.id, name: 'mine', revokedBy: adminUser.id },
+      },
+    ]);
+    // Still not for listing or rotating somebody else's: the secret would go to the administrator.
+    const again = await id.tokens.create(actor, { name: 'again', scopes: [SCOPE] });
+    await expect(id.tokens.rotate(actorOf(adminUser), again.id, {})).rejects.toBeInstanceOf(
+      NotFound,
+    );
+  });
+});

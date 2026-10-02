@@ -20,10 +20,10 @@ checked, and the decisions the sprint plan leaves open.
   the secret is stored only as an argon2id hash (the password wrapper, same parameters).
 - The existing log masking (`scp_<8>_<secret>`) already catches the format, so a token that
   reaches a log line by mistake is masked there as well.
-- **Scopes** are `read:<resource>` or `write:<resource>`, the resource being dotted kebab case
-  (`read:kpi`, `write:registry.services`), at most 20 per token and 64 characters each. Anything
-  else is a 422. Which resources exist is up to the modules, so the shape is checked here and the
-  meaning is enforced by `core.authz` from M3; until then a scope grants and limits nothing.
+- **Scopes** were `read:<resource>` or `write:<resource>` (`read:kpi`) in M2, checked in shape only and granting and
+  limiting nothing. **Superseded by [ADR-0015](0015-identity-on-authz.md):** a scope is the id of a permission
+  (`core.identity.me.read`), at most 20 per token and 100 characters each, at least one per token, and a token can do
+  what its scopes name and its owner holds.
 - A token name is unique per user **among tokens that are not revoked** (a partial unique index,
   migration `0001`). Revoking keeps the row, which frees the name, and rotating needs that.
 

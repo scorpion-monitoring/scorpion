@@ -1,9 +1,10 @@
 // Creating accounts from OIDC logins and linking identities: provisioning, linking by a verified
 // email, linking from the profile, and the rollback of the writes.
 import { ANONYMOUS, Conflict, Forbidden, Unauthorized } from '@scorpion/contracts';
-import { makeAuthMethod, makeUser } from '@scorpion/testing';
+import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { createMemoryMailer } from './mailer.ts';
+import { makeMember } from '../test/harness.ts';
 import { tokenFrom } from '../test/mail.ts';
 import { count, flow, fresh, rows, sessionActor, settingsWith, start } from '../test/oidc.ts';
 
@@ -69,9 +70,24 @@ describe('the first login (provisioning)', () => {
       { username: 'quick', email: 'q@example.org', emailVerified: true, provider: 'stub' },
     ]);
     expect(await count(kernel, 'identity_session')).toBe(1);
-    expect(await rows(kernel, 'select payload from kernel_outbox')).toEqual([
-      { payload: expect.objectContaining({ username: 'quick', status: 'active' }) as unknown },
+    // The account holds the default role from the start: the role is given by the system, in the
+    // transaction that created the account.
+    expect(await rows(kernel, 'select name, payload from kernel_outbox order by id')).toEqual([
+      {
+        name: 'authz.role.assigned@1',
+        payload: expect.objectContaining({ roleKey: 'user', actorId: null }) as unknown,
+      },
+      {
+        name: 'identity.user.registered@1',
+        payload: expect.objectContaining({ username: 'quick', status: 'active' }) as unknown,
+      },
     ]);
+    expect(
+      await rows(
+        kernel,
+        `select r.key from authz_role_assignment a join authz_role r on r.id = a.role_id`,
+      ),
+    ).toEqual([{ key: 'user' }]);
   });
 
   it('keeps no address, and trusts no claim, when the provider does not vouch for the email', async () => {
@@ -105,7 +121,7 @@ describe('the first login (provisioning)', () => {
     const login = fresh({ preferredUsername: 'taken' });
     const { usernameCandidates } = await import('./username.ts');
     for (const name of usernameCandidates('taken', 'stub', login.subject!)) {
-      await makeUser(kernel.pool, { username: name });
+      await makeMember(kernel.pool, { username: name });
     }
     await expect(id.oidc.complete(await flow(id, login))).rejects.toBeInstanceOf(Conflict);
     expect(await count(kernel, 'identity_auth_method')).toBe(0);
@@ -156,7 +172,7 @@ describe('the first login (provisioning)', () => {
 describe('linking by a verified email', () => {
   it('adds the identity to the account whose verified address matches, and signs it in', async () => {
     const { kernel, identity: id } = await start();
-    const user = await makeUser(kernel.pool, { email: 'ann@example.org', emailVerified: true });
+    const user = await makeMember(kernel.pool, { email: 'ann@example.org', emailVerified: true });
     const done = await id.oidc.complete(await flow(id, fresh({ email: 'ANN@example.org' })));
     expect(done).toMatchObject({ kind: 'login' });
     expect(await count(kernel, 'identity_user')).toBe(1);
@@ -174,7 +190,7 @@ describe('linking by a verified email', () => {
 
   it('never takes over an account whose address nobody confirmed (409), and links nothing', async () => {
     const { kernel, identity: id } = await start();
-    await makeUser(kernel.pool, { email: 'ann@example.org', emailVerified: false });
+    await makeMember(kernel.pool, { email: 'ann@example.org', emailVerified: false });
     const error = await id.oidc
       .complete(await flow(id, fresh({ email: 'ann@example.org' })))
       .catch((e: unknown) => e);
@@ -208,7 +224,7 @@ describe('linking by a verified email', () => {
 
   it('never links by an address the provider did not vouch for', async () => {
     const { kernel, identity: id } = await start();
-    await makeUser(kernel.pool, { email: 'ann@example.org', emailVerified: true });
+    await makeMember(kernel.pool, { email: 'ann@example.org', emailVerified: true });
     await expect(
       id.oidc.complete(await flow(id, fresh({ email: 'ann@example.org', emailVerified: false }))),
     ).rejects.toBeInstanceOf(Forbidden); // a new, pending account without an address
@@ -221,7 +237,7 @@ describe('linking by a verified email', () => {
   it('does not link to a rejected or deleted account, and says nothing about it', async () => {
     for (const over of [{ status: 'rejected' as const, deleted: true }, { deleted: true }]) {
       const { kernel, identity: id } = await start();
-      await makeUser(kernel.pool, { email: 'ann@example.org', emailVerified: true, ...over });
+      await makeMember(kernel.pool, { email: 'ann@example.org', emailVerified: true, ...over });
       await expect(
         id.oidc.complete(await flow(id, fresh({ email: 'ann@example.org' }))),
       ).rejects.toBeInstanceOf(Unauthorized);
@@ -231,7 +247,7 @@ describe('linking by a verified email', () => {
 
   it('links a pending account but gives it no session', async () => {
     const { kernel, identity: id } = await start();
-    await makeUser(kernel.pool, {
+    await makeMember(kernel.pool, {
       email: 'ann@example.org',
       emailVerified: true,
       status: 'pending',
@@ -245,7 +261,7 @@ describe('linking by a verified email', () => {
 
   it('rolls the link back when its event cannot be written', async () => {
     const { kernel, identity: id } = await start();
-    await makeUser(kernel.pool, { email: 'ann@example.org', emailVerified: true });
+    await makeMember(kernel.pool, { email: 'ann@example.org', emailVerified: true });
     await kernel.pool.query(`
       create function identity_test_fail() returns trigger language plpgsql as
         $$ begin raise exception 'outbox on fire'; end $$;
@@ -262,7 +278,7 @@ describe('linking by a verified email', () => {
 describe('linking from the profile', () => {
   it('adds the identity to the signed-in user, emits linked@1, and starts no session', async () => {
     const { kernel, identity: id } = await start();
-    const user = await makeUser(kernel.pool);
+    const user = await makeMember(kernel.pool);
     const input = await flow(
       id,
       fresh({ subject: 'profile-sub', email: 'other@example.org' }),
@@ -286,7 +302,7 @@ describe('linking from the profile', () => {
 
   it('can then be used to sign in', async () => {
     const { kernel, identity: id } = await start();
-    const user = await makeUser(kernel.pool);
+    const user = await makeMember(kernel.pool);
     await id.oidc.complete(await flow(id, fresh({ subject: 'profile-sub' }), sessionActor(user)));
     const done = await id.oidc.complete(await flow(id, fresh({ subject: 'profile-sub' })));
     const resolved = await id.sessions.resolve((done as { sessionId: string }).sessionId);
@@ -295,7 +311,7 @@ describe('linking from the profile', () => {
 
   it('refuses an anonymous caller (401) and a token caller (403), and stores no state', async () => {
     const { kernel, identity: id } = await start();
-    const user = await makeUser(kernel.pool);
+    const user = await makeMember(kernel.pool);
     await expect(id.oidc.startLink(ANONYMOUS, 'stub')).rejects.toBeInstanceOf(Unauthorized);
     await expect(
       id.oidc.startLink(
@@ -315,9 +331,9 @@ describe('linking from the profile', () => {
 
   it('is a 409 when the identity belongs to another user', async () => {
     const { kernel, identity: id } = await start();
-    const owner = await makeUser(kernel.pool);
+    const owner = await makeMember(kernel.pool);
     await makeAuthMethod(kernel.pool, owner, { provider: 'stub', subject: 'shared-sub' });
-    const thief = await makeUser(kernel.pool);
+    const thief = await makeMember(kernel.pool);
     await expect(
       id.oidc.complete(await flow(id, fresh({ subject: 'shared-sub' }), sessionActor(thief))),
     ).rejects.toBeInstanceOf(Conflict);
@@ -328,7 +344,7 @@ describe('linking from the profile', () => {
 
   it('is a 409 when the user already has this provider', async () => {
     const { kernel, identity: id } = await start();
-    const user = await makeUser(kernel.pool);
+    const user = await makeMember(kernel.pool);
     await makeAuthMethod(kernel.pool, user, { provider: 'stub', subject: 'first' });
     await expect(
       id.oidc.complete(await flow(id, fresh({ subject: 'second' }), sessionActor(user))),
@@ -337,7 +353,7 @@ describe('linking from the profile', () => {
 
   it('links nothing for a user who was deleted after starting', async () => {
     const { kernel, identity: id } = await start();
-    const user = await makeUser(kernel.pool);
+    const user = await makeMember(kernel.pool);
     const input = await flow(id, fresh(), sessionActor(user));
     await kernel.pool.query('update identity_user set deleted_at = now() where id = $1', [user.id]);
     await expect(id.oidc.complete(input)).rejects.toBeInstanceOf(Unauthorized);

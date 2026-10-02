@@ -6,11 +6,32 @@ import {
   Unauthorized,
   type Actor,
 } from '@scorpion/contracts';
-import { makeUser } from '@scorpion/testing';
+import { makeRole, makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { useIdentity } from '../test/harness.ts';
 
 const identity = useIdentity();
+
+/** An administrator: holds the Admin role, so every permission and `core.authz.role.assign`. */
+const makeAdmin = async (
+  pool: Parameters<typeof makeUser>[0],
+  overrides?: Parameters<typeof makeUser>[1],
+) => {
+  const made = await makeUser(pool, overrides);
+  await makeRoleAssignment(pool, made, 'admin');
+  return made;
+};
+const rolesOf = async (
+  kernel: { pool: { query: (sql: string, values: unknown[]) => Promise<{ rows: unknown[] }> } },
+  id: string,
+) =>
+  (
+    await kernel.pool.query(
+      `select r.key, a.assigned_by from authz_role_assignment a join authz_role r on r.id = a.role_id
+       where a.user_id = $1 order by r.key`,
+      [id],
+    )
+  ).rows as { key: string; assigned_by: string | null }[];
 
 const actorOf = (user: { id: string; username: string }): Actor => ({
   kind: 'user',
@@ -33,24 +54,35 @@ const all = async (
 describe('approve', () => {
   it('turns a pending account active and emits identity.user.approved@1 with it', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const pending = await makeUser(kernel.pool, { status: 'pending' });
 
     expect(await id.approval.approve(actorOf(admin), pending.id)).toBe('active');
 
     const row = await rowOf(kernel, pending.id);
     expect(row).toMatchObject({ status: 'active', deleted_at: null });
+    // The role is given in the same transaction: `user` unless the approver names another.
+    expect(await rolesOf(kernel, pending.id)).toEqual([{ key: 'user', assigned_by: admin.id }]);
     expect(await all(kernel, 'kernel_outbox')).toEqual([
       expect.objectContaining({
+        name: 'authz.role.assigned@1',
+        payload: { userId: pending.id, roleKey: 'user', actorId: admin.id },
+      }),
+      expect.objectContaining({
         name: 'identity.user.approved@1',
-        payload: { userId: pending.id, username: pending.username, approvedBy: admin.id },
+        payload: {
+          userId: pending.id,
+          username: pending.username,
+          approvedBy: admin.id,
+          role: 'user',
+        },
       }),
     ]);
   });
 
   it('refuses to approve your own account, and changes nothing (self-approval)', async () => {
     const { kernel, identity: id } = await identity.start();
-    const me = await makeUser(kernel.pool, { status: 'pending' });
+    const me = await makeAdmin(kernel.pool, { status: 'pending' });
     await expect(id.approval.approve(actorOf(me), me.id)).rejects.toBeInstanceOf(Forbidden);
     const row = await rowOf(kernel, me.id);
     expect(row.status).toBe('pending');
@@ -70,14 +102,14 @@ describe('approve', () => {
     ['a rejected account', { status: 'rejected' as const, deleted: true }],
   ])('answers 409 for %s', async (_name, overrides) => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const other = await makeUser(kernel.pool, overrides);
     await expect(id.approval.approve(actorOf(admin), other.id)).rejects.toBeInstanceOf(Conflict);
   });
 
   it('answers 404 for an unknown id and for text that is not an id', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     for (const unknown of [
       '019a0000-0000-7000-8000-000000000000',
       'not-a-uuid',
@@ -89,8 +121,8 @@ describe('approve', () => {
 
   it('lets two approvals at once succeed once and answer the other with 409', async () => {
     const { kernel, identity: id } = await identity.start();
-    const a = await makeUser(kernel.pool);
-    const b = await makeUser(kernel.pool);
+    const a = await makeAdmin(kernel.pool);
+    const b = await makeAdmin(kernel.pool);
     const pending = await makeUser(kernel.pool, { status: 'pending' });
     const results = await Promise.allSettled([
       id.approval.approve(actorOf(a), pending.id),
@@ -100,12 +132,14 @@ describe('approve', () => {
     expect(results.find((r) => r.status === 'rejected')).toMatchObject({
       reason: expect.any(Conflict) as unknown,
     });
-    expect(await all(kernel, 'kernel_outbox')).toHaveLength(1);
+    // One approval: one role assignment, one event each, and nothing from the loser.
+    expect(await all(kernel, 'kernel_outbox')).toHaveLength(2);
+    expect(await rolesOf(kernel, pending.id)).toHaveLength(1);
   });
 
   it('rolls back the status when the event cannot be written', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const pending = await makeUser(kernel.pool, { status: 'pending' });
     await kernel.pool.query(`
       create function identity_test_fail() returns trigger language plpgsql as
@@ -121,7 +155,7 @@ describe('approve', () => {
 describe('reject', () => {
   it('rejects and soft-deletes, keeps the username reserved, and emits identity.user.rejected@1', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const pending = await makeUser(kernel.pool, { status: 'pending', username: 'mallory' });
 
     expect(await id.approval.reject(actorOf(admin), pending.id)).toBe('rejected');
@@ -140,7 +174,7 @@ describe('reject', () => {
 
   it('refuses to reject your own account, and an anonymous caller (denied)', async () => {
     const { kernel, identity: id } = await identity.start();
-    const me = await makeUser(kernel.pool, { status: 'pending' });
+    const me = await makeAdmin(kernel.pool, { status: 'pending' });
     await expect(id.approval.reject(actorOf(me), me.id)).rejects.toBeInstanceOf(Forbidden);
     await expect(id.approval.reject(ANONYMOUS, me.id)).rejects.toBeInstanceOf(Unauthorized);
     const row = await rowOf(kernel, me.id);
@@ -149,7 +183,7 @@ describe('reject', () => {
 
   it('answers 409 for an account that is not pending and 404 for an unknown one', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const active = await makeUser(kernel.pool);
     await expect(id.approval.reject(actorOf(admin), active.id)).rejects.toBeInstanceOf(Conflict);
     await expect(
@@ -159,7 +193,7 @@ describe('reject', () => {
 
   it('rolls back when the event cannot be written', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const pending = await makeUser(kernel.pool, { status: 'pending' });
     await kernel.pool.query(`
       create function identity_test_fail() returns trigger language plpgsql as
@@ -175,7 +209,7 @@ describe('reject', () => {
 describe('listPending', () => {
   it('lists pending accounts only, oldest first, in pages with a total', async () => {
     const { kernel, identity: id } = await identity.start();
-    const admin = await makeUser(kernel.pool);
+    const admin = await makeAdmin(kernel.pool);
     const first = await makeUser(kernel.pool, { status: 'pending' });
     await makeUser(kernel.pool); // active
     await makeUser(kernel.pool, { status: 'rejected', deleted: true });
@@ -195,5 +229,96 @@ describe('listPending', () => {
     await expect(
       id.approval.listPending(ANONYMOUS, { page: 0, pageSize: 10 }),
     ).rejects.toBeInstanceOf(Unauthorized);
+  });
+});
+
+describe('approve with a role', () => {
+  it('gives the named role instead of the default, in one transaction with the status and the event', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const admin = await makeAdmin(kernel.pool);
+    const pending = await makeUser(kernel.pool, { status: 'pending' });
+    await id.approval.approve(actorOf(admin), pending.id, { role: 'reviewer' });
+    expect(await rolesOf(kernel, pending.id)).toEqual([{ key: 'reviewer', assigned_by: admin.id }]);
+    expect((await all(kernel, 'kernel_outbox')).map((e) => e.payload)).toEqual([
+      { userId: pending.id, roleKey: 'reviewer', actorId: admin.id },
+      expect.objectContaining({ approvedBy: admin.id, role: 'reviewer' }),
+    ]);
+  });
+
+  it('keeps the account pending, with no role and no event, when the role does not exist', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const admin = await makeAdmin(kernel.pool);
+    const pending = await makeUser(kernel.pool, { status: 'pending' });
+    await expect(
+      id.approval.approve(actorOf(admin), pending.id, { role: 'no-such-role' }),
+    ).rejects.toBeInstanceOf(NotFound);
+    expect(await rowOf(kernel, pending.id)).toMatchObject({ status: 'pending' });
+    expect(await rolesOf(kernel, pending.id)).toEqual([]);
+    expect(await all(kernel, 'kernel_outbox')).toEqual([]);
+  });
+
+  it('rolls the approval back when the role assignment fails after the status changed', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const admin = await makeAdmin(kernel.pool);
+    const pending = await makeUser(kernel.pool, { status: 'pending' });
+    await kernel.pool.query(`
+      create function identity_test_fail() returns trigger language plpgsql as
+        $$ begin raise exception 'assignment on fire'; end $$;
+      create trigger identity_test_fail before insert on authz_role_assignment
+        for each row execute function identity_test_fail();`);
+    await expect(id.approval.approve(actorOf(admin), pending.id)).rejects.toThrow();
+    expect(await rowOf(kernel, pending.id)).toMatchObject({ status: 'pending' });
+    expect(await rolesOf(kernel, pending.id)).toEqual([]);
+    expect(await all(kernel, 'kernel_outbox')).toEqual([]);
+  });
+
+  it('is refused for an approver who may approve but not assign roles, and changes nothing', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const approver = await makeUser(kernel.pool);
+    const role = await makeRole(kernel.pool, {
+      permissions: ['core.identity.user.approve', 'core.identity.user.reject'],
+    });
+    await makeRoleAssignment(kernel.pool, approver, role);
+    const pending = await makeUser(kernel.pool, { status: 'pending' });
+    await expect(id.approval.approve(actorOf(approver), pending.id)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    expect(await rowOf(kernel, pending.id)).toMatchObject({ status: 'pending' });
+    expect(await rolesOf(kernel, pending.id)).toEqual([]);
+    // Rejecting needs no role, so that approver may still reject.
+    await expect(id.approval.reject(actorOf(approver), pending.id)).resolves.toBe('rejected');
+  });
+});
+
+describe('the second check, with core.authz', () => {
+  it('refuses a plain user and a user without roles on approve, reject and listPending, and changes nothing', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const plain = await makeUser(kernel.pool);
+    await makeRoleAssignment(kernel.pool, plain, 'user');
+    const roleless = await makeUser(kernel.pool);
+    const pending = await makeUser(kernel.pool, { status: 'pending' });
+    for (const caller of [plain, roleless]) {
+      const actor = actorOf(caller);
+      await expect(id.approval.approve(actor, pending.id)).rejects.toBeInstanceOf(Forbidden);
+      await expect(id.approval.reject(actor, pending.id)).rejects.toBeInstanceOf(Forbidden);
+      await expect(
+        id.approval.listPending(actor, { page: 0, pageSize: 10 }),
+      ).rejects.toBeInstanceOf(Forbidden);
+    }
+    expect(await rowOf(kernel, pending.id)).toMatchObject({ status: 'pending', deleted_at: null });
+    expect(await all(kernel, 'kernel_outbox')).toEqual([]);
+  });
+
+  it('refuses an approval on your own account whatever you hold, also with the permission in a custom role', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const me = await makeUser(kernel.pool, { status: 'pending' });
+    const role = await makeRole(kernel.pool, {
+      permissions: ['core.identity.user.approve', 'core.authz.role.assign'],
+    });
+    await makeRoleAssignment(kernel.pool, me, role);
+    await expect(id.approval.approve(actorOf(me), me.id)).rejects.toBeInstanceOf(Forbidden);
+    expect(await rowOf(kernel, me.id)).toMatchObject({ status: 'pending' });
+    // Only the custom role: no `user` role came with the refused approval.
+    expect((await rolesOf(kernel, me.id)).map((r) => r.key)).toEqual([role.key]);
   });
 });

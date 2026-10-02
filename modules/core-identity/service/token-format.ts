@@ -47,7 +47,11 @@ export const cacheKey = (token: string): string => createHash('sha256').update(t
 
 // --- Scopes -----------------------------------------------------------------------------------
 
-/** `read:kpi`, `write:registry.services`: an action, a colon and a dotted resource in kebab case. */
-export const SCOPE = /^(read|write):[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*)*$/;
-export const SCOPE_MAX_LENGTH = 64;
+/**
+ * A scope is the id of a permission: `core.identity.me.read`, dotted kebab case with at least two
+ * segments (ADR 0015). The shape is checked here; that a permission of that id exists is checked
+ * when the token is created, and what it grants is decided by core.authz.
+ */
+export const SCOPE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$/;
+export const SCOPE_MAX_LENGTH = 100;
 export const SCOPES_MAX = 20;

@@ -24,8 +24,11 @@ import type { BootstrapService } from './service/bootstrap.ts';
 import type { OidcService } from './service/oidc.ts';
 import type { ProfileService } from './service/profile.ts';
 import type { RecoveryService } from './service/recovery.ts';
+import type { RoleService } from './service/roles.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
 import {
+  approveInput,
+  assignRoleInput,
   changePasswordInput,
   createTokenInput,
   loginInput,
@@ -35,6 +38,7 @@ import {
   registerInput,
   resetConfirmInput,
   resetRequestInput,
+  roleParam,
   rotateTokenInput,
   updateProfileInput,
   verifyEmailInput,
@@ -47,6 +51,7 @@ export interface IdentityRoutesServices {
   oidc: OidcService;
   profile: ProfileService;
   recovery: RecoveryService;
+  roles: RoleService;
   tokens: TokenService;
 }
 
@@ -152,10 +157,18 @@ export const approveRoute = createRoute({
   method: 'post',
   path: '/users/{id}/approve',
   permission: 'core.identity.user.approve',
-  request: { params: idParam },
+  request: {
+    params: idParam,
+    // Optional: `{}` or no body gives the role `user`.
+    body: { required: false, content: { 'application/json': { schema: approveInput } } },
+  },
   responses: {
-    200: ok('The account is active.', decision),
-    404: { description: 'No such user.' },
+    200: ok('The account is active and holds the role.', decision),
+    403: {
+      description:
+        'Your own account, or the caller may not assign roles (`core.authz.role.assign`).',
+    },
+    404: { description: 'No such user, or no such role.' },
     409: { description: 'The account is not waiting for approval.' },
   },
 });
@@ -359,6 +372,53 @@ export const updateProfileRoute = createRoute({
   },
 });
 
+const roleSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  system: z.boolean(),
+  /** Admin lists every permission a loaded module declares. */
+  permissions: z.array(z.string()),
+});
+
+export const listRolesRoute = createRoute({
+  method: 'get',
+  path: '/roles',
+  permission: 'core.identity.role.read',
+  request: { query: paginationQuery() },
+  responses: {
+    200: ok('The roles, by key.', listEnvelope(roleSchema)),
+    403: { description: 'Needs `core.identity.role.read` and `core.authz.role.read`.' },
+  },
+});
+
+export const assignRoleRoute = createRoute({
+  method: 'post',
+  path: '/users/{id}/roles',
+  permission: 'core.identity.role.assign',
+  request: { params: idParam, body: json(assignRoleInput) },
+  responses: {
+    200: ok(
+      'The user holds the role. `changed` is false when they already did.',
+      z.object({ id: z.string(), role: z.string(), changed: z.boolean() }),
+    ),
+    403: { description: 'Needs both role.assign permissions, or it is your own account.' },
+    404: { description: 'No such user, or no such role.' },
+  },
+});
+
+export const removeRoleRoute = createRoute({
+  method: 'delete',
+  path: '/users/{id}/roles/{role}',
+  permission: 'core.identity.role.assign',
+  request: { params: roleParam },
+  responses: {
+    204: { description: 'The user does not hold the role (also when they never did).' },
+    403: { description: 'Needs both role.assign permissions, or it is your own account.' },
+    404: { description: 'No such user, or no such role.' },
+    409: { description: 'The last Admin cannot be removed.' },
+  },
+});
+
 const tokenSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -450,7 +510,7 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval, bootstrap, oidc, profile, recovery, tokens }: IdentityRoutesServices,
+  { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     const user = await accounts.register(c.req.valid('json'));
@@ -477,9 +537,9 @@ export function registerIdentityRoutes(
   }) satisfies RouteHandler<typeof logoutAllRoute, AppEnv>);
 
   r.internal(meRoute, (async (c) => {
-    const { user, csrfToken } = await accounts.me(c.get('actor'), readSessionCookie(c));
+    const { user, roles, csrfToken } = await accounts.me(c.get('actor'), readSessionCookie(c));
     c.header('cache-control', 'no-store');
-    return c.json({ user: view(user), roles: [], csrfToken }, 200);
+    return c.json({ user: view(user), roles, csrfToken }, 200);
   }) satisfies RouteHandler<typeof meRoute, AppEnv>);
 
   r.internal(listPendingRoute, (async (c) => {
@@ -497,13 +557,36 @@ export function registerIdentityRoutes(
 
   r.internal(approveRoute, (async (c) => {
     const { id } = c.req.valid('param');
-    return c.json({ id, status: await approval.approve(c.get('actor'), id) }, 200);
+    // The body is optional; `valid('json')` is `{}` for none.
+    const body = c.req.valid('json') as { role?: string } | undefined;
+    const status = await approval.approve(c.get('actor'), id, { role: body?.role });
+    return c.json({ id, status }, 200);
   }) satisfies RouteHandler<typeof approveRoute, AppEnv>);
 
   r.internal(rejectRoute, (async (c) => {
     const { id } = c.req.valid('param');
     return c.json({ id, status: await approval.reject(c.get('actor'), id) }, 200);
   }) satisfies RouteHandler<typeof rejectRoute, AppEnv>);
+
+  r.internal(listRolesRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const all = await roles.list(c.get('actor'));
+    const page = all.slice(query.page * query.pageSize, (query.page + 1) * query.pageSize);
+    return c.json(paginate(query, all.length, page), 200);
+  }) satisfies RouteHandler<typeof listRolesRoute, AppEnv>);
+
+  r.internal(assignRoleRoute, (async (c) => {
+    const { id } = c.req.valid('param');
+    const { role } = c.req.valid('json');
+    const changed = await roles.assign(c.get('actor'), id, role);
+    return c.json({ id, role, changed }, 200);
+  }) satisfies RouteHandler<typeof assignRoleRoute, AppEnv>);
+
+  r.internal(removeRoleRoute, (async (c) => {
+    const { id, role } = c.req.valid('param');
+    await roles.remove(c.get('actor'), id, role);
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof removeRoleRoute, AppEnv>);
 
   r.internal(firstAdminRoute, (async (c) => {
     const admin = await bootstrap.redeemFirstRunToken(c.req.valid('json'));

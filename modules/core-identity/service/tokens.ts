@@ -2,7 +2,12 @@
 //
 // A token is `scp_<prefix>_<secret>`. The prefix finds the row, the secret is checked against its
 // argon2id hash, and the secret is shown to the owner once. Managing tokens needs a signed-in
-// session, not another token: a stolen token must not be able to mint a longer-lived one.
+// session, not another token: a stolen token must not be able to mint a longer-lived one. The
+// service checks the permission again with core.authz (own tokens only; revoking another user's
+// token needs `core.identity.token.manage-any`).
+//
+// A scope is the id of a permission (`core.identity.me.read`). What a token may do is its scopes
+// intersected with what its owner holds, decided by core.authz at every call (ADR 0015).
 //
 // Verifying is expensive on purpose (argon2id), so a small in-process cache sits in front of it:
 // a verified token is trusted for `TOKEN_CACHE_TTL_MS`, keyed by a hash of the whole token.
@@ -12,6 +17,7 @@
 // cached, and a malformed one is refused before any hashing.
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { Conflict, Invalid, NotFound, type Actor } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { ids } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
@@ -63,13 +69,19 @@ export interface TokenAuthenticator {
 }
 
 export interface TokenService extends TokenAuthenticator {
-  /** 422 for bad input, 409 for a taken name or too many tokens, 403 unless the caller has a session. */
+  /**
+   * 422 for bad input (no scope, or a scope that no loaded module declares as a permission), 409 for
+   * a taken name or too many tokens, 403 unless the caller has a session.
+   */
   create(actor: Actor, input: unknown): Promise<CreatedToken>;
   list(
     actor: Actor,
     page: { page: number; pageSize: number },
   ): Promise<{ tokens: TokenInfo[]; total: number }>;
-  /** Revokes one of the caller's tokens. 404 for an unknown id and for someone else's, with the same answer. */
+  /**
+   * Revokes one of the caller's tokens. 404 for an unknown id and for someone else's, with the same
+   * answer, unless the caller holds `core.identity.token.manage-any`: then any token can be revoked.
+   */
   revoke(actor: Actor, id: string): Promise<void>;
   /** Replaces a token by a new one with the same name and scopes; the old one stops working at once. */
   rotate(actor: Actor, id: string, input: unknown): Promise<CreatedToken>;
@@ -136,8 +148,10 @@ const requireSession = (actor: Actor) => requireSessionActor(actor, 'Managing ac
 
 export function createTokenService(
   ctx: ModuleContext,
-  options: { cacheTtlMs?: number; now?: () => number } = {},
+  options: { cacheTtlMs?: number; now?: () => number; authz: AuthzService },
 ): TokenService {
+  const { authz } = options;
+  const declaredPermissions = new Set(ctx.permissions.map((permission) => permission.id));
   const ttl = options.cacheTtlMs ?? TOKEN_CACHE_TTL_MS;
   const clock = options.now ?? Date.now;
   const cache = new Map<string, CacheEntry>();
@@ -266,9 +280,21 @@ export function createTokenService(
 
     async create(actor, input) {
       const { userId } = requireSession(actor);
+      await authz.require(actor, 'core.identity.token.manage');
       const parsed = createTokenInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       const { name, scopes, expiresAt } = parsed.data;
+      // A scope that names no permission could never grant anything: say so now, not silently later.
+      const unknown = scopes.filter((scope) => !declaredPermissions.has(scope));
+      if (unknown.length > 0) {
+        throw new Invalid(
+          'The request is not valid.',
+          unknown.map((scope) => ({
+            path: 'scopes',
+            message: `"${scope}" is not a permission of this instance`,
+          })),
+        );
+      }
       if (expiresAt !== null && expiresAt.getTime() <= clock()) {
         throw new Invalid('The request is not valid.', [
           { path: 'expiresAt', message: 'must be in the future' },
@@ -296,6 +322,7 @@ export function createTokenService(
 
     async list(actor, { page, pageSize }) {
       const { userId } = requireSession(actor);
+      await authz.require(actor, 'core.identity.token.read');
       const mine = and(eq(token.userId, userId), isNull(token.revokedAt));
       const rows = await ctx.db
         .select(infoColumns)
@@ -309,29 +336,34 @@ export function createTokenService(
     },
 
     async revoke(actor, id) {
-      const { userId } = requireSession(actor);
+      const { userId: callerId } = requireSession(actor);
+      await authz.require(actor, 'core.identity.token.manage');
       if (!UUID.test(id)) throw noSuchToken();
+      // Scoped to the owner unless the caller may manage any token: someone else's id changes
+      // nothing and is answered like an unknown one.
+      const any = await authz.can(actor, 'core.identity.token.manage-any');
+      const owned = (ownerId: string) => (any ? undefined : eq(token.userId, ownerId));
       forget(id);
       try {
         await ctx.db.tx(async (tx) => {
-          // Scoped to the owner: someone else's id changes nothing and is answered like an unknown one.
           const changed = await tx
             .update(token)
             .set({ revokedAt: sql`now()` })
-            .where(and(eq(token.id, id), eq(token.userId, userId), isNull(token.revokedAt)))
-            .returning({ name: token.name });
+            .where(and(eq(token.id, id), owned(callerId), isNull(token.revokedAt)))
+            .returning({ name: token.name, userId: token.userId });
           if (changed.length === 0) {
             const [own] = await tx
               .select({ id: token.id })
               .from(token)
-              .where(and(eq(token.id, id), eq(token.userId, userId)));
+              .where(and(eq(token.id, id), owned(callerId)));
             if (!own) throw noSuchToken();
             return; // already revoked: nothing to do, nothing to report
           }
           await ctx.events.emit('identity.token.revoked@1', {
-            userId,
+            userId: changed[0]!.userId,
             tokenId: id,
             name: changed[0]!.name,
+            revokedBy: callerId,
           });
         });
       } finally {
@@ -341,6 +373,7 @@ export function createTokenService(
 
     async rotate(actor, id, input) {
       const { userId } = requireSession(actor);
+      await authz.require(actor, 'core.identity.token.manage');
       const parsed = rotateTokenInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       if (!UUID.test(id)) throw noSuchToken();

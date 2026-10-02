@@ -639,3 +639,223 @@ describe('setRolePermissions', () => {
     expect(await stored(kernel.pool, 'reviewer')).toEqual([READ]);
   });
 });
+
+const tokenActor = (userId: string, ...scopes: string[]): UserActor => ({
+  ...actorFor(userId),
+  via: 'token',
+  scopes,
+});
+const events = async (pool: Pool) =>
+  await rows(pool, 'select name, payload from kernel_outbox order by occurred_at, id');
+
+describe('token scopes (scope ∩ owner)', () => {
+  it('lets a token use only the permissions its scopes name and its owner holds', async () => {
+    const { authz, kernel } = await start();
+    const owner = await userWith(kernel.pool, { permissions: [READ, EDIT] });
+    const id = owner.userId;
+    // Named and held.
+    await expect(authz.require(tokenActor(id, READ), READ)).resolves.toBeUndefined();
+    // Held but not named.
+    await expect(authz.require(tokenActor(id, READ), EDIT)).rejects.toBeInstanceOf(Forbidden);
+    // Named but not held: the scope grants nothing the owner lacks.
+    await expect(authz.require(tokenActor(id, APPROVE), APPROVE)).rejects.toBeInstanceOf(Forbidden);
+    // No scopes: nothing.
+    await expect(authz.require(tokenActor(id), READ)).rejects.toBeInstanceOf(Forbidden);
+    // The route-level decision is the same one.
+    await expect(authz.authorizeRoute(tokenActor(id, READ), EDIT)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(authz.authorizeRoute(tokenActor(id, READ), READ)).resolves.toBeUndefined();
+    // `can` says the same without throwing; the session of the same owner is not limited.
+    expect(await authz.can(tokenActor(id, READ), EDIT)).toBe(false);
+    expect(await authz.can(owner, EDIT)).toBe(true);
+  });
+
+  it('limits Admin through a token too, and does not let a scope pass a policy it was not given', async () => {
+    const policy = {
+      'authz.resourcePolicy': [{ resourceType: 'note', allows: () => true }],
+    };
+    const { authz, kernel } = await start({ modules: [notesModule({ contributes: policy })] });
+    const admin = await userWith(kernel.pool, 'admin');
+    await expect(authz.require(tokenActor(admin.userId, READ), APPROVE)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(
+      authz.require(tokenActor(admin.userId, APPROVE), APPROVE),
+    ).resolves.toBeUndefined();
+    const nobody = actorFor(randomUUID());
+    // A session of a user without the permission still passes the policy for the resource ...
+    await expect(authz.require(nobody, EDIT, { type: 'note', id: '1' })).resolves.toBeUndefined();
+    // ... a token of the same user passes it only if a scope names the permission.
+    await expect(
+      authz.require(tokenActor(nobody.userId, READ), EDIT, { type: 'note', id: '1' }),
+    ).rejects.toBeInstanceOf(Forbidden);
+    await expect(
+      authz.require(tokenActor(nobody.userId, EDIT), EDIT, { type: 'note', id: '1' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('takes a revoked role away from a token within the cache TTL, at once in this process', async () => {
+    const { authz, kernel } = await start();
+    const admin = await userWith(kernel.pool, 'admin');
+    const reviewer = await userWith(kernel.pool, { permissions: [READ] });
+    const token = tokenActor(reviewer.userId, READ);
+    await expect(authz.require(token, READ)).resolves.toBeUndefined();
+    await kernel.pool.query('delete from authz_role_assignment where user_id = $1', [
+      reviewer.userId,
+    ]);
+    // Another process learns of it when the entry expires; here the entry is fresh, so the stale
+    // answer is the documented bound. A role change through the service empties it at once.
+    const role = (await rows(kernel.pool, "select id from authz_role where key = 'user'"))[0]!;
+    await makeRoleAssignment(kernel.pool, { id: reviewer.userId }, { id: role.id as string });
+    await authz.removeRole(admin, { userId: reviewer.userId, roleKey: 'user' });
+    await expect(authz.require(token, READ)).rejects.toBeInstanceOf(Forbidden);
+  });
+
+  it('expires the cached permissions after the TTL', async () => {
+    let now = 1_000;
+    const { authz, kernel } = await start({ cacheTtlMs: 5_000, now: () => now });
+    const reviewer = await userWith(kernel.pool, { permissions: [READ] });
+    const token = tokenActor(reviewer.userId, READ);
+    await expect(authz.require(token, READ)).resolves.toBeUndefined();
+    await kernel.pool.query('delete from authz_role_assignment where user_id = $1', [
+      reviewer.userId,
+    ]);
+    await expect(authz.require(token, READ)).resolves.toBeUndefined(); // within the TTL
+    now += 5_001;
+    await expect(authz.require(token, READ)).rejects.toBeInstanceOf(Forbidden);
+  });
+});
+
+describe('role events', () => {
+  it('emits authz.role.assigned@1 and authz.role.removed@1 with the actor, in the same transaction', async () => {
+    const { authz, kernel } = await start();
+    const admin = await userWith(kernel.pool, 'admin');
+    const target = randomUUID();
+    await authz.assignRole(admin, { userId: target, roleKey: 'reviewer' });
+    await authz.assignRole(admin, { userId: target, roleKey: 'reviewer' }); // idempotent: no second event
+    await authz.removeRole(admin, { userId: target, roleKey: 'reviewer' });
+    await authz.removeRole(admin, { userId: target, roleKey: 'reviewer' }); // not held: no event
+    expect(await events(kernel.pool)).toEqual([
+      {
+        name: 'authz.role.assigned@1',
+        payload: { userId: target, roleKey: 'reviewer', actorId: admin.userId },
+      },
+      {
+        name: 'authz.role.removed@1',
+        payload: { userId: target, roleKey: 'reviewer', actorId: admin.userId },
+      },
+    ]);
+  });
+
+  it('leaves no event behind when the transaction rolls back, and none for a refusal', async () => {
+    const { authz, kernel } = await start();
+    const admin = await userWith(kernel.pool, 'admin');
+    const plain = await userWith(kernel.pool, { permissions: [] });
+    await expect(
+      kernel.db.tx(async () => {
+        await authz.assignRole(admin, { userId: randomUUID(), roleKey: 'reviewer' });
+        throw new Error('later step failed');
+      }),
+    ).rejects.toThrow();
+    await expect(
+      authz.assignRole(plain, { userId: randomUUID(), roleKey: 'reviewer' }),
+    ).rejects.toBeInstanceOf(Forbidden);
+    expect(await events(kernel.pool)).toEqual([]);
+  });
+});
+
+describe('assignRoleAsSystem', () => {
+  it('assigns with no actor (assigned_by null), emits the event, and is idempotent', async () => {
+    const { authz, kernel } = await start();
+    const target = randomUUID();
+    const run = () =>
+      kernel.db.tx((tx) =>
+        authz.assignRoleAsSystem(tx, { userId: target.toUpperCase(), roleKey: 'admin' }),
+      );
+    expect(await run()).toBe(true);
+    expect(await run()).toBe(false);
+    expect(
+      await rows(
+        kernel.pool,
+        'select a.user_id, a.assigned_by, r.key from authz_role_assignment a join authz_role r on r.id = a.role_id',
+      ),
+    ).toEqual([{ user_id: target, assigned_by: null, key: 'admin' }]);
+    expect(await events(kernel.pool)).toEqual([
+      {
+        name: 'authz.role.assigned@1',
+        payload: { userId: target, roleKey: 'admin', actorId: null },
+      },
+    ]);
+    // The new holder is effective at once.
+    await expect(authz.require(actorFor(target), ROLE_MANAGE)).resolves.toBeUndefined();
+  });
+
+  it('rejects an unknown role (404) and a bad user id (422), and rolls back with the caller', async () => {
+    const { authz, kernel } = await start();
+    await expect(
+      kernel.db.tx((tx) => authz.assignRoleAsSystem(tx, { userId: randomUUID(), roleKey: 'nope' })),
+    ).rejects.toBeInstanceOf(NotFound);
+    await expect(
+      kernel.db.tx((tx) => authz.assignRoleAsSystem(tx, { userId: 'x', roleKey: 'admin' })),
+    ).rejects.toBeInstanceOf(Invalid);
+    const target = randomUUID();
+    await expect(
+      kernel.db.tx(async (tx) => {
+        await authz.assignRoleAsSystem(tx, { userId: target, roleKey: 'admin' });
+        throw new Error('later step failed');
+      }),
+    ).rejects.toThrow('later step failed');
+    expect(
+      await rows(kernel.pool, 'select * from authz_role_assignment where user_id = $1', [target]),
+    ).toEqual([]);
+    expect(await events(kernel.pool)).toEqual([]);
+  });
+});
+
+describe('removeAllAssignments', () => {
+  it("removes every role of the user and nobody else's, with no event, and empties the cache", async () => {
+    const { authz, kernel } = await start();
+    const gone = await userWith(kernel.pool, { permissions: [READ] });
+    const other = await userWith(kernel.pool, { permissions: [READ] });
+    await makeRoleAssignment(kernel.pool, { id: gone.userId }, 'reviewer');
+    await expect(authz.require(gone, READ)).resolves.toBeUndefined(); // fills the cache
+    expect(await kernel.db.tx((tx) => authz.removeAllAssignments(tx, gone.userId))).toBe(2);
+    expect(await kernel.db.tx((tx) => authz.removeAllAssignments(tx, gone.userId))).toBe(0);
+    expect(await kernel.db.tx((tx) => authz.removeAllAssignments(tx, 'not-a-uuid'))).toBe(0);
+    await expect(authz.require(gone, READ)).rejects.toBeInstanceOf(Forbidden);
+    await expect(authz.require(other, READ)).resolves.toBeUndefined();
+    expect(await events(kernel.pool)).toEqual([]);
+  });
+
+  it('rolls back with the transaction of the caller', async () => {
+    const { authz, kernel } = await start();
+    const user = await userWith(kernel.pool, 'reviewer');
+    await expect(
+      kernel.db.tx(async (tx) => {
+        await authz.removeAllAssignments(tx, user.userId);
+        throw new Error('the user row could not be deleted');
+      }),
+    ).rejects.toThrow();
+    expect(
+      await rows(kernel.pool, 'select * from authz_role_assignment where user_id = $1', [
+        user.userId,
+      ]),
+    ).toHaveLength(1);
+  });
+});
+
+describe('hasHolders', () => {
+  it('says whether any user holds the role, also inside a transaction', async () => {
+    const { authz, kernel } = await start();
+    expect(await authz.hasHolders('admin')).toBe(false);
+    expect(await authz.hasHolders('nope')).toBe(false);
+    await userWith(kernel.pool, 'admin');
+    expect(await authz.hasHolders('admin')).toBe(true);
+    expect(await authz.hasHolders('reviewer')).toBe(false);
+    await kernel.db.tx(async (tx) => {
+      await authz.assignRoleAsSystem(tx, { userId: randomUUID(), roleKey: 'reviewer' });
+      expect(await authz.hasHolders('reviewer', tx)).toBe(true);
+    });
+  });
+});

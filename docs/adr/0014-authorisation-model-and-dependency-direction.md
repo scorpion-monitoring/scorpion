@@ -65,7 +65,7 @@ the architecture says otherwise.
 - Rule 3 forbids touching another module's tables. M3 needs one exception: a single migration in
   `core.identity` (it runs after `core.authz`) copies every user with `is_bootstrap_admin = true` into
   `authz_role_assignment` with the Admin role and then drops the column, in one transaction
-  (ADR-0006, "`identity_user.isBootstrapAdmin`"). It is implemented in sprint 2 and recorded here.
+  (ADR-0006, "`identity_user.isBootstrapAdmin`"). It is implemented in sprint 2 (`0006_bootstrap_admin_to_authz.sql`; ADR-0015 records the rest of that sprint) and recorded here.
 - It is the **only** place in the repository that touches a foreign table. A test asserts that no
   other migration or source file references a table of another module.
 - With zero marked users the migration changes nothing; `scorpion create-admin` and the first-run

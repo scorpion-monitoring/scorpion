@@ -3,7 +3,7 @@
 // caller, and never an error of ours. Never weaken this test.
 import { makeToken, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import { PASSWORD, useIdentityApp } from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, PASSWORD, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 
@@ -70,7 +70,11 @@ describe('defect 3: a bad key is a 401, never a 500', () => {
   it('answers an unknown token, a wrong secret, an expired and a revoked token the same way', async () => {
     const { kernel, get, signedIn, post } = await app.start({ tokenCacheTtlMs: 0 });
     const { user, cookie, csrf } = await signedIn('alice');
-    const made = await post('/tokens', { cookie, csrf, body: { name: 'ci' } });
+    const made = await post('/tokens', {
+      cookie,
+      csrf,
+      body: { name: 'ci', scopes: ALL_USER_SCOPES },
+    });
     const { token } = made.body as { token: string };
     const prefix = token.slice(4, 12);
 

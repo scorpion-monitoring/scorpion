@@ -8,10 +8,10 @@ import {
   Unauthorized,
   type Actor,
 } from '@scorpion/contracts';
-import { makeAuthMethod, makeUser } from '@scorpion/testing';
+import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { failOutbox, tokenFrom } from '../test/mail.ts';
-import { useIdentity } from '../test/harness.ts';
+import { makeMember, useIdentity } from '../test/harness.ts';
 import { hashMailToken } from './mail-tokens.ts';
 import { TooManyRequests } from './errors.ts';
 import { createMemoryMailer } from './mailer.ts';
@@ -39,8 +39,8 @@ const settingsOf = (
 async function start(options: Parameters<typeof identity.start>[0] = {}) {
   const mailer = createMemoryMailer();
   const started = await identity.start({ mailer, ...options });
-  const withPassword = async (overrides: Parameters<typeof makeUser>[1] = {}) => {
-    const user = await makeUser(started.kernel.pool, { emailVerified: false, ...overrides });
+  const withPassword = async (overrides: Parameters<typeof makeMember>[1] = {}) => {
+    const user = await makeMember(started.kernel.pool, { emailVerified: false, ...overrides });
     await makeAuthMethod(started.kernel.pool, user, { passwordHash: await hashPassword(PASSWORD) });
     return user;
   };
@@ -88,7 +88,7 @@ describe('requestReset', () => {
     const pending = await withPassword({ status: 'pending', email: 'pending@example.org' });
     await withPassword({ status: 'rejected', deleted: true, email: 'rejected@example.org' });
     await withPassword({ deleted: true, email: 'deleted@example.org' });
-    const oidcOnly = await makeUser(kernel.pool, { email: 'oidc@example.org' });
+    const oidcOnly = await makeMember(kernel.pool, { email: 'oidc@example.org' });
     await makeAuthMethod(kernel.pool, oidcOnly, { provider: 'stub' });
     expect(pending.status).toBe('pending');
 
@@ -181,9 +181,12 @@ describe('confirmReset', () => {
     const { kernel, identity: id, recovery, user, token } = await requested();
     const sessionA = await id.sessions.create(user.id);
     const sessionB = await id.sessions.create(user.id);
-    const other = await makeUser(kernel.pool);
+    const other = await makeMember(kernel.pool);
     const otherSession = await id.sessions.create(other.id);
-    const pat = await id.tokens.create(actorOf(user), { name: 'ci' });
+    const pat = await id.tokens.create(actorOf(user), {
+      name: 'ci',
+      scopes: ['core.identity.me.read'],
+    });
 
     await recovery.confirmReset({ token, password: NEW_PASSWORD });
 
@@ -313,7 +316,10 @@ describe('changePassword', () => {
     const other = await withPassword();
     const mine = await id.sessions.create(user.id);
     const theirs = await id.sessions.create(other.id);
-    const pat = await id.tokens.create(actorOf(user), { name: 'ci' });
+    const pat = await id.tokens.create(actorOf(user), {
+      name: 'ci',
+      scopes: ['core.identity.me.read'],
+    });
     await recovery.requestReset({ email: user.email! });
 
     await recovery.changePassword(actorOf(user), {
@@ -370,7 +376,7 @@ describe('changePassword', () => {
     await expect(recovery.changePassword(actorOf(user, 'token'), input)).rejects.toBeInstanceOf(
       Forbidden,
     );
-    const oidcOnly = await makeUser(kernel.pool);
+    const oidcOnly = await makeMember(kernel.pool);
     await makeAuthMethod(kernel.pool, oidcOnly, { provider: 'stub' });
     await expect(recovery.changePassword(actorOf(oidcOnly), input)).rejects.toBeInstanceOf(
       Conflict,
@@ -468,7 +474,7 @@ describe('email verification', () => {
     const { kernel, mailer, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'old@example.org' });
     await recovery.startVerification(user.id, 'new@example.org');
-    await makeUser(kernel.pool, { email: 'New@Example.org' });
+    await makeMember(kernel.pool, { email: 'New@Example.org' });
     await expect(
       recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) }),
     ).rejects.toBeInstanceOf(BadRequest);

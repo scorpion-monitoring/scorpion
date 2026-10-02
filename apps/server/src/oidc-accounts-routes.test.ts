@@ -2,7 +2,7 @@
 // an address that belongs to an unconfirmed password account, and linking from the profile.
 import { makeAuthMethod, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import { PASSWORD } from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, PASSWORD } from './testing/identity-app.ts';
 import { PROVIDER, isProblem, person, useOidcApp } from './testing/oidc-flow.ts';
 
 const { idp, startApp } = useOidcApp();
@@ -77,7 +77,7 @@ describe('POST /auth/oidc/{provider}/link', () => {
 
     const alice = await signedIn('alice');
     const created = await post('/tokens', {
-      body: { name: 'ci' },
+      body: { name: 'ci', scopes: ALL_USER_SCOPES },
       cookie: alice.cookie,
       csrf: alice.csrf,
     });

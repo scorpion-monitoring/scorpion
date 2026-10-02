@@ -8,6 +8,7 @@
 // one: the token is stored and the profile shows it as pending, but no mail goes out.
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Invalid, NotFound, type Actor } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import { createRateLimiter, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { user } from '../db/schema.ts';
@@ -52,8 +53,9 @@ function invalid(error: ZodError): Invalid {
 
 export function createProfileService(
   ctx: ModuleContext,
-  deps: { recovery: Pick<RecoveryService, 'startVerification'> },
+  deps: { recovery: Pick<RecoveryService, 'startVerification'>; authz: AuthzService },
 ): ProfileService {
+  const { authz } = deps;
   const limiter = createRateLimiter(ctx.db);
 
   async function load(userId: string, now: Date): Promise<Profile> {
@@ -81,11 +83,14 @@ export function createProfileService(
 
   return {
     async get(actor, now = new Date()) {
-      return load(requireSession(actor, 'The profile').userId, now);
+      const { userId } = requireSession(actor, 'The profile');
+      await authz.require(actor, 'core.identity.profile.read');
+      return load(userId, now);
     },
 
     async update(actor, input, now = new Date()) {
       const { userId, username } = requireSession(actor, 'The profile');
+      await authz.require(actor, 'core.identity.profile.update');
       const parsed = updateProfileInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       const change = parsed.data;

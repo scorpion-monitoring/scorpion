@@ -12,6 +12,7 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import { Conflict, Forbidden, Invalid, type Actor } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import { createRateLimiter, type ModuleContext, type RateLimit } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { authMethod, mailToken, user } from '../db/schema.ts';
@@ -106,9 +107,14 @@ function isUniqueViolation(error: unknown): boolean {
 
 export function createRecoveryService(
   ctx: ModuleContext,
-  deps: { sessions: SessionService; settings: IdentitySettings; mailer: Mailer },
+  deps: {
+    sessions: SessionService;
+    settings: IdentitySettings;
+    mailer: Mailer;
+    authz: AuthzService;
+  },
 ): RecoveryService {
-  const { sessions, settings, mailer } = deps;
+  const { sessions, settings, mailer, authz } = deps;
   const limiter = createRateLimiter(ctx.db);
 
   async function mailContext(): Promise<MailContext> {
@@ -257,6 +263,7 @@ export function createRecoveryService(
 
     async changePassword(actor, input) {
       const { userId, username } = requireSession(actor, 'Changing the password');
+      await authz.require(actor, 'core.identity.password.change');
       await requireLocalAccounts('Changing the password');
       const parsed = changePasswordInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
@@ -301,6 +308,7 @@ export function createRecoveryService(
 
     async resendVerification(actor, now = new Date()) {
       const { userId } = requireSession(actor, 'Asking for a confirmation mail');
+      await authz.require(actor, 'core.identity.email.verify');
       const [account] = await ctx.db
         .select({ email: user.email, verifiedAt: user.emailVerifiedAt })
         .from(user)

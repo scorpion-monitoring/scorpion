@@ -1,7 +1,7 @@
 // The profile routes through the whole pipeline: own profile only, session callers only, the
 // address change that waits for its link, and bad input.
 import { describe, expect, it } from 'vitest';
-import { createMemoryMailer, useIdentityApp } from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, createMemoryMailer, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 
@@ -116,7 +116,9 @@ describe('the profile routes refuse the callers who may not use them', () => {
 
       const allowed = await start({ permissions: [permission, 'core.identity.token.manage'] });
       const mine = await allowed.signedIn('alice');
-      const created = (await allowed.post('/tokens', { ...mine, body: { name: 'ci' } })).body as {
+      const created = (
+        await allowed.post('/tokens', { ...mine, body: { name: 'ci', scopes: ALL_USER_SCOPES } })
+      ).body as {
         token: string;
       };
       const viaToken = await allowed.call(method, path, {

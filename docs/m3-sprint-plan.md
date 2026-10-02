@@ -1,6 +1,6 @@
 # M3 Sprint Plan: `core.authz` + `core.settings`
 
-Status: draft, 2026-10-02. Decisions 1 to 4 answered the same day (§10).
+Status: approved, 2026-10-02 (§11 is in `implementation.md`). Decisions 1 to 4 answered the same day (§10). Sprint 1 is in PR #38; sprint 2's decisions are in §13 and ADR-0015.
 Scope source: [implementation.md](implementation.md) §3, M3. Closes defect 1 (FEATURES §5). Releases as `0.4.0`.
 
 M3 is size M (about 3 weeks for one developer), but it is the riskiest security milestone: it replaces
@@ -14,7 +14,7 @@ reviewable size) and one pull request into `dev`. M3 is released once, after spr
 1. Merge #35 (`main` back into `dev`) and #36 (backlog entry) so `dev` carries 0.3.0.
 2. The four decisions in §10 are answered. Write ADR-0014 (dependency direction and the bootstrap exception) as the
    first commit of sprint 1.
-3. Add the lines in §11 to M3's scope in `implementation.md` (needs your approval; this plan does not edit it). FEATURES §2
+3. Add the lines in §11 to M3's scope in `implementation.md` (approved and done in PR #38). FEATURES §2
    is derived from the defective legacy app; where it conflicts with the architecture or this plan (the
    authz → identity arrow), the architecture wins and the ADR records it.
 
@@ -266,7 +266,7 @@ second process within the TTL; rotation never leaves an undecryptable row; hosti
 4. **No environment fallback for secrets.** The secrets store is the only source for OIDC client secrets from 0.4.0 on;
    security wins over a smooth upgrade (0.3.0 could not have been used in production, ADR-0005). The release notes say it.
 
-## 11. Proposed additions to M3's scope in `implementation.md` (to approve)
+## 11. Additions to M3's scope in `implementation.md` (approved 2026-10-02)
 
 - `authz.defaultRole` and `authz.resourcePolicy` registries, and the route-table walker test.
 - `scorpion set-secret`, next to `rotate-secrets`.
@@ -286,3 +286,24 @@ second process within the TTL; rotation never leaves an undecryptable row; hosti
 | Settings cache differs between processes.                              | `localAccounts=false` takes seconds to apply. | Same bound as sessions, tested with two kernels.                                                                                                                                                          |
 | `sharp` and DOMPurify add native or heavy dependencies to every image. | Larger images, build time.                    | Only profiles that include the blob module install them (image check already proves profile contents).                                                                                                    |
 | Sprint 2 touches most of identity's routes at once.                    | Large, hard-to-review pull request.           | One pull request per sprint stays the default (CLAUDE.md, "batch them"); split by route group only if it passes about 1500 changed lines of non-test code, into as few stacked pull requests as possible. |
+
+## 13. Decisions taken in sprint 2 (2026-10-02)
+
+Recorded in [ADR-0015](adr/0015-identity-on-authz.md). Where they differ from §5:
+
+1. **A token scope is a permission id** (`core.identity.me.read`), not `read:<resource>`. The plan said to stop and ask if the
+   shapes differ; they did, and the answer was this one. A token needs at least one scope; a scope must name a declared
+   permission; tokens of 0.3.0 with `read:kpi`-shaped scopes grant nothing.
+2. **`core.identity.token.manage-any` applies to revoking only.** Item 3 lists list/revoke/rotate for "own tokens, or
+   manage-any"; an administrator who rotates someone else's token would receive the new secret, and there is no route to
+   list another user's tokens (backlog).
+3. **Profile and password routes have no user id** in the input, so "another user's id is a 403" has nothing to refuse: the
+   target is always the caller. The service-level check is `ctx.authz.require` for the route's permission, and the route
+   matrix proves a user without the role gets 403.
+4. **No `system` actor.** Create-admin, the first-run token and a default role for a policy-activated account use
+   `assignRoleAsSystem(tx, …)`; the purge uses `removeAllAssignments(tx, …)`; "no administrator yet" uses `hasHolders`.
+5. **Approving needs `core.authz.role.assign`** in addition to `core.identity.user.approve`, because the approval gives a
+   role through the authz service.
+6. **A token may end its owner's sessions** (`logout-all`) when a scope names `core.identity.session.manage`; this is the
+   M2 behaviour (tested since sprint 3 of M2) and is kept. The item "tokens cannot manage sessions" holds for the other
+   session-only routes and for tokens.

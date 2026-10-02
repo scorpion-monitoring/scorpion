@@ -48,6 +48,8 @@ roles, via: 'session' | 'token', scopes? }`. `roles` is empty until `core.authz`
 
 ### `identity_user.isBootstrapAdmin`
 
+_Done in M3 sprint 2: migration `0006_bootstrap_admin_to_authz.sql` turned the marker into the Admin role and dropped the column (ADR-0014, ADR-0015)._
+
 - M2 needs a first administrator ("not first registrant", defect 1) but roles are data seeded in M3. M2
   therefore stores a plain boolean column `isBootstrapAdmin` on the user that `scorpion create-admin` or
   the first-run token creates (sprint 3).

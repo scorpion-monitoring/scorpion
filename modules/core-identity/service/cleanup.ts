@@ -3,6 +3,7 @@
 // nothing to authorise. One run is one transaction, so a failure (a subscriber's rule, a database
 // error) leaves everything as it was and the next run does it again.
 import { and, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { firstRunToken, loginState, session, token, user } from '../db/schema.ts';
 import { deleteSpentMailTokens } from './mail-tokens.ts';
@@ -32,7 +33,10 @@ export interface CleanupService {
   run(now?: Date): Promise<CleanupResult>;
 }
 
-export function createCleanupService(ctx: ModuleContext): CleanupService {
+export function createCleanupService(
+  ctx: ModuleContext,
+  deps: { authz: Pick<AuthzService, 'removeAllAssignments'> },
+): CleanupService {
   return {
     async run(now = new Date()) {
       return ctx.db.tx(async (tx) => {
@@ -70,6 +74,9 @@ export function createCleanupService(ctx: ModuleContext): CleanupService {
             userId: gone.id,
             username: gone.username,
           });
+          // core.authz cannot subscribe to the event (ADR 0003), so its rows go from here, in this
+          // transaction and before the user row: a purge that fails leaves the roles in place too.
+          await deps.authz.removeAllAssignments(tx, gone.id);
         }
         if (due.length > 0) {
           // The auth methods, sessions, tokens, mail tokens and login states go with the user (cascade).

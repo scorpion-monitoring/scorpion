@@ -3,6 +3,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
 import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import { ids, type ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
@@ -18,6 +19,7 @@ import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
 import { verifyIdToken, type IdentityClaims } from './oidc-token.ts';
 import { requireSession } from './require-user.ts';
+import { grantDefaultRole } from './roles.ts';
 import type { SessionService } from './sessions.ts';
 import type { IdentitySettings, OidcProvider } from './settings.ts';
 import { usernameBase, usernameCandidates } from './username.ts';
@@ -63,6 +65,7 @@ export interface OidcService {
 type Reason = string;
 
 export interface OidcDeps {
+  authz: AuthzService;
   users: UserService;
   sessions: SessionService;
   settings: IdentitySettings;
@@ -83,7 +86,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcService {
-  const { users, sessions, settings, states, providers } = deps;
+  const { authz, users, sessions, settings, states, providers } = deps;
   const exchangeTimeoutMs = deps.exchangeTimeoutMs ?? TOKEN_EXCHANGE_TIMEOUT_MS;
 
   const redirectUri = (providerId: string): string => {
@@ -204,7 +207,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       })) ?? { status: 'pending' as const };
       try {
         // The user, its auth method and the event are one write.
-        return await ctx.db.tx(async () => {
+        return await ctx.db.tx(async (tx) => {
           const created = await users.createUser({
             username: candidate,
             email,
@@ -212,6 +215,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
             status: decision.status,
             auth: { provider: provider.id, subject: claims.subject },
           });
+          await grantDefaultRole(authz, tx, created);
           await ctx.events.emit('identity.user.registered@1', {
             userId: created.id,
             username: created.username,
@@ -285,6 +289,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
     async startLink(actor, providerId) {
       const caller = requireSession(actor, 'Linking a sign-in provider');
+      await authz.require(actor, 'core.identity.auth-method.link');
       return begin(providerId, caller.userId);
     },
 

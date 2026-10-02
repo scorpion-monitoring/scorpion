@@ -4,23 +4,23 @@ Roles as data, the permission registry and the authoriser of the request pipelin
 do what and knows nothing about users: it stores an opaque user id with no foreign key and imports
 nothing from `core.identity` (ADR-0014). It has no dependencies, so every other module may depend on it.
 
-Status: M3 sprint 1. The module is in the `full` and `kpi-tracker` profiles, but `core.identity` does not
-use it yet (sprint 2), so nobody holds a role by themselves and a signed-in user still gets 403 on every
-route that is not public, as in 0.3.0. The one change you can see: an anonymous caller of a non-public
-route now gets 401 instead of 403.
+Status: M3 sprint 2. The module is in the `full` and `kpi-tracker` profiles and `core.identity` depends on it
+([ADR-0015](../../docs/adr/0015-identity-on-authz.md)): identity contributes the permissions of the role `user`, gives
+the role at approval, owns the role routes and asks this module for every decision. An anonymous caller of a
+non-public route gets 401, a signed-in user without a role 403.
 
 ## Manifest
 
-| Part           | Value                                                                 |
-| -------------- | --------------------------------------------------------------------- |
-| id             | `core.authz`                                                          |
-| table prefix   | `authz_` (set in the manifest; ADR-0004)                              |
-| dependencies   | none (ADR-0014)                                                       |
-| routes         | none yet; the role routes are `core.identity`'s (sprint 2)            |
-| jobs, CLI      | none                                                                  |
-| events         | none yet: `authz.role.assigned@1` and `.removed@1` arrive in sprint 2 |
-| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005) |
-| public service | `ctx.deps['core.authz']`, see "Public API"                            |
+| Part           | Value                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| id             | `core.authz`                                                                                       |
+| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                           |
+| dependencies   | none (ADR-0014)                                                                                    |
+| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)) |
+| jobs, CLI      | none                                                                                               |
+| events         | emits `authz.role.assigned@1` and `authz.role.removed@1`, see "Events"                             |
+| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                              |
+| public service | `ctx.deps['core.authz']`, see "Public API"                                                         |
 
 ### Permissions
 
@@ -61,9 +61,13 @@ A contributing module must depend on `core.authz` in its `package.json` (ADR-000
 4. **The authoriser** (`kernel.authorizer`) reads `actor.userId`, resolves the roles itself and ignores
    `actor.roles`: anonymous → 401, missing permission → 403. A scoped permission is checked globally at the route;
    its resource check belongs to the service (`ctx.deps['core.authz'].require(actor, permission, resource)`).
-5. **Token scopes** are not applied yet. The seam is marked in `service/authz.ts` (`authorizeRoute`); sprint 2
-   intersects a token's scopes with the owner's permissions there. Until then a token would have its owner's
-   permissions, which is harmless because no user holds any role.
+5. **Token scopes** are permission ids. A token actor (`via: 'token'`) passes only for a permission that its scopes
+   name **and** its owner holds (scope ∩ owner), for the route (`authorizeRoute`) and for `require`/`can` in a
+   service; the scope gate also covers resource policies, so a token cannot reach through a policy what it was not
+   given. A token without scopes can do nothing; a scope that names a permission the owner lacks grants nothing; a
+   session is not limited by scopes. `grants` and `withinScopes` in `service/permissions.ts` are the pure rule, with
+   table-driven tests. A role taken from the owner takes effect for the token like for the owner (the cache bound
+   below).
 
 ### Built-in protections
 
@@ -75,7 +79,7 @@ They live in the service, so no route and no future module has to remember them,
   whatever the roles are, and no resource policy can undo it.
 - **The last Admin cannot be removed** (409). Removals of a role take turns on a row lock, so two at once cannot both
   succeed. Authz cannot tell whether an Admin's account still exists, so a deactivated Admin counts until the purge
-  removes their assignment (sprint 2).
+  removes their assignment (`removeAllAssignments`, below).
 
 ### The cache and its bound
 
@@ -99,8 +103,27 @@ Tests cover the bound with two kernels over one database.
 | `removeRole(actor, { userId, roleKey })`    | `core.authz.role.assign` | `false` when not held. 409 for the last Admin.                             |
 | `setRolePermissions(actor, roleKey, [...])` | `core.authz.role.manage` | Replaces the set in one transaction.                                       |
 
-Each method checks its permission itself, so every caller is protected, including jobs. Sprint 2's identity
-routes declare their own route permission and call these methods.
+Each method checks its permission itself, so every caller is protected, including jobs. The identity routes declare
+their own route permission (`core.identity.role.*`) and call these methods, so a role change needs both pairs
+(ADR-0015). `assignRole` and `removeRole`, called inside the caller's `ctx.db.tx()`, join that transaction (a
+savepoint): this is how an approval gives its role atomically.
+
+Three methods are for **trusted code with no human caller** and check no permission. Only a module that may hand out
+roles uses them; the trust boundary is the profile's module list, as for contributing to `kernel.authorizer`
+(ADR-0005), and no `Actor` of kind `system` exists:
+
+| Method                                        | Used by                                                               | Notes                                                                                                                                                                                 |
+| --------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `assignRoleAsSystem(tx, { userId, roleKey })` | `create-admin`, the first-run token, an account activated by a policy | `assigned_by` null; emits `authz.role.assigned@1` with actor `null` in the caller's transaction (`tx` must be the one of `ctx.db.tx()`). Never removes. 404 unknown role, 422 bad id. |
+| `removeAllAssignments(tx, userId)`            | the purge of an account (identity's cleanup job)                      | Deletes every assignment of the user in the caller's transaction, no event, the last-Admin rule is not applied (a purged account is a rejected one). Returns how many.                |
+| `hasHolders(roleKey, tx?)`                    | "no administrator yet" (bootstrap)                                    | Whether any user holds the role; names nobody.                                                                                                                                        |
+
+### Events
+
+`authz.role.assigned@1` and `authz.role.removed@1`, emitted inside the transaction of the change:
+`{ userId, roleKey, actorId }`, where `actorId` is the caller or `null` for the system. Nothing else (no permission list,
+no secret). A repeat of a change (the role was held already, or not) emits nothing. There is no subscriber yet; M4's audit
+trail subscribes. `setRolePermissions` emits no event in M3.
 
 ## Tables
 
@@ -111,5 +134,6 @@ start and every CLI command) and is idempotent, also when two processes start at
 ## Testing
 
 `test/harness.ts` starts a kernel over Postgres with fixture modules that declare permissions and contribute to
-the registries. The factories `makeRole` and `makeRoleAssignment` are in `@scorpion/testing`. Permission matching
+the registries. Other modules' tests start this module for real (see `core.identity`'s `test/harness.ts`) instead of
+using a stand-in authoriser. The factories `makeRole` and `makeRoleAssignment` are in `@scorpion/testing`. Permission matching
 is a pure function with table-driven tests (`service/permissions.test.ts`).
