@@ -9,6 +9,7 @@
     { "path": "../../packages/kernel" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/testing" },
-    { "path": "../core-authz" }
+    { "path": "../core-authz" },
+    { "path": "../core-settings" }
   ]
 }

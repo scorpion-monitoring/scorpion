@@ -5,10 +5,13 @@ import type { UserActor } from '@scorpion/contracts';
 import authzModule from '@scorpion/core-authz/module';
 import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
 import type { AuthzService } from '@scorpion/core-authz/public';
+import { createSettingsModule, type SettingsInternalsBundle } from '@scorpion/core-settings/module';
+import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import type { ModuleManifest } from '@scorpion/kernel';
 import {
   makeRoleAssignment,
+  makeSecretsKey,
   makeUser,
   startPostgres,
   type StartedPostgres,
@@ -48,6 +51,10 @@ export interface StartOptions {
   env?: Record<string, string>;
   /** Collects every log line the kernel writes (trace level), to check what the log holds. */
   logLines?: string[];
+  /** `SECRETS_KEY` of the core.settings in the profile (default: a new random key). */
+  secretsKey?: string;
+  /** How long core.settings trusts the settings it has read (default: its own, 5 s). */
+  settingsCacheTtlMs?: number;
   /** Another module of the profile that depends on core.identity, for example a policy contributor. */
   extraModule?: { manifest: ModuleManifest; id: string };
 }
@@ -60,6 +67,8 @@ export interface IdentityHarness {
     identity: IdentityInternals;
     /** The public service of core.authz in this kernel. */
     authz: AuthzService;
+    /** core.settings in this kernel: the settings, secrets and preferences services. */
+    settingsStore: SettingsInternalsBundle;
     /** The manifest this kernel was built from. */
     manifest: ReturnType<typeof createIdentityModule>;
     /**
@@ -100,10 +109,22 @@ export function useIdentity(): IdentityHarness {
       const kernel = createKernel({
         profile: {
           name: 'identity-test',
-          modules: ['core.authz', 'core.identity', ...(extra ? [extra.id] : [])] as never,
+          modules: [
+            'core.authz',
+            'core.settings',
+            'core.identity',
+            ...(extra ? [extra.id] : []),
+          ] as never,
         },
         sources: [
           { manifest: authzModule, packageJson: authzPackage },
+          {
+            manifest: createSettingsModule({
+              env: { SECRETS_KEY: options?.secretsKey ?? makeSecretsKey() },
+              cacheTtlMs: options?.settingsCacheTtlMs,
+            }),
+            packageJson: settingsPackage,
+          },
           { manifest, packageJson },
           ...(extra
             ? [
@@ -119,6 +140,7 @@ export function useIdentity(): IdentityHarness {
         ],
         modulePackages: {
           'core.authz': '@scorpion/core-authz',
+          'core.settings': '@scorpion/core-settings',
           'core.identity': '@scorpion/core-identity',
           ...(extra ? { [extra.id]: `@scorpion/${extra.id.replaceAll('.', '-')}` } : {}),
         },
@@ -146,6 +168,7 @@ export function useIdentity(): IdentityHarness {
         kernel,
         identity: kernel.services.get('core.identity') as IdentityInternals,
         authz: kernel.services.get('core.authz') as AuthzService,
+        settingsStore: kernel.services.get('core.settings') as SettingsInternalsBundle,
         manifest,
         async actorOf(user, ...roles) {
           for (const role of roles.length > 0 ? roles : ['user']) {

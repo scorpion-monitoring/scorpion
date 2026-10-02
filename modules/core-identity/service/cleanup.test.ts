@@ -13,7 +13,11 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { useIdentity } from '../test/harness.ts';
 import { createMemoryMailer } from './mailer.ts';
-import { PURGE_BATCH, PURGE_RETENTION_MS, TOKEN_GRACE_MS } from './cleanup.ts';
+import { DEFAULT_RETENTION, daysToMs } from './settings.ts';
+
+const PURGE_RETENTION_MS = daysToMs(DEFAULT_RETENTION.purgeAfterDays);
+const TOKEN_GRACE_MS = daysToMs(DEFAULT_RETENTION.tokenGraceDays);
+const PURGE_BATCH = DEFAULT_RETENTION.purgeBatch;
 
 const identity = useIdentity();
 const DAY = 24 * 3600 * 1000;

@@ -84,6 +84,9 @@ describe('the module', () => {
       localAccounts: true,
       approvalPolicy: 'manual',
       oidcProviders: [],
+      // Today's constants are the defaults (README, "Settings").
+      retention: { purgeAfterDays: 30, tokenGraceDays: 30, purgeBatch: 500 },
+      mailBudgets: { perAddress: { burst: 3, perHour: 3 }, perUser: { burst: 5, perHour: 5 } },
     });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
@@ -106,7 +109,7 @@ describe('the module', () => {
     const others = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_name not like 'identity\\_%' and table_name not like 'kernel\\_%'
-          and table_name not like 'authz\\_%'`, // core.authz's tables: this module depends on it
+          and table_name not like 'authz\\_%' and table_name not like 'settings\\_%'`, // the tables of the modules this one depends on
     );
     expect(others.rows).toEqual([]);
   });
@@ -161,7 +164,9 @@ describe('the permissions identity gives to roles (authz.defaultRole)', () => {
     } as const;
     await makeRoleAssignment(kernel.pool, { id: admin.userId }, 'admin');
     const roles = Object.fromEntries((await authz.listRoles(admin)).map((r) => [r.key, r]));
-    expect(roles.user!.permissions).toEqual([...USER_PERMISSIONS].sort());
+    expect(roles.user!.permissions.filter((p) => p.startsWith('core.identity.'))).toEqual(
+      [...USER_PERMISSIONS].sort(),
+    );
     expect(roles.reviewer!.permissions).toEqual([]);
     expect(roles.admin!.permissions).toEqual(
       expect.arrayContaining(['core.identity.role.assign', 'core.identity.token.manage-any']),

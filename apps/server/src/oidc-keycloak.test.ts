@@ -13,7 +13,7 @@ import {
   type StartedKeycloak,
 } from '@scorpion/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { useIdentityApp } from './testing/identity-app.ts';
+import { settingsWith, useIdentityApp } from './testing/identity-app.ts';
 import { browser } from './testing/oidc-flow.ts';
 
 const PROVIDER_ID = 'keycloak';
@@ -28,22 +28,20 @@ afterAll(async () => {
   await keycloak?.stop();
 });
 
-const settings = (clientId = KEYCLOAK_CLIENT_ID) => ({
-  get: () =>
-    Promise.resolve({
-      localAccounts: true,
-      approvalPolicy: 'manual',
-      oidcProviders: [
-        {
-          id: PROVIDER_ID,
-          displayName: 'Keycloak',
-          issuer: keycloak.issuer,
-          clientId,
-          scopes: ['openid', 'email', 'profile'],
-        },
-      ],
-    }),
-});
+const settings = (clientId = KEYCLOAK_CLIENT_ID) =>
+  settingsWith({
+    localAccounts: true,
+    approvalPolicy: 'manual',
+    oidcProviders: [
+      {
+        id: PROVIDER_ID,
+        displayName: 'Keycloak',
+        issuer: keycloak.issuer,
+        clientId,
+        scopes: ['openid', 'email', 'profile'],
+      },
+    ],
+  });
 
 async function startApp(options: Parameters<typeof app.start>[0] = {}) {
   const started = await app.start({

@@ -2,15 +2,10 @@
 // still accepted the request, and it accepted any text as an email address. The server enforces the
 // setting and validates the address. Never weaken this test.
 import { describe, expect, it } from 'vitest';
-import { PASSWORD, useIdentityApp } from './testing/identity-app.ts';
+import { PASSWORD, settingsWith, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
-const off = {
-  settings: {
-    get: () =>
-      Promise.resolve({ localAccounts: false, approvalPolicy: 'manual', oidcProviders: [] }),
-  },
-};
+const off = { settings: settingsWith({ localAccounts: false }) };
 const registration = { username: 'alice', email: 'alice@example.org', password: PASSWORD };
 
 describe('defect 13: local accounts', () => {

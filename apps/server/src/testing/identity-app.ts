@@ -13,10 +13,17 @@ import type { IdentityModuleOptions } from '@scorpion/core-identity/module';
 import packageJson from '@scorpion/core-identity/package.json' with { type: 'json' };
 import authzModule from '@scorpion/core-authz/module';
 import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
+import {
+  createSettingsModule,
+  type SettingsInternalsBundle,
+  type SettingsModuleOptions,
+} from '@scorpion/core-settings/module';
+import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import {
   makeRole,
   makeRoleAssignment,
+  makeSecretsKey,
   startPostgres,
   type StartedPostgres,
 } from '@scorpion/testing';
@@ -48,6 +55,14 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   permissions?: string[];
   /** Limits per route group, with the rate limiter switched on. */
   rateLimits?: AppOptions['rateLimits'];
+  /** core.settings: its cache TTL, and the keys of the secrets store (default: a new random `SECRETS_KEY`). */
+  settingsModule?: Pick<SettingsModuleOptions, 'cacheTtlMs' | 'now'>;
+  secretsKey?: string;
+  secretsKeyNext?: string;
+  /** Start over a database that another app already uses (a second server process). */
+  databaseUrl?: string;
+  /** Use the limits stored in core.settings (as the server does) instead of the constants. */
+  storedRateLimits?: boolean;
 }
 
 export interface Reply {
@@ -84,6 +99,8 @@ export function useIdentityApp() {
   return {
     async start(options: AppOptionsForTest = {}) {
       const lines: string[] = [];
+      const secretsKey = options.secretsKey ?? makeSecretsKey();
+      const databaseUrl = options.databaseUrl ?? (await server.createDatabase());
       const log = createLogger({
         level: 'trace',
         destination: new Writable({
@@ -94,17 +111,31 @@ export function useIdentityApp() {
         }),
       });
       const kernel = createKernel({
-        profile: { name: 'identity-http', modules: ['core.authz', 'core.identity'] },
+        profile: {
+          name: 'identity-http',
+          modules: ['core.authz', 'core.settings', 'core.identity'],
+        },
         sources: [
           { manifest: authzModule, packageJson: authzPackage },
+          {
+            manifest: createSettingsModule({
+              ...options.settingsModule,
+              env: {
+                SECRETS_KEY: secretsKey,
+                ...(options.secretsKeyNext ? { SECRETS_KEY_NEXT: options.secretsKeyNext } : {}),
+              },
+            }),
+            packageJson: settingsPackage,
+          },
           { manifest: createIdentityModule(options), packageJson },
         ],
         modulePackages: {
           'core.authz': '@scorpion/core-authz',
+          'core.settings': '@scorpion/core-settings',
           'core.identity': '@scorpion/core-identity',
         },
         config: loadConfig({
-          DATABASE_URL: await server.createDatabase(),
+          DATABASE_URL: databaseUrl,
           PROFILE: 'identity-http',
         }),
         log,
@@ -112,6 +143,7 @@ export function useIdentityApp() {
       open.push(kernel);
       await kernel.start();
       const identity = kernel.services.get('core.identity') as IdentityInternals;
+      const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
 
       const app = createApp({
         config: kernel.config,
@@ -197,6 +229,9 @@ export function useIdentityApp() {
       return {
         kernel,
         identity,
+        settings,
+        databaseUrl,
+        secretsKey,
         lines,
         call,
         signedIn,
