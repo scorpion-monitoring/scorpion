@@ -227,8 +227,12 @@ describe('failures and retries', () => {
     await kernel.startWorkers();
     await enqueue(kernel)('flaky');
 
+    // The last attempt is inserted as `running`; wait until it has finished, not just appeared.
     await vi.waitFor(
-      async () => expect(await listJobRuns(kernel.db, { jobName: 'worker.flaky' })).toHaveLength(3),
+      async () =>
+        expect(
+          (await listJobRuns(kernel.db, { jobName: 'worker.flaky', status: 'succeeded' })).length,
+        ).toBe(1),
       {
         timeout: 20_000,
         interval: 250,
