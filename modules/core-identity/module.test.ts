@@ -22,7 +22,9 @@ describe('the module', () => {
     expect(manifest).toMatchObject({ id: 'core.identity', tablePrefix: 'identity_' });
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
       'core.identity.auth-method.link',
+      'core.identity.email.verify',
       'core.identity.me.read',
+      'core.identity.password.change',
       'core.identity.session.manage',
       'core.identity.token.manage',
       'core.identity.token.read',
@@ -33,6 +35,10 @@ describe('the module', () => {
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
       'identity.admin.created@1',
       'identity.authMethod.linked@1',
+      'identity.email.verified@1',
+      'identity.password.changed@1',
+      'identity.password.reset@1',
+      'identity.password.resetRequested@1',
       'identity.token.created@1',
       'identity.token.revoked@1',
       'identity.token.rotated@1',
@@ -69,7 +75,7 @@ describe('the module', () => {
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
-  it('creates exactly its six tables, all with the module prefix', async () => {
+  it('creates exactly its seven tables, all with the module prefix', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
@@ -79,6 +85,7 @@ describe('the module', () => {
       'identity_auth_method',
       'identity_first_run_token',
       'identity_login_state',
+      'identity_mail_token',
       'identity_session',
       'identity_token',
       'identity_user',
@@ -95,7 +102,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(4); // 0000 to 0003, each once
+    expect(journal.rows).toHaveLength(5); // 0000 to 0004, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -108,6 +115,7 @@ describe('the module', () => {
       'identity_auth_method.password_hash',
       'identity_first_run_token.secret_hash',
       'identity_login_state.state_hash',
+      'identity_mail_token.secret_hash',
       'identity_session.secret_hash',
       'identity_token.secret_hash',
     ]);

@@ -33,9 +33,20 @@ export const oidcProviderSchema = z.strictObject({
 
 export type OidcProvider = z.infer<typeof oidcProviderSchema>;
 
+/** What a mail says when the settings do not name the instance or the sender. */
+export const DEFAULT_INSTANCE_NAME = 'Scorpion';
+export const DEFAULT_MAIL_FROM = 'no-reply@localhost';
+
 export const settingsSchema = z.strictObject({
   /** Whether people may register and sign in with a password. Enforced on the server (defect 13). */
   localAccounts: z.boolean().default(true),
+  /**
+   * How mails from core.identity name the instance and who they come from. Until core.settings
+   * (M3) and core.notifications (M4) own branding and the sender address, they live here; no
+   * mail text hard-codes either.
+   */
+  instanceName: z.string().trim().min(1).max(100).optional(),
+  mailFrom: z.string().trim().min(3).max(254).optional(),
   /** The id of the `auth.approvalPolicy` entry that decides the status of a new account. */
   approvalPolicy: z.string().min(1).default('manual'),
   /**

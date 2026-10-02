@@ -22,15 +22,20 @@ import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
 import type { BootstrapService } from './service/bootstrap.ts';
 import type { OidcService } from './service/oidc.ts';
+import type { RecoveryService } from './service/recovery.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
 import {
+  changePasswordInput,
   createTokenInput,
   loginInput,
   oidcCallbackQuery,
   oidcProviderParam,
   redeemFirstRunInput,
   registerInput,
+  resetConfirmInput,
+  resetRequestInput,
   rotateTokenInput,
+  verifyEmailInput,
 } from './validation.ts';
 
 export interface IdentityRoutesServices {
@@ -38,6 +43,7 @@ export interface IdentityRoutesServices {
   approval: ApprovalService;
   bootstrap: BootstrapService;
   oidc: OidcService;
+  recovery: RecoveryService;
   tokens: TokenService;
 }
 
@@ -237,6 +243,80 @@ export const oidcCallbackRoute = createRoute({
   },
 });
 
+const LINK_400 = { description: 'The link is not valid, has been used or has expired.' };
+
+export const resetRequestRoute = createRoute({
+  method: 'post',
+  path: '/auth/password-reset',
+  public: true,
+  publicReason:
+    'Someone who forgot their password has no session. The answer is the same for every address, and the link goes to the mailbox only. Rate limited (strict), and each address is mailed a few times an hour.',
+  rateLimit: 'strict',
+  request: { body: json(resetRequestInput) },
+  responses: {
+    202: ok(
+      'Accepted. Nothing says whether the address is known.',
+      z.object({ accepted: z.literal(true) }),
+    ),
+    403: { description: 'Local accounts are turned off.' },
+  },
+});
+
+export const resetConfirmRoute = createRoute({
+  method: 'post',
+  path: '/auth/password-reset/confirm',
+  public: true,
+  publicReason:
+    'The single-use token from the mail is the credential, and the person has no session. Rate limited (strict).',
+  rateLimit: 'strict',
+  request: { body: json(resetConfirmInput) },
+  responses: {
+    204: { description: 'The password is set and every session of the account is over.' },
+    400: LINK_400,
+    403: { description: 'Local accounts are turned off.' },
+  },
+});
+
+export const verifyEmailRoute = createRoute({
+  method: 'post',
+  path: '/auth/verify-email',
+  public: true,
+  publicReason:
+    'The single-use token from the mail is the credential; the link may be opened on another device than the one signed in. Rate limited (strict).',
+  rateLimit: 'strict',
+  request: { body: json(verifyEmailInput) },
+  responses: { 204: { description: 'The address is confirmed.' }, 400: LINK_400 },
+});
+
+export const changePasswordRoute = createRoute({
+  method: 'post',
+  path: '/account/password',
+  permission: 'core.identity.password.change',
+  rateLimit: 'strict', // checks the current password, and hashes the new one
+  request: { body: json(changePasswordInput) },
+  responses: {
+    204: { description: 'The password is changed. Every session, this one included, is over.' },
+    403: { description: 'The caller uses an access token, or local accounts are off.' },
+    409: { description: 'The account has no password.' },
+    422: { description: 'The current password is wrong, or the new one breaks the rules.' },
+  },
+});
+
+export const resendVerificationRoute = createRoute({
+  method: 'post',
+  path: '/account/email/verification',
+  permission: 'core.identity.email.verify',
+  rateLimit: 'strict',
+  responses: {
+    202: ok(
+      'A mail is on its way, if the address may still be mailed.',
+      z.object({ accepted: z.literal(true) }),
+    ),
+    403: { description: 'The caller uses an access token, not a session.' },
+    409: { description: 'The address is already confirmed, or the account has none.' },
+  },
+});
+
 const tokenSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -328,7 +408,7 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval, bootstrap, oidc, tokens }: IdentityRoutesServices,
+  { accounts, approval, bootstrap, oidc, recovery, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     const user = await accounts.register(c.req.valid('json'));
@@ -449,4 +529,35 @@ export function registerIdentityRoutes(
     c.header('cache-control', 'no-store');
     return c.json(createdTokenView(rotated), 200);
   }) satisfies RouteHandler<typeof rotateTokenRoute, AppEnv>);
+
+  r.internal(resetRequestRoute, (async (c) => {
+    await recovery.requestReset(c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.json({ accepted: true as const }, 202);
+  }) satisfies RouteHandler<typeof resetRequestRoute, AppEnv>);
+
+  r.internal(resetConfirmRoute, (async (c) => {
+    await recovery.confirmReset(c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof resetConfirmRoute, AppEnv>);
+
+  r.internal(verifyEmailRoute, (async (c) => {
+    await recovery.confirmEmail(c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof verifyEmailRoute, AppEnv>);
+
+  r.internal(changePasswordRoute, (async (c) => {
+    await recovery.changePassword(c.get('actor'), c.req.valid('json'));
+    // Every session is over, this one too: the browser's cookie goes with it.
+    clearSessionCookie(c);
+    c.header('cache-control', 'no-store');
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof changePasswordRoute, AppEnv>);
+
+  r.internal(resendVerificationRoute, (async (c) => {
+    await recovery.resendVerification(c.get('actor'));
+    return c.json({ accepted: true as const }, 202);
+  }) satisfies RouteHandler<typeof resendVerificationRoute, AppEnv>);
 }

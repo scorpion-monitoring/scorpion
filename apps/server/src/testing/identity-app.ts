@@ -3,7 +3,11 @@
 // Production denies every non-public route until core.authz exists (M3), so these tests pass a
 // test authoriser; it is never part of a manifest.
 import { Writable } from 'node:stream';
-import { createIdentityModule, type IdentityInternals } from '@scorpion/core-identity/module';
+import {
+  createIdentityModule,
+  settingsSchema,
+  type IdentityInternals,
+} from '@scorpion/core-identity/module';
 import type { IdentityModuleOptions } from '@scorpion/core-identity/module';
 import packageJson from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
@@ -12,7 +16,13 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createApp, SURFACE_PREFIX, type AppOptions } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
 
+export { createMemoryMailer } from '@scorpion/core-identity/module';
 export const API = SURFACE_PREFIX.internal;
+
+/** Settings with some values changed, for the `settings` option. */
+export const settingsWith = (values: Parameters<typeof settingsSchema.parse>[0]) => ({
+  get: () => Promise.resolve(settingsSchema.parse(values)),
+});
 export const PASSWORD = 'correct horse battery';
 const COOKIE = '__Host-session';
 

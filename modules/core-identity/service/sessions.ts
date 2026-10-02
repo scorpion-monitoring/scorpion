@@ -44,8 +44,12 @@ export interface SessionService {
   resolve(id: string, now?: Date): Promise<ResolvedSession | undefined>;
   /** Revokes one session; unknown ids are ignored. */
   revoke(id: string): Promise<void>;
-  /** Revokes every session of a user ("log out everywhere"); returns how many were open. */
-  revokeAll(userId: string): Promise<number>;
+  /**
+   * Revokes every session of a user ("log out everywhere"); returns how many were open. Pass the
+   * caller's transaction to make it part of that write, and call it again after the commit: this
+   * process's cache is emptied then, not while a concurrent request could still refill it.
+   */
+  revokeAll(userId: string, tx?: Pick<DbTx, 'update'>): Promise<number>;
 }
 
 interface CacheEntry extends SessionInfo {
@@ -145,13 +149,13 @@ export function createSessionService(
       cache.delete(hash);
     },
 
-    async revokeAll(userId) {
+    async revokeAll(userId, tx: Pick<DbTx, 'update'> = ctx.db) {
       const drop = () => {
         generation++;
         for (const [hash, entry] of cache) if (entry.userId === userId) cache.delete(hash);
       };
       drop();
-      const revoked = await ctx.db
+      const revoked = await tx
         .update(session)
         .set({ revokedAt: sql`now()` })
         .where(and(eq(session.userId, userId), isNull(session.revokedAt)))

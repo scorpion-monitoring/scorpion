@@ -7,6 +7,8 @@ import { createAccountService } from './service/accounts.ts';
 import { createBootstrapService, type BootstrapService } from './service/bootstrap.ts';
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
+import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
+import { mailerFromEnvironment, type Mailer } from './service/mailer.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
 import { createOidcService, type OidcService } from './service/oidc.ts';
 import { clientSecretFor, type ClientSecretLookup } from './service/oidc-secret.ts';
@@ -23,12 +25,16 @@ import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
 
+export { createMemoryMailer, type Mailer, type MemoryMailer } from './service/mailer.ts';
+export { settingsSchema, type IdentitySettings } from './service/settings.ts';
+
 export interface IdentityInternals extends IdentityService {
   accounts: AccountService;
   approval: ApprovalService;
   bootstrap: BootstrapService;
   loginStates: LoginStateService;
   oidc: OidcService;
+  recovery: RecoveryService;
   sessions: SessionService;
   tokens: TokenService;
 }
@@ -46,6 +52,11 @@ export interface IdentityModuleOptions {
    * wants the token passes its own function.
    */
   announce?: (text: string) => void;
+  /**
+   * How mail leaves the process. The default is SMTP over Nodemailer when `SMTP_URL` is set, and
+   * a mailer that refuses to send otherwise. Tests pass the in-memory one.
+   */
+  mailer?: Mailer;
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
   /**
@@ -106,6 +117,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'core.identity.auth-method.link': {
         description: 'Add a sign-in provider (OIDC) to your own account',
       },
+      'core.identity.password.change': { description: 'Change your own password' },
+      'core.identity.email.verify': {
+        description: 'Ask for a new confirmation mail for your own address',
+      },
       'core.identity.token.read': { description: 'List your own access tokens' },
       'core.identity.token.manage': {
         description: 'Create, revoke and rotate your own access tokens',
@@ -140,6 +155,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           provider: z.string(),
           via: z.enum(['email', 'profile']),
         }),
+        'identity.password.resetRequested@1': userEvent,
+        'identity.password.reset@1': userEvent,
+        'identity.password.changed@1': userEvent,
+        'identity.email.verified@1': userEvent,
         'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
         'identity.token.revoked@1': tokenEvent,
@@ -184,21 +203,28 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         clientSecret: options.clientSecret ?? clientSecretFor,
         exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
       });
+      const recovery = createRecoveryService(ctx, {
+        sessions,
+        settings,
+        mailer: options.mailer ?? mailerFromEnvironment(process.env),
+      });
       return {
         bootstrap,
+        recovery,
         loginStates,
         oidc,
         users,
         sessions,
         tokens,
-        accounts: createAccountService(ctx, { users, sessions, settings }),
+        accounts: createAccountService(ctx, { users, sessions, settings, recovery }),
         approval: createApprovalService(ctx, { sessions }),
       };
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, oidc, tokens } = r.service<IdentityInternals>();
-      registerIdentityRoutes(r, { accounts, approval, bootstrap, oidc, tokens });
+      const { accounts, approval, bootstrap, oidc, recovery, tokens } =
+        r.service<IdentityInternals>();
+      registerIdentityRoutes(r, { accounts, approval, bootstrap, oidc, recovery, tokens });
     },
   });
 }

@@ -3,6 +3,8 @@
 import { ANONYMOUS, Conflict, Forbidden, Unauthorized } from '@scorpion/contracts';
 import { makeAuthMethod, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
+import { createMemoryMailer } from './mailer.ts';
+import { tokenFrom } from '../test/mail.ts';
 import { count, flow, fresh, rows, sessionActor, settingsWith, start } from '../test/oidc.ts';
 
 describe('the first login (provisioning)', () => {
@@ -180,6 +182,28 @@ describe('linking by a verified email', () => {
     expect(await count(kernel, 'identity_user')).toBe(1);
     expect(await count(kernel, 'identity_auth_method')).toBe(0);
     expect(await count(kernel, 'identity_session')).toBe(0);
+  });
+
+  it('takes over a password account only after its owner confirmed the address by mail (sprint 5)', async () => {
+    const mailer = createMemoryMailer();
+    const { kernel, identity: id } = await start({ mailer });
+    const user = await id.accounts.register({
+      username: 'ann',
+      email: 'ann@example.org',
+      password: 'correct horse battery',
+    });
+    await kernel.pool.query("update identity_user set status = 'active'");
+    // Before the confirmation the address proves nothing: the same 409 as for any unconfirmed one.
+    await expect(
+      id.oidc.complete(await flow(id, fresh({ email: 'ann@example.org' }))),
+    ).rejects.toBeInstanceOf(Conflict);
+
+    await id.recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) });
+    const done = await id.oidc.complete(await flow(id, fresh({ email: 'ann@example.org' })));
+    expect(done).toMatchObject({ kind: 'login' });
+    expect(
+      await rows(kernel, "select user_id from identity_auth_method where provider = 'stub'"),
+    ).toEqual([{ user_id: user.id }]);
   });
 
   it('never links by an address the provider did not vouch for', async () => {

@@ -5,6 +5,7 @@ import { startPostgres, type StartedPostgres } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createIdentityModule, type IdentityInternals } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
+import type { Mailer } from '../service/mailer.ts';
 import type { IdentitySettings } from '../service/settings.ts';
 
 export interface StartOptions {
@@ -18,6 +19,8 @@ export interface StartOptions {
   /** Where the first-run token is shown; the default shows nothing under test. */
   announce?: (text: string) => void;
   firstRunTtlMs?: number;
+  /** Where mail goes (default: nowhere; the module refuses to send without SMTP_URL). */
+  mailer?: Mailer;
   /** Where an OIDC client secret comes from (default: the environment). */
   clientSecret?: (providerId: string) => string | undefined;
   /** The HTTP client and timeouts used to talk to OIDC providers. */
@@ -66,6 +69,7 @@ export function useIdentity(): IdentityHarness {
         tokenCacheTtlMs: options?.tokenCacheTtlMs,
         announce: options?.announce,
         firstRunTtlMs: options?.firstRunTtlMs,
+        mailer: options?.mailer,
         clientSecret: options?.clientSecret,
         oidcHttp: options?.oidcHttp,
       });
