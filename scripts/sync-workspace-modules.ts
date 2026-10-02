@@ -11,7 +11,7 @@ const target = join(root, 'packages/kernel/src/workspace-modules.ts');
 const entries: [string, string][] = [];
 for (const pkg of scanModulePackages([join(root, 'modules')])) {
   const { default: manifest } = (await import(
-    pathToFileURL(join(root, pkg.dir, 'module.ts')).href
+    pathToFileURL(resolve(root, pkg.dir, 'module.ts')).href
   )) as {
     default: { id: string };
   };
