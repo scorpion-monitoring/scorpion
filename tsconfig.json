@@ -1,15 +1,38 @@
 {
   "files": [],
   "references": [
-    { "path": "./apps/server" },
-    { "path": "./packages/kernel" },
-    { "path": "./packages/contracts" },
-    { "path": "./packages/ui-kit" },
-    { "path": "./packages/integrations" },
-    { "path": "./packages/testing" },
-    { "path": "./profiles" },
-    { "path": "./scripts" },
-    { "path": "./tools/eslint-plugin" },
-    { "path": "./tsconfig.config.json" }
+    {
+      "path": "./apps/server"
+    },
+    {
+      "path": "./packages/kernel"
+    },
+    {
+      "path": "./modules/core-identity"
+    },
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/ui-kit"
+    },
+    {
+      "path": "./packages/integrations"
+    },
+    {
+      "path": "./packages/testing"
+    },
+    {
+      "path": "./profiles"
+    },
+    {
+      "path": "./scripts"
+    },
+    {
+      "path": "./tools/eslint-plugin"
+    },
+    {
+      "path": "./tsconfig.config.json"
+    }
   ]
 }
