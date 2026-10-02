@@ -2,12 +2,15 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import type { Hono } from 'hono';
 import { Invalid, problemResponse, type AppEnv, type AppRoute } from '@scorpion/contracts';
 import {
+  anonymousOnly,
   mountPath,
+  type Authenticator,
   type Authorizer,
   type Config,
   type Logger,
   type RegisteredRoute,
 } from '@scorpion/kernel';
+import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
 import { DEFAULT_MAX_BODY_BYTES, limitBody } from './pipeline/body-limit.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
@@ -23,6 +26,8 @@ export interface AppOptions {
   log: Logger;
   /** The routes the modules registered (`kernel.routes`). */
   routes: readonly RegisteredRoute[];
+  /** Resolves credentials to an actor (`kernel.authenticator`). Default: everyone is anonymous. */
+  authenticator?: Authenticator;
   /** Decides non-public routes (`kernel.authorizer`). */
   authorizer: Authorizer;
   /** Largest accepted request body. Default 1 MiB. */
@@ -41,12 +46,15 @@ export interface AppOptions {
 /**
  * The HTTP application. Every request passes the same steps, in this order:
  *
- *  1. request id           4. body size limit      7. handler
- *  2. security headers     5. input validation     8. error mapper
- *  3. request logging      6. authorisation hook
+ *  1. request id           5. body size limit      8. handler
+ *  2. security headers     6. input validation     9. error mapper
+ *  3. request logging      7. authorisation hook
+ *  4. authentication
  *
- * Steps 1 to 4 are middleware; 5 to 7 run per route (Zod validation, then the hook, then the
- * handler); 8 catches whatever any step throws. Routes are mounted under `BASE_PATH`, which may
+ * Steps 1 to 3 and 5 are middleware for every request; step 4 is added per route, because a
+ * public route treats bad credentials differently, and is not run for the probes, which must
+ * answer without the database; 6 to 8 run per route (Zod validation, then the hook, then the
+ * handler); 9 catches whatever any step throws. Routes are mounted under `BASE_PATH`, which may
  * have any number of segments.
  */
 export function createApp(options: AppOptions): Hono<AppEnv> {
@@ -75,7 +83,15 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
     path: string,
     handler: RegisteredRoute['handler'],
     module: string,
+    authenticated = false,
   ) => {
+    if (authenticated) {
+      app.on(
+        route.method.toUpperCase(),
+        `${base}${path}`.replace(/\{(\w+)\}/g, ':$1'),
+        authenticate(options.authenticator ?? anonymousOnly, route),
+      );
+    }
     app.openapi(
       { ...route, path: `${base}${path}` } as never,
       withAuthorization({ module, route, path }, handler, options.authorizer) as never,
@@ -111,7 +127,7 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
     'server',
   );
   for (const { module, surface, route, handler } of options.routes) {
-    mount(route, `${SURFACE_PREFIX[surface]}${route.path}`, handler, module);
+    mount(route, `${SURFACE_PREFIX[surface]}${route.path}`, handler, module, true);
   }
   if (options.booting) {
     app.all('*', (c) =>

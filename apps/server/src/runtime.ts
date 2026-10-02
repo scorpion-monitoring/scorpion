@@ -133,7 +133,12 @@ export function startServer(options: RuntimeOptions): RunningServer {
   const ready = (async () => {
     await kernel.start();
     if (config.WORKER_MODE === 'inline') await kernel.startWorkers();
-    current = createApp({ ...common, routes: kernel.routes, authorizer: kernel.authorizer });
+    current = createApp({
+      ...common,
+      routes: kernel.routes,
+      authenticator: kernel.authenticator,
+      authorizer: kernel.authorizer,
+    });
     state = 'started';
     log.info(
       { modules: kernel.profile.modules.map((m) => m.id), workers: config.WORKER_MODE },

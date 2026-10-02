@@ -1,4 +1,4 @@
-import type { AnyHandler, AppRoute } from '@scorpion/contracts';
+import { ANONYMOUS, type AnyHandler, type AppRoute } from '@scorpion/contracts';
 import type { Authorizer } from '@scorpion/kernel';
 
 /**
@@ -21,6 +21,7 @@ export function withAuthorization(
   return async (c, next) => {
     await authorizer({
       context: c,
+      actor: c.get('actor') ?? ANONYMOUS,
       module,
       permission: route.permission!,
       method: route.method.toUpperCase(),
