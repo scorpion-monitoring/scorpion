@@ -63,6 +63,7 @@ export default defineConfig(
           manifestImporters: [
             'apps/server/src/generated/profile.ts',
             'apps/server/src/testing/identity-app.ts',
+            'modules/core-blob/test/harness.ts',
             'modules/core-identity/test/harness.ts',
             'modules/core-settings/test/harness.ts',
           ],

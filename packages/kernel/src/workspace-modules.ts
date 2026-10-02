@@ -2,6 +2,7 @@
 // Maps each module id to its package name; `ModuleId` is what defineProfile() checks against.
 export const WORKSPACE_MODULES = {
   'core.authz': '@scorpion/core-authz',
+  'core.blob': '@scorpion/core-blob',
   'core.identity': '@scorpion/core-identity',
   'core.settings': '@scorpion/core-settings',
 } as const satisfies Record<string, string>;
