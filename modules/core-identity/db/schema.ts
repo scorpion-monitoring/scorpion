@@ -212,3 +212,44 @@ export const firstRunToken = pgTable(
   },
   (table) => [uniqueIndex('identity_first_run_token_hash_uidx').on(table.secretHash)],
 );
+
+/** What a mail token is for. */
+export const MAIL_TOKEN_PURPOSES = ['password-reset', 'email-verification'] as const;
+export type MailTokenPurpose = (typeof MAIL_TOKEN_PURPOSES)[number];
+
+/**
+ * A single-use token that travels by mail: a password reset or the confirmation of an address
+ * (ADR 0012). Only the SHA-256 hash of 256 random bits is kept, so a leaked table is no way in.
+ * A new token for the same user and purpose replaces the outstanding one.
+ */
+export const mailToken = pgTable(
+  'identity_mail_token',
+  {
+    id: uuid().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    purpose: text().notNull(),
+    /** SHA-256 of the token that was mailed. */
+    secretHash: text('secret_hash').notNull(),
+    /** For `email-verification`: the address the token confirms (the current one, or a new one). */
+    email: text(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    /** Set when the token was used; a used token never works again. */
+    usedAt: timestamptz('used_at'),
+  },
+  (table) => [
+    uniqueIndex('identity_mail_token_hash_uidx').on(table.secretHash),
+    index('identity_mail_token_user_idx').on(table.userId, table.purpose),
+    index('identity_mail_token_expires_idx').on(table.expiresAt),
+    check(
+      'identity_mail_token_purpose_known',
+      sql`${table.purpose} in ('password-reset', 'email-verification')`,
+    ),
+    check(
+      'identity_mail_token_verification_has_email',
+      sql`(${table.purpose} = 'email-verification') = (${table.email} is not null)`,
+    ),
+  ],
+);

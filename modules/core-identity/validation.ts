@@ -134,3 +134,23 @@ export const oidcCallbackQuery = z.object({
   code: z.string().min(1).max(2048).optional(),
   error: z.string().min(1).max(64).optional(),
 });
+
+/** `POST /auth/password-reset`: only the address. The answer never depends on whether it is known. */
+export const resetRequestInput = z.strictObject({ email });
+
+/** A mailed token: only its size is limited here; whether it is good is the service's 400. */
+const mailedToken = z.string().min(1).max(128);
+
+/** `POST /auth/password-reset/confirm`. */
+export const resetConfirmInput = z.strictObject({ token: mailedToken, password });
+export type ResetConfirmInput = z.infer<typeof resetConfirmInput>;
+
+/** `POST /auth/verify-email`. */
+export const verifyEmailInput = z.strictObject({ token: mailedToken });
+
+/** `POST /account/password`. The current password is checked, not validated against the rules. */
+export const changePasswordInput = z.strictObject({
+  currentPassword: z.string().min(1).max(PASSWORD_MAX),
+  newPassword: password,
+});
+export type ChangePasswordInput = z.infer<typeof changePasswordInput>;

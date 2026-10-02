@@ -11,6 +11,7 @@ import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-p
 import { hashPassword, verifyPassword } from './password.ts';
 import { requireUser } from './require-user.ts';
 import { csrfTokenFor } from './session-id.ts';
+import type { RecoveryService } from './recovery.ts';
 import type { SessionService } from './sessions.ts';
 import type { IdentitySettings } from './settings.ts';
 
@@ -55,9 +56,14 @@ function invalid(error: ZodError): Invalid {
 
 export function createAccountService(
   ctx: ModuleContext,
-  deps: { users: UserService; sessions: SessionService; settings: IdentitySettings },
+  deps: {
+    users: UserService;
+    sessions: SessionService;
+    settings: IdentitySettings;
+    recovery: Pick<RecoveryService, 'startVerification'>;
+  },
 ): AccountService {
-  const { users, sessions, settings } = deps;
+  const { users, sessions, settings, recovery } = deps;
 
   // A hash to check when there is nobody to check against, so that "no such user" takes as long as
   // "wrong password". Made with the same parameters as the real ones, once, on first use.
@@ -92,7 +98,7 @@ export function createAccountService(
       })) ?? { status: 'pending' as const };
 
       // The user, its auth method and the event are one write.
-      return ctx.db.tx(async () => {
+      const registered = await ctx.db.tx(async () => {
         const created = await users.createUser({
           username,
           email,
@@ -106,6 +112,9 @@ export function createAccountService(
         });
         return created;
       });
+      // The mail that asks the owner to confirm the address goes out after the commit.
+      await recovery.startVerification(registered.id, email);
+      return registered;
     },
 
     async login(input, previousSessionId) {
