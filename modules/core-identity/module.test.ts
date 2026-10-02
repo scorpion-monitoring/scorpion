@@ -27,6 +27,7 @@ describe('the module', () => {
     expect(manifest).toMatchObject({ id: 'core.identity', tablePrefix: 'identity_' });
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
       'core.identity.auth-method.link',
+      'core.identity.avatar.update',
       'core.identity.email.verify',
       'core.identity.me.read',
       'core.identity.password.change',
@@ -109,7 +110,7 @@ describe('the module', () => {
     const others = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_name not like 'identity\\_%' and table_name not like 'kernel\\_%'
-          and table_name not like 'authz\\_%' and table_name not like 'settings\\_%'`, // the tables of the modules this one depends on
+          and table_name not like 'authz\\_%' and table_name not like 'settings\\_%' and table_name not like 'blob\\_%'`, // the tables of the modules this one depends on
     );
     expect(others.rows).toEqual([]);
   });
@@ -352,7 +353,7 @@ describe('the constraints of the tables', () => {
     expect(await refused(insert())).toBe('identity_login_state_hash_uidx');
   });
 
-  it('has a nullable avatar column that nothing sets', async () => {
+  it('starts every account without an avatar', async () => {
     const { kernel } = await identity.start();
     const user = await makeUser(kernel.pool);
     expect(

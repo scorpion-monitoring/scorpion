@@ -41,6 +41,7 @@ describe('get', () => {
       emailVerified: true,
       pendingEmail: null,
       bio: null,
+      avatarHash: null,
     });
   });
 

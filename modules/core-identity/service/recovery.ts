@@ -37,12 +37,7 @@ import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
-import {
-  budgetLimit,
-  DEFAULT_INSTANCE_NAME,
-  DEFAULT_MAIL_FROM,
-  type IdentitySettings,
-} from './settings.ts';
+import { budgetLimit, type BrandingSource, type IdentitySettings } from './settings.ts';
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -104,20 +99,17 @@ export function createRecoveryService(
   deps: {
     sessions: SessionService;
     settings: IdentitySettings;
+    branding: BrandingSource;
     mailer: Mailer;
     authz: AuthzService;
   },
 ): RecoveryService {
-  const { sessions, settings, mailer, authz } = deps;
+  const { sessions, settings, branding, mailer, authz } = deps;
   const limiter = createRateLimiter(ctx.db);
 
   async function mailContext(): Promise<MailContext> {
-    const { instanceName, mailFrom } = await settings.get();
-    return {
-      config: ctx.config,
-      instanceName: instanceName ?? DEFAULT_INSTANCE_NAME,
-      from: mailFrom ?? DEFAULT_MAIL_FROM,
-    };
+    const { instanceName, mailFrom } = await branding.get();
+    return { config: ctx.config, instanceName, from: mailFrom };
   }
 
   /** Spends one mail from an address's budget; false when it has had its share. */

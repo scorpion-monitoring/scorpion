@@ -4,8 +4,10 @@
 // error) leaves everything as it was and the next run does it again.
 import { and, inArray, isNotNull, lt, or } from 'drizzle-orm';
 import type { AuthzService } from '@scorpion/core-authz/public';
+import type { BlobService } from '@scorpion/core-blob/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { firstRunToken, loginState, session, token, user } from '../db/schema.ts';
+import { avatarReference } from './avatar-reference.ts';
 import { deleteSpentMailTokens } from './mail-tokens.ts';
 import { daysToMs, type IdentitySettings } from './settings.ts';
 
@@ -25,7 +27,11 @@ export interface CleanupService {
 
 export function createCleanupService(
   ctx: ModuleContext,
-  deps: { authz: Pick<AuthzService, 'removeAllAssignments'>; settings: IdentitySettings },
+  deps: {
+    authz: Pick<AuthzService, 'removeAllAssignments'>;
+    blob: Pick<BlobService, 'setReference'>;
+    settings: IdentitySettings;
+  },
 ): CleanupService {
   return {
     async run(now = new Date()) {
@@ -69,6 +75,8 @@ export function createCleanupService(
           // core.authz cannot subscribe to the event (ADR 0003), so its rows go from here, in this
           // transaction and before the user row: a purge that fails leaves the roles in place too.
           await deps.authz.removeAllAssignments(tx, gone.id);
+          // The same for the avatar: the file is released with the user row and removed later.
+          await deps.blob.setReference(avatarReference(gone.id), null);
         }
         if (due.length > 0) {
           // The auth methods, sessions, tokens, mail tokens and login states go with the user (cascade).
