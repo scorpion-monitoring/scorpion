@@ -3,11 +3,11 @@ import type { Authorizer } from '@scorpion/kernel';
 
 /**
  * Step 6: the authorisation hook. Runs after input validation and before the handler. A public
- * route skips it; every other route is decided by the authoriser, which is the deny-all default
- * until `core.authz` provides one (ADR 0005).
+ * route skips it; every other route is decided by the authoriser: the entry of `core.authz` where it
+ * is in the profile, else the deny-all default (ADR 0005).
  *
- * Regression test for defect 1 (a plain User on every admin endpoint gets 403): named
- * `defect-01.privilege-escalation.test.ts`, written in M3 when core.authz fills this hook.
+ * Regression test for defect 1 (a plain User on every admin endpoint gets 403):
+ * `defect-01.privilege-escalation.test.ts`, with a walker that fails for a route without a decision.
  */
 export function withAuthorization(
   registered: { module: string; route: AppRoute; path: string },

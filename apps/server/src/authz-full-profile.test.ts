@@ -1,7 +1,7 @@
 // The `full` profile with the real authoriser of core.authz in the pipeline (no test authoriser).
-// core.identity does not use core.authz yet (M3 sprint 2), so nobody holds a role by themselves:
-// a signed-in user without roles gets 403 on everything that is not public, as in 0.3.0, and only
-// someone who was given a role through the authz tables gets in.
+// A signed-in user without any role gets 403 on everything that is not public (roles carry the
+// permissions), and only someone who holds a role that has the permission gets in. The whole story
+// of an instance is in full-profile-journey.test.ts.
 import { Forbidden, Unauthorized, type UserActor } from '@scorpion/contracts';
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import {

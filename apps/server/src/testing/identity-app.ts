@@ -1,23 +1,37 @@
 // The HTTP app over a real core.identity kernel and Postgres, for tests that go through the whole
 // pipeline: rate limit, cookie authentication, validation, authorisation and the error mapper.
-// Production denies every non-public route until core.authz exists (M3), so these tests pass a
-// test authoriser; it is never part of a manifest.
+// Authorisation is the real one: core.authz is loaded (identity depends on it) and its authoriser
+// decides every route from roles in the database. There is no test authoriser here.
 import { Writable } from 'node:stream';
 import {
   createIdentityModule,
   settingsSchema,
+  USER_PERMISSIONS,
   type IdentityInternals,
 } from '@scorpion/core-identity/module';
 import type { IdentityModuleOptions } from '@scorpion/core-identity/module';
 import packageJson from '@scorpion/core-identity/package.json' with { type: 'json' };
+import authzModule from '@scorpion/core-authz/module';
+import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
-import { startPostgres, testAuthorizer, type StartedPostgres } from '@scorpion/testing';
+import {
+  makeRole,
+  makeRoleAssignment,
+  startPostgres,
+  type StartedPostgres,
+} from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createApp, SURFACE_PREFIX, type AppOptions } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
 
 export { createMemoryMailer } from '@scorpion/core-identity/module';
 export const API = SURFACE_PREFIX.internal;
+/**
+ * The scopes of a test token that may do everything the role `user` may: a token is limited to
+ * its scopes and to what its owner holds (ADR 0015), and the session-only routes must refuse it
+ * even then.
+ */
+export const ALL_USER_SCOPES = [...USER_PERMISSIONS];
 
 /** Settings with some values changed, for the `settings` option. */
 export const settingsWith = (values: Parameters<typeof settingsSchema.parse>[0]) => ({
@@ -27,7 +41,10 @@ export const PASSWORD = 'correct horse battery';
 const COOKIE = '__Host-session';
 
 export interface AppOptionsForTest extends IdentityModuleOptions {
-  /** Permissions the test authoriser grants to a signed-in caller. Default: all. */
+  /**
+   * Gives every `signedIn` user one role that holds exactly these permissions, instead of the
+   * role `user`. For tests of what a route does when a permission is, or is not, held.
+   */
   permissions?: string[];
   /** Limits per route group, with the rate limiter switched on. */
   rateLimits?: AppOptions['rateLimits'];
@@ -77,9 +94,15 @@ export function useIdentityApp() {
         }),
       });
       const kernel = createKernel({
-        profile: { name: 'identity-http', modules: ['core.identity'] },
-        sources: [{ manifest: createIdentityModule(options), packageJson }],
-        modulePackages: { 'core.identity': '@scorpion/core-identity' },
+        profile: { name: 'identity-http', modules: ['core.authz', 'core.identity'] },
+        sources: [
+          { manifest: authzModule, packageJson: authzPackage },
+          { manifest: createIdentityModule(options), packageJson },
+        ],
+        modulePackages: {
+          'core.authz': '@scorpion/core-authz',
+          'core.identity': '@scorpion/core-identity',
+        },
         config: loadConfig({
           DATABASE_URL: await server.createDatabase(),
           PROFILE: 'identity-http',
@@ -95,7 +118,7 @@ export function useIdentityApp() {
         log,
         routes: kernel.routes,
         authenticator: kernel.authenticator,
-        authorizer: testAuthorizer(options.permissions ?? ['*']),
+        authorizer: kernel.authorizer,
         rateLimiter: options.rateLimits ? kernel.rateLimiter : undefined,
         rateLimits: options.rateLimits,
         probes: {
@@ -146,14 +169,26 @@ export function useIdentityApp() {
         };
       }
 
-      /** An active account (made through the service, so no approval step) and a session for it. */
-      async function signedIn(username: string, extra: { email?: string } = {}) {
+      /**
+       * An active account (made through the service, so no approval step), the roles it holds
+       * (default: `user`, as an approved account has) and a session for it.
+       */
+      async function signedIn(username: string, extra: { email?: string; roles?: string[] } = {}) {
         const created = await identity.users.createUser({
           username,
           email: extra.email ?? `${username}@example.org`,
           auth: { provider: 'local', password: PASSWORD },
           status: 'active',
         });
+        const roles = extra.roles ?? (options.permissions ? [] : ['user']);
+        for (const role of roles) await makeRoleAssignment(kernel.pool, created, role);
+        if (extra.roles === undefined && options.permissions) {
+          await makeRoleAssignment(
+            kernel.pool,
+            created,
+            await makeRole(kernel.pool, { permissions: options.permissions }),
+          );
+        }
         const reply = await call('POST', '/auth/login', { body: { username, password: PASSWORD } });
         const { csrfToken } = reply.body as { csrfToken: string };
         return { user: created, cookie: reply.cookie!, csrf: csrfToken };

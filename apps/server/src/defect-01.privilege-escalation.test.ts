@@ -1,0 +1,539 @@
+// Defect 1 (FEATURES §5): unprotected internal endpoints let any signed-in user act as an
+// administrator. This is the regression suite named in ADR-0005. It goes through the whole pipeline
+// with the real authoriser of core.authz and real Postgres, and it never uses a test authoriser.
+//
+// Two layers:
+//  1. The route-table walker. It iterates the LIVE route table and fails if a non-public route has
+//     no entry in the matrix below, or if the matrix names a route that no longer exists. A route
+//     added later without a decision here fails this file. Never weaken or delete it.
+//  2. The scenarios: what a plain User, an anonymous caller, a user without roles and a token
+//     with a broader scope than its owner's permissions can and cannot do.
+import { randomUUID } from 'node:crypto';
+import { makeRole } from '@scorpion/testing';
+import { describe, expect, it } from 'vitest';
+import {
+  ALL_USER_SCOPES,
+  createMemoryMailer,
+  PASSWORD,
+  useIdentityApp,
+  type Reply,
+} from './testing/identity-app.ts';
+
+const app = useIdentityApp();
+const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+const start = () => app.start({ tokenCacheTtlMs: 0, mailer: createMemoryMailer() });
+type Started = Awaited<ReturnType<typeof start>>;
+
+interface Sample {
+  method: string;
+  path: string;
+  body?: unknown;
+}
+
+/**
+ * `admin`: a plain User (the role `user`) must get 403, and the handler must not run.
+ * `self`: the routes a plain User uses on their own account. They act on the caller only (no user id
+ * in the input), so they are protected by the role: a user without roles gets 403.
+ * Every entry also answers 401 to an anonymous caller and 403 to a user without any role.
+ */
+type Kind = 'admin' | 'self';
+const FOREIGN = randomUUID();
+const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sample }> = {
+  'POST /auth/logout': { kind: 'self', sample: () => ({ method: 'POST', path: '/auth/logout' }) },
+  'POST /auth/logout-all': {
+    kind: 'self',
+    sample: () => ({ method: 'POST', path: '/auth/logout-all' }),
+  },
+  'GET /auth/me': { kind: 'self', sample: () => ({ method: 'GET', path: '/auth/me' }) },
+  'GET /users/pending': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/users/pending' }),
+  },
+  'POST /users/{id}/approve': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/approve`, body: { role: 'admin' } }),
+  },
+  'POST /users/{id}/reject': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/reject` }),
+  },
+  'POST /auth/oidc/{provider}/link': {
+    kind: 'self',
+    sample: () => ({ method: 'POST', path: '/auth/oidc/nowhere/link' }),
+  },
+  'POST /account/password': {
+    kind: 'self',
+    sample: () => ({
+      method: 'POST',
+      path: '/account/password',
+      body: { currentPassword: PASSWORD, newPassword: 'another long passphrase' },
+    }),
+  },
+  'POST /account/email/verification': {
+    kind: 'self',
+    sample: () => ({ method: 'POST', path: '/account/email/verification' }),
+  },
+  'GET /account/profile': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/account/profile' }),
+  },
+  'PATCH /account/profile': {
+    kind: 'self',
+    sample: () => ({ method: 'PATCH', path: '/account/profile', body: { bio: 'hello' } }),
+  },
+  'GET /tokens': { kind: 'self', sample: () => ({ method: 'GET', path: '/tokens' }) },
+  'POST /tokens': {
+    kind: 'self',
+    sample: () => ({
+      method: 'POST',
+      path: '/tokens',
+      body: { name: 'walker', scopes: ['core.identity.me.read'] },
+    }),
+  },
+  'DELETE /tokens/{id}': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'DELETE', path: `/tokens/${id}` }),
+  },
+  'POST /tokens/{id}/rotate': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'POST', path: `/tokens/${id}/rotate`, body: {} }),
+  },
+  'GET /roles': { kind: 'admin', sample: () => ({ method: 'GET', path: '/roles' }) },
+  'POST /users/{id}/roles': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/roles`, body: { role: 'admin' } }),
+  },
+  'DELETE /users/{id}/roles/{role}': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'DELETE', path: `/users/${id}/roles/admin` }),
+  },
+};
+
+const send = (s: Started, sample: Sample, auth: { cookie?: string; csrf?: string } = {}) =>
+  s.call(sample.method, sample.path, { ...auth, body: sample.body });
+const session = (who: { cookie: string; csrf: string }) => ({ cookie: who.cookie, csrf: who.csrf });
+
+const rolesOf = async (s: Started, userId: string) =>
+  (
+    await s.kernel.pool.query<{ key: string }>(
+      `select r.key from authz_role_assignment a join authz_role r on r.id = a.role_id
+        where a.user_id = $1 order by r.key`,
+      [userId],
+    )
+  ).rows.map((r) => r.key);
+const statusOf = async (s: Started, userId: string) =>
+  (
+    await s.kernel.pool.query<{ status: string }>(
+      'select status from identity_user where id = $1',
+      [userId],
+    )
+  ).rows[0]!.status;
+const register = async (s: Started, username: string) => {
+  const reply = await s.post('/auth/register', {
+    body: { username, email: `${username}@example.org`, password: PASSWORD },
+  });
+  expect(reply.status).toBe(201);
+  return (reply.body as { user: { id: string } }).user.id;
+};
+const problem = (reply: Reply) => reply.res.headers.get('content-type') ?? '';
+
+describe('defect 1: the route table', () => {
+  it('has a decision in the matrix for every non-public route, and for nothing else (the walker)', async () => {
+    const { kernel } = await start();
+    const live = kernel.routes
+      .filter((entry) => !entry.route.public)
+      .map((entry) => {
+        // The matrix is written for the internal API, which these helpers call.
+        expect(entry.surface, `${entry.route.path} is not an internal route`).toBe('internal');
+        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+      })
+      .sort();
+    expect(live.length).toBeGreaterThan(10);
+    const missing = live.filter((key) => !(key in SAMPLES));
+    expect(
+      missing,
+      `a non-public route has no entry in the "denied for a plain User" matrix of ` +
+        `defect-01.privilege-escalation.test.ts: add one (and the denied-request cases) for ${missing.join(', ')}`,
+    ).toEqual([]);
+    expect(Object.keys(SAMPLES).filter((key) => !live.includes(key))).toEqual([]);
+  });
+
+  it('answers 401 to anonymous and 403 to a user without roles on every non-public route', async () => {
+    const s = await start();
+    const roleless = await s.signedIn('norole', { roles: [] });
+    for (const [key, { sample }] of Object.entries(SAMPLES)) {
+      const request = sample({ id: FOREIGN });
+      const anonymous = await send(s, request);
+      expect(anonymous.status, `${key}: anonymous`).toBe(401);
+      expect(problem(anonymous), key).toContain('application/problem+json');
+      const nobody = await send(s, request, session(roleless));
+      expect(nobody.status, `${key}: a user without roles`).toBe(403);
+      expect(problem(nobody), key).toContain('application/problem+json');
+    }
+  });
+
+  it('answers 403 to a plain User on every admin route, and leaves no trace', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const victim = await register(s, 'victim');
+    const before = await s.kernel.pool.query(
+      'select count(*)::int as n from authz_role_assignment',
+    );
+    for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
+      if (kind !== 'admin') continue;
+      const reply = await send(s, sample({ id: victim }), session(plain));
+      expect(reply.status, key).toBe(403);
+      expect(problem(reply), key).toContain('application/problem+json');
+    }
+    expect(await statusOf(s, victim)).toBe('pending');
+    expect(await rolesOf(s, victim)).toEqual([]);
+    expect(await rolesOf(s, plain.user.id)).toEqual(['user']);
+    expect(
+      (await s.kernel.pool.query('select count(*)::int as n from authz_role_assignment')).rows,
+    ).toEqual(before.rows);
+    expect(
+      (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'authz.%'")).rows,
+    ).toEqual([]);
+  });
+
+  it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
+    const s = await start();
+    let n = 0;
+    for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
+      if (kind !== 'self') continue;
+      const who = await s.signedIn(`selfservice${n++}`);
+      const reply = await send(s, sample({ id: FOREIGN }), session(who));
+      expect([401, 403], key).not.toContain(reply.status);
+    }
+  });
+
+  it('answers 403 to a token on every admin route, whatever its scopes name, when its owner is a plain User', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const permissions = [
+      'core.identity.user.approve',
+      'core.identity.user.reject',
+      'core.identity.user.list-pending',
+      'core.identity.role.read',
+      'core.identity.role.assign',
+      'core.authz.role.read',
+      'core.authz.role.assign',
+      'core.authz.role.manage',
+      'core.identity.token.manage-any',
+    ];
+    const made = await s.post('/tokens', {
+      ...session(plain),
+      body: { name: 'wide', scopes: [...ALL_USER_SCOPES, ...permissions] },
+    });
+    expect(made.status).toBe(201); // a scope that names a permission the owner lacks is allowed ...
+    const { token } = made.body as { token: string };
+    const victim = await register(s, 'victim');
+    for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
+      if (kind !== 'admin') continue;
+      const request = sample({ id: victim });
+      const reply = await s.call(request.method, request.path, {
+        headers: bearer(token),
+        body: request.body,
+      });
+      expect(reply.status, `${key}: ... but it grants nothing`).toBe(403);
+    }
+    expect(await statusOf(s, victim)).toBe('pending');
+    expect(await rolesOf(s, victim)).toEqual([]);
+  });
+});
+
+describe('defect 1: nobody grants themselves a role, or approves themselves', () => {
+  it('refuses a plain User every way of giving themselves a role', async () => {
+    const s = await start();
+    const mallory = await s.signedIn('mallory');
+    const me = mallory.user.id;
+    for (const sample of [
+      { method: 'POST', path: `/users/${me}/roles`, body: { role: 'admin' } },
+      { method: 'POST', path: `/users/${me}/approve`, body: { role: 'admin' } },
+      { method: 'POST', path: `/users/${me}/reject` },
+    ]) {
+      expect((await send(s, sample, session(mallory))).status, sample.path).toBe(403);
+    }
+    // No field of an account route carries a role: unknown fields are 422, nothing is stored.
+    const profile = await s.call('PATCH', '/account/profile', {
+      ...session(mallory),
+      body: { bio: 'x', roles: ['admin'], role: 'admin' },
+    });
+    expect(profile.status).toBe(422);
+    const registration = await s.post('/auth/register', {
+      body: { username: 'sneaky', email: 'sneaky@example.org', password: PASSWORD, role: 'admin' },
+    });
+    expect(registration.status).toBe(422);
+    expect(await rolesOf(s, me)).toEqual(['user']);
+    expect(await rolesOf(s, (await s.identity.users.findByUsername('mallory'))!.id)).toEqual([
+      'user',
+    ]);
+  });
+
+  it('refuses Admin to change their own roles, and to approve or reject their own account', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const me = root.user.id;
+    expect(
+      (await s.call('POST', `/users/${me}/roles`, { ...session(root), body: { role: 'reviewer' } }))
+        .status,
+    ).toBe(403);
+    expect((await s.call('DELETE', `/users/${me}/roles/admin`, session(root))).status).toBe(403);
+    // 403 and not 409 ("not pending"): the protection comes before anything is looked at.
+    for (const verb of ['approve', 'reject']) {
+      expect((await s.call('POST', `/users/${me}/${verb}`, session(root))).status, verb).toBe(403);
+    }
+    expect(await rolesOf(s, me)).toEqual(['admin']);
+  });
+
+  it('refuses an approver who holds the permission in a custom role to approve their own account', async () => {
+    const s = await start();
+    const role = await makeRole(s.kernel.pool, {
+      permissions: [
+        'core.identity.user.approve',
+        'core.identity.me.read',
+        'core.authz.role.assign',
+        'core.identity.role.assign',
+      ],
+    });
+    const approver = await s.signedIn('approver', { roles: [role.key] });
+    const reply = await s.call('POST', `/users/${approver.user.id}/approve`, {
+      ...session(approver),
+      body: { role: 'admin' },
+    });
+    expect(reply.status).toBe(403);
+    expect(await rolesOf(s, approver.user.id)).toEqual([role.key]);
+  });
+
+  it('lets an administrator approve someone else with a role, in one step, and the account can then be used', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const alice = await register(s, 'alice');
+    const approved = await s.call('POST', `/users/${alice}/approve`, {
+      ...session(root),
+      body: { role: 'user' },
+    });
+    expect(approved.status).toBe(200);
+    expect(await rolesOf(s, alice)).toEqual(['user']);
+    const login = await s.post('/auth/login', { body: { username: 'alice', password: PASSWORD } });
+    expect(login.status).toBe(200);
+    const me = await s.get('/auth/me', { cookie: login.cookie });
+    expect(me.body).toMatchObject({ roles: ['user'] });
+  });
+
+  it('keeps the account pending when the approval names a role that does not exist', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const alice = await register(s, 'alice');
+    const reply = await s.call('POST', `/users/${alice}/approve`, {
+      ...session(root),
+      body: { role: 'no-such-role' },
+    });
+    expect(reply.status).toBe(404);
+    expect(await statusOf(s, alice)).toBe('pending');
+    expect(await rolesOf(s, alice)).toEqual([]);
+  });
+});
+
+describe('defect 1: tokens of other people, and tokens of the caller', () => {
+  it('keeps a plain User from revoking or rotating the token of another user', async () => {
+    const s = await start();
+    const alice = await s.signedIn('alice');
+    const bob = await s.signedIn('bobby');
+    const made = await s.post('/tokens', {
+      ...session(bob),
+      body: { name: 'bobs', scopes: ['core.identity.me.read'] },
+    });
+    const { id, token } = made.body as { id: string; token: string };
+
+    const revoke = await s.call('DELETE', `/tokens/${id}`, session(alice));
+    expect(revoke.status).toBe(404); // the same answer as for an id that does not exist
+    const rotate = await s.call('POST', `/tokens/${id}/rotate`, { ...session(alice), body: {} });
+    expect(rotate.status).toBe(404);
+    expect((await s.get('/auth/me', { headers: bearer(token) })).status).toBe(200);
+    expect(JSON.stringify((await s.get('/tokens', session(alice))).body)).not.toContain(id);
+  });
+
+  it('lets only core.identity.token.manage-any revoke the token of someone else (and never rotate it)', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const bob = await s.signedIn('bobby');
+    const { id, token } = (
+      await s.post('/tokens', {
+        ...session(bob),
+        body: { name: 'bobs', scopes: ['core.identity.me.read'] },
+      })
+    ).body as { id: string; token: string };
+    expect(
+      (await s.call('POST', `/tokens/${id}/rotate`, { ...session(root), body: {} })).status,
+    ).toBe(404);
+    expect((await s.call('DELETE', `/tokens/${id}`, session(root))).status).toBe(204);
+    expect((await s.get('/auth/me', { headers: bearer(token) })).status).toBe(401);
+  });
+
+  it('keeps one user from ending the sessions of another', async () => {
+    const s = await start();
+    const alice = await s.signedIn('alice');
+    const bob = await s.signedIn('bobby');
+    expect((await s.call('POST', '/auth/logout-all', session(bob))).status).toBe(200);
+    expect((await s.get('/auth/me', { cookie: bob.cookie })).status).toBe(401);
+    expect((await s.get('/auth/me', { cookie: alice.cookie })).status).toBe(200);
+  });
+
+  it('refuses a token on every session-only route, with every scope its owner could have', async () => {
+    const s = await start();
+    const alice = await s.signedIn('alice');
+    const { token, id } = (
+      await s.post('/tokens', {
+        ...session(alice),
+        body: { name: 'all', scopes: ALL_USER_SCOPES },
+      })
+    ).body as { token: string; id: string };
+    const attempts: Sample[] = [
+      { method: 'GET', path: '/tokens' },
+      {
+        method: 'POST',
+        path: '/tokens',
+        body: { name: 'child', scopes: ['core.identity.me.read'] },
+      },
+      { method: 'DELETE', path: `/tokens/${id}` },
+      { method: 'POST', path: `/tokens/${id}/rotate`, body: {} },
+      { method: 'GET', path: '/account/profile' },
+      { method: 'PATCH', path: '/account/profile', body: { bio: 'x' } },
+      {
+        method: 'POST',
+        path: '/account/password',
+        body: { currentPassword: PASSWORD, newPassword: 'another long passphrase' },
+      },
+      { method: 'POST', path: '/account/email/verification' },
+    ];
+    for (const attempt of attempts) {
+      const reply = await s.call(attempt.method, attempt.path, {
+        headers: bearer(token),
+        body: attempt.body,
+      });
+      expect(reply.status, `${attempt.method} ${attempt.path}`).toBe(403);
+    }
+    expect((await s.get('/auth/me', { headers: bearer(token) })).status).toBe(200); // still itself
+    expect((await s.get('/auth/me', { cookie: alice.cookie })).status).toBe(200); // sessions untouched
+  });
+});
+
+describe('defect 1: sessions', () => {
+  it('lets a token end the sessions of its owner only when a scope names core.identity.session.manage', async () => {
+    const s = await start();
+    const alice = await s.signedIn('alice');
+    const bob = await s.signedIn('bobby');
+    const make = async (scopes: string[], name: string) =>
+      (
+        (await s.post('/tokens', { ...session(alice), body: { name, scopes } })).body as {
+          token: string;
+        }
+      ).token;
+    const without = await make(['core.identity.me.read'], 'plain');
+    const withScope = await make(['core.identity.session.manage'], 'ends-sessions');
+    expect((await s.post('/auth/logout-all', { headers: bearer(without) })).status).toBe(403);
+    expect((await s.get('/auth/me', { cookie: alice.cookie })).status).toBe(200);
+    expect((await s.post('/auth/logout-all', { headers: bearer(withScope) })).status).toBe(200);
+    expect((await s.get('/auth/me', { cookie: alice.cookie })).status).toBe(401);
+    // Only the owner's sessions: bob's is untouched.
+    expect((await s.get('/auth/me', { cookie: bob.cookie })).status).toBe(200);
+  });
+});
+
+describe('defect 1: a token is limited to its scopes and to what its owner holds', () => {
+  const approveScopes = [
+    'core.identity.me.read',
+    'core.identity.user.approve',
+    'core.authz.role.assign',
+    'core.identity.role.assign',
+  ];
+
+  it('limits a token to the permissions it names, even for an administrator', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const alice = await register(s, 'alice');
+    const narrow = (
+      await s.post('/tokens', {
+        ...session(root),
+        body: { name: 'narrow', scopes: ['core.identity.me.read'] },
+      })
+    ).body as { token: string };
+    expect((await s.get('/auth/me', { headers: bearer(narrow.token) })).status).toBe(200);
+    // The owner may approve; the token was not given that.
+    const denied = await s.call('POST', `/users/${alice}/approve`, {
+      headers: bearer(narrow.token),
+    });
+    expect(denied.status).toBe(403);
+    expect(await statusOf(s, alice)).toBe('pending');
+
+    const wide = (
+      await s.post('/tokens', { ...session(root), body: { name: 'wide', scopes: approveScopes } })
+    ).body as { token: string };
+    const allowed = await s.call('POST', `/users/${alice}/approve`, {
+      headers: bearer(wide.token),
+    });
+    expect(allowed.status).toBe(200);
+    expect(await statusOf(s, alice)).toBe('active');
+    expect(await rolesOf(s, alice)).toEqual(['user']);
+  });
+
+  it('gives a token nothing the owner lacks: a plain User cannot widen themselves with a scope', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const alice = await register(s, 'alice');
+    const { token } = (
+      await s.post('/tokens', { ...session(plain), body: { name: 'wide', scopes: approveScopes } })
+    ).body as { token: string };
+    expect((await s.get('/auth/me', { headers: bearer(token) })).status).toBe(200);
+    const reply = await s.call('POST', `/users/${alice}/approve`, { headers: bearer(token) });
+    expect(reply.status).toBe(403);
+    expect(await statusOf(s, alice)).toBe('pending');
+  });
+
+  it('takes the owner’s role away from the token at once in this process (and within the cache bound elsewhere)', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const second = await s.signedIn('second', { roles: ['admin'] });
+    const { token } = (
+      await s.post('/tokens', { ...session(second), body: { name: 'wide', scopes: approveScopes } })
+    ).body as { token: string };
+    const first = await register(s, 'first');
+    const secondTry = await register(s, 'next');
+    expect(
+      (await s.call('POST', `/users/${first}/approve`, { headers: bearer(token) })).status,
+    ).toBe(200);
+    // root demotes second through the API.
+    const demoted = await s.call('DELETE', `/users/${second.user.id}/roles/admin`, session(root));
+    expect(demoted.status).toBe(204);
+    expect(
+      (await s.call('POST', `/users/${secondTry}/approve`, { headers: bearer(token) })).status,
+    ).toBe(403);
+    expect(await statusOf(s, secondTry)).toBe('pending');
+  });
+
+  it('cannot create a token for a permission that does not exist, or without any scope', async () => {
+    const s = await start();
+    const alice = await s.signedIn('alice');
+    for (const scopes of [[], ['read:kpi'], ['core.identity.made-up']]) {
+      const reply = await s.post('/tokens', { ...session(alice), body: { name: 'bad', scopes } });
+      expect(reply.status, JSON.stringify(scopes)).toBe(422);
+    }
+  });
+});
+
+describe('defect 1: administrators', () => {
+  it('lets an Admin demote another Admin, and then nobody can demote the one who is left', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const other = await s.signedIn('other', { roles: ['admin'] });
+    expect(
+      (await s.call('DELETE', `/users/${other.user.id}/roles/admin`, session(root))).status,
+    ).toBe(204);
+    // root is now the only Admin: nobody else can act, and root cannot change their own roles.
+    expect(
+      (await s.call('DELETE', `/users/${root.user.id}/roles/admin`, session(root))).status,
+    ).toBe(403);
+    expect(await rolesOf(s, root.user.id)).toEqual(['admin']);
+  });
+});

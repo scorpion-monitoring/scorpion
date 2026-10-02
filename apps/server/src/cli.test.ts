@@ -248,8 +248,10 @@ describe('scorpion create-admin', () => {
     await client.connect();
     try {
       return (
-        await client.query<{ username: string; status: string; marked: boolean; hash: string }>(
-          `select u.username, u.status, u.is_bootstrap_admin as marked, a.password_hash as hash
+        await client.query<{ username: string; status: string; admin: boolean; hash: string }>(
+          `select u.username, u.status, a.password_hash as hash,
+                  exists (select 1 from authz_role_assignment ra join authz_role r on r.id = ra.role_id
+                           where ra.user_id = u.id and r.key = 'admin' and ra.assigned_by is null) as admin
              from identity_user u join identity_auth_method a on a.user_id = u.id order by u.username`,
         )
       ).rows;
@@ -276,7 +278,7 @@ describe('scorpion create-admin', () => {
       {
         username: 'root',
         status: 'active',
-        marked: true,
+        admin: true, // the Admin role, given by the system
         hash: expect.stringMatching(/^\$argon2id\$/) as unknown,
       },
     ]);

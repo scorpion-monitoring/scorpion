@@ -202,17 +202,28 @@ describe('POST /auth/login', () => {
 });
 
 describe('GET /auth/me', () => {
-  it('returns the caller, no roles yet, and the CSRF token of the session', async () => {
+  it('returns the caller, the roles core.authz holds for them, and the CSRF token of the session', async () => {
     const { signedIn, get } = await app.start();
     const { cookie, csrf, user } = await signedIn('alice');
     const reply = await get('/auth/me', { cookie });
     expect(reply.status).toBe(200);
     expect(reply.body).toEqual({
       user: expect.objectContaining({ id: user.id, username: 'alice' }) as unknown,
-      roles: [],
+      roles: ['user'],
       csrfToken: csrf,
     });
     expect(reply.res.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('shows every role the account holds, and refuses an account that holds none', async () => {
+    const { signedIn, get } = await app.start();
+    const both = await signedIn('both', { roles: ['user', 'reviewer'] });
+    expect((await get('/auth/me', { cookie: both.cookie })).body).toMatchObject({
+      roles: ['reviewer', 'user'],
+    });
+    // No role, no permission: a signed-in account without roles is a 403, not an empty answer.
+    const none = await signedIn('norole', { roles: [] });
+    expect((await get('/auth/me', { cookie: none.cookie })).status).toBe(403);
   });
 
   it('needs no CSRF token (it reads)', async () => {
@@ -328,7 +339,7 @@ describe('every protected route refuses the caller who may not use it', () => {
 describe('approval over HTTP', () => {
   it('registers, is approved by someone else, then can sign in and out (the whole journey)', async () => {
     const { post, get, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     const registered = await post('/auth/register', { body: registration });
     const { id } = (registered.body as { user: { id: string } }).user;
     expect(
@@ -358,7 +369,7 @@ describe('approval over HTTP', () => {
 
   it('rejects an account, which then cannot sign in', async () => {
     const { post, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     const { id } = (
       (await post('/auth/register', { body: registration })).body as { user: { id: string } }
     ).user;
@@ -383,7 +394,7 @@ describe('approval over HTTP', () => {
 
   it('needs the CSRF token for approve and reject', async () => {
     const { post, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     expect((await post(`/users/${UNKNOWN_ID}/approve`, { cookie: admin.cookie })).status).toBe(401);
   });
 
@@ -393,7 +404,7 @@ describe('approval over HTTP', () => {
     ['approve', "';drop table identity_user;--"],
   ])('answers 422 for %s with the id %j', async (verb, id) => {
     const { post, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     const reply = await post(`/users/${encodeURIComponent(id)}/${verb}`, {
       cookie: admin.cookie,
       csrf: admin.csrf,
@@ -403,7 +414,7 @@ describe('approval over HTTP', () => {
 
   it('answers 404 for an unknown user and 409 for one that is not pending', async () => {
     const { post, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     const other = await signedIn('bobby');
     expect(
       (await post(`/users/${UNKNOWN_ID}/approve`, { cookie: admin.cookie, csrf: admin.csrf }))
@@ -417,7 +428,7 @@ describe('approval over HTTP', () => {
 
   it('pages the pending list, and refuses a bad page with 422', async () => {
     const { post, get, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     for (const n of ['one', 'two', 'three']) {
       await post('/auth/register', {
         body: { username: `user-${n}`, email: `${n}@example.org`, password: PASSWORD },
@@ -473,7 +484,7 @@ describe('secrets in logs and responses', () => {
 
   it('puts no hash, secret or internal flag in any response', async () => {
     const { post, get, signedIn } = await app.start();
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
     await post('/auth/register', { body: registration });
     const bodies = [
       (await get('/auth/me', { cookie: admin.cookie })).body,

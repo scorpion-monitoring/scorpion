@@ -3,6 +3,7 @@
 // bad input, and what the log may not hold.
 import { describe, expect, it } from 'vitest';
 import {
+  ALL_USER_SCOPES,
   createMemoryMailer,
   PASSWORD,
   settingsWith,
@@ -164,7 +165,9 @@ describe('changing the password', () => {
   it('keeps an access token working (sessions only, ADR 0012)', async () => {
     const { post, get, call, signedIn } = await start();
     const session = await signedIn('alice');
-    const created = (await post('/tokens', { ...session, body: { name: 'ci' } })).body as {
+    const created = (
+      await post('/tokens', { ...session, body: { name: 'ci', scopes: ALL_USER_SCOPES } })
+    ).body as {
       token: string;
     };
     expect((await call('POST', '/account/password', { ...session, body })).status).toBe(204);
@@ -259,7 +262,9 @@ describe('the session-only routes refuse the callers who may not use them', () =
         rateLimits: { strict: { capacity: 3, refillPerSecond: 0.001 } },
       });
       const mine = await allowed.signedIn('alice');
-      const created = (await allowed.post('/tokens', { ...mine, body: { name: 'ci' } })).body as {
+      const created = (
+        await allowed.post('/tokens', { ...mine, body: { name: 'ci', scopes: ALL_USER_SCOPES } })
+      ).body as {
         token: string;
       };
       const viaToken = await allowed.call(method, path, {

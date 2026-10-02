@@ -1,6 +1,6 @@
 // The OIDC routes through the whole pipeline, on real Postgres, against a stub provider: starting
 // a login, the callback, login CSRF, validation of what the provider sends, and what is kept secret.
-import { makeAuthMethod, makeUser } from '@scorpion/testing';
+import { makeAuthMethod, makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import {
   LOGIN_COOKIE,
@@ -95,6 +95,7 @@ describe('GET /auth/oidc/{provider}/callback', () => {
   it('signs a known active user in: 302 to the application root, a session cookie, the login cookie cleared', async () => {
     const { kernel, web, get } = await startApp();
     const user = await makeUser(kernel.pool, { username: 'carol' });
+    await makeRoleAssignment(kernel.pool, user, 'user');
     await makeAuthMethod(kernel.pool, user, { provider: PROVIDER, subject: 'carol-sub' });
 
     const { reply } = await web.login({ ...person(), subject: 'carol-sub' });
@@ -116,6 +117,7 @@ describe('GET /auth/oidc/{provider}/callback', () => {
   it('does not depend on the session cookie: a stale one is ignored, a good one is replaced', async () => {
     const { kernel, web, get, signedIn } = await startApp();
     const user = await makeUser(kernel.pool);
+    await makeRoleAssignment(kernel.pool, user, 'user');
     await makeAuthMethod(kernel.pool, user, { provider: PROVIDER, subject: 's' });
 
     const stale = await web.login({ ...person(), subject: 's' }, { session: 'B'.repeat(43) });
@@ -132,6 +134,7 @@ describe('GET /auth/oidc/{provider}/callback', () => {
   it('lets a signed-in browser start another login (switching accounts) and replaces the session', async () => {
     const { kernel, web, get, signedIn } = await startApp();
     const other = await makeUser(kernel.pool);
+    await makeRoleAssignment(kernel.pool, other, 'user');
     await makeAuthMethod(kernel.pool, other, { provider: PROVIDER, subject: 'other-sub' });
     const dave = await signedIn('dave');
     const started = await web.start('start', { cookie: dave.cookie, csrf: dave.csrf });
