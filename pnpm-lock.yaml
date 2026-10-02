@@ -160,6 +160,9 @@ importers:
       '@scorpion/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@scorpion/core-authz':
+        specifier: workspace:*
+        version: link:../core-authz
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel

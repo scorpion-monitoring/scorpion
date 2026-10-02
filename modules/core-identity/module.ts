@@ -20,6 +20,7 @@ import {
   approvalPolicyEntrySchema,
   manualPolicy,
 } from './service/approval-policy.ts';
+import { createRoleService, type RoleService } from './service/roles.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import { defaultSettings, settingsSchema, type IdentitySettings } from './service/settings.ts';
 import { createTokenService, type TokenService } from './service/tokens.ts';
@@ -39,12 +40,13 @@ export interface IdentityInternals extends IdentityService {
   oidc: OidcService;
   profile: ProfileService;
   recovery: RecoveryService;
+  roles: RoleService;
   sessions: SessionService;
   tokens: TokenService;
 }
 
 export interface IdentityModuleOptions {
-  /** Where the settings come from. Until M3 (core.settings) that is the schema's defaults. */
+  /** Where the settings come from. Until core.settings (M3 sprint 3) that is the schema's defaults. */
   settings?: IdentitySettings;
   /** For tests: how long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
@@ -76,6 +78,19 @@ export interface IdentityModuleOptions {
     now?: () => number;
   };
 }
+
+/** What the role `user` holds: every self-service permission of this module (README, "Roles"). */
+export const USER_PERMISSIONS = [
+  'core.identity.me.read',
+  'core.identity.session.manage',
+  'core.identity.profile.read',
+  'core.identity.profile.update',
+  'core.identity.password.change',
+  'core.identity.email.verify',
+  'core.identity.auth-method.link',
+  'core.identity.token.read',
+  'core.identity.token.manage',
+];
 
 const toConsole = (text: string) => void process.stderr.write(`${text}\n`);
 const toNowhere = () => undefined;
@@ -111,7 +126,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     return currentTokens;
   };
 
-  return defineModule<IdentityInternals>({
+  return defineModule<IdentityInternals, 'core.authz'>({
     id: 'core.identity',
     version: '0.1.0',
     // Short on purpose: the module's tables are `identity_user`, not `core_identity_user` (ADR 0004).
@@ -136,6 +151,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'core.identity.token.manage': {
         description: 'Create, revoke and rotate your own access tokens',
       },
+      'core.identity.token.manage-any': {
+        description: "Revoke any user's access token, not only your own",
+      },
+      'core.identity.role.read': { description: 'List the roles and the permissions they hold' },
+      'core.identity.role.assign': { description: 'Give a role to a user and take it away' },
     },
     settings: settingsSchema,
 
@@ -174,7 +194,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.user.registered@1': userEvent.extend({
           status: z.enum(['pending', 'active']),
         }),
-        'identity.user.approved@1': userEvent.extend({ approvedBy: z.string() }),
+        // `role` is the key of the role the account got with the approval.
+        'identity.user.approved@1': userEvent.extend({ approvedBy: z.string(), role: z.string() }),
         'identity.user.rejected@1': userEvent.extend({ rejectedBy: z.string() }),
         'identity.authMethod.linked@1': userEvent.extend({
           provider: z.string(),
@@ -192,7 +213,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         }),
         'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
-        'identity.token.revoked@1': tokenEvent,
+        // `revokedBy` is the caller; it differs from `userId` when an administrator revoked it.
+        'identity.token.revoked@1': tokenEvent.extend({ revokedBy: z.string() }),
         'identity.token.rotated@1': tokenEvent.extend({ previousTokenId: z.string() }),
       },
     },
@@ -200,6 +222,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     registries: { [APPROVAL_POLICY_REGISTRY]: approvalPolicyEntrySchema },
     contributes: {
       [APPROVAL_POLICY_REGISTRY]: [manualPolicy],
+      // What the role `user` can do once an account is approved: the self-service routes of this
+      // module. Admin holds everything by resolution; Reviewer gets nothing from identity (its
+      // permissions come from the modules that review things).
+      'authz.defaultRole': [{ role: 'user', permissions: USER_PERMISSIONS }],
       'kernel.authenticator': [
         {
           authenticate: createAuthenticator({ sessions: sessionsOrThrow, tokens: tokensOrThrow }),
@@ -208,20 +234,23 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     services: (ctx) => {
+      const authz = ctx.deps['core.authz'];
       const settings = options.settings ?? defaultSettings;
       const users = createUserService(ctx);
       const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
-      const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs });
+      const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
       current = sessions;
       currentTokens = tokens;
       const bootstrap = createBootstrapService(ctx, {
         users,
+        authz,
         announce: options.announce ?? (process.env.NODE_ENV === 'test' ? toNowhere : toConsole),
         ttlMs: options.firstRunTtlMs,
       });
       currentBootstrap = bootstrap;
       const loginStates = createLoginStateService(ctx);
       const oidc = createOidcService(ctx, {
+        authz,
         users,
         sessions,
         settings,
@@ -238,26 +267,28 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         sessions,
         settings,
         mailer: options.mailer ?? mailerFromEnvironment(process.env),
+        authz,
       });
-      const cleanup = createCleanupService(ctx);
+      const cleanup = createCleanupService(ctx, { authz });
       currentCleanup = cleanup;
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery }),
+        profile: createProfileService(ctx, { recovery, authz }),
+        roles: createRoleService({ authz, users }),
         recovery,
         loginStates,
         oidc,
         users,
         sessions,
         tokens,
-        accounts: createAccountService(ctx, { users, sessions, settings, recovery }),
-        approval: createApprovalService(ctx, { sessions }),
+        accounts: createAccountService(ctx, { users, sessions, settings, recovery, authz }),
+        approval: createApprovalService(ctx, { sessions, authz }),
       };
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, oidc, profile, recovery, tokens } =
+      const { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens } =
         r.service<IdentityInternals>();
       registerIdentityRoutes(r, {
         accounts,
@@ -266,6 +297,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         oidc,
         profile,
         recovery,
+        roles,
         tokens,
       });
     },

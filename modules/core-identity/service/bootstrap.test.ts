@@ -1,5 +1,5 @@
 import { Conflict, Invalid, Unauthorized } from '@scorpion/contracts';
-import { makeUser } from '@scorpion/testing';
+import { makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { useIdentity } from '../test/harness.ts';
 import { verifyPassword } from './password.ts';
@@ -19,22 +19,42 @@ async function start(options: Parameters<typeof identity.start>[0] = {}) {
   shown.length = 0;
   return { ...started, shown, bootstrap: started.identity.bootstrap };
 }
+/** Who holds the Admin role, with who gave it (`null`: the system). */
+const adminHolders = (kernel: { pool: Pool }) =>
+  rows(
+    kernel,
+    `select u.username, a.assigned_by from authz_role_assignment a
+       join authz_role r on r.id = a.role_id and r.key = 'admin'
+       left join identity_user u on u.id = a.user_id order by u.username`,
+  );
 const tokenIn = (shown: string[]) => /sfr_[A-Za-z0-9_-]{43}/.exec(shown.join('\n'))?.[0];
 
 describe('createAdmin', () => {
-  it('creates an active user with a password, marks it, and emits an event without the password', async () => {
-    const { kernel, bootstrap, identity: id } = await start();
+  it('creates an active user with a password and the Admin role, and emits events without the password', async () => {
+    const { kernel, bootstrap, identity: id, authz } = await start();
     const created = await bootstrap.createAdmin(admin);
 
     expect(created).toMatchObject({ username: 'root', status: 'active', emailVerified: false });
-    const [row] = await rows(kernel, 'select status, is_bootstrap_admin from identity_user');
-    expect(row).toEqual({ status: 'active', is_bootstrap_admin: true });
+    const [row] = await rows(kernel, 'select status from identity_user');
+    expect(row).toEqual({ status: 'active' });
+    // Given by the system: no human made this administrator.
+    expect(await adminHolders(kernel)).toEqual([{ username: 'root', assigned_by: null }]);
+    await expect(
+      authz.require(
+        { kind: 'user', userId: created.id, username: 'root', roles: [], via: 'session' },
+        'core.authz.role.manage',
+      ),
+    ).resolves.toBeUndefined();
     const [method] = await rows(kernel, 'select password_hash from identity_auth_method');
     expect(await verifyPassword(method!.password_hash as string, admin.password)).toBe(true);
     expect(await id.users.findByUsername('root')).toMatchObject({ id: created.id });
 
-    const events = await rows(kernel, 'select name, payload from kernel_outbox');
+    const events = await rows(kernel, 'select name, payload from kernel_outbox order by name');
     expect(events).toEqual([
+      {
+        name: 'authz.role.assigned@1',
+        payload: { userId: created.id, roleKey: 'admin', actorId: null },
+      },
       {
         name: 'identity.admin.created@1',
         payload: { userId: created.id, username: 'root', origin: 'cli' },
@@ -43,13 +63,12 @@ describe('createAdmin', () => {
     expect(JSON.stringify(events)).not.toContain(admin.password);
   });
 
-  it('marks only the user it creates', async () => {
+  it('gives the Admin role to the user it creates and to nobody else', async () => {
     const { kernel, bootstrap } = await start();
     await makeUser(kernel.pool);
     await bootstrap.createAdmin(admin);
-    expect(
-      await rows(kernel, 'select is_bootstrap_admin from identity_user order by created_at'),
-    ).toEqual([{ is_bootstrap_admin: false }, { is_bootstrap_admin: true }]);
+    expect(await adminHolders(kernel)).toEqual([{ username: 'root', assigned_by: null }]);
+    expect(await rows(kernel, 'select 1 from identity_user')).toHaveLength(2);
   });
 
   it.each([
@@ -75,7 +94,7 @@ describe('createAdmin', () => {
     ).rejects.toBeInstanceOf(Conflict);
   });
 
-  it('rolls back the user, the marker and the end of the token when the event cannot be written', async () => {
+  it('rolls back the user, the Admin role and the end of the token when an event cannot be written', async () => {
     const { kernel, bootstrap } = await start();
     await bootstrap.issueFirstRunToken();
     await failOutbox(kernel);
@@ -84,9 +103,23 @@ describe('createAdmin', () => {
 
     expect(await rows(kernel, 'select 1 from identity_user')).toEqual([]);
     expect(await rows(kernel, 'select 1 from identity_auth_method')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from authz_role_assignment')).toEqual([]);
     expect(await rows(kernel, 'select redeemed_at from identity_first_run_token')).toEqual([
       { redeemed_at: null },
     ]);
+  });
+
+  it('rolls the user back when the Admin role cannot be given', async () => {
+    const { kernel, bootstrap } = await start();
+    await kernel.pool.query(`
+      create function identity_test_fail() returns trigger language plpgsql as
+        $$ begin raise exception 'assignment on fire'; end $$;
+      create trigger identity_test_fail before insert on authz_role_assignment
+        for each row execute function identity_test_fail();`);
+    await expect(bootstrap.createAdmin(admin)).rejects.toThrow();
+    expect(await rows(kernel, 'select 1 from identity_user')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from identity_auth_method')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from kernel_outbox')).toEqual([]);
   });
 
   it('ends an outstanding first-run token', async () => {
@@ -148,15 +181,18 @@ describe('issueFirstRunToken', () => {
     expect(tokenIn([shown[0]!])).not.toBe(tokenIn([shown[1]!]));
   });
 
-  it('issues nothing when an active user exists, whoever they are', async () => {
+  it('issues nothing when somebody holds the Admin role', async () => {
     const { kernel, bootstrap, shown } = await start();
-    await makeUser(kernel.pool);
+    await makeRoleAssignment(kernel.pool, await makeUser(kernel.pool), 'admin');
     expect(await bootstrap.issueFirstRunToken()).toBe(false);
     expect(shown).toEqual([]);
   });
 
-  it('is not put off by pending, rejected or deleted users', async () => {
+  it('is not put off by users who do not hold the Admin role, whatever their status or other roles', async () => {
     const { kernel, bootstrap } = await start();
+    await makeUser(kernel.pool); // active, no role
+    await makeRoleAssignment(kernel.pool, await makeUser(kernel.pool), 'user');
+    await makeRoleAssignment(kernel.pool, await makeUser(kernel.pool), 'reviewer');
     await makeUser(kernel.pool, { status: 'pending' });
     await makeUser(kernel.pool, { status: 'rejected', deleted: true });
     await makeUser(kernel.pool, { deleted: true });
@@ -166,30 +202,13 @@ describe('issueFirstRunToken', () => {
   it('is issued at start-up (system.ready) and shown only to the announcer, never to the log', async () => {
     const lines: string[] = [];
     const shown: string[] = [];
-    const { Writable } = await import('node:stream');
-    const { createKernel, createLogger, loadConfig } = await import('@scorpion/kernel');
-    const { createIdentityModule } = await import('../module.ts');
-    const packageJson = (await import('../package.json', { with: { type: 'json' } })).default;
     const databaseUrl = await identity.server().createDatabase();
     const boot = async () => {
-      const kernel = createKernel({
-        profile: { name: 'identity-test', modules: ['core.identity'] as never },
-        sources: [
-          { manifest: createIdentityModule({ announce: (t) => shown.push(t) }), packageJson },
-        ],
-        modulePackages: { 'core.identity': '@scorpion/core-identity' },
-        config: loadConfig({ DATABASE_URL: databaseUrl, PROFILE: 'identity-test' }),
-        log: createLogger({
-          level: 'trace',
-          destination: new Writable({
-            write(chunk: Buffer, _e, done) {
-              lines.push(chunk.toString());
-              done();
-            },
-          }),
-        }),
+      const { kernel } = await identity.start({
+        databaseUrl,
+        announce: (text) => shown.push(text),
+        logLines: lines,
       });
-      await kernel.start();
       await kernel.stop();
     };
 
@@ -216,15 +235,16 @@ describe('redeemFirstRunToken', () => {
     const created = await bootstrap.redeemFirstRunToken({ ...admin, token });
 
     expect(created).toMatchObject({ username: 'root', status: 'active' });
-    expect(await rows(kernel, 'select is_bootstrap_admin from identity_user')).toEqual([
-      { is_bootstrap_admin: true },
-    ]);
+    expect(await adminHolders(kernel)).toEqual([{ username: 'root', assigned_by: null }]);
     expect(
-      (await rows(kernel, 'select name, payload from kernel_outbox')).map((e) => e.name),
-    ).toEqual(['identity.admin.created@1']);
-    expect((await rows(kernel, 'select payload from kernel_outbox'))[0]!.payload).toMatchObject({
-      origin: 'first-run',
-    });
+      (await rows(kernel, 'select name, payload from kernel_outbox order by name')).map(
+        (e) => e.name,
+      ),
+    ).toEqual(['authz.role.assigned@1', 'identity.admin.created@1']);
+    expect(
+      (await rows(kernel, "select payload from kernel_outbox where name like 'identity.%'"))[0]!
+        .payload,
+    ).toMatchObject({ origin: 'first-run' });
     // Single use.
     await expect(
       bootstrap.redeemFirstRunToken({
@@ -273,9 +293,17 @@ describe('redeemFirstRunToken', () => {
     ).resolves.toMatchObject({ username: 'root2' });
   });
 
-  it('refuses once an active user exists, even with a good token, and keeps the token unused', async () => {
+  it('works although other users exist, as long as none holds the Admin role', async () => {
     const { kernel, bootstrap, token } = await issued();
-    await makeUser(kernel.pool);
+    await makeRoleAssignment(kernel.pool, await makeUser(kernel.pool), 'user');
+    await expect(bootstrap.redeemFirstRunToken({ ...admin, token })).resolves.toMatchObject({
+      username: 'root',
+    });
+  });
+
+  it('refuses once somebody holds the Admin role, even with a good token, and keeps the token unused', async () => {
+    const { kernel, bootstrap, token } = await issued();
+    await makeRoleAssignment(kernel.pool, await makeUser(kernel.pool), 'admin');
     await expect(bootstrap.redeemFirstRunToken({ ...admin, token })).rejects.toBeInstanceOf(
       Unauthorized,
     );

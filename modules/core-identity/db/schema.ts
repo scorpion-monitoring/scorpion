@@ -4,28 +4,12 @@
 // Secrets are never stored in the clear: a session id and a login state are random 256-bit values
 // kept as a SHA-256 hash, a token secret and a password as an argon2id hash.
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  check,
-  index,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 /** The provider id of the password account that every user can have. */
 export const LOCAL_PROVIDER = 'local';
-
-/**
- * What `create-admin` and the first-run token write to mark the administrator they create: the
- * only place in the code that sets the temporary marker, so the file list that may mention it stays
- * this one (ADR 0006). It is write-only: nothing reads the column, and nothing decides by it.
- */
-export const BOOTSTRAP_ADMIN_MARK = { isBootstrapAdmin: true } as const;
 
 /** A person. How they sign in is in `identity_auth_method`, so one user can have several ways. */
 export const user = pgTable(
@@ -47,12 +31,6 @@ export const user = pgTable(
     bio: text(),
     /** The blob store arrives with core.settings (M3); nothing sets this before. */
     avatarBlobId: uuid('avatar_blob_id'),
-    /**
-     * TEMPORARY, removed completely in M3 (ADR 0006). Marks the admin that `scorpion create-admin`
-     * or the first-run token creates, until roles exist. M3's seed migration turns it into an
-     * Admin role assignment and drops the column. Nothing reads it in M2, so it grants nothing.
-     */
-    isBootstrapAdmin: boolean('is_bootstrap_admin').notNull().default(false),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
@@ -178,7 +156,7 @@ export const token = pgTable(
     prefix: text().notNull(),
     /** argon2id of the secret part. */
     secretHash: text('secret_hash').notNull(),
-    /** What the token may do, `read:kpi`. */
+    /** What the token may do: permission ids such as `core.identity.me.read` (ADR 0015). */
     scopes: text()
       .array()
       .notNull()

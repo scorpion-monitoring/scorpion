@@ -2,6 +2,7 @@
 // through here; the routes only parse, call one method and map the result.
 import { and, eq, sql } from 'drizzle-orm';
 import { Forbidden, Invalid, Unauthorized, type Actor } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { authMethod } from '../db/schema.ts';
@@ -10,6 +11,7 @@ import { loginInput, registerInput } from '../validation.ts';
 import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { requireUser } from './require-user.ts';
+import { grantDefaultRole } from './roles.ts';
 import { csrfTokenFor } from './session-id.ts';
 import type { RecoveryService } from './recovery.ts';
 import type { SessionService } from './sessions.ts';
@@ -36,11 +38,14 @@ export interface AccountService {
   logout(actor: Actor, sessionId: string | undefined): Promise<void>;
   /** Ends every session of the caller; returns how many were open. */
   logoutAll(actor: Actor): Promise<number>;
-  /** The caller's own account, with the CSRF token of their session when they have one. */
+  /**
+   * The caller's own account, their roles (asked of core.authz every time, never cached here) and
+   * the CSRF token of their session when they have one.
+   */
   me(
     actor: Actor,
     sessionId: string | undefined,
-  ): Promise<{ user: User; csrfToken: string | null }>;
+  ): Promise<{ user: User; roles: string[]; csrfToken: string | null }>;
 }
 
 /** The field problems of a Zod error, without ever repeating the value that was sent. */
@@ -61,9 +66,10 @@ export function createAccountService(
     sessions: SessionService;
     settings: IdentitySettings;
     recovery: Pick<RecoveryService, 'startVerification'>;
+    authz: AuthzService;
   },
 ): AccountService {
-  const { users, sessions, settings, recovery } = deps;
+  const { users, sessions, settings, recovery, authz } = deps;
 
   // A hash to check when there is nobody to check against, so that "no such user" takes as long as
   // "wrong password". Made with the same parameters as the real ones, once, on first use.
@@ -98,13 +104,15 @@ export function createAccountService(
       })) ?? { status: 'pending' as const };
 
       // The user, its auth method and the event are one write.
-      const registered = await ctx.db.tx(async () => {
+      const registered = await ctx.db.tx(async (tx) => {
         const created = await users.createUser({
           username,
           email,
           auth: { provider: 'local', password },
           status: decision.status,
         });
+        // A policy that activates at once also gives the default role; otherwise approval does.
+        await grantDefaultRole(authz, tx, created);
         await ctx.events.emit('identity.user.registered@1', {
           userId: created.id,
           username: created.username,
@@ -166,19 +174,24 @@ export function createAccountService(
 
     async logout(actor, sessionId) {
       requireUser(actor);
+      await authz.require(actor, 'core.identity.session.manage');
       if (sessionId !== undefined) await sessions.revoke(sessionId);
     },
 
     async logoutAll(actor) {
-      return sessions.revokeAll(requireUser(actor).userId);
+      const { userId } = requireUser(actor);
+      await authz.require(actor, 'core.identity.session.manage');
+      return sessions.revokeAll(userId);
     },
 
     async me(actor, sessionId) {
       const { userId } = requireUser(actor);
       const found = await users.findById(userId);
       if (!found) throw new Unauthorized();
+      await authz.require(actor, 'core.identity.me.read');
       return {
         user: found,
+        roles: await authz.rolesOf(actor, userId),
         csrfToken:
           actor.kind === 'user' && actor.via === 'session' && sessionId
             ? csrfTokenFor(sessionId)

@@ -1,6 +1,7 @@
-// A stand-in for `core.authz` in tests. Production denies every non-public route until M3 (ADR
-// 0005, ADR 0006); a test that wants to get through the pipeline uses this and says which
-// permissions to allow. It must never be contributed by a module that ships.
+// A stand-in for `core.authz` for tests of the pipeline itself (transport: ordering of the steps,
+// error mapping), where no module or database is involved. A test of what a route or a service
+// allows uses the real `core.authz` and roles in the database instead (ADR 0015). It must never be
+// contributed by a module that ships.
 import { Forbidden, Unauthorized, type Actor } from '@scorpion/contracts';
 
 /** What the pipeline hands an authoriser; this one reads only the actor and the permission. */

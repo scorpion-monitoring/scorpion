@@ -5,10 +5,11 @@ import {
   Unauthorized,
   ANONYMOUS,
   type Actor,
+  type UserActor,
 } from '@scorpion/contracts';
-import { makeAuthMethod, makeUser } from '@scorpion/testing';
+import { makeAuthMethod, makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { useIdentity } from '../test/harness.ts';
+import { makeMember, useIdentity } from '../test/harness.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { csrfTokenFor } from './session-id.ts';
 import { settingsSchema, type IdentitySettings } from './settings.ts';
@@ -35,10 +36,10 @@ const all = async (
 
 /** A user who can sign in with `PASSWORD`. */
 async function withPassword(
-  kernel: { pool: Parameters<typeof makeUser>[0] },
-  overrides: Parameters<typeof makeUser>[1] = {},
+  kernel: { pool: Parameters<typeof makeMember>[0] },
+  overrides: Parameters<typeof makeMember>[1] = {},
 ) {
-  const user = await makeUser(kernel.pool, overrides);
+  const user = await makeMember(kernel.pool, overrides);
   await makeAuthMethod(kernel.pool, user, { passwordHash: await hashPassword(PASSWORD) });
   return user;
 }
@@ -101,7 +102,7 @@ describe('register', () => {
 
   it('answers 409 for a taken username or email, whatever way its holder signs in', async () => {
     const { kernel, identity: id } = await identity.start();
-    const oidc = await makeUser(kernel.pool, { username: 'bob', email: 'bob@example.org' });
+    const oidc = await makeMember(kernel.pool, { username: 'bob', email: 'bob@example.org' });
     await makeAuthMethod(kernel.pool, oidc, { provider: 'lifescience-aai' });
     await expect(id.accounts.register({ ...input, username: 'bob' })).rejects.toBeInstanceOf(
       Conflict,
@@ -257,7 +258,7 @@ describe('login', () => {
 
   it('treats an account that signs in another way, with no password, like an unknown user', async () => {
     const { kernel, identity: id } = await identity.start();
-    const user = await makeUser(kernel.pool, { username: 'oidc-only' });
+    const user = await makeMember(kernel.pool, { username: 'oidc-only' });
     await makeAuthMethod(kernel.pool, user, { provider: 'lifescience-aai' });
     await expect(
       id.accounts.login({ username: 'oidc-only', password: PASSWORD }),
@@ -387,7 +388,11 @@ describe('me', () => {
     const { kernel, identity: id } = await identity.start();
     const user = await withPassword(kernel, { username: 'alice' });
     expect((await id.accounts.me(actorOf(user), undefined)).csrfToken).toBeNull();
-    const viaToken: Actor = { ...(actorOf(user) as object), via: 'token' } as Actor;
+    const viaToken: Actor = {
+      ...(actorOf(user) as UserActor),
+      via: 'token',
+      scopes: ['core.identity.me.read'],
+    };
     expect((await id.accounts.me(viaToken, 'x'.repeat(43))).csrfToken).toBeNull();
   });
 
@@ -400,5 +405,58 @@ describe('me', () => {
         undefined,
       ),
     ).rejects.toBeInstanceOf(Unauthorized);
+  });
+});
+
+describe('roles and the second check, with core.authz', () => {
+  it('returns the roles of the caller from core.authz, every time', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const user = await withPassword(kernel, { username: 'alice' });
+    const actor = actorOf(user); // makeMember gave the account the role `user`
+    expect((await id.accounts.me(actor, undefined)).roles).toEqual(['user']);
+    // Not cached by identity: a change in the roles shows at once.
+    await makeRoleAssignment(kernel.pool, user, 'reviewer');
+    expect((await id.accounts.me(actor, undefined)).roles).toEqual(['reviewer', 'user']);
+  });
+
+  it('denies a user without roles on me, logout and logoutAll', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const roleless = await makeUser(kernel.pool);
+    const actor = actorOf(roleless);
+    await expect(id.accounts.me(actor, undefined)).rejects.toBeInstanceOf(Forbidden);
+    await expect(id.accounts.logout(actor, undefined)).rejects.toBeInstanceOf(Forbidden);
+    await expect(id.accounts.logoutAll(actor)).rejects.toBeInstanceOf(Forbidden);
+  });
+
+  it('gives an account the default role when a policy activates it at registration, and none when it waits', async () => {
+    const auto = {
+      id: 'test.auto',
+      version: '1.0.0',
+      contributes: {
+        'auth.approvalPolicy': [{ id: 'auto', decide: () => ({ status: 'active' }) }],
+      },
+    };
+    const manual = await identity.start();
+    const waiting = await manual.identity.accounts.register({
+      username: 'waiter',
+      email: 'waiter@example.org',
+      password: PASSWORD,
+    });
+    expect(waiting.status).toBe('pending');
+    expect(await all(manual.kernel, 'authz_role_assignment')).toEqual([]);
+
+    const started = await identity.start({
+      settings: { get: () => Promise.resolve(settingsSchema.parse({ approvalPolicy: 'auto' })) },
+      extraModule: { id: 'test.auto', manifest: auto },
+    });
+    const created = await started.identity.accounts.register({
+      username: 'quick',
+      email: 'quick@example.org',
+      password: PASSWORD,
+    });
+    expect(created.status).toBe('active');
+    expect(await all(started.kernel, 'authz_role_assignment')).toEqual([
+      expect.objectContaining({ user_id: created.id, assigned_by: null }),
+    ]);
   });
 });
