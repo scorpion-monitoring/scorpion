@@ -1,6 +1,7 @@
 // Input rules for accounts. The service applies them to every caller (routes, CLI, OIDC
 // provisioning), so no entry point can skip one. Size limits are part of the rules.
 import { z } from 'zod';
+import { SCOPE, SCOPE_MAX_LENGTH, SCOPES_MAX } from './service/token-format.ts';
 
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 31;
@@ -73,3 +74,37 @@ export const loginInput = z.strictObject({
   password: z.string().min(1).max(PASSWORD_MAX),
 });
 export type LoginInput = z.infer<typeof loginInput>;
+
+export const TOKEN_NAME_MAX = 64;
+
+/** A scope is `read:` or `write:` and a dotted kebab-case resource. Which resources exist is up to the modules (M3). */
+export const scope = z
+  .string()
+  .max(SCOPE_MAX_LENGTH)
+  .regex(SCOPE, 'must look like "read:kpi" or "write:registry.services"');
+
+const tokenName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(TOKEN_NAME_MAX)
+  .regex(/^[^\p{Cc}]+$/u, 'may not contain control characters');
+
+const scopes = z
+  .array(scope)
+  .max(SCOPES_MAX)
+  .transform((list) => [...new Set(list)].sort());
+
+const expiresAt = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
+
+/** The body of `POST /tokens`. `expiresAt` is optional (no expiry) and must lie in the future. */
+export const createTokenInput = z.strictObject({
+  name: tokenName,
+  scopes: scopes.default([]),
+  expiresAt: expiresAt.nullish().transform((value) => value ?? null),
+});
+export type CreateTokenInput = z.input<typeof createTokenInput>;
+
+/** The body of `POST /tokens/{id}/rotate`: a new expiry, or the old one is kept. */
+export const rotateTokenInput = z.strictObject({ expiresAt: expiresAt.optional() });
+export type RotateTokenInput = z.input<typeof rotateTokenInput>;
