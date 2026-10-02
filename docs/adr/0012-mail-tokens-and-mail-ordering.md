@@ -56,6 +56,11 @@ returning`. Two requests with the same link cannot both succeed. It runs in the 
 - **Verification and OIDC (changes the sprint 4 rule).** Registering a password account sends a verification mail. Until
   the owner opens the link the address is unverified and an OIDC login with the same address answers 409. After it, the
   account is linkable by a provider that vouches for that address (ADR-0011).
+- **Changing the address in the profile.** The old address stays, with its verified state, until the new one is
+  confirmed; confirming swaps it and marks it verified. A change asked for an address another account holds stores
+  its token and shows `pendingEmail` like any other but sends no mail, so the profile cannot be used to probe for
+  addresses. The alternative, "reset verification at once", would leave a signed-in person unverified (and unlinkable by
+  OIDC) while the mail is in transit, and would let a typo take their verified address away.
 - **The Mailer port.** `send(mail)`, with SMTP (Nodemailer, `SMTP_URL`), in-memory (tests) and "unconfigured"
   implementations in `modules/core-identity/service/mailer.ts`. Plain text only, no templates, no queue. M4 moves the
   port behind `core.notifications` and reuses the transport. The sender address and the instance name come from the

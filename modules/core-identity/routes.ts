@@ -22,6 +22,7 @@ import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
 import type { BootstrapService } from './service/bootstrap.ts';
 import type { OidcService } from './service/oidc.ts';
+import type { ProfileService } from './service/profile.ts';
 import type { RecoveryService } from './service/recovery.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
 import {
@@ -35,6 +36,7 @@ import {
   resetConfirmInput,
   resetRequestInput,
   rotateTokenInput,
+  updateProfileInput,
   verifyEmailInput,
 } from './validation.ts';
 
@@ -43,6 +45,7 @@ export interface IdentityRoutesServices {
   approval: ApprovalService;
   bootstrap: BootstrapService;
   oidc: OidcService;
+  profile: ProfileService;
   recovery: RecoveryService;
   tokens: TokenService;
 }
@@ -317,6 +320,45 @@ export const resendVerificationRoute = createRoute({
   },
 });
 
+const profileSchema = z.object({
+  username: z.string(),
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  emailVerified: z.boolean(),
+  /** The address a change was asked for and nobody has confirmed yet. */
+  pendingEmail: z.string().nullable(),
+  /** Plain text. Show it as text, never as HTML. */
+  bio: z.string().nullable(),
+});
+
+export const getProfileRoute = createRoute({
+  method: 'get',
+  path: '/account/profile',
+  permission: 'core.identity.profile.read',
+  responses: {
+    200: ok("The caller's own profile.", profileSchema),
+    403: { description: 'The caller uses an access token, not a session.' },
+  },
+});
+
+export const updateProfileRoute = createRoute({
+  method: 'patch',
+  path: '/account/profile',
+  permission: 'core.identity.profile.update',
+  request: { body: json(updateProfileInput) },
+  responses: {
+    200: ok(
+      'The profile after the change. A new `email` is `pendingEmail` until the mailed link is opened.',
+      profileSchema,
+    ),
+    403: { description: 'The caller uses an access token, not a session.' },
+    422: {
+      description: 'A field breaks the rules, an unknown field was sent, or nothing changes.',
+    },
+    429: { description: 'Too many address changes.' },
+  },
+});
+
 const tokenSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -408,7 +450,7 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval, bootstrap, oidc, recovery, tokens }: IdentityRoutesServices,
+  { accounts, approval, bootstrap, oidc, profile, recovery, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     const user = await accounts.register(c.req.valid('json'));
@@ -560,4 +602,14 @@ export function registerIdentityRoutes(
     await recovery.resendVerification(c.get('actor'));
     return c.json({ accepted: true as const }, 202);
   }) satisfies RouteHandler<typeof resendVerificationRoute, AppEnv>);
+
+  r.internal(getProfileRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json(await profile.get(c.get('actor')), 200);
+  }) satisfies RouteHandler<typeof getProfileRoute, AppEnv>);
+
+  r.internal(updateProfileRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json(await profile.update(c.get('actor'), c.req.valid('json')), 200);
+  }) satisfies RouteHandler<typeof updateProfileRoute, AppEnv>);
 }
