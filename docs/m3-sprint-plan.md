@@ -39,6 +39,9 @@ Each item is a promise M2 made in code, README or backlog. Sprint numbers are wh
 ## 2. Cross-sprint rules
 
 - Stay inside M3. Anything else goes to `docs/backlog.md`.
+- **One pull request per sprint** (CLAUDE.md, "Pull requests are expensive: batch them"). ADRs, README updates, backlog lines and
+  review fixes go into the sprint's pull request, not into separate ones. Push the branch and open the pull request when the
+  sprint is complete and verified locally.
 - Every service method has an integration test against real Postgres, including a denied-permission case and a rollback
   case for multi-row writes. For `core.authz` the denied case is the point of the module: test it per route.
 - Pure logic (permission matching, scope intersection, key derivation, vocabulary term ordering) gets table-driven unit tests.
@@ -274,12 +277,12 @@ second process within the TTL; rotation never leaves an undecryptable row; hosti
 
 ## 12. Risks
 
-| Risk                                                                   | Effect                                        | Mitigation                                                                                                                     |
-| ---------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| A route is added later without a real permission check.                | Defect 1 returns quietly.                     | Registration already refuses a route without `permission`; the route-table walker catches a missing denied-case.               |
-| Stale role cache after a demotion.                                     | A demoted admin keeps access for seconds.     | Invalidate in-process, keep TTL at 5 s, document the cross-process bound, test it.                                             |
-| Bootstrap migration runs on a database with zero or many marked users. | No Admin, or too many.                        | Zero marked users: leave the instance as it is, `create-admin` and the first-run token still work. Test both.                  |
-| `SECRETS_KEY` lost or rotated badly.                                   | OIDC and backup secrets unreadable.           | Key id per row, rotation is resumable and verifies decryption before it commits, document the backup of the key in the README. |
-| Settings cache differs between processes.                              | `localAccounts=false` takes seconds to apply. | Same bound as sessions, tested with two kernels.                                                                               |
-| `sharp` and DOMPurify add native or heavy dependencies to every image. | Larger images, build time.                    | Only profiles that include the blob module install them (image check already proves profile contents).                         |
-| Sprint 2 touches most of identity's routes at once.                    | Large, hard-to-review pull request.           | Split by route group (accounts, tokens, profile) into stacked branches, as sprint 5 of M2 did.                                 |
+| Risk                                                                   | Effect                                        | Mitigation                                                                                                                                                                                                |
+| ---------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A route is added later without a real permission check.                | Defect 1 returns quietly.                     | Registration already refuses a route without `permission`; the route-table walker catches a missing denied-case.                                                                                          |
+| Stale role cache after a demotion.                                     | A demoted admin keeps access for seconds.     | Invalidate in-process, keep TTL at 5 s, document the cross-process bound, test it.                                                                                                                        |
+| Bootstrap migration runs on a database with zero or many marked users. | No Admin, or too many.                        | Zero marked users: leave the instance as it is, `create-admin` and the first-run token still work. Test both.                                                                                             |
+| `SECRETS_KEY` lost or rotated badly.                                   | OIDC and backup secrets unreadable.           | Key id per row, rotation is resumable and verifies decryption before it commits, document the backup of the key in the README.                                                                            |
+| Settings cache differs between processes.                              | `localAccounts=false` takes seconds to apply. | Same bound as sessions, tested with two kernels.                                                                                                                                                          |
+| `sharp` and DOMPurify add native or heavy dependencies to every image. | Larger images, build time.                    | Only profiles that include the blob module install them (image check already proves profile contents).                                                                                                    |
+| Sprint 2 touches most of identity's routes at once.                    | Large, hard-to-review pull request.           | One pull request per sprint stays the default (CLAUDE.md, "batch them"); split by route group only if it passes about 1500 changed lines of non-test code, into as few stacked pull requests as possible. |
