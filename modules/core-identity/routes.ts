@@ -10,14 +10,24 @@ import {
   type RouteHandler,
 } from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
-import { clearSessionCookie, readSessionCookie, writeSessionCookie } from './cookie.ts';
+import {
+  clearLoginCookie,
+  clearSessionCookie,
+  readLoginCookie,
+  readSessionCookie,
+  writeLoginCookie,
+  writeSessionCookie,
+} from './cookie.ts';
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
 import type { BootstrapService } from './service/bootstrap.ts';
+import type { OidcService } from './service/oidc.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
 import {
   createTokenInput,
   loginInput,
+  oidcCallbackQuery,
+  oidcProviderParam,
   redeemFirstRunInput,
   registerInput,
   rotateTokenInput,
@@ -27,6 +37,7 @@ export interface IdentityRoutesServices {
   accounts: AccountService;
   approval: ApprovalService;
   bootstrap: BootstrapService;
+  oidc: OidcService;
   tokens: TokenService;
 }
 
@@ -170,6 +181,44 @@ export const firstAdminRoute = createRoute({
   },
 });
 
+const startedSchema = z.object({ authorizationUrl: z.url() });
+
+export const oidcStartRoute = createRoute({
+  method: 'post',
+  path: '/auth/oidc/{provider}/start',
+  public: true,
+  publicReason:
+    'Signing in is what makes a caller known. It only creates a login state and returns the provider URL. Rate limited (strict).',
+  rateLimit: 'strict',
+  request: { params: oidcProviderParam },
+  responses: {
+    200: ok('Send the browser to `authorizationUrl`. The login cookie is set.', startedSchema),
+    404: { description: 'No such sign-in provider.' },
+    502: { description: 'The provider could not be reached.' },
+  },
+});
+
+export const oidcCallbackRoute = createRoute({
+  method: 'get',
+  path: '/auth/oidc/{provider}/callback',
+  public: true,
+  publicReason:
+    'The provider redirects the browser here to finish a login this browser started; the single-use state and the login cookie are the credential. It needs no session. Rate limited (strict).',
+  rateLimit: 'strict',
+  request: { params: oidcProviderParam, query: oidcCallbackQuery },
+  responses: {
+    302: { description: 'Signed in. The session cookie is set.' },
+    400: {
+      description:
+        'The state is unknown, expired, used or from another browser, or the provider refused.',
+    },
+    401: { description: 'The id_token did not pass validation, or the account may not sign in.' },
+    403: { description: 'The account is waiting for approval.' },
+    404: { description: 'No such sign-in provider.' },
+    502: { description: 'The provider could not be reached or answered unexpectedly.' },
+  },
+});
+
 const tokenSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -261,7 +310,7 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval, bootstrap, tokens }: IdentityRoutesServices,
+  { accounts, approval, bootstrap, oidc, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     const user = await accounts.register(c.req.valid('json'));
@@ -321,6 +370,33 @@ export function registerIdentityRoutes(
     c.header('cache-control', 'no-store');
     return c.json({ user: view(admin) }, 201);
   }) satisfies RouteHandler<typeof firstAdminRoute, AppEnv>);
+
+  r.internal(oidcStartRoute, (async (c) => {
+    const started = await oidc.start(c.req.valid('param').provider);
+    writeLoginCookie(c, started.cookie.value, started.cookie.maxAgeSeconds);
+    c.header('cache-control', 'no-store');
+    return c.json({ authorizationUrl: started.authorizationUrl }, 200);
+  }) satisfies RouteHandler<typeof oidcStartRoute, AppEnv>);
+
+  r.internal(oidcCallbackRoute, (async (c) => {
+    const query = c.req.valid('query');
+    // The login cookie is spent whatever the outcome; a failed callback cannot be retried.
+    const verifier = readLoginCookie(c);
+    clearLoginCookie(c);
+    c.header('cache-control', 'no-store');
+    c.header('referrer-policy', 'no-referrer');
+    const done = await oidc.complete({
+      providerId: c.req.valid('param').provider,
+      state: query.state,
+      code: query.code,
+      error: query.error,
+      verifier,
+      previousSessionId: readSessionCookie(c),
+    });
+    if (done.kind === 'login') writeSessionCookie(c, done.sessionId, done.expiresAt);
+    // Always the application root: no caller-supplied target, so no open redirect.
+    return c.redirect(oidc.landing, 302);
+  }) satisfies RouteHandler<typeof oidcCallbackRoute, AppEnv>);
 
   r.internal(listTokensRoute, (async (c) => {
     const query = c.req.valid('query');

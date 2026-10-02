@@ -190,8 +190,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, tokens } = r.service<IdentityInternals>();
-      registerIdentityRoutes(r, { accounts, approval, bootstrap, tokens });
+      const { accounts, approval, bootstrap, oidc, tokens } = r.service<IdentityInternals>();
+      registerIdentityRoutes(r, { accounts, approval, bootstrap, oidc, tokens });
     },
   });
 }
