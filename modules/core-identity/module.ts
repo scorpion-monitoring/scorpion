@@ -7,6 +7,7 @@ import { createAccountService } from './service/accounts.ts';
 import { createBootstrapService, type BootstrapService } from './service/bootstrap.ts';
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
+import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
 import {
   APPROVAL_POLICY_REGISTRY,
   approvalPolicyEntrySchema,
@@ -23,6 +24,7 @@ export interface IdentityInternals extends IdentityService {
   accounts: AccountService;
   approval: ApprovalService;
   bootstrap: BootstrapService;
+  loginStates: LoginStateService;
   sessions: SessionService;
   tokens: TokenService;
 }
@@ -147,6 +149,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       currentBootstrap = bootstrap;
       return {
         bootstrap,
+        loginStates: createLoginStateService(ctx),
         users,
         sessions,
         tokens,
