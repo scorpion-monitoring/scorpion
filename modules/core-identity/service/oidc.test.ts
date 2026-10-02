@@ -154,6 +154,26 @@ describe('a known identity', () => {
   });
 });
 
+describe('a first login, until accounts can be created', () => {
+  it('is refused with 401, creating no user and no session', async () => {
+    const { kernel, identity: id } = await start();
+    const error = await id.oidc.complete(await flow(id, fresh())).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Unauthorized);
+    expect(await count(kernel, 'identity_user')).toBe(0);
+    expect(await count(kernel, 'identity_session')).toBe(0);
+  });
+
+  it('refuses a state that was made for linking, which is not a login', async () => {
+    const { kernel, identity: id } = await start();
+    const user = await makeUser(kernel.pool);
+    await makeAuthMethod(kernel.pool, user, { provider: 'stub', subject: 'known-sub' });
+    const input = await flow(id, fresh({ subject: 'known-sub' }));
+    await kernel.pool.query('update identity_login_state set link_user_id = $1', [user.id]);
+    await expect(id.oidc.complete(input)).rejects.toBeInstanceOf(BadRequest);
+    expect(await count(kernel, 'identity_session')).toBe(0);
+  });
+});
+
 describe('the login state', () => {
   const expectBad = async (id: IdentityInternals, input: CompleteInput) => {
     const error = await id.oidc.complete(input).catch((e: unknown) => e);

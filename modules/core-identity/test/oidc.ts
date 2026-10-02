@@ -2,7 +2,6 @@
 // knows it, and a few helpers to walk a login.
 import { startStubIdp, type StubIdp, type StubLogin } from '@scorpion/testing';
 import { afterAll, beforeAll } from 'vitest';
-import type { Actor } from '@scorpion/contracts';
 import type { IdentityInternals } from '../module.ts';
 import type { CompleteInput } from '../service/oidc.ts';
 import { settingsSchema, type IdentitySettings } from '../service/settings.ts';
@@ -39,21 +38,12 @@ export const rows = async (kernel: Kernel, sql: string, values: unknown[] = []) 
 export const count = async (kernel: Kernel, table: string) =>
   Number((await rows(kernel, `select count(*) from ${table}`))[0]!.count);
 
-export const sessionActor = (u: { id: string; username: string }): Actor => ({
-  kind: 'user',
-  userId: u.id,
-  username: u.username,
-  roles: [],
-  via: 'session',
-});
-
-/** Starts a login (or, with an actor, a link) and plays the browser at the provider. */
+/** Starts a login and plays the browser at the provider; returns what the callback receives. */
 export async function flow(
   id: IdentityInternals,
   login: Partial<StubLogin> = {},
-  actor?: Actor,
 ): Promise<CompleteInput> {
-  const started = actor ? await id.oidc.startLink(actor, 'stub') : await id.oidc.start('stub');
+  const started = await id.oidc.start('stub');
   const back = await idp.authorize(started.authorizationUrl, login);
   return {
     providerId: 'stub',
