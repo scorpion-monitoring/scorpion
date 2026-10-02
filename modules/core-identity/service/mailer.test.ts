@@ -63,7 +63,7 @@ function smtpStub() {
         } else if (verb === 'QUIT') socket.end('221 bye\r\n');
         else socket.write('250 ok\r\n');
       }
-      buffer = data ? '' : '';
+      buffer = '';
     });
   });
   return {

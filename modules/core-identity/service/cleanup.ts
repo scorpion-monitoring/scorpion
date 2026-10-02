@@ -1,0 +1,95 @@
+// The hourly cleanup (ADR 0013): rows that can never be used again, and the purge of accounts that
+// were soft-deleted long enough ago. It is a job, not a service anyone calls: no route, no actor,
+// nothing to authorise. One run is one transaction, so a failure (a subscriber's rule, a database
+// error) leaves everything as it was and the next run does it again.
+import { and, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import type { ModuleContext } from '@scorpion/kernel';
+import { firstRunToken, loginState, session, token, user } from '../db/schema.ts';
+import { deleteSpentMailTokens } from './mail-tokens.ts';
+
+const DAY_MS = 24 * 3600 * 1000;
+/**
+ * How long a soft-deleted account stays before it is purged. A module constant until core.settings
+ * (M3). Until then it keeps its username reserved and its address taken.
+ */
+export const PURGE_RETENTION_MS = 30 * DAY_MS;
+/** An access token that expired or was revoked is shown to its owner for this long, then removed. */
+export const TOKEN_GRACE_MS = 30 * DAY_MS;
+/** At most this many accounts are purged per run; the next hourly run takes the rest. */
+export const PURGE_BATCH = 500;
+
+export interface CleanupResult {
+  sessions: number;
+  loginStates: number;
+  mailTokens: number;
+  accessTokens: number;
+  firstRunTokens: number;
+  purgedUsers: number;
+}
+
+export interface CleanupService {
+  /** Deletes what is spent or expired as of `now`. Returns how many rows of each kind went. */
+  run(now?: Date): Promise<CleanupResult>;
+}
+
+export function createCleanupService(ctx: ModuleContext): CleanupService {
+  return {
+    async run(now = new Date()) {
+      return ctx.db.tx(async (tx) => {
+        const sessions = await tx
+          .delete(session)
+          // A revoked session is as dead as an expired one: the lookup is by hash and finds nothing.
+          .where(or(lt(session.expiresAt, now), isNotNull(session.revokedAt)))
+          .returning({ id: session.id });
+        const loginStates = await tx
+          .delete(loginState)
+          .where(lt(loginState.expiresAt, now))
+          .returning({ id: loginState.id });
+        const mailTokens = await deleteSpentMailTokens(tx, now);
+        const grace = new Date(now.getTime() - TOKEN_GRACE_MS);
+        const accessTokens = await tx
+          .delete(token)
+          .where(or(lt(token.expiresAt, grace), lt(token.revokedAt, grace)))
+          .returning({ id: token.id });
+        const firstRunTokens = await tx
+          .delete(firstRunToken)
+          .where(lt(firstRunToken.expiresAt, now))
+          .returning({ id: firstRunToken.id });
+
+        // The purge: accounts soft-deleted (rejected) before the cutoff, oldest first.
+        const cutoff = new Date(now.getTime() - PURGE_RETENTION_MS);
+        const due = await tx
+          .select({ id: user.id, username: user.username })
+          .from(user)
+          .where(and(isNotNull(user.deletedAt), lt(user.deletedAt, cutoff)))
+          .orderBy(user.deletedAt, user.id)
+          .limit(PURGE_BATCH);
+        for (const gone of due) {
+          // Other modules clean up their rows for this user from this event (ADR 0013).
+          await ctx.events.emit('identity.user.purged@1', {
+            userId: gone.id,
+            username: gone.username,
+          });
+        }
+        if (due.length > 0) {
+          // The auth methods, sessions, tokens, mail tokens and login states go with the user (cascade).
+          await tx.delete(user).where(
+            inArray(
+              user.id,
+              due.map((row) => row.id),
+            ),
+          );
+        }
+
+        return {
+          sessions: sessions.length,
+          loginStates: loginStates.length,
+          mailTokens,
+          accessTokens: accessTokens.length,
+          firstRunTokens: firstRunTokens.length,
+          purgedUsers: due.length,
+        };
+      });
+    },
+  };
+}
