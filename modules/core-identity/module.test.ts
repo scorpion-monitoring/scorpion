@@ -18,14 +18,21 @@ async function refused(run: Promise<unknown>): Promise<string> {
 }
 
 describe('the module', () => {
-  it('declares itself: id, prefix, and no routes, permissions, events or jobs yet', () => {
+  it('declares itself: id, prefix and the session authenticator; no routes, permissions, events or jobs yet', () => {
     expect(manifest).toMatchObject({ id: 'core.identity', tablePrefix: 'identity_' });
     expect(manifest.permissions).toBeUndefined();
     expect(manifest.routes).toBeUndefined();
     expect(manifest.jobs).toBeUndefined();
     expect(manifest.events).toBeUndefined();
     expect(manifest.registries).toBeUndefined();
-    expect(manifest.contributes).toBeUndefined();
+    expect(Object.keys(manifest.contributes ?? {})).toEqual(['kernel.authenticator']);
+  });
+
+  it('contributes exactly one authenticator entry', async () => {
+    const { kernel } = await identity.start();
+    expect(kernel.composition.registries.get('kernel.authenticator')?.entries).toEqual([
+      { module: 'core.identity', value: { authenticate: expect.any(Function) as unknown } },
+    ]);
   });
 
   it('creates exactly its five tables, all with the module prefix', async () => {

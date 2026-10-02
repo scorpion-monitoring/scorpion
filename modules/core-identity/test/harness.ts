@@ -2,16 +2,24 @@
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import { startPostgres, type StartedPostgres } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll } from 'vitest';
-import manifest from '../module.ts';
+import { createIdentityModule, type IdentityInternals } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
-import type { IdentityService } from '../public.ts';
+
+export interface StartOptions {
+  databaseUrl?: string;
+  /** How long a verified session is trusted without asking the database. */
+  sessionCacheTtlMs?: number;
+}
 
 export interface IdentityHarness {
   server: () => StartedPostgres;
   /** A migrated kernel on a database of its own; closed after the test. */
-  start: (options?: {
-    databaseUrl?: string;
-  }) => Promise<{ kernel: Kernel; identity: IdentityService }>;
+  start: (options?: StartOptions) => Promise<{
+    kernel: Kernel;
+    identity: IdentityInternals;
+    /** The manifest this kernel was built from. */
+    manifest: ReturnType<typeof createIdentityModule>;
+  }>;
 }
 
 /** One Postgres container per test file; every `start()` gets an empty database. */
@@ -30,6 +38,7 @@ export function useIdentity(): IdentityHarness {
   return {
     server: () => server,
     async start(options) {
+      const manifest = createIdentityModule({ sessionCacheTtlMs: options?.sessionCacheTtlMs });
       const kernel = createKernel({
         profile: { name: 'identity-test', modules: ['core.identity'] },
         sources: [{ manifest, packageJson }],
@@ -42,7 +51,11 @@ export function useIdentity(): IdentityHarness {
       });
       open.push(kernel);
       await kernel.start();
-      return { kernel, identity: kernel.services.get('core.identity') as IdentityService };
+      return {
+        kernel,
+        identity: kernel.services.get('core.identity') as IdentityInternals,
+        manifest,
+      };
     },
   };
 }
