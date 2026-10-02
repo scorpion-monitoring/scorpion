@@ -8,7 +8,9 @@ import {
   type RateLimitGroup,
 } from '@scorpion/contracts';
 import {
+  anonymousOnly,
   mountPath,
+  type Authenticator,
   type Authorizer,
   type Config,
   type Logger,
@@ -16,6 +18,7 @@ import {
   type RateLimiter,
   type RegisteredRoute,
 } from '@scorpion/kernel';
+import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
 import { DEFAULT_MAX_BODY_BYTES, limitBody } from './pipeline/body-limit.ts';
 import { createClientIpResolver } from './pipeline/client-ip.ts';
@@ -33,6 +36,8 @@ export interface AppOptions {
   log: Logger;
   /** The routes the modules registered (`kernel.routes`). */
   routes: readonly RegisteredRoute[];
+  /** Resolves credentials to an actor (`kernel.authenticator`). Default: everyone is anonymous. */
+  authenticator?: Authenticator;
   /** Decides non-public routes (`kernel.authorizer`). */
   authorizer: Authorizer;
   /**
@@ -61,7 +66,7 @@ export interface AppOptions {
  *  1. request id           5. body size limit      8. handler
  *  2. security headers     6. input validation     9. error mapper
  *  3. request logging      7. authorisation hook
- *  4. rate limit
+ *  4. rate limit and authentication
  *
  * Steps 1 to 3 and 5 are middleware for every request; step 4 is added per route, because its
  * bucket is the route's group, and runs before the body is read; 6 to 8 run per route (Zod
@@ -97,15 +102,22 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
     path: string,
     handler: RegisteredRoute['handler'],
     module: string,
-    limited = false,
+    moduleRoute = false,
   ) => {
-    if (limited && options.rateLimiter) {
+    if (moduleRoute) {
+      // Step 2 (rate limit), then step 3 (authentication), before validation and the handler.
       const group = route.rateLimit ?? 'default';
-      app.on(
-        route.method.toUpperCase(),
-        `${base}${path}`.replace(/\{(\w+)\}/g, ':$1'),
-        rateLimit({ limiter: options.rateLimiter, group, limit: limits[group], clientIp, log }),
-      );
+      const honoPath = `${base}${path}`.replace(/\{(\w+)\}/g, ':$1');
+      const method = route.method.toUpperCase();
+      if (options.rateLimiter) {
+        const limit = limits[group];
+        app.on(
+          method,
+          honoPath,
+          rateLimit({ limiter: options.rateLimiter, group, limit, clientIp, log }),
+        );
+      }
+      app.on(method, honoPath, authenticate(options.authenticator ?? anonymousOnly, route));
     }
     app.openapi(
       { ...route, path: `${base}${path}` } as never,

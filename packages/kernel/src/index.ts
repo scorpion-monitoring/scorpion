@@ -95,6 +95,12 @@ export {
 } from './authz.ts';
 export { collectRoutes, type RegisteredRoute, type RouteSurface } from './routes.ts';
 export {
+  anonymousOnly,
+  AUTHENTICATOR_REGISTRY,
+  type AuthenticationRequest,
+  type Authenticator,
+} from './authn.ts';
+export {
   createRateLimiter,
   type RateDecision,
   type RateLimit,

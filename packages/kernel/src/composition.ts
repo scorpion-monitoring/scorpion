@@ -2,6 +2,7 @@
 // contributions against them. Everything here is pure, so it is tested without a database.
 import type { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
+import { AUTHENTICATOR_REGISTRY, authenticatorEntrySchema } from './authn.ts';
 import { AUTHORIZER_REGISTRY, authorizerEntrySchema } from './authz.ts';
 import { SYSTEM_READY, type PermissionDef } from './manifest.ts';
 import type { ResolvedModule, ResolvedProfile } from './resolve.ts';
@@ -127,6 +128,15 @@ export function buildComposition(profile: ResolvedProfile): Composition {
         entries: [],
       },
     ],
+    [
+      AUTHENTICATOR_REGISTRY,
+      {
+        name: AUTHENTICATOR_REGISTRY,
+        owner: KERNEL_OWNER,
+        schema: authenticatorEntrySchema,
+        entries: [],
+      },
+    ],
   ]);
   for (const module of profile.modules) {
     for (const [name, schema] of Object.entries(module.manifest.registries ?? {})) {
@@ -197,6 +207,13 @@ export function buildComposition(profile: ResolvedProfile): Composition {
   if (authorizers.length > 1) {
     problems.push(
       `more than one module contributes to "${AUTHORIZER_REGISTRY}": ${authorizers.map((e) => e.module).join(', ')}`,
+    );
+  }
+
+  const authenticators = registries.get(AUTHENTICATOR_REGISTRY)!.entries;
+  if (authenticators.length > 1) {
+    problems.push(
+      `more than one module contributes to "${AUTHENTICATOR_REGISTRY}": ${authenticators.map((e) => e.module).join(', ')}`,
     );
   }
 

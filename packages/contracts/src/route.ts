@@ -5,6 +5,7 @@ import {
   type RouteConfig,
   type RouteHandler,
 } from '@hono/zod-openapi';
+import type { Actor } from './actor.ts';
 import { PROBLEM_CONTENT_TYPE, problemSchema } from './problem.ts';
 
 /** Who may call a route: a permission id, or everyone (with the reason written down). */
@@ -121,5 +122,7 @@ export interface AppEnv {
   Variables: {
     /** The id of this request (`X-Request-Id`), also in the logs and in every problem response. */
     requestId: string;
+    /** Who is calling: set by the authentication step, `anonymous` without credentials. */
+    actor: Actor;
   };
 }
