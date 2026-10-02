@@ -1,6 +1,6 @@
 import { startPostgres, type StartedPostgres } from '@scorpion/testing';
 import { z } from 'zod';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   allFixtureSources,
   FIXTURE_MODULE_PACKAGES,
@@ -231,5 +231,79 @@ describe('ctx', () => {
       profile: 'full',
       bound: { module: 'probe' },
     });
+  });
+});
+
+describe('module commands', () => {
+  const io = () => {
+    const out: string[] = [];
+    return {
+      out,
+      io: {
+        out: (text: string) => void out.push(text),
+        err: (text: string) => void out.push(`err: ${text}`),
+        readSecret: () => Promise.resolve('hunter2'),
+      },
+    };
+  };
+
+  async function inline(manifest: ModuleManifest): Promise<Kernel> {
+    const kernel = createKernel({
+      profile: { name: 'inline', modules: [manifest.id] as never },
+      sources: [{ manifest, packageJson: { name: `@scorpion/${manifest.id}`, dependencies: {} } }],
+      modulePackages: { [manifest.id]: `@scorpion/${manifest.id}` },
+      config: loadConfig({ DATABASE_URL: await server.createDatabase() }),
+      log: createLogger({ level: 'silent' }),
+    });
+    open.push(kernel);
+    return kernel;
+  }
+
+  it('lists the commands without touching the database, and runs one with the services built, no routes and no system.ready', async () => {
+    const ready = vi.fn();
+    const seen: unknown[] = [];
+    const kernel = await inline(
+      defineModule<{ greet: () => string }>({
+        id: 'tool',
+        version: '1.0.0',
+        services: () => ({ greet: () => 'hello' }),
+        routes: () => seen.push('routes registered'),
+        events: { on: { 'system.ready': ready } },
+        commands: [
+          {
+            name: 'greet',
+            description: 'Say hello',
+            usage: 'greet <name>',
+            run: (args, cliIo, ctx) => {
+              cliIo.out(`${args.join(' ')} ${ctx.moduleId}`);
+              return Promise.resolve(3);
+            },
+          },
+        ],
+      }),
+    );
+    expect(kernel.commands).toEqual([
+      { module: 'tool', name: 'greet', description: 'Say hello', usage: 'greet <name>' },
+    ]);
+
+    const { out, io: cliIo } = io();
+    expect(await kernel.runCommand('greet', ['to', 'you'], cliIo)).toBe(3);
+    expect(out).toEqual(['to you tool']);
+    expect(ready).not.toHaveBeenCalled();
+    expect(seen).toEqual([]);
+    // The database was migrated for it.
+    expect((await kernel.pool.query(`select 1 from kernel_outbox`)).rows).toEqual([]);
+  });
+
+  it('treats a command that returns nothing as exit code 0, and refuses an unknown name', async () => {
+    const kernel = await inline(
+      defineModule({
+        id: 'tool',
+        version: '1.0.0',
+        commands: [{ name: 'noop', description: 'x', run: async () => {} }],
+      }),
+    );
+    expect(await kernel.runCommand('noop', [], io().io)).toBe(0);
+    await expect(kernel.runCommand('nope', [], io().io)).rejects.toThrow(KernelStartupError);
   });
 });

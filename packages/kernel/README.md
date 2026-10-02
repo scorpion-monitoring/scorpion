@@ -14,6 +14,7 @@ what a module does is up to the module.
 - [Events](#events)
 - [Jobs](#jobs)
 - [Registries](#registries)
+- [CLI commands](#cli-commands)
 - [Routes](#routes)
 - [Profiles](#profiles)
 - [Testing a module](#testing-a-module)
@@ -278,6 +279,7 @@ starts; a wrong field is reported with its name.
 | `services(ctx)`  | Builds the module's service object (sync or async). Other modules get it as `ctx.deps['<id>']`.                                                                                                                               |
 | `routes(r, ctx)` | Registers routes: `r.internal(route, handler)`, `r.public('v1', route, handler)`, and `r.service<T>()` for the module's own service.                                                                                          |
 | `jobs`           | `{ name, schedule?, data?, handler, retry, timeoutSeconds }[]`. Names start with the module id.                                                                                                                               |
+| `commands`       | `{ name, description, usage?, run(args, io, ctx) }[]`: commands of the `scorpion` CLI. See [CLI commands](#cli-commands).                                                                                                     |
 | `events`         | `{ emits: { 'name@1': ZodSchema }, on: { 'name@1': handler, 'system.ready': handler } }`.                                                                                                                                     |
 | `registries`     | `{ [name]: ZodSchema }`: registries this module declares (the schema of one entry).                                                                                                                                           |
 | `contributes`    | `{ [registry name]: entries[] }`: entries for registries of this module or of a dependency.                                                                                                                                   |
@@ -420,6 +422,35 @@ registry entries, not `if` branches in the owner.
   to that absent module. Without such a dependency they are errors.
 - The kernel declares two registries itself, `kernel.authenticator` and `kernel.authorizer`, which any
   module may contribute to (see Routes). At most one entry may exist in each.
+
+## CLI commands
+
+A module can add a command to the `scorpion` CLI ([ADR-0009](../../docs/adr/0009-module-cli-commands.md)):
+
+```ts
+commands: [
+  {
+    name: 'create-admin', // lower-case kebab case; unique in the profile; not start, worker, migrate, profile:generate, help
+    description: 'Create an active administrator account.',
+    usage: 'create-admin --username <name> --email <address>',
+    async run(args, io, ctx) {
+      const password = await io.readSecret('Password: '); // terminal prompt, or one line of stdin
+      io.out('Created.');
+      return 0; // the exit code; returning nothing is 0
+    },
+  },
+],
+```
+
+- `scorpion <name>` runs it. The CLI knows the commands from the manifests of the build, so a profile
+  without the module has neither the command nor its line in the usage text. `kernel.commands` lists them
+  without touching the database.
+- `kernel.runCommand(name, args, io)` applies pending migrations and builds every module's services, then
+  calls `run` with the module's own `ctx`. No routes are registered, no workers start, and **`system.ready`
+  is not emitted**, so a command never triggers start-up behaviour.
+- `io` is `out`, `err` and `readSecret`. **Never take a secret from `args`**: the process list and the shell
+  history keep it. Never print one either; a command that has to is the exception to explain in its README.
+- A command is an entry point like a route: it calls the module's service and holds no logic of its own.
 
 ## Routes
 
