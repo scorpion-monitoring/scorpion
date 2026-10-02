@@ -270,8 +270,8 @@ The parameters are in one place; a unit test pins them. Under `NODE_ENV=test` on
 through the pipeline before `core.authz` exists.
 
 The routes are tested through the whole pipeline, on real Postgres, in `apps/server/src` (a module cannot import the
-server; `cli.test.ts` runs the real `scorpion create-admin` and `scorpion start` as processes): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, `defect-03.invalid-token.test.ts`, `tokens-routes.test.ts`, `bootstrap-routes.test.ts`, `oidc-routes.test.ts`, `oidc-accounts-routes.test.ts` and `defect-05.oidc-validation.test.ts`, with
+server; `cli.test.ts` runs the real `scorpion create-admin` and `scorpion start` as processes): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, `defect-03.invalid-token.test.ts`, `tokens-routes.test.ts`, `bootstrap-routes.test.ts`, `oidc-routes.test.ts` and `defect-05.oidc-validation.test.ts`, with
 `useIdentityApp()` from `src/testing/identity-app.ts`. The OIDC tests talk to `startStubIdp()` from `@scorpion/testing`, a
 provider on a local port (discovery, authorisation, a token endpoint that checks PKCE and the secret, a JWKS) whose
-`faults` break the id_token one way at a time. A test builds its own manifest with
+`faults` break the id_token one way at a time; `oidc-keycloak.test.ts` runs the same flow against a Keycloak container. A test builds its own manifest with
 `createIdentityModule({ settings, sessionCacheTtlMs, tokenCacheTtlMs })` to change a setting or the cache TTL.
