@@ -173,6 +173,7 @@ jobs:
         run: |
           docker run -d --rm --network host --name scorpion-smoke \
             -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
+            -e SECRETS_KEY="$(openssl rand -base64 32)" \
             "$IMAGE"
           for _ in $(seq 1 60); do
             if curl -fsS localhost:3000/healthz && curl -fsS localhost:3000/readyz; then

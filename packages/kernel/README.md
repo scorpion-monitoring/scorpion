@@ -328,17 +328,19 @@ export default defineModule<MyService, 'kpi.framework', 'kpi.impact'>({
 
 ## `ctx`: what a module receives
 
-| Member               | What it gives you                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `ctx.moduleId`       | The id of the module.                                                                                                                 |
-| `ctx.db`             | Drizzle over one shared `pg` pool. `ctx.db.tx(fn)` runs `fn(tx)` in one transaction.                                                  |
-| `ctx.log`            | A pino logger with `module` bound (and `jobId` inside a job). Secrets are redacted.                                                   |
-| `ctx.config`         | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`, `TRUSTED_PROXIES`.   |
-| `ctx.events`         | `emit(name, payload)` into the outbox.                                                                                                |
-| `ctx.jobs`           | `enqueue(name, data?)`.                                                                                                               |
-| `ctx.registry(name)` | The validated entries of a registry of this module or of a dependency (frozen).                                                       |
-| `ctx.deps`           | The public service objects of the declared dependencies.                                                                              |
-| `ctx.permissions`    | Every permission the loaded manifests declare (`id`, `module`, `scope`, `description`), read-only. `core.authz` validates against it. |
+| Member                | What it gives you                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.moduleId`        | The id of the module.                                                                                                                 |
+| `ctx.db`              | Drizzle over one shared `pg` pool. `ctx.db.tx(fn)` runs `fn(tx)` in one transaction.                                                  |
+| `ctx.log`             | A pino logger with `module` bound (and `jobId` inside a job). Secrets are redacted.                                                   |
+| `ctx.config`          | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`, `TRUSTED_PROXIES`.   |
+| `ctx.events`          | `emit(name, payload)` into the outbox.                                                                                                |
+| `ctx.jobs`            | `enqueue(name, data?)`.                                                                                                               |
+| `ctx.registry(name)`  | The validated entries of a registry of this module or of a dependency (frozen).                                                       |
+| `ctx.deps`            | The public service objects of the declared dependencies.                                                                              |
+| `ctx.permissions`     | Every permission the loaded manifests declare (`id`, `module`, `scope`, `description`), read-only. `core.authz` validates against it. |
+| `ctx.settings`        | `get()`: the module's own settings, validated by its manifest `settings` schema, defaults applied ([below](#settings)).               |
+| `ctx.settingsSchemas` | The `settings` schema of every loaded module that has one, by module id, read-only. `core.settings` validates writes against it.      |
 
 `ctx.deps` reaches nothing else: asking for the id of a module that is not a declared dependency
 throws (`Module "x" cannot reach "y"`), also for a dependency of a dependency. An absent optional
@@ -355,6 +357,41 @@ await ctx.db.tx(async (tx) => {
   await ctx.events.emit('note.created@1', { noteId: id }); // commits or rolls back with the insert
 });
 ```
+
+## Settings
+
+A module declares a Zod schema in its manifest (`settings`) and reads its own validated, defaulted settings with
+`ctx.settings.get()` ([ADR-0017](../../docs/adr/0017-settings-port.md)). Type it with the fourth argument of
+`defineModule`:
+
+```ts
+const settings = z.strictObject({ localAccounts: z.boolean().default(true) });
+
+export default defineModule<Service, 'core.settings', never, z.output<typeof settings>>({
+  id: 'core.identity',
+  settings,
+  services: (ctx) => ({
+    async mayRegister() {
+      return (await ctx.settings.get()).localAccounts; // typed, never undefined
+    },
+  }),
+});
+```
+
+- **Where the values come from.** The registry `kernel.settingsStore` takes one entry, `{ read(moduleId) }`, which
+  `core.settings` contributes: it returns the stored JSON of a module (cached for 5 seconds, emptied in the process that
+  writes). The kernel parses it with the module's schema on every `get()`. **Without a store in the profile, `get()`
+  yields the schema's defaults**, so a profile without `core.settings` keeps working. A module with no `settings` schema
+  gets `{}`.
+- **A stored key the schema now rejects** (a type it no longer accepts, a key it removed) is dropped and falls back to its
+  default; the other keys keep their stored values and a warning names the keys (never the values). `get()` throws only
+  when a required setting without a default was never stored.
+- **Bound.** A change reaches another process when its cache entry expires (5 seconds), the bound of sessions and
+  permissions.
+- `ctx.settingsSchemas` lists every module's schema (read-only, no values) for the module that validates writes, and
+  `kernel.settingsOf(moduleId)` gives the server's pipeline the same port for a module it has no context for (the rate
+  limits).
+- Settings are not for secrets: those go through `ctx.deps['core.settings'].getSecret(name)` (see `core.settings`).
 
 ## Database and migrations
 
@@ -421,8 +458,8 @@ registry entries, not `if` branches in the owner.
 - If a module has an optional dependency that is not in the profile, contributions and subscriptions
   to names that no module in the profile provides are skipped (and logged), because they may belong
   to that absent module. Without such a dependency they are errors.
-- The kernel declares two registries itself, `kernel.authenticator` and `kernel.authorizer`, which any
-  module may contribute to (see Routes). At most one entry may exist in each.
+- The kernel declares three registries itself, `kernel.authenticator`, `kernel.authorizer` and
+  `kernel.settingsStore`, which any module may contribute to (see Routes and Settings). At most one entry may exist in each.
 
 ## CLI commands
 
@@ -555,3 +592,4 @@ Start-up stops with the complete list of what is wrong, not the first problem.
 | `Cannot register routes:`                                        | A route without a permission of its module (or `public: true` with a reason), a duplicate route.                                                                                                                                        |
 | `Cannot schedule job "x":`                                       | The `schedule` is not a valid cron expression.                                                                                                                                                                                          |
 | `Wrong profile:`                                                 | `PROFILE` is not the profile this build contains.                                                                                                                                                                                       |
+| `Cannot start core.settings:`                                    | `SECRETS_KEY` is missing or not 32 random bytes in base64 (or `SECRETS_KEY_NEXT` is invalid or equal to it). The message says how to generate one; values are never echoed.                                                             |

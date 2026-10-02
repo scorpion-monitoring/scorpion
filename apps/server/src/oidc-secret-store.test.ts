@@ -1,6 +1,7 @@
 // OIDC client secrets come from the secrets store of core.settings and nowhere else (M3 decision 4,
 // ADR 0016): a stored secret is used for the code exchange, a provider without one is a public
 // client, the start-up log names those providers, and the old environment variable has no effect.
+import { makeSecret, makeSecretsKey } from '@scorpion/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PROVIDER, person, useOidcApp } from './testing/oidc-flow.ts';
 
@@ -46,6 +47,23 @@ describe('the client secret of a provider', () => {
     const { web, settings } = await startApp(fromStore);
     await settings.secrets.setAsSystem(SECRET_NAME, 'not-the-secret');
     expect((await web.login(person())).reply.status).toBe(502);
+  });
+
+  it('that cannot be decrypted is an operator’s error: 500, and the log holds no value', async () => {
+    const { web, kernel, logText } = await startApp(fromStore);
+    // A row written under some other key: this process does not hold it.
+    await makeSecret(kernel.pool, {
+      name: SECRET_NAME,
+      value: 'unreadable-secret-value',
+      key: makeSecretsKey(),
+    });
+    const started = await web.start(); // the authorisation URL needs no secret
+    const reply = await web.callback(await web.provider(started, person()), started);
+    expect(reply.status).toBe(500);
+    expect(await users(kernel)).toBe(0);
+    expect(JSON.stringify(reply.body)).not.toContain('unreadable-secret-value');
+    expect(logText()).toContain('unhandled error');
+    expect(logText()).not.toContain('unreadable-secret-value');
   });
 
   it('is replaced by the next login after it is changed (no restart)', async () => {
