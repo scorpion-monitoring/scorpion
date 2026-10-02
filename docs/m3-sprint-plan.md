@@ -1,6 +1,6 @@
 # M3 Sprint Plan: `core.authz` + `core.settings`
 
-Status: draft, 2026-10-02
+Status: draft, 2026-10-02. Decisions 1 to 4 answered the same day (§10).
 Scope source: [implementation.md](implementation.md) §3, M3. Closes defect 1 (FEATURES §5). Releases as `0.4.0`.
 
 M3 is size M (about 3 weeks for one developer), but it is the riskiest security milestone: it replaces
@@ -12,9 +12,11 @@ reviewable size) and one pull request into `dev`. M3 is released once, after spr
 ## 0. Before sprint 1
 
 1. Merge #35 (`main` back into `dev`) and #36 (backlog entry) so `dev` carries 0.3.0.
-2. Answer the four decisions in §10. Decision 1 changes the dependency direction between two modules and conflicts
-   with FEATURES §2, so per CLAUDE.md it needs an answer and an ADR before code.
-3. Add the lines in §11 to M3's scope in `implementation.md` (needs your approval; this plan does not edit it).
+2. The four decisions in §10 are answered. Write ADR-0014 (dependency direction and the bootstrap exception) as the
+   first commit of sprint 1.
+3. Add the lines in §11 to M3's scope in `implementation.md` (needs your approval; this plan does not edit it). FEATURES §2
+   is derived from the defective legacy app; where it conflicts with the architecture or this plan (the
+   authz → identity arrow), the architecture wins and the ADR records it.
 
 ## 1. What M2 hands to M3
 
@@ -31,7 +33,7 @@ Each item is a promise M2 made in code, README or backlog. Sprint numbers are wh
 | `OIDC_<ID>_CLIENT_SECRET` moves to the encrypted secrets store (`service/oidc-secret.ts` is the one place to change)       | README (OIDC), backlog                  | 3               |
 | `instanceName` and `mailFrom` move out of identity into branding settings                                                  | README (settings), backlog              | 4               |
 | Avatar upload (`avatar_blob_id` exists, unused)                                                                            | backlog                                 | 4               |
-| Role assignments must not block the purge of a user; they subscribe to `identity.user.purged@1`                            | README (cleanup)                        | 2               |
+| Role assignments must not block the purge of a user and must go with it                                                    | README (cleanup)                        | 2               |
 | Admin user management: list users, deactivate, revoke sessions                                                             | backlog                                 | not M3 (see §9) |
 
 ## 2. Cross-sprint rules
@@ -90,11 +92,11 @@ Work items
    is documented as for sessions, ADR-0007). Anonymous → 401, missing permission → 403. A token actor is limited to its
    scopes (see sprint 2).
 6. **`ctx.authz`** (`require(actor, permission, resource?)`, `can(...)`) and the resource-policy registry
-   `authz.resourcePolicy` (`service.member` is the first user, in M7). Per Decision 1 this is delivered either as a
-   public service of `core.authz` or as a kernel port; the ADR records which.
+   `authz.resourcePolicy` (`service.member` is the first user, in M7). It is a public service of `core.authz`, reached by
+   other modules as `ctx.deps['core.authz']` (Decision 1); the kernel gets no new port.
 7. Built-in protections as service rules, not route code: nobody changes their own roles; nobody approves their own
    request (the check lives in the policy engine so every future module gets it); last Admin cannot be removed.
-8. ADR-0014: "Authorisation model: roles as data, permission registry, dependency direction" (Decision 1, 2).
+8. ADR-0014: "Authorisation model: roles as data, permission registry, dependency direction" (Decision 1) and the bootstrap migration exception (Decision 3).
 9. Remove the test-only authorizer's role as the only way to test routes: it stays for fixture modules, but identity's
    tests move to the real one in sprint 2.
 
@@ -108,7 +110,8 @@ parallel role changes cannot remove the last Admin.
 
 Work items
 
-1. Identity's authenticator fills `Actor.roles` (or `core.authz` fills them in the authorizer; Decision 1 fixes which).
+1. The authorizer (`core.authz`) resolves roles from `actor.userId` itself; identity's authenticator keeps returning `roles: []`
+   and `/auth/me` asks `core.authz` for the roles. Identity must not cache roles.
    `/auth/me` returns real roles. Remove the "roles are empty until M3" sentences from the README.
 2. Role routes (permissions named `identity.role.*` in implementation.md): list roles, assign and remove a role for a user,
    with `ctx.authz.require` in the service. Approve now takes the role to assign (FEATURES 3.2: "approve and assign a
@@ -119,12 +122,15 @@ Work items
 4. **Token scopes** are intersected with the owner's permissions: effective permission = scope ∩ owner. A scope that names a
    permission the owner lacks grants nothing; a revoked role takes effect within the cache TTL. Tokens still cannot
    manage tokens or sessions.
-5. **Bootstrap migration** (Decision 3): every user with `is_bootstrap_admin = true` gets the Admin role, then the column is
+5. **Bootstrap migration** (Decision 3, ADR-0014): every user with `is_bootstrap_admin = true` gets the Admin role, then the column is
    dropped completely. Tests: former bootstrap admins hold Admin; the column no longer exists; no non-test file mentions
    it (the M2 guard test is deleted in the same commit, with the reason in the message). `create-admin` and the first-run
    token now assign the Admin role through the authz service. "No administrator yet" becomes "no user holds the Admin
    role".
-6. `identity.user.purged@1` subscriber in `core.authz`: delete the user's role assignments.
+6. Purge: a module may subscribe only to its own events and to those of its dependencies (ADR-0003), so `core.authz`
+   cannot subscribe to `identity.user.purged@1`. Instead the cleanup job's purge transaction calls the authz service
+   (`removeAllAssignments(tx, userId)`) before deleting the user row: same transaction, no orphan rows, no event needed.
+   Test: a purge rolls back together with the assignment removal.
 7. **Defect 1 regression suite** `defect-01.privilege-escalation.test.ts`: a plain User calling each admin endpoint gets
    403 (role changes, self-approval, approve/reject, token manage-any, session manage); cannot grant themselves a role by
    any route; cannot approve their own account or request; cannot revoke another user's token; an anonymous caller gets 401;
@@ -164,9 +170,10 @@ Work items
    prints a value; a test proves old-key rows still decrypt mid-run) and `scorpion set-secret <name>` (value from the
    prompt or standard input, like `create-admin`).
 7. **Identity wiring (replaces defaults only):** `IdentitySettings` reads `ctx.settings`; `service/oidc-secret.ts` reads
-   the secrets store first and the environment variable second (Decision 4); the retention constants, rate-limit numbers
-   and mail budgets become settings with today's values as defaults. Log a one-line warning, once, when a secret still comes
-   from the environment.
+   the secrets store only (Decision 4: no environment fallback; a provider whose secret is not set is a public client, as
+   today when the variable is unset, and the start-up log names the providers that have none); the retention constants, rate-limit numbers
+   and mail budgets become settings with today's values as defaults. `OIDC_<ID>_CLIENT_SECRET` is no longer read: the 0.4.0 notes and changeset say so, and a test proves the variable has no
+   effect.
 8. Defect-13 regression test stays green and gains a case: turning `localAccounts` off through the settings API takes
    effect within the cache TTL, and a non-admin cannot change it.
 
@@ -186,7 +193,7 @@ Work items
    permissions, deactivate instead of delete when a term is in use (modules declare a usage check). Seeds, idempotent:
    stages `DEV`, `DEMO`, `PROD`, `TERM`; thematic categories; necessity levels; sender types; aggregates. No pg enum
    anywhere (CLAUDE.md rule 8); a test fails on one.
-2. **Blob store** (own small module `core.blob`, or inside `core.settings`: Decision 2): `blob` table (bytea, sha256, MIME,
+2. **Blob store** (its own module `core.blob`, Decision 2; it depends on `core.settings` for the size limit and on `core.authz`): `blob` table (bytea, sha256, MIME,
    size), content-addressed; `GET /files/:hash` with a strict CSP, `X-Content-Type-Options: nosniff`, long cache with
    the hash as validator. Upload service re-encodes rasters with `sharp` (strip metadata, cap dimensions), sanitises SVG
    with DOMPurify, enforces the size limit from a setting, sniffs the real type (never trusts the client MIME). Never
@@ -231,32 +238,38 @@ second process within the TTL; rotation never leaves an undecryptable row; hosti
 - Per-resource policies for services and providers: registered by M7; M3 ships the registry and a test policy.
 - S3 blob backend (architecture mentions it); the table is the only M3 backend.
 
-## 10. Decisions needed before sprint 1
+## 10. Decisions taken (2026-10-02)
 
-1. **Dependency direction and where `ctx.authz` comes from.** FEATURES §2 says `core.authz` depends on identity. But
-   identity must call `ctx.authz.require` (CLAUDE.md, security rules), and `identity.role.assign` is an identity permission.
-   Both cannot depend on each other. **Recommendation:** `core.identity` depends on `core.authz`; `core.authz` is
-   user-agnostic (an opaque user id, no foreign key, no import of identity), and identity owns the role-assignment routes
-   and calls the authz service. This also lets the identity migration that drops the bootstrap column run after the authz
-   tables exist. Alternative: a kernel-owned `ctx.authz` port filled by a registry entry, with the dependency left as in
-   FEATURES. It keeps FEATURES intact but adds a second kernel extension point. Needs an ADR either way.
-2. **Where the blob store lives.** Own module `core.blob` (clean ownership, one more package and profile entry) or inside
-   `core.settings` (matches implementation.md's M3 list). **Recommendation:** own module; the size limit comes from a setting.
-3. **How the bootstrap marker becomes a role.** Rule 3 forbids reading another module's tables, but a one-time data
-   migration has to. **Recommendation:** one migration in `core.identity` (which runs after `core.authz` under
-   Decision 1) inserts the Admin assignments with a single `INSERT … SELECT` into `authz_role_assignment`, then drops the
-   column in the next statement, in one transaction. Documented in the ADR as the one sanctioned exception, with a test.
-4. **Environment secrets after the store exists.** **Recommendation:** the store wins, the environment variable stays as a
-   fallback with a once-per-start warning, so a 0.3.0 operator can upgrade without a flag day; removal is a later breaking
-   release. Alternative: drop the fallback now (0.3.0 cannot have been used in production because of ADR-0005, so no one
-   depends on it).
+1. **`core.identity` depends on `core.authz`; `core.authz` is user-agnostic.** FEATURES §2 shows the arrow the other way
+   round, but FEATURES is derived from the defective legacy app. The reasons: identity must call `ctx.authz.require`
+   (CLAUDE.md) and owns the role-assignment routes (`identity.role.*`); authz stores opaque user ids with no foreign key and
+   imports nothing from identity. Consequences, all reflected above:
+   - Module graph (no cycle): `core.authz` (no dependencies) ← `core.settings` (uses authz in its services) ← `core.blob`
+     (settings for limits, authz for permissions) ← `core.identity` (all three). Migrations run in this order, so the identity
+     migration can touch authz tables.
+   - `core.authz` cannot subscribe to identity events (ADR-0003: own and dependencies' events only). User purge therefore
+     calls the authz service inside the purge transaction (sprint 2, item 6).
+   - `core.authz` reads no settings: its cache TTL and defaults are constants, so `core.settings` can depend on it.
+   - Every profile that lists `core.identity` must list its dependencies; `defineProfile()` and `modules:sync` already check
+     this, and the profile files get `core.authz`, `core.settings` and `core.blob` as they are built.
+   - ADR-0014 records the arrow and why FEATURES §2 is not followed here.
+2. **`core.blob` is its own module** (prefix `blob_`), depending on `core.settings` and `core.authz`. It is not
+   in the `kpi-tracker` profile unless something there needs files; identity depends on it for avatars, so it is in every
+   profile that has identity. (Check the profile files in sprint 4.)
+3. **The bootstrap exception is made.** One migration in `core.identity` (after `core.authz` under Decision 1) runs
+   `INSERT … SELECT` into `authz_role_assignment` for every user with `is_bootstrap_admin`, then drops the column, in one
+   transaction. It is the only place in the repository that touches another module's table; ADR-0014 names it as a
+   one-time exception to rule 3, and a test asserts that no other migration or source file references a foreign table.
+4. **No environment fallback for secrets.** The secrets store is the only source for OIDC client secrets from 0.4.0 on;
+   security wins over a smooth upgrade (0.3.0 could not have been used in production, ADR-0005). The release notes say it.
 
 ## 11. Proposed additions to M3's scope in `implementation.md` (to approve)
 
 - `authz.defaultRole` and `authz.resourcePolicy` registries, and the route-table walker test.
 - `scorpion set-secret`, next to `rotate-secrets`.
 - Token scopes intersected with the owner's permissions; approve takes the role to assign.
-- The M2 hand-offs in §1 (settings port for identity, secrets for OIDC, avatar upload, purge subscriber) as explicit items.
+- The M2 hand-offs in §1 (settings port for identity, secrets for OIDC, avatar upload, purge inside the transaction) as explicit items.
+- `core.blob` as its own module (Decision 2), and the dependency order `core.authz` → `core.settings` → `core.blob` → `core.identity`.
 - Sprint 2's end state as an acceptance line: a fresh `full` instance works end to end without a test authorizer.
 
 ## 12. Risks
