@@ -25,6 +25,20 @@ function credentialKey(headers: { get(name: string): string | undefined }): stri
   return createHash('sha256').update(presented).digest('hex').slice(0, 32);
 }
 
+/** The 429 answer, with `Retry-After`. */
+export function tooManyRequests(requestId: string | undefined, retryAfter: number): Response {
+  return problemResponse(
+    {
+      type: 'about:blank',
+      title: 'Too Many Requests',
+      status: 429,
+      detail: `Too many requests. Try again in ${retryAfter} seconds.`,
+      requestId,
+    },
+    { 'retry-after': String(retryAfter) },
+  );
+}
+
 export interface RateLimitOptions {
   limiter: RateLimiter;
   group: RateLimitGroup;
@@ -57,16 +71,7 @@ export function rateLimit(options: RateLimitOptions): MiddlewareHandler<AppEnv> 
     }
     if (retryAfter > 0) {
       log.warn({ requestId: c.get('requestId'), group, path: c.req.path }, 'rate limit exceeded');
-      return problemResponse(
-        {
-          type: 'about:blank',
-          title: 'Too Many Requests',
-          status: 429,
-          detail: `Too many requests. Try again in ${retryAfter} seconds.`,
-          requestId: c.get('requestId'),
-        },
-        { 'retry-after': String(retryAfter) },
-      );
+      return tooManyRequests(c.get('requestId'), retryAfter);
     }
     return next();
   };

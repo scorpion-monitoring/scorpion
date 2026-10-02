@@ -13,6 +13,8 @@ export interface StartOptions {
   settings?: IdentitySettings;
   /** How long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
+  /** How long a verified access token is trusted without verifying it again. */
+  tokenCacheTtlMs?: number;
   /** Another module of the profile that depends on core.identity, for example a policy contributor. */
   extraModule?: { manifest: ModuleManifest; id: string };
 }
@@ -47,6 +49,7 @@ export function useIdentity(): IdentityHarness {
       const manifest = createIdentityModule({
         settings: options?.settings,
         sessionCacheTtlMs: options?.sessionCacheTtlMs,
+        tokenCacheTtlMs: options?.tokenCacheTtlMs,
       });
       const extra = options?.extraModule;
       const kernel = createKernel({

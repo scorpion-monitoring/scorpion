@@ -117,7 +117,15 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
           rateLimit({ limiter: options.rateLimiter, group, limit, clientIp, log }),
         );
       }
-      app.on(method, honoPath, authenticate(options.authenticator ?? anonymousOnly, route));
+      app.on(
+        method,
+        honoPath,
+        authenticate(
+          options.authenticator ?? anonymousOnly,
+          route,
+          options.rateLimiter ? { limiter: options.rateLimiter, clientIp, log } : undefined,
+        ),
+      );
     }
     app.openapi(
       { ...route, path: `${base}${path}` } as never,

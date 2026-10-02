@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { createUserInput, email, password, username } from './validation.ts';
+import {
+  createTokenInput,
+  createUserInput,
+  email,
+  password,
+  rotateTokenInput,
+  scope,
+  username,
+} from './validation.ts';
 
 const ok = (schema: { safeParse(value: unknown): { success: boolean } }, value: unknown) =>
   schema.safeParse(value).success;
@@ -138,5 +146,64 @@ describe('createUserInput', () => {
       auth: { provider: 'local', password: 'tiny' },
     });
     expect(JSON.stringify(result.error?.issues)).not.toContain('tiny');
+  });
+});
+
+describe('scope', () => {
+  it.each<[string, string, boolean]>([
+    ['read a resource', 'read:kpi', true],
+    ['write a dotted resource', 'write:registry.services', true],
+    ['kebab case', 'read:kpi-ingestion', true],
+    ['an unknown action', 'delete:kpi', false],
+    ['no action', 'kpi', false],
+    ['no resource', 'read:', false],
+    ['upper case', 'read:KPI', false],
+    ['a wildcard', 'read:*', false],
+    ['a space', 'read: kpi', false],
+    ['a trailing dot', 'read:kpi.', false],
+    ['a leading digit in a segment', 'read:1kpi', false],
+    ['too long', `read:${'a'.repeat(60)}`, false],
+    ['non-ASCII', 'read:kpí', false],
+  ])('%s: %j', (_name, value, valid) => {
+    expect(ok(scope, value)).toBe(valid);
+  });
+});
+
+describe('createTokenInput', () => {
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  it('defaults to no scopes and no expiry, trims the name, sorts and de-duplicates scopes', () => {
+    expect(createTokenInput.parse({ name: ' ci ' })).toEqual({
+      name: 'ci',
+      scopes: [],
+      expiresAt: null,
+    });
+    expect(
+      createTokenInput.parse({
+        name: 'a',
+        scopes: ['write:b', 'read:a', 'read:a'],
+        expiresAt: future,
+      }),
+    ).toEqual({ name: 'a', scopes: ['read:a', 'write:b'], expiresAt: new Date(future) });
+  });
+
+  it.each<[string, unknown]>([
+    ['no name', {}],
+    ['an empty name', { name: '  ' }],
+    ['a long name', { name: 'x'.repeat(65) }],
+    ['a control character in the name', { name: 'a\u0000b' }],
+    ['a number for the name', { name: 7 }],
+    ['an unknown scope shape', { name: 'a', scopes: ['everything'] }],
+    ['too many scopes', { name: 'a', scopes: Array.from({ length: 21 }, (_, i) => `read:a${i}`) }],
+    ['an expiry that is not a date', { name: 'a', expiresAt: 'tomorrow' }],
+    ['an expiry without a time zone', { name: 'a', expiresAt: '2030-01-01T00:00:00' }],
+    ['an extra field', { name: 'a', admin: true }],
+  ])('refuses %s', (_name, value) => {
+    expect(ok(createTokenInput, value)).toBe(false);
+  });
+
+  it('takes an optional expiry for rotation and nothing else', () => {
+    expect(ok(rotateTokenInput, {})).toBe(true);
+    expect(ok(rotateTokenInput, { expiresAt: future })).toBe(true);
+    expect(ok(rotateTokenInput, { name: 'other' })).toBe(false);
   });
 });

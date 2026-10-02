@@ -100,4 +100,20 @@ describe('the rate limiter store', () => {
     );
     expect(rows.map((r) => r.key)).toEqual(['new']);
   });
+
+  it('peeks without taking a token', async () => {
+    const { limiter: rate } = await limiter();
+    const one = { capacity: 1, refillPerSecond: 0.001 };
+    expect(await rate.peek('p', one)).toEqual({
+      allowed: true,
+      remaining: 1,
+      retryAfterSeconds: 0,
+    });
+    expect(await rate.peek('p', one)).toMatchObject({ allowed: true }); // still full: peeking is free
+    expect((await rate.consume('p', one)).allowed).toBe(true);
+    const denied = await rate.peek('p', one);
+    expect(denied).toMatchObject({ allowed: false, remaining: 0 });
+    expect(denied.retryAfterSeconds).toBeGreaterThan(900);
+    expect((await rate.consume('p', one)).allowed).toBe(false); // and peeking did not refill it
+  });
 });

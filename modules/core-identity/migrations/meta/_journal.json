@@ -8,6 +8,13 @@
       "when": 1790923599363,
       "tag": "0000_identity_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790928842543,
+      "tag": "0001_right_devos",
+      "breakpoints": true
     }
   ]
 }

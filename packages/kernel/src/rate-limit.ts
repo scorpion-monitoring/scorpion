@@ -21,6 +21,12 @@ export interface RateDecision {
 export interface RateLimiter {
   /** Takes one token from the bucket `key`, creating the bucket full if it does not exist. */
   consume(key: string, limit: RateLimit): Promise<RateDecision>;
+  /**
+   * Whether a token is available in the bucket, without taking one. A bucket that does not exist
+   * is full. Two parallel callers can both see the last token, so use it to refuse early and
+   * `consume()` to count.
+   */
+  peek(key: string, limit: RateLimit): Promise<RateDecision>;
   /** Deletes buckets idle for a day (they are full again anyway). Returns how many. */
   prune(): Promise<number>;
 }
@@ -47,6 +53,18 @@ export function createRateLimiter(db: Db, options: RateLimiterOptions = {}): Rat
 
   return {
     prune,
+    async peek(key, { capacity, refillPerSecond }) {
+      const { rows } = await db.execute<{ tokens: number }>(sql`
+        select least(${capacity}::float8, b.tokens + extract(epoch from (now() - b.updated_at)) * ${refillPerSecond}::float8) as tokens
+        from kernel_rate_bucket b where b.key = ${key}`);
+      const tokens = rows[0]?.tokens ?? capacity;
+      const allowed = tokens >= 1;
+      return {
+        allowed,
+        remaining: Math.floor(allowed ? tokens : 0),
+        retryAfterSeconds: allowed ? 0 : Math.max(1, Math.ceil((1 - tokens) / refillPerSecond)),
+      };
+    },
     async consume(key, { capacity, refillPerSecond }) {
       // The bucket as it is now: what was left, plus what has come back since, up to capacity.
       const refilled = sql`least(${capacity}::float8, b.tokens + extract(epoch from (now() - b.updated_at)) * ${refillPerSecond}::float8)`;

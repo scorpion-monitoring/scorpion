@@ -13,11 +13,13 @@ import type { RouteRegistrar } from '@scorpion/kernel';
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from './cookie.ts';
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
-import { loginInput, registerInput } from './validation.ts';
+import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
+import { createTokenInput, loginInput, registerInput, rotateTokenInput } from './validation.ts';
 
 export interface IdentityRoutesServices {
   accounts: AccountService;
   approval: ApprovalService;
+  tokens: TokenService;
 }
 
 const userSchema = z.object({
@@ -142,6 +144,81 @@ export const rejectRoute = createRoute({
   },
 });
 
+const tokenSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
+  scopes: z.array(z.string()),
+  expiresAt: z.iso.datetime().nullable(),
+  lastUsedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+// The only response that ever carries a secret: the one that creates or replaces a token.
+const createdTokenSchema = tokenSchema.extend({ token: z.string() });
+
+export const listTokensRoute = createRoute({
+  method: 'get',
+  path: '/tokens',
+  permission: 'core.identity.token.read',
+  request: { query: paginationQuery() },
+  responses: {
+    200: ok("The caller's access tokens, without their secrets.", listEnvelope(tokenSchema)),
+    403: { description: 'The caller is using an access token, not a session.' },
+  },
+});
+
+export const createTokenRoute = createRoute({
+  method: 'post',
+  path: '/tokens',
+  permission: 'core.identity.token.manage',
+  rateLimit: 'strict', // each token costs an argon2id hash
+  request: { body: json(createTokenInput) },
+  responses: {
+    201: ok('The token. `token` is shown this once.', createdTokenSchema),
+    403: { description: 'The caller is using an access token, not a session.' },
+    409: { description: 'The name is taken, or the caller has too many tokens.' },
+  },
+});
+
+export const revokeTokenRoute = createRoute({
+  method: 'delete',
+  path: '/tokens/{id}',
+  permission: 'core.identity.token.manage',
+  request: { params: idParam },
+  responses: {
+    204: { description: 'The token is revoked (also when it already was).' },
+    403: { description: 'The caller is using an access token, not a session.' },
+    404: { description: "No such token of the caller's." },
+  },
+});
+
+export const rotateTokenRoute = createRoute({
+  method: 'post',
+  path: '/tokens/{id}/rotate',
+  permission: 'core.identity.token.manage',
+  rateLimit: 'strict', // each token costs an argon2id hash
+  request: { params: idParam, body: json(rotateTokenInput) },
+  responses: {
+    200: ok('The new token. The old one no longer works.', createdTokenSchema),
+    403: { description: 'The caller is using an access token, not a session.' },
+    404: { description: "No such token of the caller's." },
+  },
+});
+
+const tokenView = (token: TokenInfo) => ({
+  id: token.id,
+  name: token.name,
+  prefix: token.prefix,
+  scopes: token.scopes,
+  expiresAt: token.expiresAt?.toISOString() ?? null,
+  lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
+  createdAt: token.createdAt.toISOString(),
+});
+const createdTokenView = (created: CreatedToken) => ({
+  ...tokenView(created),
+  token: created.token,
+});
+
 const view = (user: {
   id: string;
   username: string;
@@ -158,7 +235,7 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval }: IdentityRoutesServices,
+  { accounts, approval, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     const user = await accounts.register(c.req.valid('json'));
@@ -212,4 +289,31 @@ export function registerIdentityRoutes(
     const { id } = c.req.valid('param');
     return c.json({ id, status: await approval.reject(c.get('actor'), id) }, 200);
   }) satisfies RouteHandler<typeof rejectRoute, AppEnv>);
+
+  r.internal(listTokensRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const result = await tokens.list(c.get('actor'), query);
+    return c.json(paginate(query, result.total, result.tokens.map(tokenView)), 200);
+  }) satisfies RouteHandler<typeof listTokensRoute, AppEnv>);
+
+  r.internal(createTokenRoute, (async (c) => {
+    const created = await tokens.create(c.get('actor'), c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.json(createdTokenView(created), 201);
+  }) satisfies RouteHandler<typeof createTokenRoute, AppEnv>);
+
+  r.internal(revokeTokenRoute, (async (c) => {
+    await tokens.revoke(c.get('actor'), c.req.valid('param').id);
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof revokeTokenRoute, AppEnv>);
+
+  r.internal(rotateTokenRoute, (async (c) => {
+    const rotated = await tokens.rotate(
+      c.get('actor'),
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    );
+    c.header('cache-control', 'no-store');
+    return c.json(createdTokenView(rotated), 200);
+  }) satisfies RouteHandler<typeof rotateTokenRoute, AppEnv>);
 }
