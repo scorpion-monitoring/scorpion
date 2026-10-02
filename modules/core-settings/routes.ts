@@ -12,6 +12,8 @@ import {
   type RouteHandler,
 } from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
+import { NotFound } from '@scorpion/contracts';
+import { LEGAL_PAGES, type BrandingService } from './service/branding.ts';
 import type { PreferencesService, PreferenceView } from './service/preferences.ts';
 import {
   PERMISSION_PREFERENCE_READ,
@@ -19,6 +21,8 @@ import {
   PERMISSION_SECRET_WRITE,
   PERMISSION_SETTINGS_READ,
   PERMISSION_SETTINGS_WRITE,
+  PERMISSION_VOCABULARY_READ,
+  PERMISSION_VOCABULARY_WRITE,
 } from './service/permissions.ts';
 import {
   MAX_SECRET_LENGTH,
@@ -26,11 +30,15 @@ import {
   type SecretsAdminService,
 } from './service/secrets.ts';
 import type { SettingsAdminService, SettingsView } from './service/settings.ts';
+import { labelsSchema, termKeySchema } from './service/vocabularies.ts';
+import type { TermView, VocabularyAdminService, VocabularyView } from './service/vocabularies.ts';
 
 export interface SettingsRoutesServices {
   settings: SettingsAdminService;
   secrets: SecretsAdminService;
   preferences: PreferencesService;
+  vocabularies: VocabularyAdminService;
+  branding: BrandingService;
 }
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -190,6 +198,148 @@ export const removePreferenceRoute = createRoute({
   },
 });
 
+const vocabularyParam = z.object({ vocabulary: z.string().min(1).max(100) });
+const termParam = vocabularyParam.extend({ key: z.string().min(1).max(64) });
+
+const vocabularySchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  terms: z.number().int(),
+  activeTerms: z.number().int(),
+});
+const termSchema = z.object({
+  key: z.string(),
+  labels: z.record(z.string(), z.string()),
+  label: z.string().describe('The label for the requested locale, `en` by default.'),
+  sortOrder: z.number().int(),
+  active: z.boolean(),
+  seeded: z.boolean().describe('Declared by a module; such a term is deactivated, never deleted.'),
+});
+const termsQuery = paginationQuery({ defaultPageSize: 100, maxPageSize: 500 }).extend({
+  includeInactive: z
+    .stringbool()
+    .optional()
+    .describe('Also list deactivated terms (needs `core.settings.vocabulary.write`).'),
+  locale: z.string().max(35).optional().describe('The locale of `label`. Default `en`.'),
+});
+const createTermInput = z.strictObject({
+  key: termKeySchema,
+  labels: labelsSchema,
+  sortOrder: z.number().int().optional(),
+});
+const updateTermInput = z.strictObject({
+  labels: labelsSchema.optional(),
+  sortOrder: z.number().int().optional(),
+  active: z.boolean().optional(),
+});
+
+const brandingSchema = z.object({
+  productName: z.string(),
+  instanceName: z.string(),
+  contactEmail: z.string().nullable(),
+  imprintUrl: z.string().nullable(),
+  logos: z.object({ light: z.string().nullable(), dark: z.string().nullable() }),
+  legalPages: z.array(z.enum(LEGAL_PAGES)),
+});
+const legalSchema = z.object({
+  page: z.enum(LEGAL_PAGES),
+  title: z.string(),
+  html: z.string().describe('Sanitised HTML rendered from the Markdown text.'),
+});
+
+export const listVocabulariesRoute = createRoute({
+  method: 'get',
+  path: '/vocabularies',
+  permission: PERMISSION_VOCABULARY_READ,
+  request: { query: paginationQuery() },
+  responses: {
+    200: ok(
+      'The vocabularies that loaded modules declare, with their term counts.',
+      listEnvelope(vocabularySchema),
+    ),
+  },
+});
+
+export const listTermsRoute = createRoute({
+  method: 'get',
+  path: '/vocabularies/{vocabulary}/terms',
+  permission: PERMISSION_VOCABULARY_READ,
+  request: { params: vocabularyParam, query: termsQuery },
+  responses: {
+    200: ok('The terms in order: sort order, then key.', listEnvelope(termSchema)),
+    404: { description: 'No loaded module declares this vocabulary.' },
+  },
+});
+
+export const createTermRoute = createRoute({
+  method: 'post',
+  path: '/vocabularies/{vocabulary}/terms',
+  permission: PERMISSION_VOCABULARY_WRITE,
+  request: { params: vocabularyParam, body: json(createTermInput) },
+  responses: {
+    201: ok('The term was added.', termSchema),
+    404: { description: 'No loaded module declares this vocabulary.' },
+    409: { description: 'The vocabulary has a term with this key (also a deactivated one).' },
+  },
+});
+
+export const updateTermRoute = createRoute({
+  method: 'patch',
+  path: '/vocabularies/{vocabulary}/terms/{key}',
+  permission: PERMISSION_VOCABULARY_WRITE,
+  request: { params: termParam, body: json(updateTermInput) },
+  responses: {
+    200: ok('The term after the change.', termSchema),
+    404: { description: 'No such vocabulary or term.' },
+  },
+});
+
+export const removeTermRoute = createRoute({
+  method: 'delete',
+  path: '/vocabularies/{vocabulary}/terms/{key}',
+  permission: PERMISSION_VOCABULARY_WRITE,
+  request: { params: termParam },
+  responses: {
+    200: ok(
+      'A term a module declared, or one that is in use, is deactivated (`outcome: deactivated`, with the term); any other is deleted (`outcome: deleted`).',
+      z.object({ outcome: z.enum(['deleted', 'deactivated']), term: termSchema.nullable() }),
+    ),
+    404: { description: 'No such vocabulary or term.' },
+  },
+});
+
+export const brandingRoute = createRoute({
+  method: 'get',
+  path: '/branding',
+  public: true,
+  publicReason:
+    'The sign-in page and every header show the instance name and logo to people who are not signed in; nothing here is private (the sender address is not included).',
+  responses: { 200: ok('How the instance presents itself.', brandingSchema) },
+});
+
+export const legalRoute = createRoute({
+  method: 'get',
+  path: '/legal/{page}',
+  public: true,
+  publicReason:
+    'Terms, privacy policy and imprint must be readable without signing in (FEATURES 3.2, the legacy app hid them behind login).',
+  request: { params: z.object({ page: z.enum(LEGAL_PAGES) }) },
+  responses: {
+    200: ok('The page, rendered from Markdown on the server and sanitised.', legalSchema),
+    404: { description: 'No text was written for this page.' },
+  },
+});
+
+const termView = (term: TermView) => ({
+  key: term.key,
+  labels: term.labels,
+  label: term.label,
+  sortOrder: term.sortOrder,
+  active: term.active,
+  seeded: term.seeded,
+});
+const vocabularyView = (vocabulary: VocabularyView) => ({ ...vocabulary });
+
 const settingsView = (view: SettingsView) => ({
   module: view.module,
   version: view.version,
@@ -210,7 +360,7 @@ const preferenceView = (preference: PreferenceView) => ({
 
 export function registerSettingsRoutes(
   r: RouteRegistrar,
-  { settings, secrets, preferences }: SettingsRoutesServices,
+  { settings, secrets, preferences, vocabularies, branding }: SettingsRoutesServices,
 ) {
   r.internal(listSettingsRoute, (async (c) => {
     const query = c.req.valid('query');
@@ -279,4 +429,63 @@ export function registerSettingsRoutes(
     await preferences.remove(c.get('actor'), c.req.valid('param').key);
     return c.body(null, 204);
   }) satisfies RouteHandler<typeof removePreferenceRoute, AppEnv>);
+
+  r.internal(listVocabulariesRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const all = await vocabularies.list(c.get('actor'));
+    const page = all.slice(pageOffset(query), pageOffset(query) + query.pageSize);
+    return c.json(paginate(query, all.length, page.map(vocabularyView)), 200);
+  }) satisfies RouteHandler<typeof listVocabulariesRoute, AppEnv>);
+
+  r.internal(listTermsRoute, (async (c) => {
+    const { includeInactive, locale, ...query } = c.req.valid('query');
+    const all = await vocabularies.listTerms(c.get('actor'), c.req.valid('param').vocabulary, {
+      includeInactive,
+      locale,
+    });
+    const page = all.slice(pageOffset(query), pageOffset(query) + query.pageSize);
+    return c.json(paginate(query, all.length, page.map(termView)), 200);
+  }) satisfies RouteHandler<typeof listTermsRoute, AppEnv>);
+
+  r.internal(createTermRoute, (async (c) => {
+    const term = await vocabularies.createTerm(
+      c.get('actor'),
+      c.req.valid('param').vocabulary,
+      c.req.valid('json'),
+    );
+    return c.json(termView(term), 201);
+  }) satisfies RouteHandler<typeof createTermRoute, AppEnv>);
+
+  r.internal(updateTermRoute, (async (c) => {
+    const { vocabulary, key } = c.req.valid('param');
+    const term = await vocabularies.updateTerm(
+      c.get('actor'),
+      vocabulary,
+      key,
+      c.req.valid('json'),
+    );
+    return c.json(termView(term), 200);
+  }) satisfies RouteHandler<typeof updateTermRoute, AppEnv>);
+
+  r.internal(removeTermRoute, (async (c) => {
+    const { vocabulary, key } = c.req.valid('param');
+    const result = await vocabularies.removeTerm(c.get('actor'), vocabulary, key);
+    return c.json(
+      { outcome: result.outcome, term: result.term ? termView(result.term) : null },
+      200,
+    );
+  }) satisfies RouteHandler<typeof removeTermRoute, AppEnv>);
+
+  r.internal(brandingRoute, (async (c) => {
+    const { mailFrom: _private, ...open } = await branding.get();
+    c.header('cache-control', 'public, max-age=30');
+    return c.json(open, 200);
+  }) satisfies RouteHandler<typeof brandingRoute, AppEnv>);
+
+  r.internal(legalRoute, (async (c) => {
+    const document = await branding.legal(c.req.valid('param').page);
+    if (!document) throw new NotFound('There is no text for this page.');
+    c.header('cache-control', 'public, max-age=30');
+    return c.json(document, 200);
+  }) satisfies RouteHandler<typeof legalRoute, AppEnv>);
 }

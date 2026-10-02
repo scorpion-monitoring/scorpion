@@ -8,6 +8,20 @@
       "when": 1790957102543,
       "tag": "0000_settings_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790960674017,
+      "tag": "0001_vocabularies",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790960680039,
+      "tag": "0002_branding_from_identity",
+      "breakpoints": true
     }
   ]
 }
