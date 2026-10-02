@@ -418,8 +418,8 @@ registry entries, not `if` branches in the owner.
 - If a module has an optional dependency that is not in the profile, contributions and subscriptions
   to names that no module in the profile provides are skipped (and logged), because they may belong
   to that absent module. Without such a dependency they are errors.
-- The kernel declares one registry itself, `kernel.authorizer`, which any module may contribute to
-  (see Routes). Exactly one entry may exist.
+- The kernel declares two registries itself, `kernel.authenticator` and `kernel.authorizer`, which any
+  module may contribute to (see Routes). At most one entry may exist in each.
 
 ## Routes
 
@@ -441,11 +441,21 @@ publicReason)`. A permission of another module, a duplicate method and path, and
   `{ metadata: { currentPage, pageSize, totalCount, totalPages }, result }` with 0-based pages and a
   stable order (sort by a key, then by id).
 
-Every request passes the pipeline in this order: request id → security headers → logging → body
-size limit (413) → Zod validation (422) → **authorisation hook** → handler → error mapper. The hook
-is the registry `kernel.authorizer`; until `core.authz` contributes to it (M3) every route that is not
-public answers 403 ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)). In the service
-layer, check resource-scoped permissions again (`ctx.authz.require`, M3).
+Every request passes the pipeline in this order: request id → security headers → logging →
+**authentication** → body size limit (413) → Zod validation (422) → **authorisation hook** → handler →
+error mapper.
+
+- Authentication is the registry `kernel.authenticator`: `core.identity` contributes the entry that turns a
+  session cookie or a token into an `Actor` (`@scorpion/contracts`). With no credentials the actor is
+  `anonymous`, which a `public: true` route accepts. Bad credentials are a 401 on any other route; on a
+  public route they only mean "not signed in". Read the actor in a handler with `c.get('actor')`
+  ([ADR-0006](../../docs/adr/0006-actor-authenticator-interim-authorisation.md)).
+- The authorisation hook is the registry `kernel.authorizer`; until `core.authz` contributes to it (M3)
+  every route that is not public answers 403
+  ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)). It receives the actor too. Tests that
+  need to get through use `testAuthorizer()` from `@scorpion/testing`.
+
+In the service layer, check resource-scoped permissions again (`ctx.authz.require`, M3).
 
 ## Profiles
 

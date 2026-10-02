@@ -22,3 +22,6 @@
 - Approval policies `auto-by-email-domain` and `invite-only` (architecture lists them; M2 ships `manual` only).
   Invite-only needs an invitation table and email delivery (M4) and admin permissions (M3).
 - Avatar upload endpoint for the profile (needs the blob store from M3). The `avatarBlobId` column exists from M2.
+- Settings for `core.identity`: the manifest `settings` schema is only validated and stored by the kernel today; nothing at runtime reads it and `ctx` has no settings access. Sprint 2 reads `localAccounts` through a module-internal `IdentitySettings` port whose default comes from the module's own schema (`parse({})`); M3 swaps in the real store.
+- Test harness for a module: every module test file builds a kernel over Postgres by hand (`modules/core-identity/test/harness.ts`). Move it to a shared helper once a second module needs it; `packages/testing` cannot import the kernel without a package cycle, so it probably belongs with the kernel's test exports.
+- Rate-limit limits, the per-credential bucket for session cookies and finer keys (for example per username on login) arrive with settings in M3 and the login service in sprint 2.
