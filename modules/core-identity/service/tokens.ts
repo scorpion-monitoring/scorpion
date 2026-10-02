@@ -11,14 +11,14 @@
 // there for at most that long (the same bound as a session, ADR 0007). Wrong tokens are never
 // cached, and a malformed one is refused before any hashing.
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
-import { Conflict, Forbidden, Invalid, NotFound, type Actor } from '@scorpion/contracts';
+import { Conflict, Invalid, NotFound, type Actor } from '@scorpion/contracts';
 import type { ModuleContext } from '@scorpion/kernel';
 import { ids } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { token, user } from '../db/schema.ts';
 import { createTokenInput, rotateTokenInput } from '../validation.ts';
 import { hashPassword, verifyPassword } from './password.ts';
-import { requireUser } from './require-user.ts';
+import { requireSession as requireSessionActor } from './require-user.ts';
 import { cacheKey, generateToken, parseToken } from './token-format.ts';
 
 /** How long one process trusts a token it has verified. The staleness bound across processes. */
@@ -132,13 +132,7 @@ const infoColumns = {
 };
 
 /** Management needs a session: a token must not be able to create or change tokens. */
-function requireSession(actor: Actor) {
-  const user = requireUser(actor);
-  if (user.via !== 'session') {
-    throw new Forbidden('Access tokens can only be managed with a signed-in session.');
-  }
-  return user;
-}
+const requireSession = (actor: Actor) => requireSessionActor(actor, 'Managing access tokens');
 
 export function createTokenService(
   ctx: ModuleContext,

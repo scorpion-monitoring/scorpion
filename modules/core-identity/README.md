@@ -5,10 +5,10 @@ Users, the ways they sign in, sessions, personal access tokens and approval. Pac
 are `identity_user` and not `core_identity_user`; ADR-0004).
 
 This is **sprint 4 of M2** ([sprint plan](../../docs/m2-sprint-plan.md)): local accounts, sessions, approval,
-personal access tokens and, in progress, OIDC sign-in. People can register with a password or sign in through an OIDC
-provider they already have an account at, an approver can approve or reject new accounts, a signed-in person can create
-tokens for scripts, and a fresh install gets its first administrator from `scorpion create-admin` or a one-time
-first-run token. Password reset and the profile follow.
+personal access tokens and OIDC sign-in. People can register with a password or sign in through an OIDC provider, an
+approver can approve or reject new accounts, a signed-in person can create tokens for scripts and link a provider to
+their account, and a fresh install gets its first administrator from `scorpion create-admin` or a one-time first-run
+token. Password reset and the profile follow.
 
 **Nothing is reachable in a real deployment yet.** Production denies every route that is not public until
 `core.authz` exists in M3 ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)), so register and login
@@ -16,15 +16,15 @@ work, and everything behind a session answers 403. Tests use `testAuthorizer()` 
 
 ## Manifest
 
-| Part         | Now                                                                                                                                                                                                                                                                                                                                                                                           | Later                                                                  |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Permissions  | `core.identity.session.manage`, `core.identity.me.read`, `core.identity.user.list-pending`, `core.identity.user.approve`, `core.identity.user.reject`, `core.identity.token.read`, `core.identity.token.manage`                                                                                                                                                                               | M3 adds the role-assignment permission                                 |
-| Settings     | `localAccounts` (default `true`, enforced on the server), `approvalPolicy` (default `manual`), `oidcProviders` (default none; OIDC is off; the sign-in flow follows in the next pull requests, [ADR-0011](../../docs/adr/0011-oidc-login.md))                                                                                                                                                 | M3: stored settings replace the defaults                               |
-| Events       | emits `identity.admin.created@1`, `identity.user.registered@1`, `identity.user.approved@1`, `identity.user.rejected@1`, `identity.token.created@1`, `identity.token.revoked@1`, `identity.token.rotated@1` through the outbox; handles `system.ready` only (issues the first-run token, below)                                                                                                | handlers arrive with core.notifications (M4)                           |
-| Registries   | declares `auth.approvalPolicy`, contributes `manual` to it; contributes the one entry to `kernel.authenticator` (session cookie, `Authorization: Bearer`, `X-API-Key`)                                                                                                                                                                                                                        | none                                                                   |
-| Jobs         | none                                                                                                                                                                                                                                                                                                                                                                                          | hourly cleanup of expired sessions, login states and tokens (sprint 5) |
-| CLI commands | `scorpion create-admin --username <name> --email <address>` (password from the prompt or stdin)                                                                                                                                                                                                                                                                                               | none                                                                   |
-| Routes       | internal API: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`, `GET /users/pending`, `POST /users/{id}/approve`, `POST /users/{id}/reject`, `GET /tokens`, `POST /tokens`, `DELETE /tokens/{id}`, `POST /tokens/{id}/rotate`, `POST /bootstrap/first-admin`, `POST /auth/oidc/{provider}/start`, `GET /auth/oidc/{provider}/callback` | password reset, profile (sprint 5)                                     |
+| Part         | Now                                                                                                                                                                                                                                                                                                                                                                                                                              | Later                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Permissions  | `core.identity.session.manage`, `core.identity.me.read`, `core.identity.user.list-pending`, `core.identity.user.approve`, `core.identity.user.reject`, `core.identity.token.read`, `core.identity.token.manage`, `core.identity.auth-method.link`                                                                                                                                                                                | M3 adds the role-assignment permission                                 |
+| Settings     | `localAccounts` (default `true`, enforced on the server), `approvalPolicy` (default `manual`), `oidcProviders` (default none: OIDC is off; [below](#oidc-sign-in))                                                                                                                                                                                                                                                               | M3: stored settings replace the defaults                               |
+| Events       | emits `identity.admin.created@1`, `identity.user.registered@1`, `identity.user.approved@1`, `identity.user.rejected@1`, `identity.authMethod.linked@1`, `identity.token.created@1`, `identity.token.revoked@1`, `identity.token.rotated@1` through the outbox; handles `system.ready` only (issues the first-run token, below)                                                                                                   | handlers arrive with core.notifications (M4)                           |
+| Registries   | declares `auth.approvalPolicy`, contributes `manual` to it; contributes the one entry to `kernel.authenticator` (session cookie, `Authorization: Bearer`, `X-API-Key`)                                                                                                                                                                                                                                                           | none                                                                   |
+| Jobs         | none                                                                                                                                                                                                                                                                                                                                                                                                                             | hourly cleanup of expired sessions, login states and tokens (sprint 5) |
+| CLI commands | `scorpion create-admin --username <name> --email <address>` (password from the prompt or stdin)                                                                                                                                                                                                                                                                                                                                  | none                                                                   |
+| Routes       | internal API: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`, `GET /users/pending`, `POST /users/{id}/approve`, `POST /users/{id}/reject`, `GET /tokens`, `POST /tokens`, `DELETE /tokens/{id}`, `POST /tokens/{id}/rotate`, `POST /bootstrap/first-admin`, `POST /auth/oidc/{provider}/start`, `POST /auth/oidc/{provider}/link`, `GET /auth/oidc/{provider}/callback` | password reset, profile (sprint 5)                                     |
 
 The README changes together with the manifest.
 
@@ -50,7 +50,8 @@ cross-site HTML form from reaching them ([ADR-0007](../../docs/adr/0007-session-
 | `POST /tokens/{id}/rotate`    | `core.identity.token.manage`      | `{ expiresAt? }` (send `{}`) → the new token, same name and scopes, shown once; the old one is dead. Strict rate limit. 404 as above                                                                                                                                                          |
 
 | `POST /auth/oidc/{provider}/start` | public (strict rate limit) | no body → 200 `{ authorizationUrl }` and the `__Host-oidc-login` cookie. 404 unknown provider, 422 malformed id, 502 provider unreachable |
-| `GET /auth/oidc/{provider}/callback` | public (strict rate limit) | `?state&code` (or `?state&error`) → 302 to the application root and the session cookie. 400 bad state / refused, 401 bad id_token or refused account, 403 pending, 422 bad query, 502 |
+| `POST /auth/oidc/{provider}/link` | `core.identity.auth-method.link`, session only | as `start`, but the callback adds the identity to the caller's account. Strict rate limit. 401 anonymous, 403 token caller |
+| `GET /auth/oidc/{provider}/callback` | public (strict rate limit) | `?state&code` (or `?state&error`) → 302 to the application root and the session cookie. 400 bad state / refused, 401 bad id_token or refused account, 403 pending, 409, 422 bad query, 502 |
 
 The token routes are described under [Access tokens](#access-tokens), the OIDC routes under [OIDC sign-in](#oidc-sign-in). The three approval routes are not in plan §5 item 6, which lists five routes. The plan's definition of done asks for a
 denied-permission test for approve and reject, and before `ctx.authz` exists (M3) the route's `permission` is the only
@@ -116,8 +117,25 @@ that an account is pending; they do not tell whether a username exists when sign
   failure is a 401 with no session and no user. Discovery and the JWKS are fetched with a 10 s timeout, a 1 MiB limit and
   no redirects, cached (1 h and 10 min; an unknown `kid` re-reads the keys once per 30 s); an unreachable or malformed
   provider is a 502. The code exchange is raced against the same 10 s.
-- **Accounts.** A login for an identity Scorpion does not know yet is refused with a 401 for now; creating accounts and linking
-  follow in the next pull request.
+- **First login** with an unknown `(provider, sub)` creates a user: status from the `auth.approvalPolicy` registry
+  (`provider` is the provider id; the default `manual` policy leaves it `pending`, and a pending account gets a 403 and
+  no session), the address stored **only when the provider sent `email_verified: true`** (the boolean), the username
+  derived from `preferred_username`, else the address before `@`, else `user`: lower-cased, accents removed, anything
+  else `-`, padded to 3 and cut to 31, made unique with a hash suffix of the identity (`sam`, `sam-1a2b`, …). Claims decide nothing else.
+- **Linking by email**: only when the provider vouches for the address **and** the existing account's address is verified
+  too. An existing account whose address nobody confirmed (a password account, until sprint 5's verification) is never
+  taken over: the login is a 409 telling the person to sign in the usual way and link from the profile. A rejected or
+  deleted account is a plain 401, a pending one is linked and answers 403.
+- **Linking from the profile**: `POST …/link` needs a session (an access token gets 403). The callback adds the identity to
+  that user; an identity that belongs to anyone, or a provider the user already has, is a 409.
+- **Events**: provisioning emits `identity.user.registered@1` in the transaction that creates the user and its identity;
+  linking emits `identity.authMethod.linked@1 { userId, username, provider, via: 'email' | 'profile' }`. Signing in emits
+  nothing. No subject, address or secret is in either.
+- **Bootstrap**: OIDC provisioning never sets the temporary administrator marker. "No administrator yet" stays "no active,
+  non-deleted user", so with `manual` an OIDC account (pending) does not end the first-run bootstrap. An approval policy
+  that activates OIDC accounts automatically would make the first such account an active user and end the bootstrap path
+  (the safe side: nobody becomes administrator by it); a policy author must know that.
+- **Trust.** The provider's `email_verified` is believed for linking, so list only providers that verify addresses.
 - **Not yet:** a public list of providers for the login page (M5), cleanup of expired login states (sprint 5's hourly job).
 
 ### Bootstrap: `create-admin` and the first-run token
@@ -252,7 +270,7 @@ The parameters are in one place; a unit test pins them. Under `NODE_ENV=test` on
 through the pipeline before `core.authz` exists.
 
 The routes are tested through the whole pipeline, on real Postgres, in `apps/server/src` (a module cannot import the
-server; `cli.test.ts` runs the real `scorpion create-admin` and `scorpion start` as processes): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, `defect-03.invalid-token.test.ts`, `tokens-routes.test.ts`, `bootstrap-routes.test.ts`, `oidc-routes.test.ts` and `defect-05.oidc-validation.test.ts`, with
+server; `cli.test.ts` runs the real `scorpion create-admin` and `scorpion start` as processes): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, `defect-03.invalid-token.test.ts`, `tokens-routes.test.ts`, `bootstrap-routes.test.ts`, `oidc-routes.test.ts`, `oidc-accounts-routes.test.ts` and `defect-05.oidc-validation.test.ts`, with
 `useIdentityApp()` from `src/testing/identity-app.ts`. The OIDC tests talk to `startStubIdp()` from `@scorpion/testing`, a
 provider on a local port (discovery, authorisation, a token endpoint that checks PKCE and the secret, a JWKS) whose
 `faults` break the id_token one way at a time. A test builds its own manifest with

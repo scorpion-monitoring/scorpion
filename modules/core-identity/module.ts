@@ -103,6 +103,9 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'core.identity.user.list-pending': { description: 'List accounts waiting for approval' },
       'core.identity.user.approve': { description: 'Approve a pending account' },
       'core.identity.user.reject': { description: 'Reject a pending account' },
+      'core.identity.auth-method.link': {
+        description: 'Add a sign-in provider (OIDC) to your own account',
+      },
       'core.identity.token.read': { description: 'List your own access tokens' },
       'core.identity.token.manage': {
         description: 'Create, revoke and rotate your own access tokens',
@@ -133,6 +136,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         }),
         'identity.user.approved@1': userEvent.extend({ approvedBy: z.string() }),
         'identity.user.rejected@1': userEvent.extend({ rejectedBy: z.string() }),
+        'identity.authMethod.linked@1': userEvent.extend({
+          provider: z.string(),
+          via: z.enum(['email', 'profile']),
+        }),
         'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
         'identity.token.revoked@1': tokenEvent,
