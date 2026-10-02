@@ -18,21 +18,41 @@ async function refused(run: Promise<unknown>): Promise<string> {
 }
 
 describe('the module', () => {
-  it('declares itself: id, prefix and the session authenticator; no routes, permissions, events or jobs yet', () => {
+  it('declares itself: id, prefix, permissions, settings, events, the policy registry and its routes', () => {
     expect(manifest).toMatchObject({ id: 'core.identity', tablePrefix: 'identity_' });
-    expect(manifest.permissions).toBeUndefined();
-    expect(manifest.routes).toBeUndefined();
+    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+      'core.identity.me.read',
+      'core.identity.session.manage',
+      'core.identity.user.approve',
+      'core.identity.user.list-pending',
+      'core.identity.user.reject',
+    ]);
+    expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'identity.user.approved@1',
+      'identity.user.registered@1',
+      'identity.user.rejected@1',
+    ]);
+    expect(Object.keys(manifest.registries ?? {})).toEqual(['auth.approvalPolicy']);
+    expect(Object.keys(manifest.contributes ?? {}).sort()).toEqual([
+      'auth.approvalPolicy',
+      'kernel.authenticator',
+    ]);
+    expect(manifest.routes).toBeDefined();
     expect(manifest.jobs).toBeUndefined();
-    expect(manifest.events).toBeUndefined();
-    expect(manifest.registries).toBeUndefined();
-    expect(Object.keys(manifest.contributes ?? {})).toEqual(['kernel.authenticator']);
   });
 
-  it('contributes exactly one authenticator entry', async () => {
+  it('contributes the manual policy and exactly one authenticator', async () => {
     const { kernel } = await identity.start();
-    expect(kernel.composition.registries.get('kernel.authenticator')?.entries).toEqual([
-      { module: 'core.identity', value: { authenticate: expect.any(Function) as unknown } },
+    expect(kernel.composition.registries.get('auth.approvalPolicy')?.entries).toEqual([
+      { module: 'core.identity', value: expect.objectContaining({ id: 'manual' }) as unknown },
     ]);
+    expect(kernel.composition.registries.get('kernel.authenticator')?.entries).toHaveLength(1);
+  });
+
+  it('declares localAccounts (default true) and the approval policy in its settings schema', () => {
+    const settings = manifest.settings as { parse(input: unknown): unknown };
+    expect(settings.parse({})).toEqual({ localAccounts: true, approvalPolicy: 'manual' });
+    expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
   it('creates exactly its five tables, all with the module prefix', async () => {

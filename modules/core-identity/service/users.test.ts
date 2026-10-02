@@ -369,3 +369,20 @@ describe('findByEmail', () => {
     expect((await id.users.findByEmail('both@example.org'))?.id).toBe(verified.id);
   });
 });
+
+describe('findById', () => {
+  it('finds a user, soft-deleted ones included', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const created = await id.users.createUser({ username: 'alice', auth: local() });
+    expect(await id.users.findById(created.id)).toEqual(created);
+    const gone = await makeUser(kernel.pool, { deleted: true });
+    expect((await id.users.findById(gone.id))?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('finds nothing for an unknown id, and a malformed one is no database error', async () => {
+    const { identity: id } = await identity.start();
+    for (const value of ['019a0000-0000-7000-8000-000000000000', 'nope', '', "' or 1=1 --"]) {
+      expect(await id.users.findById(value)).toBeUndefined();
+    }
+  });
+});

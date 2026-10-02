@@ -58,6 +58,8 @@ function isUniqueViolation(error: unknown): boolean {
   return code(error) === '23505' || code((error as { cause?: unknown } | null)?.cause) === '23505';
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function createUserService(ctx: ModuleContext): UserService {
   return {
     async createUser(input) {
@@ -133,6 +135,12 @@ export function createUserService(ctx: ModuleContext): UserService {
         .from(user)
         .where(eq(user.username, username.toLowerCase()))
         .limit(1);
+      return row ? toUser(row) : undefined;
+    },
+
+    async findById(id) {
+      if (!UUID.test(id)) return undefined; // a malformed id is "no such user", not a database error
+      const [row] = await ctx.db.select(publicColumns).from(user).where(eq(user.id, id)).limit(1);
       return row ? toUser(row) : undefined;
     },
 
