@@ -23,8 +23,16 @@ export type RouteAccess =
       permission?: never;
     };
 
+/**
+ * The rate-limit bucket a route draws from (pipeline step 2). `strict` is for routes an attacker
+ * gains from by repeating them: login, register, token use and creation, onboarding submission.
+ */
+export type RateLimitGroup = 'default' | 'strict';
+
 export type AppRouteConfig = RouteConfig &
   RouteAccess & {
+    /** Default: `default`. */
+    rateLimit?: RateLimitGroup;
     /** Write an audit entry for every call (`core.audit`, M4). */
     audit?: boolean;
   };
@@ -33,6 +41,7 @@ export type AppRoute = RouteConfig & {
   permission?: string;
   public?: boolean;
   publicReason?: string;
+  rateLimit?: RateLimitGroup;
   audit?: boolean;
 };
 
