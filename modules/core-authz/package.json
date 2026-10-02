@@ -1,0 +1,24 @@
+{
+  "name": "@scorpion/core-authz",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@scorpion/contracts": "workspace:*",
+    "@scorpion/kernel": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@scorpion/testing": "workspace:*"
+  }
+}

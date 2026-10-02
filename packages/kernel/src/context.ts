@@ -1,5 +1,6 @@
 // The context a module receives (`ctx`). See the kernel README for the full API.
 import type { Config } from './config.ts';
+import type { RegisteredPermission } from './composition.ts';
 import type { Db } from './db.ts';
 import type { Logger } from './logger.ts';
 import type { JobsApi } from './jobs.ts';
@@ -40,4 +41,9 @@ export interface ModuleContext<
   };
   /** Validated entries of a registry declared by this module or one of its dependencies. */
   registry(name: string): readonly unknown[];
+  /**
+   * Every permission the manifests of the loaded profile declare, in module order. Read-only and
+   * open to any module; `core.authz` uses it to know which permissions can exist.
+   */
+  readonly permissions: readonly RegisteredPermission[];
 }

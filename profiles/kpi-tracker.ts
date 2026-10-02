@@ -13,5 +13,5 @@ import { defineProfile } from '@scorpion/kernel';
 //   Optional: kpi.impact, bibliometrics, announcements
 export default defineProfile({
   name: 'kpi-tracker',
-  modules: ['core.identity'],
+  modules: ['core.authz', 'core.identity'],
 });

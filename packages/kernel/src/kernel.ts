@@ -178,6 +178,9 @@ export function createKernel(options: KernelOptions): Kernel {
   let routes: readonly RegisteredRoute[] = [];
   const contexts = new Map<string, ModuleContext>();
   const moduleById = new Map(profile.modules.map((module) => [module.id, module]));
+  const allPermissions = Object.freeze(
+    [...composition.permissions.values()].map((permission) => Object.freeze({ ...permission })),
+  );
 
   // Event name → the modules that subscribe to it (composition has checked they may).
   const subscribers = new Map<string, string[]>();
@@ -245,6 +248,7 @@ export function createKernel(options: KernelOptions): Kernel {
       jobs: jobs.apiFor(module.id),
       config,
       deps: dependencyView(module, services),
+      permissions: allPermissions,
       registry(name) {
         const registry = composition.registries.get(name);
         if (!registry)

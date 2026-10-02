@@ -161,6 +161,35 @@ describe('ctx.deps', () => {
   });
 });
 
+describe('ctx.permissions', () => {
+  it('lists the permissions of every loaded module, read-only', async () => {
+    let seen: readonly unknown[] = [];
+    const kernel = await inlineKernel([
+      defineModule({
+        id: 'one',
+        version: '1.0.0',
+        permissions: { 'one.read': { description: 'Read ones' } },
+      }),
+      defineModule({
+        id: 'two',
+        version: '1.0.0',
+        permissions: { 'two.edit': { description: 'Edit twos', scope: 'two' } },
+        services: (ctx) => {
+          seen = ctx.permissions;
+          return {};
+        },
+      }),
+    ]);
+    await kernel.start();
+    expect(seen).toEqual([
+      { id: 'one.read', module: 'one', description: 'Read ones' },
+      { id: 'two.edit', module: 'two', description: 'Edit twos', scope: 'two' },
+    ]);
+    expect(Object.isFrozen(seen)).toBe(true);
+    expect(Object.isFrozen(seen[0])).toBe(true);
+  });
+});
+
 describe('ctx.registry', () => {
   const widget = z.strictObject({ label: z.string() });
 

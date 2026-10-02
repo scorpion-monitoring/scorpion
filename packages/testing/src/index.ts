@@ -4,6 +4,7 @@ export {
   testAuthorizerEntry,
   type TestAuthorizationRequest,
 } from './authorizer.ts';
+export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
 export {
   hashSecret,
   makeAuthMethod,
