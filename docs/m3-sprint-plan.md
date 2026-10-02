@@ -13,7 +13,7 @@ reviewable size) and one pull request into `dev`. M3 is released once, after spr
 
 1. Merge #35 (`main` back into `dev`) and #36 (backlog entry) so `dev` carries 0.3.0.
 2. Answer the four decisions in §10. Decision 1 changes the dependency direction between two modules and conflicts
-   with FEATURES §2.1, so per CLAUDE.md it needs an answer and an ADR before code.
+   with FEATURES §2, so per CLAUDE.md it needs an answer and an ADR before code.
 3. Add the lines in §11 to M3's scope in `implementation.md` (needs your approval; this plan does not edit it).
 
 ## 1. What M2 hands to M3
@@ -233,7 +233,7 @@ second process within the TTL; rotation never leaves an undecryptable row; hosti
 
 ## 10. Decisions needed before sprint 1
 
-1. **Dependency direction and where `ctx.authz` comes from.** FEATURES §2.1 says `core.authz` depends on identity. But
+1. **Dependency direction and where `ctx.authz` comes from.** FEATURES §2 says `core.authz` depends on identity. But
    identity must call `ctx.authz.require` (CLAUDE.md, security rules), and `identity.role.assign` is an identity permission.
    Both cannot depend on each other. **Recommendation:** `core.identity` depends on `core.authz`; `core.authz` is
    user-agnostic (an opaque user id, no foreign key, no import of identity), and identity owns the role-assignment routes
