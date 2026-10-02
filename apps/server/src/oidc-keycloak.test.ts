@@ -13,7 +13,7 @@ import {
   type StartedKeycloak,
 } from '@scorpion/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { useIdentityApp } from './testing/identity-app.ts';
+import { settingsWith, useIdentityApp } from './testing/identity-app.ts';
 import { browser } from './testing/oidc-flow.ts';
 
 const PROVIDER_ID = 'keycloak';
@@ -28,29 +28,29 @@ afterAll(async () => {
   await keycloak?.stop();
 });
 
-const settings = (clientId = KEYCLOAK_CLIENT_ID) => ({
-  get: () =>
-    Promise.resolve({
-      localAccounts: true,
-      approvalPolicy: 'manual',
-      oidcProviders: [
-        {
-          id: PROVIDER_ID,
-          displayName: 'Keycloak',
-          issuer: keycloak.issuer,
-          clientId,
-          scopes: ['openid', 'email', 'profile'],
-        },
-      ],
-    }),
-});
+const settings = (clientId = KEYCLOAK_CLIENT_ID) =>
+  settingsWith({
+    localAccounts: true,
+    approvalPolicy: 'manual',
+    oidcProviders: [
+      {
+        id: PROVIDER_ID,
+        displayName: 'Keycloak',
+        issuer: keycloak.issuer,
+        clientId,
+        scopes: ['openid', 'email', 'profile'],
+      },
+    ],
+  });
 
 async function startApp(options: Parameters<typeof app.start>[0] = {}) {
-  const started = await app.start({
-    settings: settings(),
-    clientSecret: (id) => (id === PROVIDER_ID ? KEYCLOAK_CLIENT_SECRET : undefined),
-    ...options,
-  });
+  // The client secret is in the encrypted secrets store, as `scorpion set-secret` puts it there
+  // (ADR 0016); the module's default lookup reads it from there, with no environment variable.
+  const started = await app.start({ settings: settings(), ...options });
+  await started.settings.secrets.setAsSystem(
+    `oidc.${PROVIDER_ID}.client-secret`,
+    KEYCLOAK_CLIENT_SECRET,
+  );
   expect(started.kernel.config.ORIGIN).toBe('http://localhost:3000'); // what the realm registered
   const count = async (table: string) =>
     Number(

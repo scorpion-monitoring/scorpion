@@ -1,6 +1,6 @@
 # M3 Sprint Plan: `core.authz` + `core.settings`
 
-Status: approved, 2026-10-02 (§11 is in `implementation.md`). Decisions 1 to 4 answered the same day (§10). Sprint 1 is in PR #38; sprint 2's decisions are in §13 and ADR-0015.
+Status: approved, 2026-10-02 (§11 is in `implementation.md`). Decisions 1 to 4 answered the same day (§10). Sprint 1 is in PR #38; sprint 2's decisions are in §13 and ADR-0015; sprint 3's are in §14, ADR-0016 and ADR-0017.
 Scope source: [implementation.md](implementation.md) §3, M3. Closes defect 1 (FEATURES §5). Releases as `0.4.0`.
 
 M3 is size M (about 3 weeks for one developer), but it is the riskiest security milestone: it replaces
@@ -307,3 +307,36 @@ Recorded in [ADR-0015](adr/0015-identity-on-authz.md). Where they differ from §
 6. **A token may end its owner's sessions** (`logout-all`) when a scope names `core.identity.session.manage`; this is the
    M2 behaviour (tested since sprint 3 of M2) and is kept. The item "tokens cannot manage sessions" holds for the other
    session-only routes and for tokens.
+
+## 14. Decisions taken in sprint 3 (2026-10-02)
+
+Recorded in [ADR-0016](adr/0016-secrets-store-and-key-rotation.md) (secrets) and [ADR-0017](adr/0017-settings-port.md)
+(the settings port). Where they differ from §6:
+
+1. **The settings port is a kernel registry, `kernel.settingsStore`**, filled by `core.settings`, like the authoriser and the
+   authenticator. `ctx.settings.get()` parses the stored JSON with the manifest schema in the kernel; the store caches
+   (5 seconds, emptied in the writing process). Without a store `get()` yields the schema defaults. The type of the
+   result is the fourth type argument of `defineModule`. The kernel also gets `ctx.settingsSchemas` and
+   `kernel.settingsOf()`, both read-only.
+2. **No `zod-to-json-schema`.** Zod 4 ships `z.toJSONSchema`, which the admin-form route uses (input side, unrepresentable
+   parts left open). The plan expected a new dependency; there is none. Sprint 3 adds no runtime dependency at all.
+3. **Rotation uses `SECRETS_KEY` plus `SECRETS_KEY_NEXT`**, not a key ring with ids. The process reads rows of either key
+   and writes with the next one while it is set; `rotate-secrets` moves the rest and verifies each row before the batch
+   commits. Key ids are derived from the key, not configured.
+4. **`SECRETS_KEY` is read by the module from the process environment**, not through the kernel `Config`, which stays free of
+   secrets. A missing or invalid key stops `core.settings` from building its service (`Cannot start core.settings:`),
+   after the migrations. `scorpion migrate` needs no key.
+5. **The rate limits of the pipeline are a setting of `core.settings`** (`rateLimits.default` and `.strict`, a burst and a
+   rate per minute), read through `kernel.settingsOf('core.settings')`. The plan listed "the rate-limit numbers" among
+   identity's settings; they are the server pipeline's, which no module owns, and identity's own numbers are the mail
+   budgets. Constants remain the fallback.
+6. **A stored setting the schema rejects falls back per key**, not to all defaults and not to an error.
+7. **A save replaces the stored object** (`PUT` with the version read). Partial updates are in the backlog.
+8. **Preferences are self-service**: the role `user` holds the two preference permissions (through `authz.defaultRole`); the
+   settings and secrets permissions are Admin's by resolution and Reviewer and User hold none of them.
+9. **`getSecret(name)` is the one public method of `core.settings`.** The rest of the services (settings, secrets,
+   preferences, `setAsSystem` for the CLI) are internal to the module and its routes.
+10. **Test harnesses.** Identity's two harnesses now load `core.settings` (with a random `SECRETS_KEY`); both were already in
+    `manifestImporters`. `modules/core-settings/test/harness.ts` is added to `manifestImporters` because it composes
+    `core.authz` and `core.settings` for a test. `identity-app.ts` can start a second app over the same database, which is how
+    the "second process" cases are tested with a fake clock for the cache.

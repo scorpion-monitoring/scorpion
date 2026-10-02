@@ -2,6 +2,7 @@
 // a login, the callback, login CSRF, validation of what the provider sends, and what is kept secret.
 import { makeAuthMethod, makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
+import { settingsWith } from './testing/identity-app.ts';
 import {
   LOGIN_COOKIE,
   PROVIDER,
@@ -62,10 +63,7 @@ describe('POST /auth/oidc/{provider}/start', () => {
 
   it('is 404 everywhere when no provider is configured, whatever localAccounts says', async () => {
     const { post } = await app.start({
-      settings: {
-        get: () =>
-          Promise.resolve({ localAccounts: false, approvalPolicy: 'manual', oidcProviders: [] }),
-      },
+      settings: settingsWith({ localAccounts: false, approvalPolicy: 'manual', oidcProviders: [] }),
     });
     expect((await post(`/auth/oidc/${PROVIDER}/start`)).status).toBe(404);
   });

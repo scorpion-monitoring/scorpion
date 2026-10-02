@@ -1,5 +1,5 @@
 import { z } from '@scorpion/contracts';
-import { defineModule } from '@scorpion/kernel';
+import { defineModule, type ModuleContext } from '@scorpion/kernel';
 import { createAuthenticator } from './authenticator.ts';
 import type { IdentityService } from './public.ts';
 import { registerIdentityRoutes } from './routes.ts';
@@ -13,7 +13,11 @@ import { createRecoveryService, type RecoveryService } from './service/recovery.
 import { mailerFromEnvironment, type Mailer } from './service/mailer.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
 import { createOidcService, type OidcService } from './service/oidc.ts';
-import { clientSecretFor, type ClientSecretLookup } from './service/oidc-secret.ts';
+import {
+  clientSecretFrom,
+  clientSecretName,
+  type ClientSecretLookup,
+} from './service/oidc-secret.ts';
 import { createProviderClient } from './service/oidc-provider.ts';
 import {
   APPROVAL_POLICY_REGISTRY,
@@ -22,7 +26,11 @@ import {
 } from './service/approval-policy.ts';
 import { createRoleService, type RoleService } from './service/roles.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
-import { defaultSettings, settingsSchema, type IdentitySettings } from './service/settings.ts';
+import {
+  settingsSchema,
+  type IdentitySettings,
+  type IdentitySettingsValues,
+} from './service/settings.ts';
 import { createTokenService, type TokenService } from './service/tokens.ts';
 import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
@@ -46,7 +54,7 @@ export interface IdentityInternals extends IdentityService {
 }
 
 export interface IdentityModuleOptions {
-  /** Where the settings come from. Until core.settings (M3 sprint 3) that is the schema's defaults. */
+  /** Where the settings come from. Default: `ctx.settings`, the values saved through core.settings. */
   settings?: IdentitySettings;
   /** For tests: how long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
@@ -66,8 +74,8 @@ export interface IdentityModuleOptions {
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
   /**
-   * Where an OIDC client secret comes from. The default reads `OIDC_<ID>_CLIENT_SECRET` from the
-   * environment (`service/oidc-secret.ts`); M3 changes that default to the secrets store.
+   * Where an OIDC client secret comes from. The default is the secrets store of core.settings
+   * (`service/oidc-secret.ts`); there is no environment fallback.
    */
   clientSecret?: ClientSecretLookup;
   /** For tests: the HTTP client and timeouts used to talk to OIDC providers. */
@@ -126,7 +134,33 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     return currentTokens;
   };
 
-  return defineModule<IdentityInternals, 'core.authz'>({
+  let currentSettings: IdentitySettings | undefined;
+  let currentSecret: ClientSecretLookup | undefined;
+  /**
+   * Names, in the start-up log, the providers that have no stored client secret and therefore run as
+   * public clients (PKCE only). Names only: a secret is never read into the log.
+   */
+  async function reportProvidersWithoutSecret(log: ModuleContext['log']) {
+    if (!currentSettings || !currentSecret) return;
+    const { oidcProviders } = await currentSettings.get();
+    const without: string[] = [];
+    for (const provider of oidcProviders) {
+      if ((await currentSecret(provider.id)) === undefined) without.push(provider.id);
+    }
+    if (without.length > 0) {
+      log.info(
+        { providers: without, secrets: without.map(clientSecretName) },
+        'OIDC providers without a stored client secret run as public clients (set one with: scorpion set-secret <secret>)',
+      );
+    }
+  }
+
+  return defineModule<
+    IdentityInternals,
+    'core.authz' | 'core.settings',
+    never,
+    IdentitySettingsValues
+  >({
     id: 'core.identity',
     version: '0.1.0',
     // Short on purpose: the module's tables are `identity_user`, not `core_identity_user` (ADR 0004).
@@ -188,6 +222,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           } catch (err) {
             ctx.log.warn({ err }, 'could not issue a first-run token');
           }
+          try {
+            await reportProvidersWithoutSecret(ctx.log);
+          } catch (err) {
+            ctx.log.warn({ err }, 'could not check the OIDC client secrets');
+          }
         },
       },
       emits: {
@@ -235,7 +274,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
 
     services: (ctx) => {
       const authz = ctx.deps['core.authz'];
-      const settings = options.settings ?? defaultSettings;
+      const settings: IdentitySettings = options.settings ?? { get: () => ctx.settings.get() };
+      const clientSecret = options.clientSecret ?? clientSecretFrom(ctx.deps['core.settings']);
+      currentSettings = settings;
+      currentSecret = clientSecret;
       const users = createUserService(ctx);
       const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
       const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
@@ -260,7 +302,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           timeoutMs: options.oidcHttp?.timeoutMs,
           now: options.oidcHttp?.now,
         }),
-        clientSecret: options.clientSecret ?? clientSecretFor,
+        clientSecret,
         exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
       });
       const recovery = createRecoveryService(ctx, {
@@ -269,12 +311,12 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         mailer: options.mailer ?? mailerFromEnvironment(process.env),
         authz,
       });
-      const cleanup = createCleanupService(ctx, { authz });
+      const cleanup = createCleanupService(ctx, { authz, settings });
       currentCleanup = cleanup;
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery, authz }),
+        profile: createProfileService(ctx, { recovery, authz, settings }),
         roles: createRoleService({ authz, users }),
         recovery,
         loginStates,

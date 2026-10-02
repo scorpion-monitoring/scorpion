@@ -1,6 +1,7 @@
 import { getTableName, is } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import type pg from 'pg';
+import type { z } from 'zod';
 import { anonymousOnly, AUTHENTICATOR_REGISTRY, type Authenticator } from './authn.ts';
 import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
 import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
@@ -20,6 +21,12 @@ import {
 import { ids } from './ids.ts';
 import { createJobs, type JobRunReport } from './jobs.ts';
 import { createRateLimiter, type RateLimiter } from './rate-limit.ts';
+import {
+  createSettingsPort,
+  SETTINGS_STORE_REGISTRY,
+  type SettingsPort,
+  type SettingsStore,
+} from './settings.ts';
 import {
   KERNEL_MODULE,
   KERNEL_TABLE_PREFIX,
@@ -94,6 +101,11 @@ export interface Kernel {
   readonly authenticator: Authenticator;
   /** The token-bucket store the server's rate limit (pipeline step 2) charges. */
   readonly rateLimiter: RateLimiter;
+  /**
+   * The settings of a loaded module, read as the module itself would (`ctx.settings`). For the
+   * server's own pipeline, which has no module context; throws for a module that is not loaded.
+   */
+  settingsOf(moduleId: string): SettingsPort;
   /** Public service objects by module id, once `start()` has built them. */
   readonly services: ReadonlyMap<string, unknown>;
   /** The CLI commands the modules contribute, known without touching the database. */
@@ -178,6 +190,13 @@ export function createKernel(options: KernelOptions): Kernel {
   let routes: readonly RegisteredRoute[] = [];
   const contexts = new Map<string, ModuleContext>();
   const moduleById = new Map(profile.modules.map((module) => [module.id, module]));
+  const settingsSchemas: ReadonlyMap<string, z.ZodType> = new Map(
+    profile.modules.flatMap((module) =>
+      module.manifest.settings ? [[module.id, module.manifest.settings] as const] : [],
+    ),
+  );
+  const storeEntry = composition.registries.get(SETTINGS_STORE_REGISTRY)!.entries[0];
+  const settingsStore = storeEntry ? (storeEntry.value as SettingsStore) : undefined;
   const allPermissions = Object.freeze(
     [...composition.permissions.values()].map((permission) => Object.freeze({ ...permission })),
   );
@@ -232,6 +251,15 @@ export function createKernel(options: KernelOptions): Kernel {
     ...options.jobs,
   });
 
+  function settingsPortFor(moduleId: string): SettingsPort {
+    return createSettingsPort({
+      moduleId,
+      schema: settingsSchemas.get(moduleId),
+      store: () => settingsStore,
+      log: childLogger(log, { module: moduleId }),
+    });
+  }
+
   function contextFor(module: ResolvedModule): ModuleContext {
     const cached = contexts.get(module.id);
     if (cached) return cached;
@@ -249,6 +277,8 @@ export function createKernel(options: KernelOptions): Kernel {
       config,
       deps: dependencyView(module, services),
       permissions: allPermissions,
+      settings: settingsPortFor(module.id),
+      settingsSchemas,
       registry(name) {
         const registry = composition.registries.get(name);
         if (!registry)
@@ -347,6 +377,12 @@ export function createKernel(options: KernelOptions): Kernel {
     })),
     runCommand,
     rateLimiter: createRateLimiter(db),
+    settingsOf(moduleId) {
+      if (!moduleById.has(moduleId)) {
+        throw new KernelStartupError(`Unknown module "${moduleId}":`, ['it is not in the profile']);
+      }
+      return contextFor(moduleById.get(moduleId)!).settings;
+    },
     config,
     log,
     db,

@@ -4,7 +4,8 @@
 #   docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
 #
 # The image runs the API server (`scorpion start`). The web UI (M5) is added to this build later.
-# DATABASE_URL is required at run time; see .env.example for the other variables.
+# DATABASE_URL is required at run time, and SECRETS_KEY for profiles that include core.settings (see
+# modules/core-settings/README.md); see .env.example for the other variables.
 #
 # Build arguments:
 #   PROFILE       the profile (default full); profiles/<PROFILE>.ts lists its modules

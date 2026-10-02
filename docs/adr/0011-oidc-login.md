@@ -145,3 +145,9 @@ auth method. Linking emits the new `identity.authMethod.linked@1 { userId, usern
 - Two `__Host-` cookies exist now; both need `Secure`, so local development over plain http needs a browser that
   treats `localhost` as secure (all current ones do).
 - M3 changes `clientSecretFor()` and the settings source, and nothing else here.
+
+## Update (M3 sprint 3)
+
+`clientSecretFor()` is replaced by `clientSecretFrom(settings)`, which asks the secrets store of `core.settings` for
+`oidc.<provider id>.client-secret`. There is no environment fallback: `OIDC_<ID>_CLIENT_SECRET` is not read
+([ADR-0016](0016-secrets-store-and-key-rotation.md)).

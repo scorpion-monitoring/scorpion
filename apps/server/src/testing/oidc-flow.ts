@@ -2,20 +2,24 @@
 // that walks the three steps (start, provider, callback) and lets a test change any one of them.
 import { startStubIdp, type StubIdp } from '@scorpion/testing';
 import { afterAll, beforeAll } from 'vitest';
-import { API, useIdentityApp, type Reply, type RequestOptions } from './identity-app.ts';
+import {
+  API,
+  settingsWith,
+  useIdentityApp,
+  type Reply,
+  type RequestOptions,
+} from './identity-app.ts';
 
 export const PROVIDER = 'stub';
 export const LOGIN_COOKIE = '__Host-oidc-login';
 
-export const oidcSettings = (idp: StubIdp, over: Record<string, unknown> = {}) => ({
-  get: () =>
-    Promise.resolve({
-      localAccounts: true,
-      approvalPolicy: 'manual',
-      oidcProviders: [idp.provider(PROVIDER)],
-      ...over,
-    }),
-});
+export const oidcSettings = (idp: StubIdp, over: Record<string, unknown> = {}) =>
+  settingsWith({
+    localAccounts: true,
+    approvalPolicy: 'manual',
+    oidcProviders: [idp.provider(PROVIDER)],
+    ...over,
+  });
 
 interface App {
   call(method: string, path: string, options?: RequestOptions): Promise<Reply>;

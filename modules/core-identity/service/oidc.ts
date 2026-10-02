@@ -101,10 +101,14 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     return found;
   }
 
-  const clientFor = (provider: OidcProvider) =>
+  /**
+   * The client that talks to the provider. Only the code exchange needs the secret, so only it reads
+   * the store; a provider without a stored secret is a public client (PKCE only).
+   */
+  const clientFor = async (provider: OidcProvider, withSecret: boolean) =>
     new OAuth2Client(
       provider.clientId,
-      deps.clientSecret(provider.id) ?? null,
+      withSecret ? ((await deps.clientSecret(provider.id)) ?? null) : null,
       redirectUri(provider.id),
     );
 
@@ -117,7 +121,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     const provider = await providerOrThrow(providerId);
     const discovery = await providers.discovery(provider);
     const fresh = await states.create(provider.id, linkUserId);
-    const url = clientFor(provider).createAuthorizationURLWithPKCE(
+    const url = (await clientFor(provider, false)).createAuthorizationURLWithPKCE(
       discovery.authorizationEndpoint,
       fresh.state,
       CodeChallengeMethod.S256,
@@ -318,14 +322,13 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
       const discovery = await providers.discovery(provider);
 
+      // Read outside the try: a secret that cannot be decrypted is an operator's error (a 500 that the
+      // log explains without the value), not something to report as a failed sign-in.
+      const client = await clientFor(provider, true);
       let idToken: string;
       try {
         const tokens = await withTimeout(
-          clientFor(provider).validateAuthorizationCode(
-            discovery.tokenEndpoint,
-            input.code,
-            input.verifier,
-          ),
+          client.validateAuthorizationCode(discovery.tokenEndpoint, input.code, input.verifier),
           exchangeTimeoutMs,
         );
         try {

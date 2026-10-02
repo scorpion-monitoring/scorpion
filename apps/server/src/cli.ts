@@ -41,8 +41,9 @@ Commands:
                              Write apps/server/src/generated/profile.ts for a profile (build time).
 
 ${moduleCommandLines()}
-Environment: DATABASE_URL (required), PROFILE, PORT, BASE_PATH, LOG_LEVEL, WORKER_MODE
-(inline | separate), ORIGIN. See .env.example.
+Environment: DATABASE_URL (required), SECRETS_KEY (required by profiles with core.settings; generate with
+openssl rand -base64 32), SECRETS_KEY_NEXT (only while rotating secrets), PROFILE, PORT, BASE_PATH,
+LOG_LEVEL, WORKER_MODE (inline | separate), ORIGIN. See .env.example.
 `;
 
 async function profileGenerate(args: string[]): Promise<number> {
@@ -107,6 +108,8 @@ async function untilSignal(
     process.once('SIGINT', () => shutdown('SIGINT'));
     running.ready.catch((error: unknown) => {
       log.fatal({ err: error }, 'start-up failed');
+      // A start-up error carries the complete list of what to fix; show it as plain text too.
+      if (error instanceof KernelStartupError) console.error(error.message);
       code = 1;
       resolve();
     });

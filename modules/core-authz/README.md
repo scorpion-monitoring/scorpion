@@ -7,7 +7,10 @@ nothing from `core.identity` (ADR-0014). It has no dependencies, so every other 
 Status: M3 sprint 2. The module is in the `full` and `kpi-tracker` profiles and `core.identity` depends on it
 ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)): identity contributes the permissions of the role `user`, gives
 the role at approval, owns the role routes and asks this module for every decision. An anonymous caller of a
-non-public route gets 401, a signed-in user without a role 403.
+non-public route gets 401, a signed-in user without a role 403. `core.settings` (sprint 3) depends on it too: it uses
+`ctx.deps['core.authz']` in every service method and contributes the two preference permissions to the role `user`
+through `authz.defaultRole`; the module order is `core.authz` → `core.settings` → `core.identity`. This module still reads
+no settings (ADR-0014).
 
 ## Manifest
 

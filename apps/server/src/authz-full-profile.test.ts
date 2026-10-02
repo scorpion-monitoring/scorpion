@@ -6,6 +6,7 @@ import { Forbidden, Unauthorized, type UserActor } from '@scorpion/contracts';
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import {
   makeRoleAssignment,
+  makeSecretsKey,
   makeSession,
   makeUser,
   startPostgres,
@@ -15,6 +16,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createApp, SURFACE_PREFIX } from './app.ts';
 import { moduleIds, profileName, sources } from './generated/profile.ts';
 import { createMetrics } from './metrics.ts';
+
+// The generated profile has core.settings, which will not start without a key (ADR 0016).
+process.env.SECRETS_KEY = makeSecretsKey();
 
 let server: StartedPostgres;
 const open: Kernel[] = [];
@@ -73,7 +77,7 @@ async function boot() {
 
 describe('profile full with core.authz', () => {
   it('contains core.authz before core.identity', () => {
-    expect(moduleIds).toEqual(['core.authz', 'core.identity']);
+    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.identity']);
   });
 
   it('answers 403 to a signed-in user without roles on a non-public route', async () => {

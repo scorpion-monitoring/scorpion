@@ -14,6 +14,9 @@
       "path": "./modules/core-identity"
     },
     {
+      "path": "./modules/core-settings"
+    },
+    {
       "path": "./packages/contracts"
     },
     {

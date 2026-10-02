@@ -200,13 +200,15 @@ const manifestSchema = z.strictObject({
  * Name the dependencies you use as type arguments so that `ctx.deps` is typed from their
  * `public.ts`: `defineModule<Service, 'kpi.framework', 'kpi.impact'>({ ... })` for one required
  * and one optional dependency. The type arguments only shape `ctx.deps`; the dependencies
- * themselves come from package.json (ADR 0002).
+ * themselves come from package.json (ADR 0002). A fourth argument types `ctx.settings.get()`:
+ * pass `z.output<typeof settingsSchema>`.
  */
 export function defineModule<
   Services = unknown,
   Required extends keyof ModuleServices = never,
   Optional extends keyof ModuleServices = never,
->(manifest: ModuleManifest<Services, ModuleContext<Required, Optional>>): ModuleManifest {
+  Settings = unknown,
+>(manifest: ModuleManifest<Services, ModuleContext<Required, Optional, Settings>>): ModuleManifest {
   return manifest as unknown as ModuleManifest;
 }
 

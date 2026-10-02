@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { useKernels } from '../../../../packages/kernel/test/helpers.ts';
 import { createApp, SURFACE_PREFIX, type AppOptions } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
+import { limitsFromSettings, RATE_LIMITS } from './rate-limit.ts';
 
 const kernels = useKernels();
 const allow: Authorizer = () => undefined;
@@ -166,5 +167,90 @@ describe('step 2: rate limit', () => {
       expect(JSON.stringify(lines)).not.toContain('s3cret');
       expect(JSON.stringify(lines)).toContain('rate limit exceeded');
     });
+  });
+});
+
+describe('limits an administrator saved (core.settings)', () => {
+  const saved = (over: Record<string, unknown> = {}) => ({
+    rateLimits: {
+      default: { burst: 2, perMinute: 30 },
+      strict: { burst: 1, perMinute: 6 },
+      ...over,
+    },
+  });
+
+  it.each([
+    ['nothing', undefined],
+    ['a string', 'x'],
+    ['no rateLimits', {}],
+    ['a group missing', { rateLimits: { default: { burst: 2, perMinute: 30 } } }],
+    ['a zero burst', saved({ default: { burst: 0, perMinute: 30 } })],
+    ['a negative rate', saved({ strict: { burst: 1, perMinute: -1 } })],
+    ['a text number', saved({ strict: { burst: '1', perMinute: 6 } })],
+  ])('leaves the constants in force for %s', (_name, values) => {
+    expect(limitsFromSettings(values)).toBeUndefined();
+  });
+
+  it('turns a burst and a rate per minute into a token bucket', () => {
+    expect(limitsFromSettings(saved())).toEqual({
+      default: { capacity: 2, refillPerSecond: 0.5 },
+      strict: { capacity: 1, refillPerSecond: 0.1 },
+    });
+  });
+
+  it('has defaults, the module’s, that equal the constants of the pipeline', () => {
+    expect(
+      limitsFromSettings({
+        rateLimits: {
+          default: { burst: 120, perMinute: 120 },
+          strict: { burst: 10, perMinute: 10 },
+        },
+      }),
+    ).toEqual({
+      default: {
+        capacity: RATE_LIMITS.default.capacity,
+        refillPerSecond: RATE_LIMITS.default.refillPerSecond,
+      },
+      strict: {
+        capacity: RATE_LIMITS.strict.capacity,
+        refillPerSecond: RATE_LIMITS.strict.refillPerSecond,
+      },
+    });
+  });
+
+  it('are read for every request: a change applies at once, and a failing source leaves the constants', async () => {
+    let current: Parameters<typeof limitsFromSettings>[0] = saved();
+    let failing = false;
+    const { from, lines } = await rateLimitedApp({
+      rateLimits: undefined,
+      storedRateLimits: () => {
+        if (failing) return Promise.reject(new Error('the database is away'));
+        return Promise.resolve(limitsFromSettings(current));
+      },
+    });
+    const statuses = async (peer: string, n: number) => {
+      const out: number[] = [];
+      for (let i = 0; i < n; i++) out.push((await from(peer, things)).status);
+      return out;
+    };
+    expect(await statuses('203.0.113.50', 3)).toEqual([200, 200, 429]); // the saved burst of 2
+    current = saved({ default: { burst: 5, perMinute: 30 } });
+    expect(await statuses('203.0.113.51', 6)).toEqual([200, 200, 200, 200, 200, 429]);
+    failing = true;
+    expect(await statuses('203.0.113.52', 3)).toEqual([200, 200, 200]); // the constants: a burst of 120
+    expect(
+      lines.some(
+        (line) => line.msg === 'could not read the stored rate limits; the defaults apply',
+      ),
+    ).toBe(true);
+  });
+
+  it('lose against a limit a test fixes, so existing tests keep their numbers', async () => {
+    const { from } = await rateLimitedApp({
+      storedRateLimits: () => Promise.resolve(limitsFromSettings(saved())),
+    });
+    const out: number[] = [];
+    for (let i = 0; i < 4; i++) out.push((await from('203.0.113.60', things)).status);
+    expect(out).toEqual([200, 200, 200, 429]); // the fixture's burst of 3, not the saved 2
   });
 });

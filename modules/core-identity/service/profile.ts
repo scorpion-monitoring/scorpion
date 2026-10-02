@@ -15,7 +15,8 @@ import { user } from '../db/schema.ts';
 import { updateProfileInput } from '../validation.ts';
 import { TooManyRequests } from './errors.ts';
 import { pendingVerificationEmail } from './mail-tokens.ts';
-import { MAIL_BUDGET_PER_USER, type RecoveryService } from './recovery.ts';
+import type { RecoveryService } from './recovery.ts';
+import { budgetLimit, type IdentitySettings } from './settings.ts';
 import { requireSession } from './require-user.ts';
 
 export interface Profile {
@@ -53,9 +54,13 @@ function invalid(error: ZodError): Invalid {
 
 export function createProfileService(
   ctx: ModuleContext,
-  deps: { recovery: Pick<RecoveryService, 'startVerification'>; authz: AuthzService },
+  deps: {
+    recovery: Pick<RecoveryService, 'startVerification'>;
+    authz: AuthzService;
+    settings: IdentitySettings;
+  },
 ): ProfileService {
-  const { authz } = deps;
+  const { authz, settings } = deps;
   const limiter = createRateLimiter(ctx.db);
 
   async function load(userId: string, now: Date): Promise<Profile> {
@@ -100,7 +105,11 @@ export function createProfileService(
         change.email !== undefined && change.email.toLowerCase() !== before.email?.toLowerCase();
       if (asksForNewAddress) {
         // A signed-in caller may be told no: this limit is theirs, not an address's.
-        const budget = await limiter.consume(`identity.verify:${userId}`, MAIL_BUDGET_PER_USER);
+        const { mailBudgets } = await settings.get();
+        const budget = await limiter.consume(
+          `identity.verify:${userId}`,
+          budgetLimit(mailBudgets.perUser),
+        );
         if (!budget.allowed)
           throw new TooManyRequests('Too many address changes. Try again later.');
       }

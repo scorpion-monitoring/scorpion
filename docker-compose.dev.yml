@@ -42,6 +42,8 @@ services:
         PROFILE: ${PROFILE:-full}
     environment:
       DATABASE_URL: postgres://scorpion:scorpion@postgres:5432/scorpion
+      # From .env (`pnpm dev` generates one). Required by profiles that include core.settings.
+      SECRETS_KEY: ${SECRETS_KEY:-}
       PROFILE: ${PROFILE:-full}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       WORKER_MODE: inline
