@@ -117,6 +117,17 @@ export function buildComposition(profile: ResolvedProfile): Composition {
     }
   }
 
+  // CLI command names: unique across modules.
+  const commandOwner = new Map<string, string>();
+  for (const module of profile.modules) {
+    for (const command of module.manifest.commands ?? []) {
+      const other = commandOwner.get(command.name);
+      if (other)
+        problems.push(`command "${command.name}" is declared by both ${other} and ${module.id}`);
+      else commandOwner.set(command.name, module.id);
+    }
+  }
+
   // Registries: unique names. The kernel owns `kernel.authorizer`, which any module may fill.
   const registries = new Map<string, RegisteredRegistry>([
     [

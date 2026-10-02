@@ -10,6 +10,17 @@ export const EVENT_NAME = /^[a-z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)+@[1-9][0-9
 /** Lifecycle event emitted by the kernel after startup. Not versioned, not stored in the outbox. */
 export const SYSTEM_READY = 'system.ready';
 
+/** Command names: lower-case kebab case, as in `create-admin`. */
+export const COMMAND_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+/** Commands of the server itself; a module cannot take these names. */
+export const RESERVED_COMMANDS: readonly string[] = [
+  'start',
+  'worker',
+  'migrate',
+  'profile:generate',
+  'help',
+];
+
 export interface PermissionDef {
   /** What the permission is checked against; `global` when omitted. */
   scope?: string;
@@ -49,6 +60,33 @@ export interface DomainEvent<Payload = unknown> {
 
 export type EventHandler<C = ModuleContext> = (event: DomainEvent, ctx: C) => Promise<void>;
 
+/** What a command may use to talk to the person at the terminal. Never put a secret in `out` or `err`. */
+export interface CommandIo {
+  out(text: string): void;
+  err(text: string): void;
+  /**
+   * Asks for a secret (a password) without echoing it: from the terminal when there is one, else
+   * as one line of standard input. A secret must never come from the command line (`argv`), where
+   * the process list and the shell history keep it.
+   */
+  readSecret(prompt: string): Promise<string>;
+}
+
+/** A command of the `scorpion` CLI that a module contributes (`scorpion <name>`). */
+export interface CommandDef<C = ModuleContext> {
+  /** `create-admin`. Unique across the profile and not one of `RESERVED_COMMANDS`. */
+  name: string;
+  /** One line for the usage text. */
+  description: string;
+  /** The arguments, for the usage text: `create-admin --username <name> --email <address>`. */
+  usage?: string;
+  /**
+   * Runs once the database is migrated and the module's services are built, but with no HTTP
+   * server, no routes and no `system.ready`. Returns the exit code (0 when it returns nothing).
+   */
+  run: (args: readonly string[], io: CommandIo, ctx: C) => Promise<number | void>;
+}
+
 /** What a module's `routes(r, ctx)` receives. Every route is checked when it is registered. */
 export interface RouteRegistrar {
   /** A route under `/api/internal` for the SvelteKit UI. */
@@ -79,6 +117,8 @@ export interface ModuleManifest<Services = unknown, C = ModuleContext> {
   services?: (ctx: C) => Services | Promise<Services>;
   routes?: (r: RouteRegistrar, ctx: C) => void;
   jobs?: JobDef<C>[];
+  /** Commands of the `scorpion` CLI. They run with the module's services and no web server. */
+  commands?: CommandDef<C>[];
   events?: {
     /** Event name → payload schema. */
     emits?: Record<string, z.ZodType>;
@@ -130,6 +170,16 @@ const manifestSchema = z.strictObject({
           backoff: z.boolean().optional(),
         }),
         timeoutSeconds: z.number().int().min(1),
+      }),
+    )
+    .optional(),
+  commands: z
+    .array(
+      z.strictObject({
+        name: z.string().regex(COMMAND_NAME, 'must be lower-case kebab case, e.g. "create-admin"'),
+        description: z.string().min(1),
+        usage: z.string().min(1).optional(),
+        run: fn,
       }),
     )
     .optional(),
@@ -191,6 +241,14 @@ export function validateManifest(manifest: unknown, source: string): ModuleManif
   const jobNames = (value.jobs ?? []).map((job) => job.name);
   for (const name of jobNames.filter((name, index) => jobNames.indexOf(name) !== index)) {
     problems.push(`job "${name}" is declared twice`);
+  }
+  const commandNames = (value.commands ?? []).map((command) => command.name);
+  for (const name of commandNames) {
+    if (RESERVED_COMMANDS.includes(name))
+      problems.push(`command "${name}" is a command of the server`);
+  }
+  for (const name of commandNames.filter((name, index) => commandNames.indexOf(name) !== index)) {
+    problems.push(`command "${name}" is declared twice`);
   }
   for (const name of Object.keys(value.events?.emits ?? {})) {
     if (!EVENT_NAME.test(name)) {

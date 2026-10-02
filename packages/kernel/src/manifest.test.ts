@@ -157,6 +157,37 @@ describe('validateManifest', () => {
       'jobs.0.retry',
     ],
     [
+      'a command with an upper-case name',
+      { ...valid, commands: [{ name: 'Create-Admin', description: 'x', run: async () => {} }] },
+      'must be lower-case kebab case',
+    ],
+    [
+      'a command that takes the name of a server command',
+      { ...valid, commands: [{ name: 'start', description: 'x', run: async () => {} }] },
+      'command "start" is a command of the server',
+    ],
+    [
+      'a command without a description',
+      { ...valid, commands: [{ name: 'tidy', run: async () => {} }] },
+      'commands.0.description',
+    ],
+    [
+      'a command without a function',
+      { ...valid, commands: [{ name: 'tidy', description: 'x' }] },
+      'commands.0.run',
+    ],
+    [
+      'the same command twice',
+      {
+        ...valid,
+        commands: [
+          { name: 'tidy', description: 'x', run: async () => {} },
+          { name: 'tidy', description: 'y', run: async () => {} },
+        ],
+      },
+      'command "tidy" is declared twice',
+    ],
+    [
       'the same job twice',
       {
         ...valid,

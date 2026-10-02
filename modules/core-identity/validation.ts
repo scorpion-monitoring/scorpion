@@ -108,3 +108,15 @@ export type CreateTokenInput = z.input<typeof createTokenInput>;
 /** The body of `POST /tokens/{id}/rotate`: a new expiry, or the old one is kept. */
 export const rotateTokenInput = z.strictObject({ expiresAt: expiresAt.optional() });
 export type RotateTokenInput = z.input<typeof rotateTokenInput>;
+
+/** The account `create-admin` and the first-run token create: active, with a password and an address. */
+export const createAdminInput = z.strictObject({ username, email, password });
+export type CreateAdminInput = z.infer<typeof createAdminInput>;
+
+/** The body of `POST /bootstrap/first-admin`. The token is checked by the service; here only its size. */
+export const redeemFirstRunInput = z.strictObject({
+  token: z.string().min(1).max(128),
+  username,
+  email,
+  password,
+});

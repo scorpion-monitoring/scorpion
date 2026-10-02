@@ -13,12 +13,20 @@ import type { RouteRegistrar } from '@scorpion/kernel';
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from './cookie.ts';
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
+import type { BootstrapService } from './service/bootstrap.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
-import { createTokenInput, loginInput, registerInput, rotateTokenInput } from './validation.ts';
+import {
+  createTokenInput,
+  loginInput,
+  redeemFirstRunInput,
+  registerInput,
+  rotateTokenInput,
+} from './validation.ts';
 
 export interface IdentityRoutesServices {
   accounts: AccountService;
   approval: ApprovalService;
+  bootstrap: BootstrapService;
   tokens: TokenService;
 }
 
@@ -144,6 +152,24 @@ export const rejectRoute = createRoute({
   },
 });
 
+export const firstAdminRoute = createRoute({
+  method: 'post',
+  path: '/bootstrap/first-admin',
+  public: true,
+  publicReason:
+    'The first administrator of a fresh install has no account yet; the single-use token printed at start-up is the credential. Rate limited (strict).',
+  rateLimit: 'strict',
+  request: { body: json(redeemFirstRunInput) },
+  responses: {
+    201: ok(
+      'The administrator was created. Sign in with the password.',
+      z.object({ user: userSchema }),
+    ),
+    401: { description: 'The token is unknown, used or expired.' },
+    409: { description: 'The username or email address is taken (the token is not used up).' },
+  },
+});
+
 const tokenSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -235,7 +261,7 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval, tokens }: IdentityRoutesServices,
+  { accounts, approval, bootstrap, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     const user = await accounts.register(c.req.valid('json'));
@@ -289,6 +315,12 @@ export function registerIdentityRoutes(
     const { id } = c.req.valid('param');
     return c.json({ id, status: await approval.reject(c.get('actor'), id) }, 200);
   }) satisfies RouteHandler<typeof rejectRoute, AppEnv>);
+
+  r.internal(firstAdminRoute, (async (c) => {
+    const admin = await bootstrap.redeemFirstRunToken(c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.json({ user: view(admin) }, 201);
+  }) satisfies RouteHandler<typeof firstAdminRoute, AppEnv>);
 
   r.internal(listTokensRoute, (async (c) => {
     const query = c.req.valid('query');

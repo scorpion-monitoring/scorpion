@@ -30,6 +30,7 @@ describe('the module', () => {
       'core.identity.user.reject',
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'identity.admin.created@1',
       'identity.token.created@1',
       'identity.token.revoked@1',
       'identity.token.rotated@1',
@@ -43,6 +44,8 @@ describe('the module', () => {
       'kernel.authenticator',
     ]);
     expect(manifest.routes).toBeDefined();
+    expect(manifest.commands?.map((command) => command.name)).toEqual(['create-admin']);
+    expect(Object.keys(manifest.events?.on ?? {})).toEqual(['system.ready']);
     expect(manifest.jobs).toBeUndefined();
   });
 
@@ -60,7 +63,7 @@ describe('the module', () => {
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
-  it('creates exactly its five tables, all with the module prefix', async () => {
+  it('creates exactly its six tables, all with the module prefix', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
@@ -68,6 +71,7 @@ describe('the module', () => {
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       'identity_auth_method',
+      'identity_first_run_token',
       'identity_login_state',
       'identity_session',
       'identity_token',
@@ -85,7 +89,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(2); // 0000 and 0001, each once
+    expect(journal.rows).toHaveLength(3); // 0000 to 0002, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -96,6 +100,7 @@ describe('the module', () => {
     );
     expect(rows.map((r) => `${r.table_name}.${r.column_name}`).sort()).toEqual([
       'identity_auth_method.password_hash',
+      'identity_first_run_token.secret_hash',
       'identity_login_state.state_hash',
       'identity_session.secret_hash',
       'identity_token.secret_hash',
@@ -141,8 +146,35 @@ describe('the temporary isBootstrapAdmin column (ADR 0006)', () => {
     const mentioning = files
       .filter((file) => /isBootstrapAdmin|is_bootstrap_admin/.test(readFileSync(file, 'utf8')))
       .map((file) => file.slice(import.meta.dirname.length + 1));
-    // Only the schema defines it. The service never selects or sets it, and nothing else knows it.
+    // Only the schema knows the column. `create-admin` and the first-run token set it through the
+    // exported `BOOTSTRAP_ADMIN_MARK` (a value, not a mention), and nothing reads it or decides by it.
     expect(mentioning).toEqual(['db/schema.ts']);
+  });
+});
+
+describe('the marker is written, never read (ADR 0006)', () => {
+  it('is used only by the bootstrap service, and only as the argument of a `.set()`', () => {
+    const source = (file: string) => readFileSync(join(import.meta.dirname, file), 'utf8');
+    const mentioning: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (['node_modules', 'migrations', 'dist'].includes(entry.name)) continue;
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+          if (readFileSync(path, 'utf8').includes('BOOTSTRAP_ADMIN_MARK'))
+            mentioning.push(path.slice(import.meta.dirname.length + 1));
+        }
+      }
+    };
+    walk(import.meta.dirname);
+    expect(mentioning.sort()).toEqual(['db/schema.ts', 'service/bootstrap.ts']);
+    const uses = source('service/bootstrap.ts').match(/.*BOOTSTRAP_ADMIN_MARK.*/g) ?? [];
+    expect(
+      uses.filter((line) => !line.includes('import') && !line.trim().startsWith('//')),
+    ).toEqual([
+      '      await tx.update(user).set(BOOTSTRAP_ADMIN_MARK).where(eq(user.id, created.id));',
+    ]);
   });
 });
 

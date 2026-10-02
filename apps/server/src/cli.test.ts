@@ -18,12 +18,13 @@ afterAll(async () => {
   await server?.stop();
 });
 
-function run(args: string[], env: Record<string, string> = {}) {
+function run(args: string[], env: Record<string, string> = {}, input?: string) {
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: root,
     env: { PATH: process.env.PATH ?? '', ...env },
     encoding: 'utf8',
     timeout: 60_000,
+    input,
   });
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
@@ -130,10 +131,14 @@ describe('scorpion start', () => {
     await fetch(`${base}/healthz`, { headers: { 'x-request-id': 'cli-test-request-1' } });
     proc.child.kill('SIGTERM');
     await proc.exited;
-    const lines = proc
-      .output()
-      .trim()
-      .split('\n')
+    // A fresh install also shows the first-run token as a plain-text block on the console (the one
+    // thing that is not a log line); everything else is JSON.
+    const all = proc.output().trim().split('\n');
+    expect(
+      all.filter((line) => !line.startsWith('{')).every((line) => /^(\s|=|$)/.test(line)),
+    ).toBe(true);
+    const lines = all
+      .filter((line) => line.startsWith('{'))
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(lines.find((l) => l.requestId === 'cli-test-request-1')).toMatchObject({
       method: 'GET',
@@ -233,4 +238,153 @@ describe('the command line itself', () => {
     const result = run(['profile:generate', 'full', '--check'], {});
     expect(result.code).toBe(0);
   });
+});
+
+describe('scorpion create-admin', () => {
+  const password = 'a long password for the admin';
+  const args = ['create-admin', '--username', 'root', '--email', 'root@example.org'];
+  const users = async (url: string) => {
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+      return (
+        await client.query<{ username: string; status: string; marked: boolean; hash: string }>(
+          `select u.username, u.status, u.is_bootstrap_admin as marked, a.password_hash as hash
+             from identity_user u join identity_auth_method a on a.user_id = u.id order by u.username`,
+        )
+      ).rows;
+    } finally {
+      await client.end();
+    }
+  };
+
+  it('is listed in the usage text, with no database', () => {
+    const result = run([]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('create-admin --username <name> --email <address>');
+  });
+
+  it('creates an active administrator with a password read from stdin, and prints no secret', async () => {
+    const url = await server.createDatabase();
+    const result = run(args, { DATABASE_URL: url }, `${password}\n`);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Created the administrator "root"');
+    expect(result.stdout + result.stderr).not.toContain(password);
+    expect(result.stdout + result.stderr).not.toContain('$argon2');
+    const rows = await users(url);
+    expect(rows).toEqual([
+      {
+        username: 'root',
+        status: 'active',
+        marked: true,
+        hash: expect.stringMatching(/^\$argon2id\$/) as unknown,
+      },
+    ]);
+  }, 90_000);
+
+  it('refuses a password on the command line, and creates nothing', async () => {
+    const url = await server.createDatabase();
+    expect(run(['migrate'], { DATABASE_URL: url }).code).toBe(0);
+    for (const extra of [
+      ['--password', 'hunter2hunter2'],
+      ['--password=hunter2hunter2'],
+      ['--pass', 'x'],
+    ]) {
+      const result = run([...args, ...extra], { DATABASE_URL: url }, `${password}\n`);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('never taken from the command line');
+      expect(result.stdout + result.stderr).not.toContain('hunter2hunter2');
+    }
+    expect(await users(url)).toEqual([]);
+  }, 90_000);
+
+  it.each([
+    ['no username', ['create-admin', '--email', 'root@example.org']],
+    ['no email', ['create-admin', '--username', 'root']],
+    ['an unknown option', [...args, '--role', 'admin']],
+  ])(
+    'exits with 2 and the usage for %s',
+    async (_name, argv) => {
+      const url = await server.createDatabase();
+      const result = run(argv, { DATABASE_URL: url }, `${password}\n`);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('Usage: scorpion create-admin');
+    },
+    90_000,
+  );
+
+  it('exits with 1 and names the field, never the value, for a weak password', async () => {
+    const url = await server.createDatabase();
+    const result = run(args, { DATABASE_URL: url }, 'short\n');
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('password');
+    expect(result.stderr).not.toContain('short\n');
+    expect(await users(url)).toEqual([]);
+  }, 90_000);
+
+  it('exits with 1 for a name that is taken, and does not touch the first account', async () => {
+    const url = await server.createDatabase();
+    expect(run(args, { DATABASE_URL: url }, `${password}\n`).code).toBe(0);
+    const again = run(args, { DATABASE_URL: url }, `another long password\n`);
+    expect(again.code).toBe(1);
+    expect(again.stderr).toContain('taken');
+    expect(again.stdout + again.stderr).not.toContain('another long password');
+    expect(await users(url)).toHaveLength(1);
+  }, 90_000);
+});
+
+describe('the first-run token of a fresh install', () => {
+  const TOKEN = /sfr_[A-Za-z0-9_-]{43}/g;
+  const admin = {
+    username: 'root',
+    email: 'root@example.org',
+    password: 'a long password for the admin',
+  };
+
+  it('is shown once on the console, redeemed over HTTP, never logged, and not shown again', async () => {
+    const url = await server.createDatabase();
+    const port = freePort();
+    const base = `http://127.0.0.1:${port}`;
+    const env = { DATABASE_URL: url, PORT: String(port), LOG_LEVEL: 'trace' };
+
+    const first = launch(['start'], env);
+    await waitFor(async () => (await fetch(`${base}/readyz`)).status === 200, '/readyz');
+    const token = first.output().match(TOKEN)?.[0];
+    expect(token).toBeDefined();
+    expect(first.output().match(TOKEN)).toHaveLength(1);
+
+    const redeemed = await fetch(`${base}/api/internal/bootstrap/first-admin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token, ...admin }),
+    });
+    expect(redeemed.status).toBe(201);
+    const again = await fetch(`${base}/api/internal/bootstrap/first-admin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token, ...admin, username: 'second', email: 'b@example.org' }),
+    });
+    expect(again.status).toBe(401);
+
+    first.child.kill('SIGTERM');
+    expect(await first.exited).toBe(0);
+    // Every line the structured logger wrote (JSON) is free of the secret, requests included.
+    const jsonLines = first
+      .output()
+      .split('\n')
+      .filter((line) => line.startsWith('{'));
+    expect(jsonLines.length).toBeGreaterThan(0);
+    for (const line of jsonLines) {
+      expect(line).not.toContain(token!.slice(4));
+      expect(line).not.toContain(admin.password);
+    }
+
+    // A restart finds an administrator and shows nothing.
+    const second = launch(['start'], { ...env, PORT: String(freePort()) });
+    await waitFor(() => Promise.resolve(/ready/.test(second.output())), 'the second start');
+    second.child.kill('SIGTERM');
+    expect(await second.exited).toBe(0);
+    expect(second.output()).not.toMatch(TOKEN);
+    expect(second.output()).not.toContain('no administrator yet');
+  }, 120_000);
 });

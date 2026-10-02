@@ -9,7 +9,7 @@ import type { ModuleContext } from './context.ts';
 import { createDb, createPool, type Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { childLogger, createLogger, type Logger } from './logger.ts';
-import { SYSTEM_READY, type DomainEvent } from './manifest.ts';
+import { SYSTEM_READY, type CommandIo, type DomainEvent } from './manifest.ts';
 import {
   createDispatcher,
   createEvents,
@@ -66,6 +66,13 @@ export interface KernelOptions {
   pool?: pg.Pool;
 }
 
+export interface RegisteredCommand {
+  module: string;
+  name: string;
+  description: string;
+  usage?: string;
+}
+
 export interface Kernel {
   readonly profile: ResolvedProfile;
   readonly composition: Composition;
@@ -89,6 +96,13 @@ export interface Kernel {
   readonly rateLimiter: RateLimiter;
   /** Public service objects by module id, once `start()` has built them. */
   readonly services: ReadonlyMap<string, unknown>;
+  /** The CLI commands the modules contribute, known without touching the database. */
+  readonly commands: readonly RegisteredCommand[];
+  /**
+   * Runs a module's CLI command: applies pending migrations, builds the services (loader steps 2
+   * and 5), then runs the command. No routes, no `system.ready`, no workers. Returns its exit code.
+   */
+  runCommand(name: string, args: readonly string[], io: CommandIo): Promise<number>;
   /** Loader step 2 alone: apply pending migrations. */
   migrate(): Promise<MigrationReport>;
   /** Modules whose migrations have not all been applied. Empty when the database is ready. */
@@ -261,7 +275,8 @@ export function createKernel(options: KernelOptions): Kernel {
     return runMigrations(pool, targets(), log);
   }
 
-  async function start(): Promise<void> {
+  /** Steps 2 and 5: migrate, then build every module's services. */
+  async function build(): Promise<void> {
     await migrate(); // step 2
     log.info(
       { profile: profile.name, modules: profile.modules.map((module) => module.id) },
@@ -272,6 +287,21 @@ export function createKernel(options: KernelOptions): Kernel {
       if (module.manifest.services)
         services.set(module.id, await module.manifest.services(contextFor(module)));
     }
+  }
+
+  const commands = profile.modules.flatMap((module) =>
+    (module.manifest.commands ?? []).map((command) => ({ module, command })),
+  );
+
+  async function runCommand(name: string, args: readonly string[], io: CommandIo): Promise<number> {
+    const found = commands.find((entry) => entry.command.name === name);
+    if (!found) throw new KernelStartupError(`Unknown command "${name}":`, ['no module has it']);
+    await build();
+    return (await found.command.run(args, io, contextFor(found.module))) ?? 0;
+  }
+
+  async function start(): Promise<void> {
+    await build();
     // step 6: mount routes (registered here, mounted by the server), subscriptions are wired
     // (the dispatcher looks handlers up by module and event); jobs are scheduled by
     // startWorkers().
@@ -305,6 +335,13 @@ export function createKernel(options: KernelOptions): Kernel {
     },
     authorizer,
     authenticator,
+    commands: commands.map(({ module, command }) => ({
+      module: module.id,
+      name: command.name,
+      description: command.description,
+      usage: command.usage,
+    })),
+    runCommand,
     rateLimiter: createRateLimiter(db),
     config,
     log,

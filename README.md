@@ -82,6 +82,7 @@ what is wrong, and secrets never appear in logs.
 | `scorpion worker`           | Migrates, then runs jobs and the event dispatcher only, without HTTP |
 | `scorpion migrate`          | Applies pending migrations of every module and exits                 |
 | `scorpion profile:generate` | Build time: composes the server for a profile                        |
+| `scorpion <command>`        | A command a module of the build contributes, e.g. `create-admin`     |
 
 `GET /healthz` says the process is alive and never touches the database. `GET /readyz` answers 503
 until the database answers and every migration is applied, and again while shutting down.
