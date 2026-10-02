@@ -1,14 +1,20 @@
 // Starts core.identity over real Postgres, as the kernel guide describes ("Testing a module").
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
+import type { ModuleManifest } from '@scorpion/kernel';
 import { startPostgres, type StartedPostgres } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createIdentityModule, type IdentityInternals } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
+import type { IdentitySettings } from '../service/settings.ts';
 
 export interface StartOptions {
   databaseUrl?: string;
+  /** Replaces the default settings (the defaults of the schema). */
+  settings?: IdentitySettings;
   /** How long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
+  /** Another module of the profile that depends on core.identity, for example a policy contributor. */
+  extraModule?: { manifest: ModuleManifest; id: string };
 }
 
 export interface IdentityHarness {
@@ -38,11 +44,34 @@ export function useIdentity(): IdentityHarness {
   return {
     server: () => server,
     async start(options) {
-      const manifest = createIdentityModule({ sessionCacheTtlMs: options?.sessionCacheTtlMs });
+      const manifest = createIdentityModule({
+        settings: options?.settings,
+        sessionCacheTtlMs: options?.sessionCacheTtlMs,
+      });
+      const extra = options?.extraModule;
       const kernel = createKernel({
-        profile: { name: 'identity-test', modules: ['core.identity'] },
-        sources: [{ manifest, packageJson }],
-        modulePackages: { 'core.identity': '@scorpion/core-identity' },
+        profile: {
+          name: 'identity-test',
+          modules: ['core.identity', ...(extra ? [extra.id] : [])] as never,
+        },
+        sources: [
+          { manifest, packageJson },
+          ...(extra
+            ? [
+                {
+                  manifest: extra.manifest,
+                  packageJson: {
+                    name: `@scorpion/${extra.id.replaceAll('.', '-')}`,
+                    dependencies: { '@scorpion/core-identity': 'workspace:*' },
+                  },
+                },
+              ]
+            : []),
+        ],
+        modulePackages: {
+          'core.identity': '@scorpion/core-identity',
+          ...(extra ? { [extra.id]: `@scorpion/${extra.id.replaceAll('.', '-')}` } : {}),
+        },
         config: loadConfig({
           DATABASE_URL: options?.databaseUrl ?? (await server.createDatabase()),
           PROFILE: 'identity-test',

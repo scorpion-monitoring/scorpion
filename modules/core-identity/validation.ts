@@ -59,3 +59,17 @@ export const createUserInput = z
   });
 
 export type CreateUserInput = z.input<typeof createUserInput>;
+
+/** The body of `POST /register`: a password account. Unlike `createUserInput`, the email is required. */
+export const registerInput = z.strictObject({ username, email, password });
+export type RegisterInput = z.infer<typeof registerInput>;
+
+/**
+ * The body of `POST /login`. Only the size is limited here, not the registration rules: a rule
+ * that changes later must not lock out an old account, and the answer must not hint at them.
+ */
+export const loginInput = z.strictObject({
+  username: z.string().min(1).max(USERNAME_MAX),
+  password: z.string().min(1).max(PASSWORD_MAX),
+});
+export type LoginInput = z.infer<typeof loginInput>;

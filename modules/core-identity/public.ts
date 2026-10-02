@@ -24,6 +24,8 @@ export interface UserService {
   createUser(input: CreateUserInput): Promise<User>;
   /** Case-insensitive. `undefined` when there is no such user (soft-deleted ones are found). */
   findByUsername(username: string): Promise<User | undefined>;
+  /** `undefined` when there is no such user (also for an id that is not a UUID). */
+  findById(id: string): Promise<User | undefined>;
   /** Case-insensitive. `undefined` when no user has this address. */
   findByEmail(email: string): Promise<User | undefined>;
 }

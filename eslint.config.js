@@ -58,7 +58,12 @@ export default defineConfig(
         {
           moduleRoots: ['modules', 'tools/lint-fixtures', 'packages/kernel/test/fixtures/modules'],
           // Written by `scorpion profile:generate`; the only file that imports module manifests.
-          manifestImporters: ['apps/server/src/generated/profile.ts'],
+          // The test helper that starts a kernel and the HTTP app over core.identity does the same
+          // composition for a test, with injected settings (apps/server/src/testing).
+          manifestImporters: [
+            'apps/server/src/generated/profile.ts',
+            'apps/server/src/testing/identity-app.ts',
+          ],
         },
       ],
     },
