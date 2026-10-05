@@ -80,9 +80,11 @@ describe('the manifest', () => {
     }
   });
 
-  it('does not read SMTP_URL (M4 decision 7)', () => {
+  it('does not read the old SMTP variable (M4 decision 7)', () => {
+    // Built from pieces so that a search for the name finds documentation only.
+    const variable = ['SMTP', 'URL'].join('_');
     for (const file of sources().filter((path) => !/\.test\.ts$/.test(path))) {
-      expect(readFileSync(file, 'utf8'), relative(dir, file)).not.toContain('SMTP_URL');
+      expect(readFileSync(file, 'utf8'), relative(dir, file)).not.toContain(variable);
     }
   });
 

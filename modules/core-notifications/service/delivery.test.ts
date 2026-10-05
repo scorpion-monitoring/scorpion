@@ -1,6 +1,5 @@
-import { makeDelivery } from '@scorpion/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startSmtpServer, type TestSmtpServer } from '../test/smtp-server.ts';
+import { makeDelivery, startSmtpServer, type TestSmtpServer } from '@scorpion/testing';
 import { mail, useNotifications, type Started } from '../test/harness.ts';
 import { backoffSeconds } from './backoff.ts';
 import { claimDue, markSent } from './delivery.ts';

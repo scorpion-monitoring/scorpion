@@ -90,7 +90,7 @@ describe('an instance whose emailTransport is none', () => {
     const t = await harness.start();
     const lines = t.logs.filter((line) => line.includes('emailTransport is \\"none\\"'));
     expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0]!).level).toBe(40); // warn
+    expect((JSON.parse(lines[0]!) as { level: number }).level).toBe(40); // warn
   });
 
   it('logs nothing per message, counts what it dropped and shows it in the status', async () => {
@@ -99,7 +99,9 @@ describe('an instance whose emailTransport is none', () => {
     for (let i = 0; i < 5; i += 1) await t.mail.send(mail());
     const report = await t.notifications.deliverDue();
     expect(report).toMatchObject({ claimed: 5, sent: 5, dropped: 5 });
-    const added = t.logs.slice(before).filter((line) => JSON.parse(line).level >= 40);
+    const added = t.logs
+      .slice(before)
+      .filter((line) => (JSON.parse(line) as { level: number }).level >= 40);
     expect(added).toEqual([]);
     const status = await t.notifications.status(await t.actorOf('admin'));
     expect(status).toMatchObject({ transportIsNone: true, sentWithoutTransport: 5 });

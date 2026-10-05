@@ -314,3 +314,56 @@ export function mail(overrides: Partial<NotificationMessage> = {}): Notification
     ...overrides,
   };
 }
+
+/**
+ * Starts a kernel whose only extra module contributes the given entries to `notify.template`, and stops
+ * it again. Resolves when the kernel started, and rejects with the start error when the registry
+ * refuses an entry: this is how a test sees what the start-up checks.
+ */
+export async function startKernelWithTemplates(
+  server: StartedPostgres,
+  entries: unknown[],
+): Promise<void> {
+  const fixture = defineModule({
+    id: 'fix.templates',
+    version: '1.0.0',
+    contributes: { 'notify.template': entries },
+  });
+  const kernel = createKernel({
+    profile: {
+      name: 'templates-test',
+      modules: ['core.authz', 'core.settings', 'core.notifications', 'fix.templates'] as never,
+    },
+    sources: [
+      { manifest: authzModule, packageJson: authzPackage },
+      {
+        manifest: createSettingsModule({ env: { SECRETS_KEY: makeSecretsKey() } }),
+        packageJson: settingsPackage,
+      },
+      { manifest: createNotificationsModule({ listen: false }), packageJson },
+      {
+        manifest: fixture,
+        packageJson: {
+          name: '@scorpion/fix-templates',
+          dependencies: { '@scorpion/core-notifications': 'workspace:*' },
+        },
+      },
+    ],
+    modulePackages: {
+      'core.authz': '@scorpion/core-authz',
+      'core.settings': '@scorpion/core-settings',
+      'core.notifications': '@scorpion/core-notifications',
+      'fix.templates': '@scorpion/fix-templates',
+    },
+    config: loadConfig({
+      DATABASE_URL: await server.createDatabase(),
+      PROFILE: 'templates-test',
+    }),
+    log: createLogger({ level: 'silent' }),
+  });
+  try {
+    await kernel.start();
+  } finally {
+    await kernel.stop().catch(() => undefined);
+  }
+}

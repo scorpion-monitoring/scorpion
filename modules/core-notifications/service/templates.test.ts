@@ -2,17 +2,9 @@
 // registered template, in the right language, with the branding of the instance, and stored like
 // any other message. Plus what the registry refuses at start.
 import { Invalid, z } from '@scorpion/contracts';
-import { createKernel, createLogger, defineModule, loadConfig } from '@scorpion/kernel';
-import authzModule from '@scorpion/core-authz/module';
-import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
-import { createSettingsModule } from '@scorpion/core-settings/module';
-import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
-import { makeSecretsKey } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import notificationsModule from '../module.ts';
-import packageJson from '../package.json' with { type: 'json' };
-import { startSmtpServer } from '../test/smtp-server.ts';
-import { useNotifications } from '../test/harness.ts';
+import { startSmtpServer } from '@scorpion/testing';
+import { startKernelWithTemplates, useNotifications } from '../test/harness.ts';
 import { NotificationError } from './notifications.ts';
 
 const harness = useNotifications();
@@ -208,48 +200,8 @@ describe('enqueueTemplate', () => {
 });
 
 describe('the registry notify.template at start', () => {
-  async function startWith(entry: unknown, extra: unknown[] = []) {
-    const databaseUrl = await harness.server().createDatabase();
-    const fixture = defineModule<unknown, 'core.notifications'>({
-      id: 'fix.templates',
-      version: '1.0.0',
-      contributes: { 'notify.template': [entry, ...extra] },
-    });
-    const kernel = createKernel({
-      profile: {
-        name: 'templates-test',
-        modules: ['core.authz', 'core.settings', 'core.notifications', 'fix.templates'] as never,
-      },
-      sources: [
-        { manifest: authzModule, packageJson: authzPackage },
-        {
-          manifest: createSettingsModule({ env: { SECRETS_KEY: makeSecretsKey() } }),
-          packageJson: settingsPackage,
-        },
-        { manifest: notificationsModule, packageJson },
-        {
-          manifest: fixture,
-          packageJson: {
-            name: '@scorpion/fix-templates',
-            dependencies: { '@scorpion/core-notifications': 'workspace:*' },
-          },
-        },
-      ],
-      modulePackages: {
-        'core.authz': '@scorpion/core-authz',
-        'core.settings': '@scorpion/core-settings',
-        'core.notifications': '@scorpion/core-notifications',
-        'fix.templates': '@scorpion/fix-templates',
-      },
-      config: loadConfig({ DATABASE_URL: databaseUrl, PROFILE: 'templates-test' }),
-      log: createLogger({ level: 'silent' }),
-    });
-    try {
-      await kernel.start();
-    } finally {
-      await kernel.stop().catch(() => undefined);
-    }
-  }
+  const startWith = (entry: unknown, extra: unknown[] = []) =>
+    startKernelWithTemplates(harness.server(), [entry, ...extra]);
 
   const valid = {
     key: 'fix.valid',
@@ -266,8 +218,9 @@ describe('the registry notify.template at start', () => {
   });
 
   it('fails the start for a template without a German catalogue, naming the key’s entry', async () => {
-    const { de: _de, ...onlyEnglish } = valid.catalogue;
-    await expect(startWith({ ...valid, catalogue: onlyEnglish })).rejects.toThrow(/de/);
+    await expect(startWith({ ...valid, catalogue: { en: valid.catalogue.en } })).rejects.toThrow(
+      /de/,
+    );
   });
 
   it('fails the start for an empty catalogue, a bad key and a template that is not a function', async () => {

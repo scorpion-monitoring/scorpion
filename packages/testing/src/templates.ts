@@ -70,8 +70,10 @@ export function templateProblems(
       if (BIDI.test(html)) problems.push(`${label}: the HTML has a bidirectional mark`);
       if (/<script/i.test(html) || /<img src=x/i.test(html))
         problems.push(`${label}: the HTML has raw markup from the data`);
-      if (/onerror=/i.test(html) && /<[^>]*onerror=/i.test(html))
+      // An attribute the data added: look for an `on…=` inside a real tag once quoted values are removed.
+      if (/<[^>]*\son[a-z]+\s*=/i.test(html.replace(/"[^"]*"/g, '""'))) {
         problems.push(`${label}: the HTML has an injected attribute`);
+      }
     }
   }
   return problems;

@@ -1,8 +1,7 @@
 // A change of the transport settings or of a notification secret reaches another process within the
 // settings port's 5 s TTL (ADR 0017, 0020), and the process that hears the event rebuilds at once.
-import { makeSecret } from '@scorpion/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startSmtpServer, type TestSmtpServer } from '../test/smtp-server.ts';
+import { makeSecret, startSmtpServer, type TestSmtpServer } from '@scorpion/testing';
 import { mail, useNotifications } from '../test/harness.ts';
 
 const harness = useNotifications();

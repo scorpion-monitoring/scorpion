@@ -133,7 +133,7 @@ export function createPreferencesService(
         .limit(1);
       if (!row) return undefined;
       const parsed = entry.schema.safeParse(row.value);
-      return parsed.success ? (parsed.data as unknown) : undefined;
+      return parsed.success ? parsed.data : undefined;
     },
 
     async remove(actor, key) {

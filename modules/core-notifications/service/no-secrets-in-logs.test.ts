@@ -4,7 +4,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { startSmtpServer, type TestSmtpServer } from '../test/smtp-server.ts';
+import { startSmtpServer, type TestSmtpServer } from '@scorpion/testing';
 import { mail, useNotifications } from '../test/harness.ts';
 
 const harness = useNotifications();

@@ -8,8 +8,10 @@
  */
 const BIDI = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
 /** Control characters, including CR and LF, and the Unicode line and paragraph separators. */
+// eslint-disable-next-line no-control-regex -- removing control characters is the point
 const CONTROL_AND_BREAKS = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g;
 /** Controls other than a line feed and a tab, for text that may span lines. */
+// eslint-disable-next-line no-control-regex -- removing control characters is the point
 const CONTROL_KEEP_BREAKS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u2028\u2029]/g;
 
 /** One line, for a subject or a name: no line breaks, no controls, no bidi marks, single spaces. */
@@ -51,6 +53,7 @@ export function escapeHtml(value: string): string {
  */
 export function safeUrl(value: string): string | undefined {
   const trimmed = value.trim();
+  // eslint-disable-next-line no-control-regex -- a link with a control character or a space is refused
   if (trimmed.length === 0 || trimmed.length > 2048 || /[\u0000- \u007F-\u009F]/.test(trimmed)) {
     return undefined;
   }
