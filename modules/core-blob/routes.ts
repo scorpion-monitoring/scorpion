@@ -53,6 +53,7 @@ export const uploadFileRoute = createRoute({
   method: 'post',
   path: '/files',
   permission: PERMISSION_MANAGE,
+  audit: true,
   rateLimit: 'strict',
   maxBodyBytes: MAX_UPLOAD_BYTES,
   request: {

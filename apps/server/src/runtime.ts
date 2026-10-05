@@ -136,6 +136,7 @@ export function startServer(options: RuntimeOptions): RunningServer {
     probes,
     onRequest: metrics.onRequest,
     rateLimiter: kernel.rateLimiter,
+    audit: kernel.audit,
     storedRateLimits: storedRateLimits(kernel),
   };
 

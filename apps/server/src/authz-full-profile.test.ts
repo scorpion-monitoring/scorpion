@@ -83,6 +83,7 @@ describe('profile full with core.authz', () => {
       'core.blob',
       'core.notifications',
       'core.identity',
+      'core.audit',
     ]);
   });
 

@@ -161,6 +161,7 @@ export const approveRoute = createRoute({
   method: 'post',
   path: '/users/{id}/approve',
   permission: 'core.identity.user.approve',
+  audit: { body: true },
   request: {
     params: idParam,
     // Optional: `{}` or no body gives the role `user`.
@@ -181,6 +182,7 @@ export const rejectRoute = createRoute({
   method: 'post',
   path: '/users/{id}/reject',
   permission: 'core.identity.user.reject',
+  audit: true,
   request: { params: idParam },
   responses: {
     200: ok('The account is rejected and soft-deleted.', decision),
@@ -437,6 +439,7 @@ export const assignRoleRoute = createRoute({
   method: 'post',
   path: '/users/{id}/roles',
   permission: 'core.identity.role.assign',
+  audit: { body: true },
   request: { params: idParam, body: json(assignRoleInput) },
   responses: {
     200: ok(
@@ -452,6 +455,7 @@ export const removeRoleRoute = createRoute({
   method: 'delete',
   path: '/users/{id}/roles/{role}',
   permission: 'core.identity.role.assign',
+  audit: true,
   request: { params: roleParam },
   responses: {
     204: { description: 'The user does not hold the role (also when they never did).' },
@@ -488,6 +492,7 @@ export const createTokenRoute = createRoute({
   method: 'post',
   path: '/tokens',
   permission: 'core.identity.token.manage',
+  audit: true,
   rateLimit: 'strict', // each token costs an argon2id hash
   request: { body: json(createTokenInput) },
   responses: {
@@ -501,6 +506,7 @@ export const revokeTokenRoute = createRoute({
   method: 'delete',
   path: '/tokens/{id}',
   permission: 'core.identity.token.manage',
+  audit: true,
   request: { params: idParam },
   responses: {
     204: { description: 'The token is revoked (also when it already was).' },
@@ -513,6 +519,7 @@ export const rotateTokenRoute = createRoute({
   method: 'post',
   path: '/tokens/{id}/rotate',
   permission: 'core.identity.token.manage',
+  audit: true,
   rateLimit: 'strict', // each token costs an argon2id hash
   request: { params: idParam, body: json(rotateTokenInput) },
   responses: {

@@ -178,6 +178,7 @@ export const requeueRoute = createRoute({
   method: 'post',
   path: '/notifications/deliveries/{id}/requeue',
   permission: 'core.notifications.deliveries.manage',
+  audit: true,
   request: { params: idParam },
   responses: {
     200: ok('The delivery is queued again with its attempts reset.', deliverySchema),
@@ -190,6 +191,7 @@ export const testRoute = createRoute({
   method: 'post',
   path: '/notifications/test',
   permission: 'core.notifications.test',
+  audit: true,
   rateLimit: 'strict', // each call sends a mail; the service adds a per-administrator budget
   responses: {
     202: ok(

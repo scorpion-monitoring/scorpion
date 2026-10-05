@@ -11,6 +11,8 @@ import {
 } from '@scorpion/core-identity/module';
 import type { IdentityModuleOptions } from '@scorpion/core-identity/module';
 import packageJson from '@scorpion/core-identity/package.json' with { type: 'json' };
+import { createAuditModule, type AuditInternals } from '@scorpion/core-audit/module';
+import auditPackage from '@scorpion/core-audit/package.json' with { type: 'json' };
 import authzModule from '@scorpion/core-authz/module';
 import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
 import blobModule from '@scorpion/core-blob/module';
@@ -91,6 +93,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   /** Stored `branding` settings of core.settings. */
   branding?: Record<string, unknown>;
   startWorkers?: boolean;
+  /** false: the profile has no core.audit, so the sink is a no-op (default: it is there). */
+  audit?: boolean;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
@@ -152,6 +156,7 @@ export function useIdentityApp() {
             'core.blob',
             'core.notifications',
             'core.identity',
+            ...(options.audit === false ? [] : ['core.audit']),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -173,6 +178,9 @@ export function useIdentityApp() {
             packageJson: notificationsPackage,
           },
           { manifest: createIdentityModule(options), packageJson },
+          ...(options.audit === false
+            ? []
+            : [{ manifest: createAuditModule(), packageJson: auditPackage }]),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
@@ -187,6 +195,7 @@ export function useIdentityApp() {
           'core.blob': '@scorpion/core-blob',
           'core.notifications': '@scorpion/core-notifications',
           'core.identity': '@scorpion/core-identity',
+          'core.audit': '@scorpion/core-audit',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,
@@ -216,6 +225,7 @@ export function useIdentityApp() {
       const identity = kernel.services.get('core.identity') as IdentityInternals;
       const notifications = kernel.services.get('core.notifications') as NotificationsInternals;
       const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
+      const audit = kernel.services.get('core.audit') as AuditInternals | undefined;
 
       const app = createApp({
         config: kernel.config,
@@ -223,6 +233,7 @@ export function useIdentityApp() {
         routes: kernel.routes,
         authenticator: kernel.authenticator,
         authorizer: kernel.authorizer,
+        audit: kernel.audit,
         rateLimiter:
           options.rateLimits || options.storedRateLimits ? kernel.rateLimiter : undefined,
         rateLimits: options.rateLimits,
@@ -310,6 +321,8 @@ export function useIdentityApp() {
         kernel,
         identity,
         notifications,
+        /** The service of core.audit; `undefined` when the test turned it off. */
+        audit,
         /** The mail queued so far (bodies are kept while a mail is queued). */
         mail: mailbox(kernel.pool),
         settings,

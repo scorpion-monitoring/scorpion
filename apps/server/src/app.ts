@@ -10,6 +10,8 @@ import {
 import {
   anonymousOnly,
   mountPath,
+  routeAudit,
+  type AuditSink,
   type Authenticator,
   type Authorizer,
   type Config,
@@ -18,6 +20,7 @@ import {
   type RateLimiter,
   type RegisteredRoute,
 } from '@scorpion/kernel';
+import { auditRequest } from './pipeline/audit.ts';
 import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
 import { DEFAULT_MAX_BODY_BYTES, limitBodyPerRoute } from './pipeline/body-limit.ts';
@@ -52,6 +55,11 @@ export interface AppOptions {
    * cache. An answer of `undefined`, or an error, leaves the constants in force.
    */
   storedRateLimits?: () => Promise<Partial<Record<RateLimitGroup, RateLimit>> | undefined>;
+  /**
+   * Where the entry of a route with `audit` goes (`kernel.audit`, ADR 0021). Without it nothing is
+   * recorded, which is what a profile without `core.audit` has.
+   */
+  audit?: AuditSink;
   /** Largest accepted request body. Default 1 MiB. */
   maxBodyBytes?: number;
   /** Called after every request; the metrics use it. */
@@ -71,7 +79,7 @@ export interface AppOptions {
  *  1. request id           5. body size limit      8. handler
  *  2. security headers     6. input validation     9. error mapper
  *  3. request logging      7. authorisation hook
- *  4. rate limit and authentication
+ *  4. rate limit and authentication (a route with `audit` has its audit hook in front of both)
  *
  * Steps 1 to 3 and 5 are middleware for every request; step 4 is added per route, because its
  * bucket is the route's group, and runs before the body is read; 6 to 8 run per route (Zod
@@ -139,6 +147,23 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
       const group = route.rateLimit ?? 'default';
       const honoPath = `${base}${path}`.replace(/\{(\w+)\}/g, ':$1');
       const method = route.method.toUpperCase();
+      // Step 2a: the audit hook comes first, so it also sees what the steps below turn away.
+      if (options.audit && routeAudit(route.audit)) {
+        const surface = path.startsWith(SURFACE_PREFIX.v1) ? 'v1' : 'internal';
+        app.on(
+          method,
+          honoPath,
+          auditRequest({
+            sink: options.audit,
+            route,
+            template: path,
+            surface,
+            prefix: SURFACE_PREFIX[surface],
+            clientIp,
+            log,
+          }),
+        );
+      }
       if (options.rateLimiter) {
         app.on(
           method,
