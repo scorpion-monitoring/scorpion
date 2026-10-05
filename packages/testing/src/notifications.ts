@@ -27,6 +27,8 @@ export interface MakeDelivery {
   lastError?: string | null;
   sentAt?: Date | null;
   createdAt?: Date;
+  /** Default: now. The retention job counts from here. */
+  statusChangedAt?: Date;
   transport?: string | null;
 }
 
@@ -62,8 +64,8 @@ export async function makeDelivery(
   const { rows } = await db.query<DeliveryRow>(
     `insert into notify_delivery
        (id, template, channel, recipient_address, recipient_user_id, locale, subject, text_body, html_body,
-        sensitive, status, attempts, next_attempt_at, locked_until, last_error, sent_at, created_at, transport)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, coalesce($13, now()), $14, $15, $16, coalesce($17, now()), $18)
+        sensitive, status, attempts, next_attempt_at, locked_until, last_error, sent_at, created_at, transport, status_changed_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, coalesce($13, now()), $14, $15, $16, coalesce($17, now()), $18, coalesce($19, now()))
      returning *`,
     [
       randomUUID(),
@@ -88,6 +90,54 @@ export async function makeDelivery(
       overrides.sentAt ?? null,
       overrides.createdAt ?? null,
       overrides.transport ?? null,
+      overrides.statusChangedAt ?? null,
+    ],
+  );
+  return rows[0]!;
+}
+
+export interface MakeInboxItem {
+  /** Default: a new random user id. */
+  userId?: string;
+  template?: string;
+  title?: string;
+  text?: string;
+  link?: string | null;
+  /** Default: now. */
+  createdAt?: Date;
+  readAt?: Date | null;
+}
+
+export interface InboxItemRow {
+  id: string;
+  user_id: string;
+  template: string;
+  title: string;
+  text: string;
+  link: string | null;
+  created_at: Date;
+  read_at: Date | null;
+}
+
+/** An inbox item, by default unread, for a random user. */
+export async function makeInboxItem(
+  db: Queryable,
+  overrides: MakeInboxItem = {},
+): Promise<InboxItemRow> {
+  const n = next();
+  const { rows } = await db.query<InboxItemRow>(
+    `insert into notify_inbox_item (id, user_id, template, title, text, link, created_at, read_at)
+     values ($1, $2, $3, $4, $5, $6, coalesce($7, now()), $8)
+     returning *`,
+    [
+      randomUUID(),
+      overrides.userId ?? randomUUID(),
+      overrides.template ?? 'test.message',
+      overrides.title ?? `Title ${n}`,
+      overrides.text ?? `Text ${n}`,
+      overrides.link ?? null,
+      overrides.createdAt ?? null,
+      overrides.readAt ?? null,
     ],
   );
   return rows[0]!;

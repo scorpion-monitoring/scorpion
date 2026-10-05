@@ -9,8 +9,11 @@ export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } 
 export {
   mailbox,
   makeDelivery,
+  makeInboxItem,
   type DeliveryRow,
+  type InboxItemRow,
   type MakeDelivery,
+  type MakeInboxItem,
   type Mailbox,
   type QueuedMail,
 } from './notifications.ts';
