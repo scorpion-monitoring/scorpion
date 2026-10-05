@@ -6,15 +6,13 @@ import { Forbidden } from '@scorpion/contracts';
 import { describe, expect, it } from 'vitest';
 import { makeMember, useIdentity } from '../test/harness.ts';
 import { hashPassword } from './password.ts';
-import { createMemoryMailer } from './mailer.ts';
 
 const identity = useIdentity();
 const DAY = 24 * 3600 * 1000;
 const PASSWORD = 'correct horse battery';
 
 async function start(options: Parameters<typeof identity.start>[0] = {}) {
-  const mailer = createMemoryMailer();
-  const started = await identity.start({ mailer, ...options });
+  const started = await identity.start(options);
   const admin = await started.actorOf(
     await makeUser(started.kernel.pool, { username: 'root' }),
     'admin',
@@ -27,7 +25,7 @@ async function start(options: Parameters<typeof identity.start>[0] = {}) {
       values,
     });
   };
-  return { ...started, mailer, admin, save };
+  return { ...started, admin, save };
 }
 
 const count = async (
@@ -117,7 +115,7 @@ describe('retention', () => {
 
 describe('mail budgets', () => {
   it('limit the mails to one address to the saved burst', async () => {
-    const { kernel, identity: id, mailer, save } = await start();
+    const { kernel, identity: id, mail, save } = await start();
     const user = await makeMember(kernel.pool, {
       email: 'alice@example.org',
       emailVerified: false,
@@ -125,7 +123,7 @@ describe('mail budgets', () => {
     await makeAuthMethod(kernel.pool, user, { passwordHash: await hashPassword(PASSWORD) });
     await save({ mailBudgets: { perAddress: { burst: 1, perHour: 0.5 } } });
     for (let i = 0; i < 4; i++) await id.recovery.requestReset({ email: 'alice@example.org' });
-    expect(mailer.sent).toHaveLength(1);
+    expect(await mail.all()).toHaveLength(1);
   });
 
   it('limit the confirmation mails of one user to the saved burst', async () => {

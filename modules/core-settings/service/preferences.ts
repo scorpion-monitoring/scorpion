@@ -10,6 +10,8 @@ import { userPreference } from '../db/schema.ts';
 import { PERMISSION_PREFERENCE_READ, PERMISSION_PREFERENCE_WRITE } from './permissions.ts';
 import { fieldProblems } from './settings.ts';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const USER_PREFERENCE_REGISTRY = 'settings.userPreference';
 
 /** `core.ui.theme`: dot-separated lower-case segments. By convention it starts with the module's id. */
@@ -38,6 +40,13 @@ export interface PreferencesService {
   set(actor: Actor, key: string, value: unknown): Promise<PreferenceView>;
   /** Needs `core.settings.preference.write`. Back to the default; also when nothing was stored. */
   remove(actor: Actor, key: string): Promise<void>;
+  /**
+   * For trusted code that acts for a user with no human caller (a mail in their language): the
+   * stored value of one preference of `userId`, or `undefined` when none is stored, the key is not
+   * registered, the id is not a UUID, or the stored value no longer passes the key's schema. Checks
+   * no permission and no route calls it (ADR 0015).
+   */
+  getForUser(userId: string, key: string): Promise<unknown>;
 }
 
 export function createPreferencesService(
@@ -112,6 +121,19 @@ export function createPreferencesService(
         await ctx.events.emit('settings.preference.changed@1', { userId, key, removed: false });
       });
       return { key, value: stored, updatedAt: now };
+    },
+
+    async getForUser(userId, key) {
+      const entry = definitions.get(key);
+      if (!entry || !UUID.test(userId)) return undefined;
+      const [row] = await ctx.db
+        .select({ value: userPreference.value })
+        .from(userPreference)
+        .where(and(eq(userPreference.userId, userId.toLowerCase()), eq(userPreference.key, key)))
+        .limit(1);
+      if (!row) return undefined;
+      const parsed = entry.schema.safeParse(row.value);
+      return parsed.success ? parsed.data : undefined;
     },
 
     async remove(actor, key) {

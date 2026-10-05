@@ -5,6 +5,7 @@
 import { and, inArray, isNotNull, lt, or } from 'drizzle-orm';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { BlobService } from '@scorpion/core-blob/public';
+import type { NotificationsService } from '@scorpion/core-notifications/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { firstRunToken, loginState, session, token, user } from '../db/schema.ts';
 import { avatarReference } from './avatar-reference.ts';
@@ -30,6 +31,7 @@ export function createCleanupService(
   deps: {
     authz: Pick<AuthzService, 'removeAllAssignments'>;
     blob: Pick<BlobService, 'setReference'>;
+    notifications: Pick<NotificationsService, 'removeInboxOfUser'>;
     settings: IdentitySettings;
   },
 ): CleanupService {
@@ -77,6 +79,9 @@ export function createCleanupService(
           await deps.authz.removeAllAssignments(tx, gone.id);
           // The same for the avatar: the file is released with the user row and removed later.
           await deps.blob.setReference(avatarReference(gone.id), null);
+          // And the inbox: core.notifications cannot subscribe to identity's events (ADR 0019), so the
+          // purge calls it, in this transaction (ADR 0023).
+          await deps.notifications.removeInboxOfUser(tx, gone.id);
         }
         if (due.length > 0) {
           // The auth methods, sessions, tokens, mail tokens and login states go with the user (cascade).

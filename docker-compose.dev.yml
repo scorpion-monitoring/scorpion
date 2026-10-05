@@ -2,6 +2,13 @@
 #
 # `docker compose -f docker-compose.dev.yml --profile app up --build` also builds and runs the server
 # image for PROFILE (default `full`), to try what CI builds: it applies its migrations when it starts.
+#
+# Mail: `pnpm dev` runs `scorpion seed-dev-mail`, which stores the mail settings for the Mailpit below
+# (smtp localhost:1025) when none are stored. The image sets NODE_ENV=production and the command refuses
+# there, so a production image never gets a relay it did not configure. To try the mailpit service
+# from the `app` server, set the relay yourself:
+#   docker compose -f docker-compose.dev.yml --profile app exec -e NODE_ENV=development server \
+#     node apps/server/src/cli.ts seed-dev-mail --host mailpit
 name: scorpion-dev
 
 services:

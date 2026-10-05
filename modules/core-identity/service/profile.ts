@@ -16,6 +16,7 @@ import { user } from '../db/schema.ts';
 import { updateProfileInput } from '../validation.ts';
 import { avatarReference } from './avatar-reference.ts';
 import { TooManyRequests } from './errors.ts';
+import type { IdentityMail } from './identity-mail.ts';
 import { pendingVerificationEmail } from './mail-tokens.ts';
 import type { RecoveryService } from './recovery.ts';
 import { budgetLimit, type IdentitySettings } from './settings.ts';
@@ -69,7 +70,8 @@ function invalid(error: ZodError): Invalid {
 export function createProfileService(
   ctx: ModuleContext,
   deps: {
-    recovery: Pick<RecoveryService, 'startVerification'>;
+    recovery: Pick<RecoveryService, 'startVerificationIn'>;
+    mail: Pick<IdentityMail, 'preferredLocale'>;
     authz: AuthzService;
     blob: Pick<BlobService, 'put' | 'describe' | 'setReference'>;
     settings: IdentitySettings;
@@ -159,6 +161,10 @@ export function createProfileService(
       if (asksForNewAddress) fields.push('email');
       if (fields.length === 0) return before;
 
+      // The new address's confirmation mail is queued in this transaction too, before the event, so a
+      // rollback sends nothing. Asking for an address another account holds stores the token and
+      // sends no mail, so the profile cannot be used to probe for addresses.
+      const locale = asksForNewAddress ? await deps.mail.preferredLocale(userId) : undefined;
       await ctx.db.tx(async (tx) => {
         if (fields.includes('displayName') || fields.includes('bio')) {
           await tx
@@ -170,21 +176,21 @@ export function createProfileService(
             })
             .where(eq(user.id, userId));
         }
+        if (asksForNewAddress) {
+          const [holder] = await tx
+            .select({ id: user.id })
+            .from(user)
+            .where(and(sql`lower(${user.email}) = lower(${change.email!})`, ne(user.id, userId)))
+            .limit(1);
+          await deps.recovery.startVerificationIn(tx, userId, change.email!, {
+            send: holder === undefined,
+            now,
+            locale,
+          });
+        }
         // Field names only: the values (an address, a bio) are not in an event.
         await ctx.events.emit('identity.profile.updated@1', { userId, username, fields });
       });
-
-      if (asksForNewAddress) {
-        const [holder] = await ctx.db
-          .select({ id: user.id })
-          .from(user)
-          .where(and(sql`lower(${user.email}) = lower(${change.email!})`, ne(user.id, userId)))
-          .limit(1);
-        await deps.recovery.startVerification(userId, change.email!, {
-          send: holder === undefined,
-          now,
-        });
-      }
       return load(userId, now);
     },
 

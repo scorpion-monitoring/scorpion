@@ -67,7 +67,7 @@ immutable`, `ETag: "<hash>"` (304 for a matching `If-None-Match`, without readin
 and `Cross-Origin-Resource-Policy: cross-origin`. A hash that is not 64 lower-case hex digits is 422; an unknown one 404.
 
 `POST /files` takes the raw bytes as the body (any `Content-Type`), `core.blob.manage`, rate limited (strict), body limit 8 MiB
-(the route option `maxBodyBytes`; every other route keeps 1 MiB). It answers 201 `{ id, hash, mime, size, url }`.
+(the route option `maxBodyBytes`; every other route keeps 1 MiB). It answers 201 `{ id, hash, mime, size, url }`. The route has `audit: true` (who uploaded; the bytes are never stored in the trail).
 
 ## References and release
 

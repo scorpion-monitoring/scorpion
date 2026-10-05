@@ -251,15 +251,17 @@ export function createVocabularyService(
   }
 
   async function emitChange(
+    actor: Actor,
     vocabularyId: string,
     key: string,
     change: 'created' | 'updated' | 'activated' | 'deactivated' | 'deleted',
   ) {
-    // Which term, never its labels.
+    // Which term and who, never its labels.
     await ctx.events.emit('settings.vocabulary.changed@1', {
       vocabulary: vocabularyId,
       key,
       change,
+      actorId: actor.kind === 'user' ? actor.userId : null,
     });
   }
 
@@ -388,7 +390,7 @@ export function createVocabularyService(
             seeded: false,
           })
           .returning();
-        await emitChange(vocabularyId, key, 'created');
+        await emitChange(actor, vocabularyId, key, 'created');
         return created!;
       });
       return view(row, 'en');
@@ -423,6 +425,7 @@ export function createVocabularyService(
           .where(eq(vocabularyTerm.id, current.id))
           .returning();
         await emitChange(
+          actor,
           vocabularyId,
           key,
           next.active === current.active ? 'updated' : next.active ? 'activated' : 'deactivated',
@@ -450,11 +453,11 @@ export function createVocabularyService(
             .set({ active: false, updatedAt: new Date() })
             .where(eq(vocabularyTerm.id, current.id))
             .returning();
-          await emitChange(vocabularyId, key, 'deactivated');
+          await emitChange(actor, vocabularyId, key, 'deactivated');
           return { outcome: 'deactivated' as const, term: view(updated!, 'en') };
         }
         await tx.delete(vocabularyTerm).where(eq(vocabularyTerm.id, current.id));
-        await emitChange(vocabularyId, key, 'deleted');
+        await emitChange(actor, vocabularyId, key, 'deleted');
         return { outcome: 'deleted' as const, term: null };
       });
     },

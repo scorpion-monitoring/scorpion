@@ -8,9 +8,20 @@ import type { Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { ids } from './ids.ts';
 import { childLogger, type Logger } from './logger.ts';
-import type { JobDef, ModuleManifest } from './manifest.ts';
+import type { JobDef, JobResult, ModuleManifest } from './manifest.ts';
 import type { ModuleContext } from './context.ts';
 import { maskString } from './redact.ts';
+
+/** A returned summary is kept only when it is a flat object of counts, flags and short strings. */
+function summarise(value: unknown): JobResult | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const kept: JobResult = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === 'number' || typeof item === 'boolean') kept[key] = item;
+    else if (typeof item === 'string') kept[key] = maskString(item).slice(0, 200);
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined;
+}
 
 export class JobError extends Error {
   constructor(message: string) {
@@ -129,7 +140,12 @@ export function createJobs(options: JobsOptions): Jobs {
   async function record(
     run: { id: string; def: JobDef; module: string; jobId: string; attempt: number },
     phase: 'start' | 'end',
-    result?: { status: 'succeeded' | 'failed'; durationMs: number; error?: string },
+    result?: {
+      status: 'succeeded' | 'failed';
+      durationMs: number;
+      error?: string;
+      summary?: JobResult;
+    },
   ): Promise<void> {
     try {
       if (phase === 'start') {
@@ -139,7 +155,8 @@ export function createJobs(options: JobsOptions): Jobs {
       } else {
         await db.execute(sql`
           update kernel_job_run
-             set status = ${result!.status}, finished_at = now(), duration_ms = ${result!.durationMs}, error = ${result!.error ?? null}
+             set status = ${result!.status}, finished_at = now(), duration_ms = ${result!.durationMs}, error = ${result!.error ?? null},
+                 result = ${result!.summary === undefined ? null : JSON.stringify(result!.summary)}::jsonb
            where id = ${run.id}`);
       }
     } catch (error) {
@@ -172,7 +189,7 @@ export function createJobs(options: JobsOptions): Jobs {
           reject(error);
         }, def.timeoutSeconds * 1000);
       });
-      await Promise.race([
+      const summary = await Promise.race([
         Promise.resolve().then(() =>
           def.handler(
             {
@@ -188,7 +205,11 @@ export function createJobs(options: JobsOptions): Jobs {
         timeout,
       ]);
       const durationMs = Date.now() - started;
-      await record(run, 'end', { status: 'succeeded', durationMs });
+      await record(run, 'end', {
+        status: 'succeeded',
+        durationMs,
+        summary: summarise(summary),
+      });
       options.onRun?.({
         job: def.name,
         module,

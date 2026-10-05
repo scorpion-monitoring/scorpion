@@ -10,7 +10,10 @@ import { createApprovalService } from './service/approval.ts';
 import { createCleanupService, type CleanupService } from './service/cleanup.ts';
 import { createProfileService, type ProfileService } from './service/profile.ts';
 import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
-import { mailerFromEnvironment, type Mailer } from './service/mailer.ts';
+import { createIdentityMail } from './service/identity-mail.ts';
+import { createMailBudget } from './service/mail-budget.ts';
+import { createMailLinks } from './service/mail-links.ts';
+import { IDENTITY_TEMPLATES } from './service/mail-templates.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
 import { createOidcService, type OidcService } from './service/oidc.ts';
 import {
@@ -28,7 +31,6 @@ import { createRoleService, type RoleService } from './service/roles.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import {
   settingsSchema,
-  type BrandingSource,
   type IdentitySettings,
   type IdentitySettingsValues,
 } from './service/settings.ts';
@@ -37,7 +39,6 @@ import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
 
-export { createMemoryMailer, type Mailer, type MemoryMailer } from './service/mailer.ts';
 export { settingsSchema, type IdentitySettings } from './service/settings.ts';
 
 export interface IdentityInternals extends IdentityService {
@@ -57,11 +58,6 @@ export interface IdentityInternals extends IdentityService {
 export interface IdentityModuleOptions {
   /** Where the settings come from. Default: `ctx.settings`, the values saved through core.settings. */
   settings?: IdentitySettings;
-  /**
-   * Where the instance name and the mail sender come from. Default: `getBranding()` of core.settings,
-   * which owns them (ADR-0018).
-   */
-  branding?: BrandingSource;
   /** For tests: how long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
   /** For tests: how long a verified access token is trusted without verifying it again. */
@@ -72,11 +68,6 @@ export interface IdentityModuleOptions {
    * wants the token passes its own function.
    */
   announce?: (text: string) => void;
-  /**
-   * How mail leaves the process. The default is SMTP over Nodemailer when `SMTP_URL` is set, and
-   * a mailer that refuses to send otherwise. Tests pass the in-memory one.
-   */
-  mailer?: Mailer;
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
   /**
@@ -136,6 +127,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     if (!currentCleanup) throw new Error('core.identity: the cleanup service is not ready');
     return currentCleanup;
   };
+  let currentUsers: ReturnType<typeof createUserService> | undefined;
+  const usersOrThrow = () => {
+    if (!currentUsers) throw new Error('core.identity: the user service is not ready');
+    return currentUsers;
+  };
   const tokensOrThrow = (): TokenService => {
     if (!currentTokens) throw new Error('core.identity: the token service is not ready');
     return currentTokens;
@@ -164,7 +160,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
 
   return defineModule<
     IdentityInternals,
-    'core.authz' | 'core.settings' | 'core.blob',
+    'core.authz' | 'core.settings' | 'core.blob' | 'core.notifications',
     never,
     IdentitySettingsValues
   >({
@@ -269,6 +265,16 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     registries: { [APPROVAL_POLICY_REGISTRY]: approvalPolicyEntrySchema },
     contributes: {
       [APPROVAL_POLICY_REGISTRY]: [manualPolicy],
+      // The mails of this module. The rendering, the layout and the delivery are core.notifications'.
+      'notify.template': IDENTITY_TEMPLATES,
+      // How core.notifications finds the address of the administrator who asks for a test mail.
+      'notify.recipientAddress': [
+        {
+          id: 'core.identity',
+          addressOf: async (userId: string) =>
+            (await usersOrThrow().findById(userId))?.email ?? null,
+        },
+      ],
       // What the role `user` can do once an account is approved: the self-service routes of this
       // module. Admin holds everything by resolution; Reviewer gets nothing from identity (its
       // permissions come from the modules that review things).
@@ -284,13 +290,17 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const authz = ctx.deps['core.authz'];
       const settings: IdentitySettings = options.settings ?? { get: () => ctx.settings.get() };
       const clientSecret = options.clientSecret ?? clientSecretFrom(ctx.deps['core.settings']);
-      const branding: BrandingSource = options.branding ?? {
-        get: () => ctx.deps['core.settings'].getBranding(),
-      };
+      const mail = createIdentityMail({
+        notifications: ctx.deps['core.notifications'],
+        settings: ctx.deps['core.settings'],
+      });
+      const links = createMailLinks(ctx.config);
+      const budget = createMailBudget(ctx, settings);
       const blob = ctx.deps['core.blob'];
       currentSettings = settings;
       currentSecret = clientSecret;
       const users = createUserService(ctx);
+      currentUsers = users;
       const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
       const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
       current = sessions;
@@ -320,16 +330,22 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const recovery = createRecoveryService(ctx, {
         sessions,
         settings,
-        branding,
-        mailer: options.mailer ?? mailerFromEnvironment(process.env),
+        mail,
+        budget,
+        links,
         authz,
       });
-      const cleanup = createCleanupService(ctx, { authz, blob, settings });
+      const cleanup = createCleanupService(ctx, {
+        authz,
+        blob,
+        notifications: ctx.deps['core.notifications'],
+        settings,
+      });
       currentCleanup = cleanup;
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery, authz, blob, settings }),
+        profile: createProfileService(ctx, { recovery, mail, authz, blob, settings }),
         roles: createRoleService({ authz, users }),
         recovery,
         loginStates,
@@ -337,8 +353,17 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         users,
         sessions,
         tokens,
-        accounts: createAccountService(ctx, { users, sessions, settings, recovery, authz }),
-        approval: createApprovalService(ctx, { sessions, authz }),
+        accounts: createAccountService(ctx, {
+          users,
+          sessions,
+          settings,
+          recovery,
+          mail,
+          budget,
+          links,
+          authz,
+        }),
+        approval: createApprovalService(ctx, { sessions, authz, mail, links }),
       };
     },
 

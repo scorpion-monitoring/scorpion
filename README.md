@@ -27,7 +27,10 @@ curl localhost:3000/readyz
 `pnpm dev` creates `.env` from `.env.example` when it is missing, starts Postgres and Mailpit,
 and runs the server (which applies pending migrations on start) and the web app.
 
-Mailpit's web UI runs on <http://localhost:8025> (SMTP on port 1025).
+Mailpit's web UI runs on <http://localhost:8025> (SMTP on port 1025). `pnpm dev` also runs `scorpion seed-dev-mail`, which
+points the instance's mail settings at that Mailpit when none are stored yet (development only: the command refuses with
+`NODE_ENV=production`, and never overwrites settings that are saved). Register an account and the welcome and administrator mails
+show up there.
 
 ```bash
 pnpm check        # ESLint (incl. module boundaries), Prettier, tsc -b, svelte-check

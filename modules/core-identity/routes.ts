@@ -82,9 +82,12 @@ export const registerRoute = createRoute({
   rateLimit: 'strict',
   request: { body: json(registerInput) },
   responses: {
-    201: ok('The account was created.', z.object({ user: userSchema })),
+    202: ok(
+      'The request was accepted. Always the same answer for a well-formed request, whether the email address is new or already has an account: a new address gets an account that waits for review, a taken one gets a mail to its owner and nothing else. Check your mail.',
+      z.object({ accepted: z.literal(true) }),
+    ),
     403: { description: 'Local accounts are turned off.' },
-    409: { description: 'The username or email address is taken.' },
+    409: { description: 'The username is taken (usernames are public).' },
   },
 });
 
@@ -158,6 +161,7 @@ export const approveRoute = createRoute({
   method: 'post',
   path: '/users/{id}/approve',
   permission: 'core.identity.user.approve',
+  audit: { body: true },
   request: {
     params: idParam,
     // Optional: `{}` or no body gives the role `user`.
@@ -178,6 +182,7 @@ export const rejectRoute = createRoute({
   method: 'post',
   path: '/users/{id}/reject',
   permission: 'core.identity.user.reject',
+  audit: true,
   request: { params: idParam },
   responses: {
     200: ok('The account is rejected and soft-deleted.', decision),
@@ -434,6 +439,7 @@ export const assignRoleRoute = createRoute({
   method: 'post',
   path: '/users/{id}/roles',
   permission: 'core.identity.role.assign',
+  audit: { body: true },
   request: { params: idParam, body: json(assignRoleInput) },
   responses: {
     200: ok(
@@ -449,6 +455,7 @@ export const removeRoleRoute = createRoute({
   method: 'delete',
   path: '/users/{id}/roles/{role}',
   permission: 'core.identity.role.assign',
+  audit: true,
   request: { params: roleParam },
   responses: {
     204: { description: 'The user does not hold the role (also when they never did).' },
@@ -485,6 +492,7 @@ export const createTokenRoute = createRoute({
   method: 'post',
   path: '/tokens',
   permission: 'core.identity.token.manage',
+  audit: true,
   rateLimit: 'strict', // each token costs an argon2id hash
   request: { body: json(createTokenInput) },
   responses: {
@@ -498,6 +506,7 @@ export const revokeTokenRoute = createRoute({
   method: 'delete',
   path: '/tokens/{id}',
   permission: 'core.identity.token.manage',
+  audit: true,
   request: { params: idParam },
   responses: {
     204: { description: 'The token is revoked (also when it already was).' },
@@ -510,6 +519,7 @@ export const rotateTokenRoute = createRoute({
   method: 'post',
   path: '/tokens/{id}/rotate',
   permission: 'core.identity.token.manage',
+  audit: true,
   rateLimit: 'strict', // each token costs an argon2id hash
   request: { params: idParam, body: json(rotateTokenInput) },
   responses: {
@@ -552,8 +562,11 @@ export function registerIdentityRoutes(
   { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
-    const user = await accounts.register(c.req.valid('json'));
-    return c.json({ user: view(user) }, 201);
+    // The same answer whether the account was created or the address was taken: nothing of the
+    // new account is returned (register without revealing).
+    await accounts.register(c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.json({ accepted: true as const }, 202);
   }) satisfies RouteHandler<typeof registerRoute, AppEnv>);
 
   r.internal(loginRoute, (async (c) => {

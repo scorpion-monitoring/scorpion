@@ -64,6 +64,8 @@ const changed = z.strictObject({
   // Names of the keys that changed, never their values.
   keys: z.array(z.string()).min(1),
   version: z.number().int(),
+  // Who saved them: the user id, or `null` for a seed and the system.
+  actorId: z.string().nullable(),
 });
 
 /**
@@ -113,7 +115,11 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
       emits: {
         'settings.changed@1': changed,
         // The name of the secret and whether it went; never the value, the key or its id.
-        'settings.secret.changed@1': z.strictObject({ name: z.string(), removed: z.boolean() }),
+        'settings.secret.changed@1': z.strictObject({
+          name: z.string(),
+          removed: z.boolean(),
+          actorId: z.string().nullable(),
+        }),
         // Which preference of which user, never what it was set to.
         'settings.preference.changed@1': z.strictObject({
           userId: z.string(),
@@ -125,6 +131,7 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
           vocabulary: z.string(),
           key: z.string(),
           change: z.enum(['created', 'updated', 'activated', 'deactivated', 'deleted']),
+          actorId: z.string().nullable(),
         }),
       },
     },
@@ -153,14 +160,17 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
       const vocabularies = createVocabularyService(ctx, { authz });
       await vocabularies.seed();
       const branding = createBrandingService(settings);
+      const preferences = createPreferencesService(ctx, { authz });
       current = {
         settings,
         secrets,
-        preferences: createPreferencesService(ctx, { authz }),
+        preferences,
         vocabularies,
         branding,
         getSecret: (name) => secrets.getSecret(name),
         getBranding: (options) => branding.get(options),
+        getUserPreference: (userId, key) => preferences.getForUser(userId, key),
+        seedSettings: (moduleId, values) => settings.seed(moduleId, values),
         listTerms: (vocabularyId, options) => vocabularies.terms(vocabularyId, options),
         validateTerm: (vocabularyId, key, options) =>
           vocabularies.validateTerm(vocabularyId, key, options),

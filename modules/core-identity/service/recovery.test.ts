@@ -14,7 +14,6 @@ import { failOutbox, tokenFrom } from '../test/mail.ts';
 import { makeMember, useIdentity } from '../test/harness.ts';
 import { hashMailToken } from './mail-tokens.ts';
 import { TooManyRequests } from './errors.ts';
-import { createMemoryMailer } from './mailer.ts';
 import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { settingsSchema, type IdentitySettings } from './settings.ts';
@@ -36,32 +35,42 @@ const settingsOf = (
   get: () => Promise.resolve(settingsSchema.parse(values)),
 });
 
+/** Like `start`, and collects every log line, to prove what the log does not hold. */
+async function startLogged(options: Parameters<typeof identity.start>[0] = {}) {
+  const logLines: string[] = [];
+  return { ...(await start({ ...options, logLines })), logLines };
+}
+
 async function start(options: Parameters<typeof identity.start>[0] = {}) {
-  const mailer = createMemoryMailer();
-  const started = await identity.start({ mailer, ...options });
+  const started = await identity.start(options);
   const withPassword = async (overrides: Parameters<typeof makeMember>[1] = {}) => {
     const user = await makeMember(started.kernel.pool, { emailVerified: false, ...overrides });
     await makeAuthMethod(started.kernel.pool, user, { passwordHash: await hashPassword(PASSWORD) });
     return user;
   };
   const { recovery } = started.identity;
-  return { ...started, mailer, recovery, withPassword };
+  return { ...started, recovery, withPassword };
 }
 
 describe('requestReset', () => {
   it('mails one link to the account behind the address, and stores only a hash of the token', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start({
+    const { kernel, mail, recovery, withPassword } = await start({
       env: { ORIGIN: 'https://registry.example.org', BASE_PATH: '/a/b' },
     });
     const user = await withPassword({ email: 'alice@example.org' });
 
     await recovery.requestReset({ email: 'Alice@Example.org' });
 
-    expect(mailer.sent).toHaveLength(1);
-    const mail = mailer.sent[0]!;
-    expect(mail).toMatchObject({ kind: 'password-reset', to: 'Alice@Example.org' });
-    expect(mail.text).toContain('https://registry.example.org/a/b/reset-password#token=srt_');
-    const token = tokenFrom(mail);
+    expect(await mail.all()).toHaveLength(1);
+    const queued = (await mail.all())[0]!;
+    expect(queued).toMatchObject({
+      template: 'identity.password-reset',
+      to: 'Alice@Example.org',
+      sensitive: true,
+      status: 'queued',
+    });
+    expect(queued.text).toContain('https://registry.example.org/a/b/reset-password#token=srt_');
+    const token = tokenFrom(queued);
     const stored = await rows(kernel, 'select * from identity_mail_token');
     expect(stored).toEqual([
       expect.objectContaining({
@@ -84,7 +93,7 @@ describe('requestReset', () => {
   });
 
   it('is silent for an unknown address and for accounts that cannot use a password', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+    const { kernel, mail, recovery, withPassword } = await start();
     const pending = await withPassword({ status: 'pending', email: 'pending@example.org' });
     await withPassword({ status: 'rejected', deleted: true, email: 'rejected@example.org' });
     await withPassword({ deleted: true, email: 'deleted@example.org' });
@@ -101,16 +110,16 @@ describe('requestReset', () => {
     ]) {
       await expect(recovery.requestReset({ email })).resolves.toBeUndefined();
     }
-    expect(mailer.sent).toEqual([]);
+    expect(await mail.all()).toEqual([]);
     expect(await rows(kernel, 'select 1 from identity_mail_token')).toEqual([]);
     expect(await rows(kernel, 'select 1 from kernel_outbox')).toEqual([]);
   });
 
   it('gives an address three mails an hour, and spends the budget for unknown addresses too', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+    const { kernel, mail, recovery, withPassword } = await start();
     await withPassword({ email: 'alice@example.org' });
     for (let i = 0; i < 5; i++) await recovery.requestReset({ email: 'alice@example.org' });
-    expect(mailer.sent).toHaveLength(3);
+    expect(await mail.all()).toHaveLength(3);
 
     await recovery.requestReset({ email: 'ghost@example.org' });
     const keys = await rows(
@@ -122,11 +131,11 @@ describe('requestReset', () => {
   });
 
   it('replaces the outstanding link: only the newest one works', async () => {
-    const { mailer, recovery, withPassword } = await start();
+    const { mail, recovery, withPassword } = await start();
     await withPassword({ email: 'alice@example.org' });
     await recovery.requestReset({ email: 'alice@example.org' });
     await recovery.requestReset({ email: 'alice@example.org' });
-    const [first, second] = mailer.sent.map(tokenFrom);
+    const [first, second] = (await mail.all()).map(tokenFrom);
 
     await expect(
       recovery.confirmReset({ token: first, password: NEW_PASSWORD }),
@@ -136,13 +145,20 @@ describe('requestReset', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('answers the same when the mail transport fails, and logs nothing from the mail', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+  it('never waits for the relay: with one that is down it answers the same and the mail is queued', async () => {
+    // Port 9 refuses connections. The request only inserts a row (ADR 0012's timing rule holds by
+    // construction); the delivery job retries later.
+    const { kernel, mail, recovery, withPassword, logLines } = await startLogged({
+      notificationSettings: {
+        emailTransport: 'smtp',
+        smtp: { host: '127.0.0.1', port: 9, tls: 'none', timeoutSeconds: 1 },
+      },
+    });
     await withPassword({ email: 'alice@example.org' });
-    mailer.failWith(new Error('550 alice@example.org rejected'));
     await expect(recovery.requestReset({ email: 'alice@example.org' })).resolves.toBeUndefined();
-    // The token is stored: the mail was the part that failed, and a new request replaces it.
     expect(await rows(kernel, 'select 1 from identity_mail_token')).toHaveLength(1);
+    expect(await mail.all()).toMatchObject([{ status: 'queued', to: 'alice@example.org' }]);
+    expect(logLines.join('')).not.toContain('alice@example.org');
   });
 
   it('is refused (403) when local accounts are off, and a malformed address is a 422', async () => {
@@ -160,12 +176,12 @@ describe('requestReset', () => {
   });
 
   it('writes no token and sends no mail when the event cannot be written (rollback)', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+    const { kernel, mail, recovery, withPassword } = await start();
     await withPassword({ email: 'alice@example.org' });
     await failOutbox(kernel);
     await expect(recovery.requestReset({ email: 'alice@example.org' })).rejects.toThrow();
     expect(await rows(kernel, 'select 1 from identity_mail_token')).toEqual([]);
-    expect(mailer.sent).toEqual([]);
+    expect(await mail.all()).toEqual([]);
   });
 });
 
@@ -174,7 +190,7 @@ describe('confirmReset', () => {
     const s = await start({ tokenCacheTtlMs: 0 });
     const user = await s.withPassword({ email: 'alice@example.org' });
     await s.recovery.requestReset({ email: 'alice@example.org' });
-    return { ...s, user, token: tokenFrom(s.mailer.sent[0]) };
+    return { ...s, user, token: tokenFrom((await s.mail.all())[0]) };
   }
 
   it('sets the password, ends every session and every outstanding link, and keeps access tokens', async () => {
@@ -230,9 +246,9 @@ describe('confirmReset', () => {
   });
 
   it('is the same 400 for unknown, malformed, expired, used and wrong-purpose tokens', async () => {
-    const { kernel, mailer, recovery, user, token } = await requested();
+    const { kernel, mail, recovery, user, token } = await requested();
     await recovery.startVerification(user.id, 'alice@example.org');
-    const verification = tokenFrom(mailer.sent[1]);
+    const verification = tokenFrom((await mail.all())[1]);
     const expired = await requested();
     await expired.kernel.pool.query(
       "update identity_mail_token set expires_at = now() - interval '1 second'",
@@ -419,16 +435,18 @@ describe('changePassword', () => {
 
 describe('email verification', () => {
   it('is started by registering: one mail, and the link confirms the address once', async () => {
-    const { identity: id, mailer, recovery } = await start();
-    const user = await id.accounts.register({
+    const { identity: id, mail, recovery } = await start();
+    const user = (await id.accounts.register({
       username: 'alice',
       email: 'alice@example.org',
       password: PASSWORD,
-    });
+    }))!;
     expect(user.emailVerified).toBe(false);
-    expect(mailer.sent).toHaveLength(1);
-    expect(mailer.sent[0]).toMatchObject({ kind: 'email-verification', to: 'alice@example.org' });
-    const token = tokenFrom(mailer.sent[0]);
+    // Registering also queues the welcome mail; the confirmation link is the one this test follows.
+    const verification = await mail.of('identity.email-verification');
+    expect(verification).toHaveLength(1);
+    expect(verification[0]).toMatchObject({ to: 'alice@example.org', sensitive: true });
+    const token = tokenFrom(verification[0]);
 
     await recovery.confirmEmail({ token });
 
@@ -436,13 +454,22 @@ describe('email verification', () => {
     await expect(recovery.confirmEmail({ token })).rejects.toBeInstanceOf(BadRequest);
   });
 
-  it('still registers when the mail cannot be sent, and when no transport is configured', async () => {
-    const { identity: id, mailer } = await start();
-    mailer.failWith(new Error('down'));
+  it('still registers when the relay is down and when no relay is configured: the mail is only queued', async () => {
+    const down = await start({
+      notificationSettings: {
+        emailTransport: 'smtp',
+        smtp: { host: '127.0.0.1', port: 9, tls: 'none', timeoutSeconds: 1 },
+      },
+    });
     await expect(
-      id.accounts.register({ username: 'alice', email: 'alice@example.org', password: PASSWORD }),
+      down.identity.accounts.register({
+        username: 'alice',
+        email: 'alice@example.org',
+        password: PASSWORD,
+      }),
     ).resolves.toMatchObject({ username: 'alice' });
-    const bare = await identity.start(); // no mailer: refuses to send
+    expect(await down.mail.templates()).toContain('identity.email-verification');
+    const bare = await start(); // emailTransport none (the default)
     await expect(
       bare.identity.accounts.register({
         username: 'bob',
@@ -450,20 +477,21 @@ describe('email verification', () => {
         password: PASSWORD,
       }),
     ).resolves.toMatchObject({ username: 'bob' });
+    expect(await bare.mail.templates()).toContain('identity.email-verification');
   });
 
   it('confirms a new address and only then replaces the old one', async () => {
-    const { identity: id, mailer, recovery, withPassword } = await start();
+    const { identity: id, mail, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'old@example.org', emailVerified: true });
 
     await recovery.startVerification(user.id, 'new@example.org');
-    expect(mailer.sent.map((m) => m.to)).toEqual(['new@example.org']);
+    expect((await mail.all()).map((m) => m.to)).toEqual(['new@example.org']);
     expect(await id.users.findById(user.id)).toMatchObject({
       email: 'old@example.org',
       emailVerified: true,
     });
 
-    await recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) });
+    await recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) });
     expect(await id.users.findById(user.id)).toMatchObject({
       email: 'new@example.org',
       emailVerified: true,
@@ -471,12 +499,12 @@ describe('email verification', () => {
   });
 
   it('refuses the link when another account has taken the address meanwhile, or the account is gone', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+    const { kernel, mail, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'old@example.org' });
     await recovery.startVerification(user.id, 'new@example.org');
     await makeMember(kernel.pool, { email: 'New@Example.org' });
     await expect(
-      recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) }),
+      recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) }),
     ).rejects.toBeInstanceOf(BadRequest);
 
     const gone = await withPassword({ email: 'gone@example.org' });
@@ -486,17 +514,17 @@ describe('email verification', () => {
       [gone.id],
     );
     await expect(
-      recovery.confirmEmail({ token: tokenFrom(mailer.sent[1]) }),
+      recovery.confirmEmail({ token: tokenFrom((await mail.all())[1]) }),
     ).rejects.toBeInstanceOf(BadRequest);
   });
 
   it('is the same 400 for unknown, malformed, expired and reset tokens', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+    const { kernel, mail, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'alice@example.org' });
     await recovery.requestReset({ email: 'alice@example.org' });
-    const reset = tokenFrom(mailer.sent[0]);
+    const reset = tokenFrom((await mail.all())[0]);
     await recovery.startVerification(user.id, 'alice@example.org');
-    const expired = tokenFrom(mailer.sent[1]);
+    const expired = tokenFrom((await mail.all())[1]);
     await kernel.pool.query(
       "update identity_mail_token set expires_at = now() - interval '1 second' where purpose = 'email-verification'",
     );
@@ -512,11 +540,13 @@ describe('email verification', () => {
   });
 
   it('leaves the address unconfirmed when the event cannot be written (rollback)', async () => {
-    const { kernel, mailer, recovery, withPassword } = await start();
+    const { kernel, mail, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'alice@example.org' });
     await recovery.startVerification(user.id, 'alice@example.org');
     await failOutbox(kernel);
-    await expect(recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) })).rejects.toThrow();
+    await expect(
+      recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) }),
+    ).rejects.toThrow();
     expect(await rows(kernel, 'select email_verified_at from identity_user')).toEqual([
       { email_verified_at: null },
     ]);
@@ -526,10 +556,10 @@ describe('email verification', () => {
   });
 
   it('mails a fresh link on request, five times an hour, and not for a confirmed address', async () => {
-    const { mailer, recovery, withPassword } = await start();
+    const { mail, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'alice@example.org' });
     await recovery.resendVerification(actorOf(user));
-    expect(mailer.sent).toHaveLength(1);
+    expect(await mail.all()).toHaveLength(1);
 
     const confirmed = await withPassword({ email: 'bob@example.org', emailVerified: true });
     await expect(recovery.resendVerification(actorOf(confirmed))).rejects.toBeInstanceOf(Conflict);
@@ -549,10 +579,10 @@ describe('email verification', () => {
   });
 
   it('resends to the address that waits for confirmation, not the current one', async () => {
-    const { mailer, recovery, withPassword } = await start();
+    const { mail, recovery, withPassword } = await start();
     const user = await withPassword({ email: 'old@example.org', emailVerified: true });
     await recovery.startVerification(user.id, 'new@example.org', { send: false });
     await recovery.resendVerification(actorOf(user));
-    expect(mailer.sent.map((m) => m.to)).toEqual(['new@example.org']);
+    expect((await mail.all()).map((m) => m.to)).toEqual(['new@example.org']);
   });
 });

@@ -174,6 +174,7 @@ describe('the token half (ADR 0008)', () => {
           roles: [],
           via: 'token',
           scopes: ['read:kpi'],
+          tokenId: 't1', // for the audit trail: the id of the token, never the token
         },
       });
     },

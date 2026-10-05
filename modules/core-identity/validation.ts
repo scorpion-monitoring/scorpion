@@ -61,8 +61,26 @@ export const createUserInput = z
 
 export type CreateUserInput = z.input<typeof createUserInput>;
 
-/** The body of `POST /register`: a password account. Unlike `createUserInput`, the email is required. */
-export const registerInput = z.strictObject({ username, email, password });
+/**
+ * The language a request asks for its mails in: a tag like `de` or `pt-BR`. Only the form is checked
+ * here (422); whether the language is shipped is core.notifications' decision, which falls back to the
+ * instance default, so a browser that sends `fr` still registers.
+ */
+export const requestLocale = z
+  .string()
+  .max(20)
+  .regex(/^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8}){0,2}$/, 'must be a language tag like "en" or "de"');
+
+/**
+ * The body of `POST /register`: a password account. Unlike `createUserInput`, the email is required.
+ * `locale` is the language of the mails that go out before the account has a preference.
+ */
+export const registerInput = z.strictObject({
+  username,
+  email,
+  password,
+  locale: requestLocale.optional(),
+});
 export type RegisterInput = z.infer<typeof registerInput>;
 
 /**
@@ -138,7 +156,7 @@ export const oidcCallbackQuery = z.object({
 });
 
 /** `POST /auth/password-reset`: only the address. The answer never depends on whether it is known. */
-export const resetRequestInput = z.strictObject({ email });
+export const resetRequestInput = z.strictObject({ email, locale: requestLocale.optional() });
 
 /** A mailed token: only its size is limited here; whether it is good is the service's 400. */
 const mailedToken = z.string().min(1).max(128);

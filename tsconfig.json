@@ -8,6 +8,9 @@
       "path": "./packages/kernel"
     },
     {
+      "path": "./modules/core-audit"
+    },
+    {
       "path": "./modules/core-authz"
     },
     {
@@ -15,6 +18,9 @@
     },
     {
       "path": "./modules/core-identity"
+    },
+    {
+      "path": "./modules/core-notifications"
     },
     {
       "path": "./modules/core-settings"

@@ -79,6 +79,8 @@ export interface JobRunRow {
   finishedAt: Date | null;
   durationMs: number | null;
   error: string | null;
+  /** What the handler returned (counts and flags), or `null`. */
+  result: Record<string, number | boolean | string> | null;
 }
 
 export interface JobRunFilter {
@@ -103,8 +105,9 @@ export async function listJobRuns(db: Db, filter: JobRunFilter = {}): Promise<Jo
     finished_at: Date | null;
     duration_ms: number | null;
     error: string | null;
+    result: JobRunRow['result'];
   }>(sql`
-    select id, job_name, module, job_id, attempt, status, started_at, finished_at, duration_ms, error
+    select id, job_name, module, job_id, attempt, status, started_at, finished_at, duration_ms, error, result
       from kernel_job_run
      where (${filter.jobName ?? null}::text is null or job_name = ${filter.jobName ?? null})
        and (${filter.status ?? null}::text is null or status = ${filter.status ?? null})
@@ -121,5 +124,6 @@ export async function listJobRuns(db: Db, filter: JobRunFilter = {}): Promise<Jo
     finishedAt: row.finished_at ? new Date(row.finished_at) : null,
     durationMs: row.duration_ms,
     error: row.error,
+    result: row.result,
   }));
 }

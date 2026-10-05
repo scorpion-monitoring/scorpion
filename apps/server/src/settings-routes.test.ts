@@ -41,13 +41,15 @@ describe('GET /settings', () => {
       metadata: Record<string, number>;
       result: { module: string; version: number; values: Record<string, unknown> }[];
     };
-    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 3, totalPages: 1 });
+    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 5, totalPages: 1 });
     expect(body.result.map((entry) => entry.module)).toEqual([
+      'core.audit',
       'core.blob',
       'core.identity',
+      'core.notifications',
       'core.settings',
     ]);
-    expect(body.result[1]).toMatchObject({
+    expect(body.result[2]).toMatchObject({
       version: 0,
       values: { localAccounts: true, approvalPolicy: 'manual', oidcProviders: [] },
     });
@@ -58,7 +60,7 @@ describe('GET /settings', () => {
     const a = await admin(s);
     const second = await s.get('/settings?page=1&pageSize=1', as(a));
     expect((second.body as { result: { module: string }[] }).result.map((e) => e.module)).toEqual([
-      'core.identity',
+      'core.blob',
     ]);
     expect((await s.get('/settings?pageSize=0', as(a))).status).toBe(422);
   });

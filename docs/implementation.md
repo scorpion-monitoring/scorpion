@@ -20,6 +20,7 @@ A milestone is **done** only when all of the following hold:
 7. The public OpenAPI diff shows no breaking change, or the milestone explicitly bumps the API version.
 8. Module docs (`modules/<id>/README.md`) are updated: permissions, settings keys, events, registries, jobs.
 9. Every merged pull request carries a changeset (`pnpm changeset`, or `pnpm changeset --empty` for changes that operators and API users do not notice), except docs-only pull requests (`docs/**`, `**/*.md` other than `CHANGELOG.md`, `.github/ISSUE_TEMPLATE/**`). `CHANGELOG.md` is written by `changeset version` at a release and never edited by hand.
+10. From M4a on, a pull request that touches a security-scoped path (see §8.4) either updates the matching ASVS assessment file in `docs/security/asvs/`, or carries the label `asvs-no-impact` with a one-line reason in the description. CI enforces this.
 
 Terms used below come from the architecture: **kernel**, **manifest** (`defineModule`), **registry**, **profile**, **service layer**, **outbox**.
 
@@ -34,8 +35,9 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | M2 | `core.identity`: accounts, sessions, OIDC, PATs | 1 Foundation | L | M1 | 3, 4, 5, 13 |
 | M3 | `core.authz` + `core.settings` (incl. secrets, vocabularies) | 1 Foundation | M | M2 | 1 |
 | M4 | `core.notifications` + `core.audit` | 1 Foundation | M | M3 | none |
+| M4a | Security assurance tooling | 1 Foundation | S | M4 | none |
 | M5 | `core.ui-shell` + web app skeleton | 1 Foundation | M | M3 | 11, 12 |
-| **G1** | **Gate 1: security foundation** | | | M0–M5 | |
+| **G1** | **Gate 1: security foundation** | | | M0–M5 incl. M4a | |
 | M6 | `registry.organisations` | 2 Registry | M | G1 | none |
 | M7 | `registry.services`: model, wizard, catalogue, detail/edit | 2 Registry | L | M6 | 2, 14 (partly) |
 | M8 | `public-api` v1 (read) + OpenAPI + Swagger | 2 Registry | M | M7 | 15 |
@@ -137,8 +139,26 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Templates for all events in FEATURES §3.15, plus membership decided, password reset and email verification.
 - In-app inbox (table + API) and per-user notification preferences.
 - Audit: an append-only `audit_event` table; middleware logs every public API call; `ctx.audit()` for admin and permission-relevant actions; viewer API with filters (method, user, endpoint, date range), CSV export; retention job.
+- Dependency order (ADR-0019): `core.authz` → `core.settings` → `core.blob` → `core.notifications` → `core.identity` → `core.audit`. `core.notifications` is user-agnostic (opaque user ids, recipients passed by the caller); `core.identity` depends on it and enqueues inside its own transactions. Delivery rows are the queue (a job and `pg_notify` only wake it); the rendered body of a `sensitive` mail (reset, verification) is deleted once the delivery is `sent` or `dead`.
+- The webhook transport is an admin-notification mirror (one signed URL), not a user channel. It refuses loopback, private, link-local and metadata addresses unless `allowPrivateTargets` is set, resolves once, and follows no redirects.
+- `SMTP_URL` is removed without a fallback: SMTP host, port and TLS mode are `core.notifications` settings and the password is a secret. The `Mailer` port in `core.identity` is deleted. Templates are typed TypeScript functions in English and German (user preference `locale`, else the instance default), with no new dependency.
+- `POST /auth/register` answers 202 for every well-formed request; the owner of a taken address gets a notice mail (register without revealing).
+- Audit (ADR-0021): `core.audit` subscribes to the events of authz, settings and identity, and the kernel gets an audit sink port that the pipeline and `ctx.audit()` use (a no-op without `core.audit`). Request bodies are stored only when a route opts in, redacted and capped at 8 KB, and never for auth routes. The table refuses `UPDATE` and ordinary `DELETE`. `core.authz` gains `authz.role.permissions.changed@1`.
+- Hosted in `core.audit`: the kernel's outbox and job-run retention jobs and the outbox requeue route, under `core.audit.system.*` permissions. (Job names carry the module id: `core.audit.retention`, `core.audit.system.outbox-retention`, `core.audit.system.job-run-retention`; ADR-0024.)
 
-**Acceptance:** registering produces the welcome and admin emails in Mailpit. If the SMTP relay is down, emails are retried and the failure shows in the admin status list. A role change creates an audit entry.
+**Acceptance:** registering produces the welcome and admin emails in Mailpit. If the SMTP relay is down, emails are retried and the failure shows in the admin status list. A role change creates an audit entry. No secret (reset token, SMTP password, webhook secret) appears in logs, the audit table or API responses, and a plain User gets 403 on every notification-admin, audit and system route.
+
+### M4a: Security assurance tooling (S)
+
+**Goal:** the security signals of §8 are wired up before the last Phase 1 milestone, so M5 is built with them in place and G1 is a check, not a one-off audit.
+
+- Repo hardening: `SECURITY.md`, private vulnerability reporting, secret scanning with push protection, Dependabot alerts, branch protection on `main` and `dev`, CODEOWNERS for the security-scoped paths.
+- Workflow hygiene: actions pinned by SHA, Docker base images pinned by digest, top-level `permissions: contents: read`, Renovate or Dependabot, CodeQL.
+- Scorecard workflow and badge. Fix the findings that are cheap to fix. Register on bestpractices.dev and answer the passing criteria as far as possible.
+- `tools/asvs-report` (validator and generator), pinned ASVS 5.0.0 source, `pnpm security:asvs` in CI, the `asvs-impact` job (rule 10) and the generated README badge block.
+- Skeletons for V6, V7, V8 and V10 with every L1/L2 id. Fill in what M2–M4 already delivered: tag the existing tests (including the `defect-NN.*` tests) and move the matching requirements to `pass` or `n/a`. Everything else stays `fail`, with an issue for each gap.
+
+**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue assigned to M5 or to a fix before G1.
 
 ### M5: `core.ui-shell` + web app skeleton (M)
 
@@ -157,7 +177,9 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 ### Gate 1: security foundation
 
 - The regression tests for defects 1, 3, 4, 5, 11, 12 and 13 pass.
-- An external review (or a structured self-review against OWASP ASVS L2 for auth, session and access control) has no open high findings.
+- The four ASVS 5.0 Level 2 chapter assessments in `docs/security/asvs/` (V6, V7, V8, V10; see §8.1) have no `fail` entries, every `n/a` has a reason, and the second-pass self-review (§8.2) is recorded. `pnpm security:asvs` is green on the gate commit.
+- The README badge row (§8.5) shows all four ASVS badges as `self-assessed`, plus the OpenSSF Best Practices badge at **passing** and the OpenSSF Scorecard badge at **≥ 6.5**.
+- `SECURITY.md` is published, and GitHub private vulnerability reporting is switched on.
 - A `core-only` profile image deploys to staging.
 
 ---
@@ -299,6 +321,9 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Production cut-over: final migration run, DNS/proxy switch, old app set to read-only for 30 days, then retired.
 - All tests from FEATURES §4.11 and all defect regression tests pass on the release tag.
 - One real backup restore rehearsed successfully.
+- The ASVS chapter assessments are re-confirmed against the `v1.0.0` release commit (`assessed_commit` updated, second pass recorded).
+- OpenSSF Scorecard ≥ 7.0. Release images are signed and published with SLSA provenance.
+- OpenSSF Best Practices is still **passing**.
 
 ---
 
@@ -313,10 +338,176 @@ These run alongside the milestones and are not tied to a single one.
 | Observability | M1 | Logs, traces and metrics added with each module; a Grafana dashboard JSON by M18 |
 | i18n | M5 | All UI strings go through the message catalogue from the start (English first, German second); vocabularies have labels per locale |
 | Accessibility | M5 | Every `ui-kit` component keyboard- and screen-reader-tested |
+| Security assurance | M4a | ASVS chapter assessments and tool, Scorecard, Best Practices, SECURITY.md (§8) |
 
 ---
 
-## 8. Risks
+## 8. Security assurance signals
+
+The repository publishes four kinds of security signal. They are only worth showing if they are specific, backed by evidence anyone can check, and kept current by CI. A badge that a person flips by hand is not allowed.
+
+| Signal | What it means | Target |
+|---|---|---|
+| ASVS 5.0 L2 chapter badges (V6, V7, V8, V10) | A structured self-assessment of every Level 1 and Level 2 requirement in the chapter, with linked evidence | All four `self-assessed` at G1, re-confirmed at G4 |
+| OpenSSF Best Practices badge | Self-certification on bestpractices.dev | Passing at G1 |
+| OpenSSF Scorecard badge | Automated checks of the repository and its supply chain | ≥ 6.5 at G1, ≥ 7.0 at G4 (see the single-maintainer note in §8.3) |
+| `SECURITY.md` | How to report a vulnerability, and what reporters can expect | Published by G1 |
+
+OWASP does not certify projects. The project has one maintainer, so the badges say **self-assessed**, not "compliant" or "verified". The word changes only when the assessment changes (§8.4).
+
+### 8.1 ASVS scope
+
+There is one badge and one assessment per ASVS chapter. This keeps the claim aligned with the ASVS structure, so readers don't have to learn a project-specific grouping.
+
+| Badge | ASVS 5.0.0 chapter | Scope inside the chapter | Main modules |
+|---|---|---|---|
+| `V6` | V6 Authentication | Full chapter | `core.identity` |
+| `V7` | V7 Session Management | Full chapter | `core.identity`, request pipeline |
+| `V8` | V8 Authorization | Full chapter | `core.authz`, request pipeline, resource policies |
+| `V10` | V10 OAuth and OIDC | Requirements for an OAuth client and an OIDC relying party. Requirements for authorization servers, OIDC providers and resource servers are `n/a`, because Scorpion is none of these (PATs are not OAuth tokens). | `core.identity` |
+
+Level 2 includes every Level 1 requirement. V9 (self-contained tokens) does not apply, because sessions and PATs are opaque reference tokens. This is recorded once in `docs/security/README.md`. The chapter numbers must match the pinned source file (§8.2). The tool reads requirements from that file.
+
+Other ASVS chapters are not claimed. Extending the scope is in the backlog (§10).
+
+### 8.2 Layout, file format and method
+
+```text
+docs/security/
+  README.md                         scope, method, assessment history, links to all signals
+  asvs/
+    source/OWASP_ASVS_5.0.0_en.json # pinned official requirement export (CC BY-SA 4.0, with attribution)
+    v6-authentication.yaml          assessment data (source of truth, edited by people)
+    v6-authentication.md            generated report (never edited by hand)
+    v7-session-management.yaml / .md
+    v8-authorization.yaml      / .md
+    v10-oauth-oidc.yaml        / .md
+tools/asvs-report/                  validator and generator (`pnpm security:asvs [--write]`)
+SECURITY.md                         repository root
+```
+
+Assessment file (`v6-authentication.yaml`):
+
+```yaml
+asvs_version: 5.0.0
+level: 2
+chapter: V6
+assessment_type: self          # self | peer | external
+assessed_commit: 3f2c1e9…      # full SHA the assessment was made against
+assessed_on: 2026-11-20
+assessor: <github-handle>
+second_pass:                   # self-review on a later day (see "Method")
+  by: <github-handle>
+  on: 2026-11-27
+reviewer: null                 # required for type "peer"; must differ from the assessor
+requirements:
+  - id: v5.0.0-6.2.1
+    status: pass               # pass | fail | n/a (there is no "accepted risk" status)
+    evidence:
+      - test: "ASVS-6.2.1"     # tag carried by at least one test title
+      - code: modules/core-identity/src/service/password.ts
+    note: Password length 8–255 enforced in the Zod schema and the service.
+  - id: v5.0.0-6.x.y
+    status: n/a
+    reason: Scorpion has no … (explain why the requirement cannot apply)
+```
+
+**Method (single maintainer).** Without a second person, the main weakness of a self-assessment is that the author checks their own assumptions. Three things reduce this:
+
+1. Evidence is mechanical where possible: a tagged test that runs in CI beats a code pointer, and a code pointer beats prose.
+2. A **second pass** on a different day, at least 7 days after the first pass, re-checks every `pass` and `n/a` against the evidence alone, and is recorded in `second_pass`. Tool-assisted review (for example an AI code review against the chapter) can feed the second pass. It is noted in the report, and it does not count as a peer review.
+3. Everything is public, so anyone can challenge an entry through `SECURITY.md` or an issue.
+
+Rules the tool enforces (`pnpm security:asvs`, which runs in CI on every pull request after the test jobs):
+
+1. Every L1 and L2 requirement of the chapter in the pinned source file appears exactly once. There are no unknown ids.
+2. `pass` needs at least one piece of evidence. A `test:` tag must match at least one test that **passed** in this CI run (the tool reads the Vitest and Playwright JUnit reports). `code:` and `doc:` paths must exist. A requirement that cannot be tested may pass on `code:` or `doc:` evidence only.
+3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue.
+4. `second_pass.on` is at least 7 days after `assessed_on`. For `assessment_type: peer` or `external`, a `reviewer` is set and differs from the assessor.
+5. The chapter status is **derived**, never stored:
+
+   | Derived status | Condition | Badge |
+   |---|---|---|
+   | `in progress` | Any `fail` entry, or rules 1–4 not met yet | yellow |
+   | `self-assessed` | Zero `fail`, rules 1–4 hold, type `self` | green |
+   | `peer-reviewed` | Same, with type `peer` | green |
+   | `externally verified` | Same, with type `external` | green |
+   | `stale` | A scoped path changed after `assessed_commit` on a release branch (§8.4) | grey |
+
+6. `--write` regenerates each chapter's `.md` report and the README badge block (§8.5). CI fails if either differs from what the tool would generate, so a hand-edited badge or report cannot be merged.
+
+Every generated report starts with this header:
+
+> Self-assessment against OWASP ASVS 5.0.0, Level 2, chapter V6 Authentication, at commit `…` on … , second pass on … . Assessor: … . This is not a certification, and no independent party has reviewed it. OWASP does not certify projects.
+
+Then come the summary counts (pass / n/a / fail), and then one table row per requirement with its status, evidence links and note.
+
+**Test tagging.** Tests that prove a requirement carry the tag in their title, for example `it('rejects a reused OIDC state [ASVS-10.x.y]', …)`. One test may carry several tags. The defect regression tests (`defect-NN.*`) should carry the ASVS tags they cover.
+
+### 8.3 OpenSSF Best Practices and Scorecard
+
+**Best Practices (bestpractices.dev).** Register the project and answer the passing criteria. For each answer, link to a file in the repo (CONTRIBUTING.md, SECURITY.md, CI config, test docs) rather than writing free text. `docs/security/README.md` keeps a short mapping from criterion to evidence, so the answers can be re-checked at G4. Silver and gold need a second maintainer (and two-person review for gold), so they go to the backlog.
+
+**Scorecard.** Add `.github/workflows/scorecard.yml` using `ossf/scorecard-action` (pinned by SHA). It runs on pushes to `main`, weekly, and on branch-protection changes, with `publish_results: true`, and it uploads SARIF to code scanning. Repository settings and files needed for the target score:
+
+| Scorecard check | What to do |
+|---|---|
+| Security-Policy | `SECURITY.md` |
+| Branch-Protection | Protect `main` and `dev`: pull requests only, required status checks, no force-push, admins included. Required approvals stay at 0 until a second maintainer exists |
+| Token-Permissions | Top-level `permissions: contents: read` in every workflow. Widen per job only where needed |
+| Pinned-Dependencies | Actions pinned by full SHA, Docker base images pinned by digest, `pnpm i --frozen-lockfile` in CI |
+| Dependency-Update-Tool | Renovate or Dependabot (npm, GitHub Actions, Docker), grouped weekly |
+| SAST | CodeQL workflow (JavaScript/TypeScript) on pull requests and `main` |
+| Dangerous-Workflow | No `pull_request_target` that checks out pull-request code. No untrusted input inside `run:` expressions |
+| Vulnerabilities | No open OSV advisories against the lockfile. `pnpm audit` in CI. Dependabot alerts on |
+| Signed-Releases (G4) | Sign images with cosign, and attach SLSA provenance and signatures to GitHub releases |
+| Fuzzing (optional) | `fast-check` property tests for the pure calculation library (M11) and the parsers (M10). Check Scorecard's current detection rules first |
+| License, CI-Tests, Maintained, Binary-Artifacts | Covered by the existing repo setup: LICENSE file, CI on every pull request, regular commits, no committed binaries |
+| CII-Best-Practices | Picked up automatically from the bestpractices.dev badge |
+
+Also turn on GitHub secret scanning with push protection, Dependabot alerts and private vulnerability reporting.
+
+**Single-maintainer note.** Scorecard's Code-Review and Contributors checks will stay low while one person writes and merges everything. That is why the targets above are lower than usual. They go up to ≥ 7.5 when a second maintainer joins.
+
+### 8.4 Keeping the claim current
+
+- **Security-scoped paths:** `modules/core-identity/**`, `modules/core-authz/**`, `apps/server/src/pipeline/**`, `packages/contracts/src/create-route.ts` and `docs/security/**`. Each path is mapped to its ASVS chapters in `tools/asvs-report/scope.ts`. List them in `.github/CODEOWNERS` too, so a future second maintainer is requested automatically.
+- **Pull requests:** if a scoped path changes and the matching chapter YAML does not, the `asvs-impact` CI job fails unless the PR has the `asvs-no-impact` label and a reason (rule 10).
+- **Releases:** on `release/*` branches, any chapter whose scoped paths changed after its `assessed_commit` is derived as `stale`, and CI fails. Re-assess (or confirm and bump `assessed_commit` with a new second pass) before the release.
+- **History:** each re-assessment adds a line to the history table in `docs/security/README.md`: date, commit, chapters, type, assessor, reviewer.
+- **Upgrade path:** when a second maintainer or an external reviewer checks a chapter, set `assessment_type` to `peer` or `external` and fill in `reviewer`. The badge then derives `peer-reviewed` or `externally verified`, with no other change.
+
+### 8.5 README badge row
+
+The README carries a generated block between markers. Only the tool writes the ASVS badges:
+
+```markdown
+<!-- security-badges:start -->
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/<BP_ID>/badge)](https://www.bestpractices.dev/projects/<BP_ID>)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/<ORG>/<REPO>/badge)](https://scorecard.dev/viewer/?uri=github.com/<ORG>/<REPO>)
+[![ASVS 5.0 L2 V6 Authentication](https://img.shields.io/badge/ASVS_5.0_L2_V6_Authentication-self--assessed-brightgreen)](docs/security/asvs/v6-authentication.md)
+[![ASVS 5.0 L2 V7 Session Management](https://img.shields.io/badge/ASVS_5.0_L2_V7_Session_Management-self--assessed-brightgreen)](docs/security/asvs/v7-session-management.md)
+[![ASVS 5.0 L2 V8 Authorization](https://img.shields.io/badge/ASVS_5.0_L2_V8_Authorization-self--assessed-brightgreen)](docs/security/asvs/v8-authorization.md)
+[![ASVS 5.0 L2 V10 OIDC client](https://img.shields.io/badge/ASVS_5.0_L2_V10_OIDC_client-self--assessed-brightgreen)](docs/security/asvs/v10-oauth-oidc.md)
+<!-- security-badges:end -->
+```
+
+In shields.io badge paths, `_` is a space and `--` is a literal dash. Before G1 the badges show `in progress` (yellow).
+
+### 8.6 When each piece lands
+
+| When | Deliverable |
+|---|---|
+| During M4 (docs-only PR into `dev`) | This section, rule 10 and the CLAUDE.md section. CI enforcement of rule 10 starts with M4a |
+| M4a | See the M4a milestone: repo hardening, Scorecard, Best Practices registration, ASVS tool and all four chapter skeletons, retro-tagging of the M2/M3 tests |
+| M5 | New work in scoped paths (login screens, CSRF in forms, cookie handling under `BASE_PATH`) updates the chapter files as it lands |
+| G1 | First pass of all four chapters, second pass ≥ 7 days later. Badges derive `self-assessed`. Best Practices passing |
+| M18 | Signed images and SLSA provenance |
+| G4 | Re-confirmation against `v1.0.0` |
+
+---
+
+## 9. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
@@ -328,6 +519,8 @@ These run alongside the milestones and are not tied to a single one.
 
 ---
 
-## 9. After G4 (backlog, not planned)
+## 10. After G4 (backlog, not planned)
 
 SAML/LDAP auth providers, Matomo/Plausible/GitHub pull adapters, Crossref and Europe PMC citation sources, Jira and GitHub onboarding post-processors, forecasts and targets in analytics, scheduled report emails, a Sigma graph renderer, v2 of the public API.
+
+Peer or external review of the ASVS chapters; extend the ASVS L2 scope to further chapters (V1 encoding, V2 validation, V5 files, V13 configuration, V16 logging); OpenSSF Best Practices silver/gold once a second maintainer exists.

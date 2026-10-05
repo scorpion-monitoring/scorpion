@@ -47,6 +47,7 @@ export function createAuthenticator(deps: {
         roles: [], // roles are data owned by core.authz (M3)
         via: 'token',
         scopes: verified.scopes,
+        tokenId: verified.tokenId,
       };
     }
 

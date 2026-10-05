@@ -1,6 +1,6 @@
 # ADR-0012: Mail tokens, mail ordering and the Mailer port
 
-- Status: Accepted
+- Status: Accepted. The parts about the `Mailer` port and "mail after the commit" are replaced by [ADR-0022](0022-templates-locales-and-register-without-revealing.md) and [ADR-0019](0019-module-graph-and-notifications-port.md) (M4 sprint 2); tokens, single use, the one refusal, the budgets and the fragment link stand.
 - Date: 2026-10-02
 
 ## Context

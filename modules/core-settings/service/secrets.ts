@@ -129,7 +129,11 @@ export function createSecretsService(
           set: { ...sealed, updatedBy, updatedAt: now },
         });
       // The name only: the value, the key and its id stay out of the event.
-      await ctx.events.emit('settings.secret.changed@1', { name, removed: false });
+      await ctx.events.emit('settings.secret.changed@1', {
+        name,
+        removed: false,
+        actorId: updatedBy,
+      });
     });
     return { name, set: true, updatedAt: now };
   }
@@ -162,7 +166,11 @@ export function createSecretsService(
           .where(eq(secret.name, name))
           .returning({ id: secret.id });
         if (removed.length === 0) throw new NotFound(`There is no secret "${name}".`);
-        await ctx.events.emit('settings.secret.changed@1', { name, removed: true });
+        await ctx.events.emit('settings.secret.changed@1', {
+          name,
+          removed: true,
+          actorId: actor.kind === 'user' ? actor.userId : null,
+        });
       });
     },
 

@@ -68,6 +68,9 @@ importers:
       '@scorpion/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@scorpion/core-audit':
+        specifier: workspace:*
+        version: link:../../modules/core-audit
       '@scorpion/core-authz':
         specifier: workspace:*
         version: link:../../modules/core-authz
@@ -77,6 +80,9 @@ importers:
       '@scorpion/core-identity':
         specifier: workspace:*
         version: link:../../modules/core-identity
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../../modules/core-notifications
       '@scorpion/core-settings':
         specifier: workspace:*
         version: link:../../modules/core-settings
@@ -138,6 +144,49 @@ importers:
       vitest:
         specifier: ^5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.0)(jsdom@30.1.1)(vite@8.3.1(@types/node@24.19.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  modules/core-audit:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-authz':
+        specifier: workspace:*
+        version: link:../core-authz
+      '@scorpion/core-identity':
+        specifier: workspace:*
+        version: link:../core-identity
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.0)
+      hono:
+        specifier: ^4.13.12
+        version: 4.13.12
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@scorpion/core-blob':
+        specifier: workspace:*
+        version: link:../core-blob
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../core-notifications
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
 
   modules/core-authz:
     dependencies:
@@ -203,6 +252,9 @@ importers:
       '@scorpion/core-blob':
         specifier: workspace:*
         version: link:../core-blob
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../core-notifications
       '@scorpion/core-settings':
         specifier: workspace:*
         version: link:../core-settings
@@ -221,9 +273,37 @@ importers:
       jose:
         specifier: ^6.2.12
         version: 6.2.12
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
+  modules/core-notifications:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-authz':
+        specifier: workspace:*
+        version: link:../core-authz
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.0)
       nodemailer:
         specifier: ^10.0.13
         version: 10.0.13
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -234,6 +314,9 @@ importers:
       '@types/nodemailer':
         specifier: ^8.0.2
         version: 8.0.2
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
 
   modules/core-settings:
     dependencies:

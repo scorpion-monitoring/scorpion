@@ -99,6 +99,46 @@ describe('scheduled jobs', () => {
   });
 });
 
+describe('the result of a job', () => {
+  it('writes what the handler returns to the job-run history: counts and flags, short strings, nothing nested', async () => {
+    const kernel = await kernels.inline(
+      [
+        jobModule([
+          {
+            name: 'counts',
+            handler: () =>
+              Promise.resolve({
+                deleted: 12,
+                dryRun: false,
+                note: 'x'.repeat(500),
+                nested: { no: 1 },
+                list: [1],
+              } as never),
+          },
+          { name: 'nothing' },
+        ]),
+      ],
+      {},
+      quick,
+    );
+    await kernel.start();
+    await kernel.startWorkers();
+    await enqueue(kernel)('counts');
+    await enqueue(kernel)('nothing');
+    await vi.waitFor(
+      async () => {
+        const runs = await listJobRuns(kernel.db, { status: 'succeeded' });
+        expect(runs.map((r) => r.jobName).sort()).toEqual(['worker.counts', 'worker.nothing']);
+      },
+      { timeout: 20_000, interval: 250 },
+    );
+    const [counts] = await listJobRuns(kernel.db, { jobName: 'worker.counts' });
+    expect(counts!.result).toEqual({ deleted: 12, dryRun: false, note: 'x'.repeat(200) });
+    const [nothing] = await listJobRuns(kernel.db, { jobName: 'worker.nothing' });
+    expect(nothing!.result).toBeNull();
+  }, 30_000);
+});
+
 describe('ctx.jobs.enqueue', () => {
   it('runs a job with validated data and records the run', async () => {
     const kernel = await kernels.fixture('ab', quick);

@@ -1,0 +1,163 @@
+// The module as the kernel sees it: permissions, registries, jobs, events, tables and its place in
+// the module graph (ADR 0019).
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import manifest, { createNotificationsModule } from './module.ts';
+import packageJson from './package.json' with { type: 'json' };
+import { useNotifications } from './test/harness.ts';
+
+const harness = useNotifications();
+const dir = fileURLToPath(new URL('.', import.meta.url));
+
+function sources(path = dir, found: string[] = []): string[] {
+  for (const name of readdirSync(path)) {
+    if (['node_modules', 'dist', 'migrations'].includes(name)) continue;
+    const full = join(path, name);
+    if (statSync(full).isDirectory()) sources(full, found);
+    else if (/\.ts$/.test(name)) found.push(full);
+  }
+  return found;
+}
+
+describe('the manifest', () => {
+  it('has the id, the table prefix and the permissions of sprints 1 and 3', () => {
+    expect(manifest.id).toBe('core.notifications');
+    expect(manifest.tablePrefix).toBe('notify_');
+    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+      'core.notifications.deliveries.manage',
+      'core.notifications.deliveries.read',
+      'core.notifications.inbox.read',
+      'core.notifications.inbox.write',
+      'core.notifications.preference.read',
+      'core.notifications.status.read',
+      'core.notifications.test',
+    ]);
+  });
+
+  it('declares the registries notify.transport, notify.template and notify.recipientAddress and the command seed-dev-mail', () => {
+    expect(Object.keys(manifest.registries ?? {}).sort()).toEqual([
+      'notify.recipientAddress',
+      'notify.template',
+      'notify.transport',
+    ]);
+    expect(manifest.commands?.map((command) => command.name)).toEqual(['seed-dev-mail']);
+  });
+
+  it('declares the delivery job with a sweep every minute and the daily retention job', () => {
+    expect(manifest.jobs?.map((job) => [job.name, job.schedule])).toEqual([
+      ['core.notifications.deliver', '* * * * *'],
+      ['core.notifications.retention', '17 3 * * *'],
+    ]);
+  });
+
+  it('emits the three delivery events, and listens to the two settings events and system.ready', () => {
+    expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'notifications.delivery.dead@1',
+      'notifications.delivery.requeued@1',
+      'notifications.settings.tested@1',
+    ]);
+    expect(Object.keys(manifest.events?.on ?? {}).sort()).toEqual([
+      'settings.changed@1',
+      'settings.secret.changed@1',
+      'system.ready',
+    ]);
+  });
+
+  it('creates only tables with the prefix notify_, with no foreign key', () => {
+    const migrations = join(dir, 'migrations');
+    const sql = readdirSync(migrations)
+      .filter((file) => file.endsWith('.sql'))
+      .map((file) => readFileSync(join(migrations, file), 'utf8'))
+      .join('\n');
+    expect([...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((match) => match[1])).toEqual([
+      'notify_delivery',
+      'notify_inbox_item',
+    ]);
+    expect(sql).not.toMatch(/REFERENCES/i);
+  });
+
+  it('is user-agnostic: it depends on authz and settings only and imports nothing from identity', () => {
+    const dependencies = Object.keys(packageJson.dependencies).filter((name) =>
+      name.startsWith('@scorpion/'),
+    );
+    expect(dependencies.sort()).toEqual([
+      '@scorpion/contracts',
+      '@scorpion/core-authz',
+      '@scorpion/core-settings',
+      '@scorpion/kernel',
+    ]);
+    for (const file of sources().filter((path) => !/\.test\.ts$/.test(path))) {
+      expect(readFileSync(file, 'utf8'), relative(dir, file)).not.toMatch(
+        /from\s+'[^']*core-identity/,
+      );
+    }
+  });
+
+  it('does not read the old SMTP variable (M4 decision 7)', () => {
+    // Built from pieces so that a search for the name finds documentation only.
+    const variable = ['SMTP', 'URL'].join('_');
+    for (const file of sources().filter((path) => !/\.test\.ts$/.test(path))) {
+      expect(readFileSync(file, 'utf8'), relative(dir, file)).not.toContain(variable);
+    }
+  });
+
+  it('adds no runtime dependency beyond what the repository already uses', () => {
+    expect(
+      Object.keys(packageJson.dependencies)
+        .filter((name) => !name.startsWith('@scorpion/'))
+        .sort(),
+    ).toEqual(['drizzle-orm', 'nodemailer', 'pg', 'zod']);
+  });
+});
+
+describe('in a kernel', () => {
+  it('registers the transports smtp, webhook and none', async () => {
+    const t = await harness.start();
+    const entries = t.kernel.composition.registries.get('notify.transport')!.entries;
+    expect(entries.map((entry) => (entry.value as { id: string }).id).sort()).toEqual([
+      'none',
+      'smtp',
+      'webhook',
+    ]);
+  });
+
+  it('registers the shipped templates, the identity templates are the identity module’s', async () => {
+    const t = await harness.start();
+    const keys = t.kernel.composition.registries
+      .get('notify.template')!
+      .entries.map((entry) => (entry.value as { key: string }).key)
+      .sort();
+    expect(keys).toEqual([
+      'fix.hello',
+      'fix.mandatory',
+      'fix.partial',
+      'fix.secret-link',
+      'kpi.reporting-reminder',
+      'notifications.test',
+      'onboarding.application-decided',
+      'onboarding.application-submitted',
+      'registry.membership-decided',
+      'registry.membership-requested',
+    ]);
+  });
+
+  it('registers the user preference notifications.locale, limited to the shipped languages', async () => {
+    const t = await harness.start();
+    const entry = t.kernel.composition.registries
+      .get('settings.userPreference')!
+      .entries.map(
+        (e) => e.value as { key: string; schema: { safeParse(v: unknown): { success: boolean } } },
+      )
+      .find((e) => e.key === 'notifications.locale')!;
+    expect(entry.schema.safeParse('de').success).toBe(true);
+    expect(entry.schema.safeParse('en').success).toBe(true);
+    expect(entry.schema.safeParse('fr').success).toBe(false);
+    expect(entry.schema.safeParse('').success).toBe(false);
+  });
+
+  it('is a different manifest per createNotificationsModule() call, so tests can tune it', () => {
+    expect(createNotificationsModule()).not.toBe(createNotificationsModule());
+  });
+});

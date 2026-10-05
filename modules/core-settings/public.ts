@@ -65,6 +65,22 @@ export interface SettingsService {
   getBranding(options?: { fresh?: boolean }): Promise<Branding>;
 
   /**
+   * The stored value of one user preference (`settings.userPreference`) of `userId`, validated by the
+   * key's schema, or `undefined` when none is stored, the key is not registered or the stored value
+   * no longer fits. **For trusted code only**, like `getSecret`: it checks no permission, and no
+   * route calls it. Used to pick the language of a mail for a user who is not the caller.
+   */
+  getUserPreference(userId: string, key: string): Promise<unknown>;
+
+  /**
+   * Stores `values` as the settings of `moduleId` **only when nothing is stored for the module**; what
+   * an administrator saved is never overwritten (`'kept'`). For trusted code with no human caller,
+   * such as a development seed step; checks no permission and no route calls it. `Invalid` when the
+   * module's schema refuses the values.
+   */
+  seedSettings(moduleId: string, values: unknown): Promise<'seeded' | 'kept'>;
+
+  /**
    * The terms of a vocabulary, in order (`sortOrder`, then key). Active terms only, unless
    * `includeInactive`. `NotFound` for a vocabulary no loaded module declares.
    */

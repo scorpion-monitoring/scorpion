@@ -14,16 +14,16 @@ no settings (ADR-0014).
 
 ## Manifest
 
-| Part           | Value                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| id             | `core.authz`                                                                                       |
-| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                           |
-| dependencies   | none (ADR-0014)                                                                                    |
-| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)) |
-| jobs, CLI      | none                                                                                               |
-| events         | emits `authz.role.assigned@1` and `authz.role.removed@1`, see "Events"                             |
-| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                              |
-| public service | `ctx.deps['core.authz']`, see "Public API"                                                         |
+| Part           | Value                                                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| id             | `core.authz`                                                                                               |
+| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                                   |
+| dependencies   | none (ADR-0014)                                                                                            |
+| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md))         |
+| jobs, CLI      | none                                                                                                       |
+| events         | emits `authz.role.assigned@1`, `authz.role.removed@1` and `authz.role.permissions.changed@1`, see "Events" |
+| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                                      |
+| public service | `ctx.deps['core.authz']`, see "Public API"                                                                 |
 
 ### Permissions
 
@@ -111,22 +111,26 @@ their own route permission (`core.identity.role.*`) and call these methods, so a
 (ADR-0015). `assignRole` and `removeRole`, called inside the caller's `ctx.db.tx()`, join that transaction (a
 savepoint): this is how an approval gives its role atomically.
 
-Three methods are for **trusted code with no human caller** and check no permission. Only a module that may hand out
+Four methods are for **trusted code with no human caller** and check no permission. Only a module that may hand out
 roles uses them; the trust boundary is the profile's module list, as for contributing to `kernel.authorizer`
 (ADR-0005), and no `Actor` of kind `system` exists:
 
-| Method                                        | Used by                                                               | Notes                                                                                                                                                                                 |
-| --------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `assignRoleAsSystem(tx, { userId, roleKey })` | `create-admin`, the first-run token, an account activated by a policy | `assigned_by` null; emits `authz.role.assigned@1` with actor `null` in the caller's transaction (`tx` must be the one of `ctx.db.tx()`). Never removes. 404 unknown role, 422 bad id. |
-| `removeAllAssignments(tx, userId)`            | the purge of an account (identity's cleanup job)                      | Deletes every assignment of the user in the caller's transaction, no event, the last-Admin rule is not applied (a purged account is a rejected one). Returns how many.                |
-| `hasHolders(roleKey, tx?)`                    | "no administrator yet" (bootstrap)                                    | Whether any user holds the role; names nobody.                                                                                                                                        |
+| Method                                         | Used by                                                               | Notes                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `assignRoleAsSystem(tx, { userId, roleKey })`  | `create-admin`, the first-run token, an account activated by a policy | `assigned_by` null; emits `authz.role.assigned@1` with actor `null` in the caller's transaction (`tx` must be the one of `ctx.db.tx()`). Never removes. 404 unknown role, 422 bad id.                                                                                                                                         |
+| `removeAllAssignments(tx, userId)`             | the purge of an account (identity's cleanup job)                      | Deletes every assignment of the user in the caller's transaction, no event, the last-Admin rule is not applied (a purged account is a rejected one). Returns how many.                                                                                                                                                        |
+| `listHoldersAsSystem(tx, roleKey, { limit? })` | "all administrators" (identity's registration mail to every admin)    | The ids of the users who hold the role, in id order, at most `limit` (default and maximum 1000); an unknown role has none. Reads in the caller's transaction. A test proves that core.authz registers no route and that no `routes*.ts` file of any module names this method, `assignRoleAsSystem` or `removeAllAssignments`. |
+| `hasHolders(roleKey, tx?)`                     | "no administrator yet" (bootstrap)                                    | Whether any user holds the role; names nobody.                                                                                                                                                                                                                                                                                |
 
 ### Events
 
 `authz.role.assigned@1` and `authz.role.removed@1`, emitted inside the transaction of the change:
 `{ userId, roleKey, actorId }`, where `actorId` is the caller or `null` for the system. Nothing else (no permission list,
-no secret). A repeat of a change (the role was held already, or not) emits nothing. There is no subscriber yet; M4's audit
-trail subscribes. `setRolePermissions` emits no event in M3.
+no secret). A repeat of a change (the role was held already, or not) emits nothing.
+
+`authz.role.permissions.changed@1`, emitted by `setRolePermissions` in the transaction that replaces the set:
+`{ roleKey, added, removed, actorId }`, where `added` and `removed` are sorted permission strings (never user data) and
+`actorId` is the caller. Saving the set a role already has emits nothing. `core.audit` subscribes to all three (ADR-0021).
 
 ## Tables
 

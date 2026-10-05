@@ -218,7 +218,12 @@ describe('creating a term', () => {
       'BETA',
     ]);
     const [event] = await changes(kernel.pool);
-    expect(event).toEqual({ vocabulary: 'stage', key: 'BETA', change: 'created' });
+    expect(event).toEqual({
+      vocabulary: 'stage',
+      key: 'BETA',
+      change: 'created',
+      actorId: admin.kind === 'user' ? admin.userId : null,
+    });
     expect(JSON.stringify(event)).not.toContain('Beta-Phase');
   });
 

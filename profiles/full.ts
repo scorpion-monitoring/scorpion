@@ -11,5 +11,12 @@ import { defineProfile } from '@scorpion/kernel';
 //   Operations: backup, public-api
 export default defineProfile({
   name: 'full',
-  modules: ['core.authz', 'core.settings', 'core.blob', 'core.identity'],
+  modules: [
+    'core.authz',
+    'core.settings',
+    'core.blob',
+    'core.notifications',
+    'core.identity',
+    'core.audit',
+  ],
 });

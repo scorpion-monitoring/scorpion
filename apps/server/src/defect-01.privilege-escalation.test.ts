@@ -9,19 +9,13 @@
 //  2. The scenarios: what a plain User, an anonymous caller, a user without roles and a token
 //     with a broader scope than its owner's permissions can and cannot do.
 import { randomUUID } from 'node:crypto';
-import { makeRole } from '@scorpion/testing';
+import { makeInboxItem, makeRole } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import {
-  ALL_USER_SCOPES,
-  createMemoryMailer,
-  PASSWORD,
-  useIdentityApp,
-  type Reply,
-} from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, PASSWORD, useIdentityApp, type Reply } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
-const start = () => app.start({ tokenCacheTtlMs: 0, mailer: createMemoryMailer() });
+const start = () => app.start({ tokenCacheTtlMs: 0 });
 type Started = Awaited<ReturnType<typeof start>>;
 
 interface Sample {
@@ -38,7 +32,15 @@ interface Sample {
  */
 type Kind = 'admin' | 'self';
 const FOREIGN = randomUUID();
-const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sample }> = {
+const SAMPLES: Record<
+  string,
+  {
+    kind: Kind;
+    /** A self-service route on one of the caller's own items: the "plain User can use it" case needs the id of an item of theirs. */
+    own?: boolean;
+    sample: (ids: { id: string }) => Sample;
+  }
+> = {
   'POST /auth/logout': { kind: 'self', sample: () => ({ method: 'POST', path: '/auth/logout' }) },
   'POST /auth/logout-all': {
     kind: 'self',
@@ -178,6 +180,69 @@ const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sam
     kind: 'self',
     sample: () => ({ method: 'DELETE', path: '/account/avatar' }),
   },
+  // core.notifications (M4 sprint 3). The inbox and the category list are every user's own; the status,
+  // delivery list, requeue and test mail are Admin's.
+  'GET /notifications/inbox': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/notifications/inbox' }),
+  },
+  'GET /notifications/inbox/unread-count': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/notifications/inbox/unread-count' }),
+  },
+  'POST /notifications/inbox/read-all': {
+    kind: 'self',
+    sample: () => ({ method: 'POST', path: '/notifications/inbox/read-all' }),
+  },
+  'POST /notifications/inbox/{id}/read': {
+    kind: 'self',
+    own: true,
+    sample: ({ id }) => ({ method: 'POST', path: `/notifications/inbox/${id}/read` }),
+  },
+  'DELETE /notifications/inbox/{id}': {
+    kind: 'self',
+    own: true,
+    sample: ({ id }) => ({ method: 'DELETE', path: `/notifications/inbox/${id}` }),
+  },
+  'GET /notifications/preferences/categories': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/notifications/preferences/categories' }),
+  },
+  'GET /notifications/status': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/notifications/status' }),
+  },
+  'GET /notifications/deliveries': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/notifications/deliveries' }),
+  },
+  'POST /notifications/deliveries/{id}/requeue': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/notifications/deliveries/${id}/requeue` }),
+  },
+  'POST /notifications/test': {
+    kind: 'admin',
+    sample: () => ({ method: 'POST', path: '/notifications/test' }),
+  },
+  // core.audit (M4 sprint 4). The trail and the kernel's maintenance surface are Admin's: reading the
+  // log needs `core.audit.read` or `core.audit.export` and nothing else.
+  'GET /audit': { kind: 'admin', sample: () => ({ method: 'GET', path: '/audit' }) },
+  'GET /audit/export.csv': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/audit/export.csv' }),
+  },
+  'GET /audit/{id}': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/audit/${id}` }),
+  },
+  'GET /system/outbox': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/system/outbox' }),
+  },
+  'POST /system/outbox/deliveries/{id}/requeue': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/system/outbox/deliveries/${id}/requeue` }),
+  },
   'GET /preferences': { kind: 'self', sample: () => ({ method: 'GET', path: '/preferences' }) },
   'PUT /preferences/{key}': {
     kind: 'self',
@@ -216,8 +281,9 @@ const register = async (s: Started, username: string) => {
   const reply = await s.post('/auth/register', {
     body: { username, email: `${username}@example.org`, password: PASSWORD },
   });
-  expect(reply.status).toBe(201);
-  return (reply.body as { user: { id: string } }).user.id;
+  // 202 `{ accepted: true }` for every well-formed request (register without revealing): the id comes from the service.
+  expect(reply.status).toBe(202);
+  return (await s.identity.users.findByUsername(username))!.id;
 };
 const problem = (reply: Reply) => reply.res.headers.get('content-type') ?? '';
 
@@ -298,10 +364,12 @@ describe('defect 1: the route table', () => {
   it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
     const s = await start();
     let n = 0;
-    for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
+    for (const [key, { kind, own, sample }] of Object.entries(SAMPLES)) {
       if (kind !== 'self') continue;
       const who = await s.signedIn(`selfservice${n++}`);
-      const reply = await send(s, sample({ id: FOREIGN }), session(who));
+      // An item id is the caller's own, or the answer is 403 by design (see notification-routes.test.ts).
+      const id = own ? (await makeInboxItem(s.kernel.pool, { userId: who.user.id })).id : FOREIGN;
+      const reply = await send(s, sample({ id }), session(who));
       expect([401, 403], key).not.toContain(reply.status);
     }
   });
@@ -324,6 +392,14 @@ describe('defect 1: the route table', () => {
       'core.settings.secret.write',
       'core.settings.vocabulary.write',
       'core.blob.manage',
+      'core.notifications.status.read',
+      'core.notifications.deliveries.read',
+      'core.notifications.deliveries.manage',
+      'core.notifications.test',
+      'core.audit.read',
+      'core.audit.export',
+      'core.audit.system.read',
+      'core.audit.system.manage',
     ];
     // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
     const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 10)], permissions.slice(10)];
@@ -735,5 +811,70 @@ describe('defect 1: settings, secrets and preferences', () => {
       '/preferences/{key}',
     ]);
     expect((await s.get('/preferences', session(admin))).status).toBe(200);
+  });
+});
+
+describe('defect 1: log reads', () => {
+  const READS = [
+    { method: 'GET', path: '/audit' },
+    { method: 'GET', path: '/audit/export.csv' },
+    { method: 'GET', path: `/audit/${FOREIGN}` },
+    { method: 'GET', path: '/system/outbox' },
+  ];
+
+  it('keeps the trail from a plain User, by session and by token, and from a token scoped to it whose owner lacks the permission', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const plain = await s.signedIn('plain');
+    // The trail has something in it, so a 200 would be a leak and not an empty list.
+    await s.call('POST', `/users/${FOREIGN}/approve`, { ...session(plain), body: {} });
+    const made = await s.post('/tokens', {
+      ...session(plain),
+      body: {
+        name: 'wishful',
+        scopes: ['core.audit.read', 'core.audit.export', 'core.audit.system.read'],
+      },
+    });
+    expect(made.status).toBe(201);
+    const { token } = made.body as { token: string };
+    for (const read of READS) {
+      for (const auth of [{ cookie: plain.cookie, csrf: plain.csrf }, { headers: bearer(token) }]) {
+        const reply = await s.call(read.method, read.path, auth);
+        expect(reply.status, `${read.path}`).toBe(403);
+        expect(reply.bytes.toString('utf8')).not.toContain('api.POST');
+        expect(problem(reply)).toContain('application/problem+json');
+      }
+    }
+    // The administrator reads the same trail, which shows the plain User's try as denied.
+    const listed = await s.get('/audit?outcome=denied', session(root));
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(listed.body)).toContain(plain.user.id);
+  });
+
+  it('lets an administrator’s token read only what its scopes name', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const narrow = await s.post('/tokens', {
+      ...session(root),
+      body: { name: 'narrow', scopes: ['core.audit.read'] },
+    });
+    const { token } = narrow.body as { token: string };
+    expect((await s.get('/audit', { headers: bearer(token) })).status).toBe(200);
+    expect((await s.get('/audit/export.csv', { headers: bearer(token) })).status).toBe(403);
+    expect((await s.get('/system/outbox', { headers: bearer(token) })).status).toBe(403);
+  });
+
+  it('does not let the log be changed through the API: there is no route that writes or deletes it', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    const routes = s.kernel.routes
+      .filter((entry) => entry.route.path.startsWith('/audit'))
+      .map((entry) => `${entry.route.method.toUpperCase()} ${entry.route.path}`)
+      .sort();
+    expect(routes).toEqual(['GET /audit', 'GET /audit/export.csv', 'GET /audit/{id}']);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect((await s.call(method, '/audit', session(root))).status, method).toBe(404);
+      expect((await s.call(method, `/audit/${FOREIGN}`, session(root))).status, method).toBe(404);
+    }
   });
 });

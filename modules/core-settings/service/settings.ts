@@ -53,6 +53,13 @@ export interface SettingsAdminService {
 export interface SettingsInternals extends SettingsAdminService {
   /** What the kernel's `ctx.settings` reads. */
   store: SettingsStore;
+  /**
+   * For trusted code with no human caller (a development seed step): stores `values` as the
+   * settings of `moduleId` **only when nothing is stored for it yet**. Never overwrites what an
+   * administrator saved. `Invalid` when the module's schema refuses the values, `NotFound` for a
+   * module with no settings. Emits `settings.changed@1` when it writes. Checks no permission.
+   */
+  seed(moduleId: string, values: unknown): Promise<'seeded' | 'kept'>;
   /** The stored JSON of one module, straight from the database (no cache, and the cache is not filled). */
   readFresh(moduleId: string): Promise<unknown>;
   /** Empties the cache of this process. */
@@ -168,6 +175,36 @@ export function createSettingsService(
       return z.toJSONSchema(schemaOf(moduleId), { io: 'input', unrepresentable: 'any' });
     },
 
+    async seed(moduleId, values) {
+      const schema = schemaOf(moduleId);
+      const parsed = schema.safeParse(values);
+      if (!isPlainObject(values) || !parsed.success) {
+        throw new Invalid(
+          'The settings are not valid.',
+          parsed.success
+            ? [{ in: 'body', path: 'values', message: 'Must be an object.' }]
+            : fieldProblems(parsed.error, 'values'),
+        );
+      }
+      const seeded = await ctx.db.tx(async (tx) => {
+        const inserted = await tx
+          .insert(setting)
+          .values({ moduleId, value: values, version: 1, updatedBy: null })
+          .onConflictDoNothing()
+          .returning({ moduleId: setting.moduleId });
+        if (inserted.length === 0) return false;
+        await ctx.events.emit('settings.changed@1', {
+          module: moduleId,
+          keys: Object.keys(values).sort(),
+          version: 1,
+          actorId: null,
+        });
+        return true;
+      });
+      if (seeded) invalidate(moduleId);
+      return seeded ? 'seeded' : 'kept';
+    },
+
     async update(actor, moduleId, input) {
       await deps.authz.require(actor, PERMISSION_SETTINGS_WRITE);
       const schema = schemaOf(moduleId);
@@ -210,7 +247,12 @@ export function createSettingsService(
           }
         }
         if (keys.length > 0) {
-          await ctx.events.emit('settings.changed@1', { module: moduleId, keys, version });
+          await ctx.events.emit('settings.changed@1', {
+            module: moduleId,
+            keys,
+            version,
+            actorId: updatedBy,
+          });
         }
         return { keys, version };
       });

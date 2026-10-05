@@ -859,3 +859,50 @@ describe('hasHolders', () => {
     });
   });
 });
+
+describe('listHoldersAsSystem', () => {
+  it('lists the holders of a role by id, with no actor, and an unknown role has none', async () => {
+    const { authz, kernel } = await start();
+    const first = { id: randomUUID() };
+    const second = { id: randomUUID() };
+    const reviewer = { id: randomUUID() };
+    await makeRoleAssignment(kernel.pool, first, 'admin');
+    await makeRoleAssignment(kernel.pool, second, 'admin');
+    await makeRoleAssignment(kernel.pool, reviewer, 'reviewer');
+    const admins = await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'admin'));
+    expect(admins).toEqual([first.id, second.id].sort());
+    expect(await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'reviewer'))).toEqual([
+      reviewer.id,
+    ]);
+    expect(await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'nope'))).toEqual([]);
+  });
+
+  it('caps the answer at the limit, and clamps a limit that is out of range', async () => {
+    const { authz, kernel } = await start();
+    for (let i = 0; i < 3; i += 1) {
+      await makeRoleAssignment(kernel.pool, { id: randomUUID() }, 'admin');
+    }
+    expect(
+      await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'admin', { limit: 2 })),
+    ).toHaveLength(2);
+    expect(
+      await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'admin', { limit: 0 })),
+    ).toHaveLength(1);
+    expect(
+      await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'admin', { limit: 99999 })),
+    ).toHaveLength(3);
+  });
+
+  it('reads inside the caller transaction, so an uncommitted assignment is seen and a rollback leaves none', async () => {
+    const { authz, kernel } = await start();
+    const target = randomUUID();
+    await expect(
+      kernel.db.tx(async (tx) => {
+        await authz.assignRoleAsSystem(tx, { userId: target, roleKey: 'admin' });
+        expect(await authz.listHoldersAsSystem(tx, 'admin')).toEqual([target]);
+        throw new Error('roll back');
+      }),
+    ).rejects.toThrow('roll back');
+    expect(await kernel.db.tx((tx) => authz.listHoldersAsSystem(tx, 'admin'))).toEqual([]);
+  });
+});

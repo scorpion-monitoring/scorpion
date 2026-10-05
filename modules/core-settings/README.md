@@ -9,17 +9,17 @@ Status: M3 sprint 4 (complete): settings, preferences, secrets, [vocabularies](#
 
 ## Manifest
 
-| Part           | Value                                                                                                                                                                                                                            |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id             | `core.settings`                                                                                                                                                                                                                  |
-| table prefix   | `settings_` (set in the manifest; ADR-0004)                                                                                                                                                                                      |
-| dependencies   | `core.authz` (and the `@scorpion/sanitize` package for legal texts)                                                                                                                                                              |
-| routes         | internal API: [settings](#settings), [secrets](#secrets), [preferences](#user-preferences) and [vocabularies](#vocabularies); public: `GET /branding`, `GET /legal/{page}` ([branding](#branding))                               |
-| jobs           | none                                                                                                                                                                                                                             |
-| CLI            | `set-secret <name>`, `rotate-secrets [--batch-size <n>]` ([below](#cli))                                                                                                                                                         |
-| events         | emits `settings.changed@1`, `settings.secret.changed@1`, `settings.preference.changed@1`, `settings.vocabulary.changed@1` ([below](#events))                                                                                     |
-| registries     | declares `settings.userPreference` and `vocabulary`; contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                      |
-| public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
+| Part           | Value                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id             | `core.settings`                                                                                                                                                                                                                                                                                                                                                          |
+| table prefix   | `settings_` (set in the manifest; ADR-0004)                                                                                                                                                                                                                                                                                                                              |
+| dependencies   | `core.authz` (and the `@scorpion/sanitize` package for legal texts)                                                                                                                                                                                                                                                                                                      |
+| routes         | internal API: [settings](#settings), [secrets](#secrets), [preferences](#user-preferences) and [vocabularies](#vocabularies); public: `GET /branding`, `GET /legal/{page}` ([branding](#branding))                                                                                                                                                                       |
+| jobs           | none                                                                                                                                                                                                                                                                                                                                                                     |
+| CLI            | `set-secret <name>`, `rotate-secrets [--batch-size <n>]` ([below](#cli))                                                                                                                                                                                                                                                                                                 |
+| events         | emits `settings.changed@1`, `settings.secret.changed@1`, `settings.preference.changed@1`, `settings.vocabulary.changed@1` ([below](#events))                                                                                                                                                                                                                             |
+| registries     | declares `settings.userPreference` and `vocabulary`; contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                                                                                                                                                              |
+| public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `getUserPreference(userId, key)` ([below](#user-preferences)), `seedSettings(moduleId, values)` ([below](#seeding-settings-from-code)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
 
 ### Permissions
 
@@ -76,7 +76,7 @@ read.
 
 ### Routes
 
-All are internal (`/api/internal`). Settings and secrets are Admin's; no response carries a secret value.
+All are internal (`/api/internal`). Settings and secrets are Admin's; no response carries a secret value. The writes have `audit` (ADR-0021): `PUT /settings/{module}` and the vocabulary writes store their body (settings never hold secrets), `PUT` and `DELETE /secrets/{name}` store no body at all, so the value never reaches the trail. The events they emit name the actor (`actorId`).
 
 | Route                                  | Permission                       | Does                                                                                                      |
 | -------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -193,6 +193,18 @@ contributes: {
 - A stored preference whose registration is gone (its module left the profile) is kept and not shown.
 - The event `settings.preference.changed@1` says which key of which user, never the value.
 
+### Reading and seeding from code
+
+Two more methods are for trusted code with no human caller (no permission check, no route; ADR-0015):
+
+- `getUserPreference(userId, key)` returns the stored value of one preference of another user, validated by the key's
+  registered schema, or `undefined` (nothing stored, key not registered, malformed id, or a stored value that no longer
+  fits). `core.notifications` uses it to mail a person in their language (`notifications.locale`).
+- `seedSettings(moduleId, values)` stores `values` as a module's settings **only when nothing is stored for it**
+  (`'seeded'`, else `'kept'`); it never overwrites what an administrator saved. The values are checked by the module's
+  schema (`Invalid`), and a write emits `settings.changed@1` like any other. `scorpion seed-dev-mail` of
+  core.notifications is the one user today.
+
 ## Vocabularies
 
 Stages, thematic categories, necessity levels, sender types and aggregates are data, not pg enums (CLAUDE.md rule 8; a
@@ -226,7 +238,7 @@ contributes: {
   except with `allowInactive` (keeping a value that already exists).
 - **From code:** `ctx.deps['core.settings'].listTerms('stage')` and `.validateTerm('stage', key, { path: 'stage' })`
   (`Invalid`, 422, naming the path). Neither checks a permission.
-- **Event** `settings.vocabulary.changed@1`: `{ vocabulary, key, change }`, never a label.
+- **Event** `settings.vocabulary.changed@1`: `{ vocabulary, key, change, actorId }`, never a label.
 
 ## Branding
 
@@ -254,14 +266,14 @@ The `branding` group of this module's settings, saved with `PUT /settings/core.s
 
 ## Events
 
-| Event                           | Payload                       | When                                                           |
-| ------------------------------- | ----------------------------- | -------------------------------------------------------------- |
-| `settings.changed@1`            | `{ module, keys, version }`   | A module's settings were saved. `keys`: names that changed     |
-| `settings.secret.changed@1`     | `{ name, removed }`           | A secret was set, replaced or removed (the CLI too)            |
-| `settings.preference.changed@1` | `{ userId, key, removed }`    | A user set or removed a preference                             |
-| `settings.vocabulary.changed@1` | `{ vocabulary, key, change }` | A term was created, updated, activated, deactivated or deleted |
+| Event                           | Payload                                | When                                                                                                     |
+| ------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `settings.changed@1`            | `{ module, keys, version, actorId }`   | A module's settings were saved. `keys`: names that changed. `actorId`: who saved them, `null` for a seed |
+| `settings.secret.changed@1`     | `{ name, removed, actorId }`           | A secret was set, replaced or removed (the CLI too: `actorId` is `null`)                                 |
+| `settings.preference.changed@1` | `{ userId, key, removed }`             | A user set or removed a preference                                                                       |
+| `settings.vocabulary.changed@1` | `{ vocabulary, key, change, actorId }` | A term was created, updated, activated, deactivated or deleted                                           |
 
-None carries a value, a secret, a key or a label. `core.blob` subscribes to `settings.changed@1` (for the logos); the rest nothing yet; the audit trail (M4) will.
+None carries a value, a secret, a key or a label. `actorId` was added in M4 sprint 4 (additive) for the audit trail. `core.blob` and `core.notifications` subscribe to `settings.changed@1`; `core.audit` records the changes, secret and vocabulary changes (not the preferences) ([ADR-0021](../../docs/adr/0021-audit-sink-redaction-and-append-only.md)).
 
 ## Tables
 

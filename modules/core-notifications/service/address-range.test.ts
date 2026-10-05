@@ -1,0 +1,85 @@
+import { describe, expect, it } from 'vitest';
+import { classifyAddress, type Classification } from './address-range.ts';
+
+describe('classifyAddress', () => {
+  const cases: [string, Classification][] = [
+    // IPv4: what must be refused
+    ['127.0.0.1', 'loopback'],
+    ['127.255.255.254', 'loopback'],
+    ['0.0.0.0', 'unspecified'],
+    ['10.0.0.1', 'private'],
+    ['10.255.255.255', 'private'],
+    ['172.16.0.1', 'private'],
+    ['172.31.255.255', 'private'],
+    ['192.168.1.10', 'private'],
+    ['169.254.169.254', 'metadata'],
+    ['169.254.0.1', 'link-local'],
+    ['100.64.0.1', 'shared'],
+    ['100.100.100.200', 'shared'],
+    ['192.0.0.192', 'reserved'],
+    ['198.18.0.1', 'reserved'],
+    ['192.0.2.1', 'documentation'],
+    ['224.0.0.1', 'multicast'],
+    ['239.255.255.255', 'multicast'],
+    ['240.0.0.1', 'reserved'],
+    ['255.255.255.255', 'reserved'],
+    // IPv4: the edges of the ranges are public
+    ['172.15.255.255', null],
+    ['172.32.0.0', null],
+    ['100.63.255.255', null],
+    ['100.128.0.0', null],
+    ['11.0.0.1', null],
+    ['192.169.0.1', null],
+    ['169.253.1.1', null],
+    ['8.8.8.8', null],
+    ['93.184.216.34', null],
+    // IPv6
+    ['::1', 'loopback'],
+    ['::', 'unspecified'],
+    ['fe80::1', 'link-local'],
+    ['febf::1', 'link-local'],
+    ['fc00::1', 'unique-local'],
+    ['fd12:3456:789a::1', 'unique-local'],
+    ['fd00:ec2::254', 'unique-local'],
+    ['ff02::1', 'multicast'],
+    ['2001:db8::1', 'documentation'],
+    ['2001::1', 'transition'],
+    ['100::1', 'reserved'],
+    ['::192.168.0.1', 'reserved'],
+    ['3fff::1', 'documentation'],
+    ['4000::1', 'reserved'],
+    ['2606:4700:4700::1111', null],
+    ['2a00:1450:4001:81b::200e', null],
+    // IPv4 inside IPv6
+    ['::ffff:127.0.0.1', 'loopback'],
+    ['::ffff:7f00:1', 'loopback'],
+    ['::ffff:169.254.169.254', 'metadata'],
+    ['::ffff:a9fe:a9fe', 'metadata'],
+    ['::ffff:10.1.2.3', 'private'],
+    ['0:0:0:0:0:ffff:192.168.0.1', 'private'],
+    ['::ffff:8.8.8.8', null],
+    ['64:ff9b::7f00:1', 'loopback'],
+    ['64:ff9b::a00:1', 'private'],
+    ['64:ff9b::808:808', null],
+    ['64:ff9b:1::1', 'transition'],
+    ['2002:7f00:1::', 'loopback'],
+    ['2002:a9fe:a9fe::1', 'metadata'],
+    ['2002:808:808::1', 'transition'],
+    // zone ids do not hide an address
+    ['fe80::1%eth0', 'link-local'],
+    // not an address at all
+    ['example.com', 'invalid'],
+    ['', 'invalid'],
+    ['1.2.3', 'invalid'],
+    ['0x7f.0.0.1', 'invalid'],
+    ['2130706433', 'invalid'],
+    ['01.2.3.4', 'invalid'],
+    ['256.1.1.1', 'invalid'],
+    ['[::1]', 'invalid'],
+    ['::1::2', 'invalid'],
+    ['1:2:3:4:5:6:7:8:9', 'invalid'],
+  ];
+  it.each(cases)('%s is %s', (address, expected) => {
+    expect(classifyAddress(address)).toBe(expected);
+  });
+});

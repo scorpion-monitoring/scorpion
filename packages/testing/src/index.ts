@@ -5,7 +5,19 @@ export {
   type TestAuthorizationRequest,
 } from './authorizer.ts';
 export { makePng } from './images.ts';
+export { makeAuditEvent, type AuditEventRow, type MakeAuditEvent } from './audit.ts';
 export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
+export {
+  mailbox,
+  makeDelivery,
+  makeInboxItem,
+  type DeliveryRow,
+  type InboxItemRow,
+  type MakeDelivery,
+  type MakeInboxItem,
+  type Mailbox,
+  type QueuedMail,
+} from './notifications.ts';
 export {
   makePreference,
   makeSecret,
@@ -42,3 +54,12 @@ export {
   type KeycloakUser,
   type StartedKeycloak,
 } from './keycloak.ts';
+export { HOSTILE_STRINGS, templateProblems, type TemplateLike } from './templates.ts';
+export {
+  MAILPIT_IMAGE,
+  startMailpit,
+  type MailpitMessage,
+  type StartedMailpit,
+} from './mailpit.ts';
+export { startSmtpServer, type ReceivedMail, type TestSmtpServer } from './smtp-server.ts';
+export { tablesContaining } from './grep.ts';
