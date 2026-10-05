@@ -1,5 +1,136 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- 8ee404a: **Audit trail, kernel maintenance and the audit sink** (new module `core.audit`, in the `full` and `kpi-tracker` profiles). With this
+  the M4 changes are complete. The breaking points that earlier M4 changesets already announced stand and are unchanged by this one:
+  `SMTP_URL` is gone (the relay is a `core.notifications` setting and its password a secret), and `POST /auth/register` answers `202` for
+  every well-formed request.
+
+  - **New migrations.** `core.audit` creates one table, `audit_event`, and a trigger that makes it append-only; the kernel adds a column
+    `kernel_job_run.result`. Run `scorpion migrate` (or just start the server). A profile without `core.audit` gets only the kernel column.
+  - **What is recorded.** Role changes, **changes of what a role may do** (new event `authz.role.permissions.changed@1`, from
+    `setRolePermissions`), setting, secret and vocabulary changes, approvals and rejections, token creation, revocation and rotation, password
+    and sign-in-method changes, the first administrator, account purges, registrations, and the three `core.notifications` events. Each
+    row has the actor (a user, a token with its id, the system or nobody), the subject, the time and the event payload. Calls of routes marked
+    `audit` are recorded too (who, which route, the outcome, the client address), **also when the call was refused (401, 403, 429) or invalid
+    (422)**. Today those routes are: approve and reject, assigning and removing a role, creating, revoking and rotating a token, saving
+    settings, setting and removing a secret, vocabulary changes, uploading a file, requeueing a delivery, sending a test mail, and reading the log.
+  - **What is never recorded.** Passwords, tokens, secret values, the body of a route under `/auth/`, mail content or addresses. A body or
+    query string is stored only for a route that opts in, with keys named `password`, `token`, `secret`, `authorization`, `apikey`, `code`
+    or `value` (also as a suffix, such as `newPassword`) replaced by `[redacted]`, and cut to 8 KB. Event payloads leave out the username.
+    The client address is kept in full for 30 days and then as a network prefix (`203.0.113.0/24`).
+  - **The table is append-only.** The database refuses `UPDATE`, `DELETE` and `TRUNCATE` on `audit_event`; only the retention job, in its
+    own transaction, may delete old rows or shorten an address. A database superuser can still remove the trigger.
+  - **New permissions** (Admin only; custom roles get none): `core.audit.read`, `core.audit.export`, `core.audit.system.read`,
+    `core.audit.system.manage`. A plain User gets **403** on every audit and system route; reading the log needs one of the first two and
+    nothing else.
+  - **New routes** (internal API): `GET /audit` (filters `method`, `user`, `endpoint`, `action`, `outcome`, `source`, `from`, `to`; newest
+    first, standard envelope, 0-based pages), `GET /audit/{id}`, `GET /audit/export.csv` (streamed, cells that start with `=`, `+`, `-`, `@`,
+    a tab or a line break get a leading `'`, capped by `csvMaxRows`, and the export is itself an entry), `GET /system/outbox` (counts and
+    dead event deliveries) and `POST /system/outbox/deliveries/{id}/requeue`.
+  - **New settings** (under `core.audit`): `channels.admin` and `channels.api` (default on; role, approval, token, settings and secret
+    events are always logged), `retentionDays` (365), `apiRetentionDays` (90), `ipTruncateAfterDays` (30), `csvMaxRows` (50000),
+    `outboxRetentionDays` (14), `jobRunRetentionDays` (90).
+  - **New jobs** (daily, UTC): `core.audit.retention`, `core.audit.system.outbox-retention` and `core.audit.system.job-run-retention`.
+    The outbox job deletes events whose deliveries are all done, which is what removes the usernames of purged accounts from it; an
+    event with a pending or dead delivery is kept. Each job's counts are in the job-run history (`kernel_job_run.result`).
+  - **For module authors.** `createRoute({ audit })` takes `true` or `{ body, redact }` (a route under `/auth/` cannot store a body),
+    `ctx.audit(entry)` writes an entry in the caller's transaction, and both do nothing in a profile without `core.audit`. The settings
+    events `settings.changed@1`, `settings.secret.changed@1` and `settings.vocabulary.changed@1` gained a field `actorId` (additive).
+    A job handler may return counts. The authenticated actor of a token call carries `tokenId`.
+  - **If an audit write fails**, the request is not affected: the failure is logged with the request id and the error code only.
+
+- 3b4c326: New module `core.notifications` (in the `full` and `kpi-tracker` profiles): a delivery queue for email and a signed webhook.
+  Upgrading needs no action for this part: the module starts with email transport `none`, which records messages and sends
+  nothing, and says so in its status. (The next changeset moves `core.identity` onto the queue and removes `SMTP_URL`.)
+
+  - **New migration:** one table, `notify_delivery`.
+  - **New settings** (stored by `core.settings` under `core.notifications`): `emailTransport` (`smtp` or `none`, default `none`), `smtp`
+    (`host`, `port`, `tls` = `starttls` / `tls` / `none`, `user`, `timeoutSeconds`), `webhook` (`enabled`, `url`, `allowPrivateTargets`),
+    `defaultLocale`, `maxAttempts` (default 8) and `retentionDays`. A change reaches every server process within 5 seconds.
+  - **New secret names** (set with `scorpion set-secret`, never in settings): `notifications.smtp.password` and
+    `notifications.webhook.secret` (the HMAC-SHA256 key that signs webhook bodies). Both are encrypted with `SECRETS_KEY`.
+  - **New permission** `core.notifications.status.read` (Admin). There are no routes yet.
+  - Messages are stored in the transaction that causes them and delivered by a job that runs every minute and right after
+    a commit. A failed send is retried after 30 s, doubling up to 1 h, then marked dead; the body of a sensitive message
+    (a reset link) is deleted once it is sent or dead. The webhook refuses private, loopback, link-local and cloud-metadata
+    addresses unless `allowPrivateTargets` is on, resolves the host once, and follows no redirects.
+  - The module opens one extra database connection per process to listen for new messages.
+
+- 6cffe71: **In-app inbox, notification preferences and an administrator's view of delivery** (`core.notifications`, in the `full` and
+  `kpi-tracker` profiles). Mail itself behaves as before; this adds what people and administrators can see and control.
+
+  - **New migration:** one table, `notify_inbox_item`. Run `scorpion migrate` (or just start the server).
+  - **New permissions.** Held by every signed-in user (the role `user`): `core.notifications.inbox.read`,
+    `core.notifications.inbox.write`, `core.notifications.preference.read`. Held by Admin only:
+    `core.notifications.deliveries.read`, `core.notifications.deliveries.manage`, `core.notifications.test` (next to the existing
+    `core.notifications.status.read`). Custom roles get none of them until you add them. A plain User gets **403** on every
+    administrator route.
+  - **New routes** (internal API, standard envelope, 0-based pages):
+    - your inbox: `GET /notifications/inbox`, `GET /notifications/inbox/unread-count`, `POST /notifications/inbox/read-all`,
+      `POST /notifications/inbox/{id}/read`, `DELETE /notifications/inbox/{id}`. You see only your own items; an item id that is
+      not yours (or does not exist) is 403, never 404.
+    - `GET /notifications/preferences/categories`: the kinds of notification the profile sends, with descriptions in English and German.
+    - `GET /notifications/status`: counts by status, the transport and the latest error codes.
+    - `GET /notifications/deliveries`: filter by `status`, `template`, `channel`, `from`, `to`. **Metadata only**: never a body,
+      address, subject or link.
+    - `POST /notifications/deliveries/{id}/requeue`: puts a `dead` delivery back in the queue with its attempts reset. A delivery whose
+      body was removed when it ended (a reset or verification mail) cannot be requeued (409).
+    - `POST /notifications/test`: sends a test mail to **your own** address through the configured transport (3 at once, then 6 an hour;
+      429 after that; 409 if your account has no address). The answer says whether the transport is `none`.
+  - **Preferences.** Each person can switch a category of notification off for mail and for the inbox with
+    `PUT /preferences/notifications.preferences` (`{ "<category>": { "email": false, "inApp": false } }`; the default is on). Security
+    mails (reset, verification, the register notice) and the test mail are mandatory and ignore the switch. This applies at once to
+    the welcome, approved, rejected and registration-request mails, which a recipient can now switch off.
+  - **What a person sees in the inbox:** the title, text and first link of the same message the mail carries, as plain text. A mail
+    that holds a credential (password reset, address confirmation) never leaves an inbox item. Nothing writes inbox items for identity
+    mail yet; the first modules that use them arrive with the registry and onboarding modules.
+  - **New settings** of `core.notifications`: `inboxRetentionDays` (default 90; counted from when an item was read, unread items are
+    kept). `retentionDays` (default 90) now takes effect.
+  - **New job** `core.notifications.retention`, daily at 03:17 UTC: deletes `sent` and `dead` deliveries older than `retentionDays`
+    (never `queued` or `sending` ones) and read inbox items older than `inboxRetentionDays`.
+  - **New events** in the outbox, with ids and template keys only (no address, subject or body): `notifications.delivery.dead@1`,
+    `notifications.delivery.requeued@1`, `notifications.settings.tested@1`.
+  - Purging a soft-deleted account (after the 30-day retention) now also deletes the person's inbox items.
+
+- 7c4a9f7: **Breaking for operators: `SMTP_URL` is removed, with no fallback.** `core.identity` now sends every mail through
+  `core.notifications`, and the variable is no longer read by anything (a server that starts with it set ignores it). Before
+  you upgrade, configure mail where it now lives:
+
+  - **Relay:** the settings of `core.notifications` (`PUT /settings/core.notifications`): `emailTransport: "smtp"`, and
+    `smtp.host`, `smtp.port`, `smtp.tls` (`starttls`, `tls` or `none`) and `smtp.user`.
+  - **Password:** `scorpion set-secret notifications.smtp.password` (stored encrypted with `SECRETS_KEY`, never in a setting).
+  - Until you do, `emailTransport` stays `none`: mail is recorded and dropped, the log says so **once** at start-up (not once
+    per message), and the status shows `transportIsNone` and a count of dropped mail.
+  - The sender address and the instance name, logo, contact address and imprint link in every mail come from the branding
+    settings, as before.
+
+  **`POST /auth/register` now answers `202 { "accepted": true }` for every well-formed request** (it was `201` with the new
+  account, and `409` for a taken email address). A new address gets the account, a welcome mail and the confirmation link,
+  and every administrator gets a "registration request" mail; an address that already has an account gets only a notice mail to
+  its owner ("someone tried to register with your address") and nothing is created. A taken **username** is still a `409`. The
+  response no longer contains the user, so a client reads the id after sign-in. No UI exists yet; it arrives with M5. The route
+  also accepts an optional `locale` in the body (also on `POST /auth/password-reset`).
+
+  New in this release:
+
+  - **Mail templates in English and German**, with a shared layout (instance name, logo, contact address, imprint link) and a
+    plain-text part: welcome, registration request (to administrators), approved, rejected, password reset, email
+    verification and the register notice. Templates for membership requests and decisions, onboarding applications and KPI
+    reporting reminders are registered for the modules that will send them. A mail is in the language the person chose with the
+    new preference `notifications.locale` (`en` or `de`, set with `PUT /preferences/notifications.locale`), else the request's
+    `locale`, else the `defaultLocale` setting, else English.
+  - Mails are stored in the same transaction as the change that causes them, so a rollback sends nothing, and they are retried
+    when the relay is down. A reset or verification link is in the mail only: its stored body is deleted once the mail is sent.
+  - **Development:** `pnpm dev` points a fresh database at the Mailpit of `docker-compose.dev.yml` with the new command
+    `scorpion seed-dev-mail`. It only runs outside production (it refuses with `NODE_ENV=production`, which every image sets)
+    and never overwrites mail settings that are saved.
+  - Two methods for trusted code, reachable from no route: `core.authz` lists the holders of a role, and `core.settings` reads
+    another user's preference and seeds settings that were never stored.
+
 ## 0.4.0
 
 ### Minor Changes
