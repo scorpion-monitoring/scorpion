@@ -22,13 +22,16 @@ export {
 } from './problem.ts';
 export {
   checkRouteAccess,
+  checkRouteAudit,
   createRoute,
   describeRoute,
   z,
   type AppEnv,
   type AppRoute,
   type AppRouteConfig,
+  NEVER_AUDIT_BODY,
   type RateLimitGroup,
+  type RouteAuditOption,
   type RouteAccess,
   type AnyHandler,
   type Context,

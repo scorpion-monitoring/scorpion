@@ -27,6 +27,12 @@ export interface PermissionDef {
   description: string;
 }
 
+/**
+ * What a job may return to put in the job-run history: counts and flags, for example how many rows a
+ * retention job removed. Never a name, an address or a secret.
+ */
+export type JobResult = Record<string, number | boolean | string>;
+
 export interface JobDef<C = ModuleContext> {
   /** Prefixed with the module id: `kpi.ingestion.reminder`. */
   name: string;
@@ -34,7 +40,7 @@ export interface JobDef<C = ModuleContext> {
   schedule?: string;
   /** Validates the data passed to `ctx.jobs.enqueue()`. Without it the job takes no data. */
   data?: z.ZodType;
-  handler: (job: JobRun, ctx: C) => Promise<void>;
+  handler: (job: JobRun, ctx: C) => Promise<void | JobResult>;
   retry: { limit: number; delaySeconds: number; backoff?: boolean };
   /** Seconds before a running handler is considered failed. */
   timeoutSeconds: number;

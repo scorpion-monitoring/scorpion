@@ -17,6 +17,8 @@ export interface UserActor {
   via: 'session' | 'token';
   /** What a token may do (permission ids such as `core.identity.me.read`); `undefined` for a session, which is not limited by scopes. */
   scopes?: readonly string[];
+  /** The id of the personal access token (never the token itself) when `via` is `token`; for the audit trail. */
+  tokenId?: string;
 }
 
 export type Actor = AnonymousActor | UserActor;

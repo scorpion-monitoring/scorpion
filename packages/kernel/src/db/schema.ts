@@ -87,6 +87,8 @@ export const jobRun = pgTable(
     finishedAt: timestamptz('finished_at'),
     durationMs: integer('duration_ms'),
     error: text(),
+    /** What the handler returned: counts and flags (`JobResult`), e.g. rows a retention job removed. */
+    result: jsonb(),
   },
   (table) => [
     index('kernel_job_run_job_started_idx').on(table.jobName, table.startedAt),

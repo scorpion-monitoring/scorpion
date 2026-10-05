@@ -2,6 +2,7 @@ import { getTableName, is } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import type pg from 'pg';
 import type { z } from 'zod';
+import { AUDIT_SINK_REGISTRY, noAuditSink, type AuditSink } from './audit.ts';
 import { anonymousOnly, AUTHENTICATOR_REGISTRY, type Authenticator } from './authn.ts';
 import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
 import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
@@ -99,6 +100,11 @@ export interface Kernel {
    * (filled by `core.identity`), or one that leaves every caller anonymous (ADR 0006).
    */
   readonly authenticator: Authenticator;
+  /**
+   * Where the pipeline sends the audit entry of a request (`kernel.auditSink`, filled by
+   * `core.audit`), or a sink that does nothing (ADR 0021).
+   */
+  readonly audit: AuditSink;
   /** The token-bucket store the server's rate limit (pipeline step 2) charges. */
   readonly rateLimiter: RateLimiter;
   /**
@@ -274,6 +280,7 @@ export function createKernel(options: KernelOptions): Kernel {
         subscribers,
       }),
       jobs: jobs.apiFor(module.id),
+      audit: (entry) => auditSink(entry),
       config,
       deps: dependencyView(module, services),
       permissions: allPermissions,
@@ -356,6 +363,11 @@ export function createKernel(options: KernelOptions): Kernel {
     ? (authorizerEntry.value as { authorize: Authorizer }).authorize
     : denyByDefault;
 
+  const auditEntry = composition.registries.get(AUDIT_SINK_REGISTRY)!.entries[0];
+  const auditSink: AuditSink = auditEntry
+    ? (auditEntry.value as { record: AuditSink }).record
+    : noAuditSink;
+
   const authenticatorEntry = composition.registries.get(AUTHENTICATOR_REGISTRY)!.entries[0];
   const authenticator: Authenticator = authenticatorEntry
     ? (authenticatorEntry.value as { authenticate: Authenticator }).authenticate
@@ -369,6 +381,7 @@ export function createKernel(options: KernelOptions): Kernel {
     },
     authorizer,
     authenticator,
+    audit: auditSink,
     commands: commands.map(({ module, command }) => ({
       module: module.id,
       name: command.name,

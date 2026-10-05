@@ -2,6 +2,7 @@
 // contributions against them. Everything here is pure, so it is tested without a database.
 import type { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
+import { AUDIT_SINK_REGISTRY, auditSinkEntrySchema } from './audit.ts';
 import { AUTHENTICATOR_REGISTRY, authenticatorEntrySchema } from './authn.ts';
 import { AUTHORIZER_REGISTRY, authorizerEntrySchema } from './authz.ts';
 import { SETTINGS_STORE_REGISTRY, settingsStoreEntrySchema } from './settings.ts';
@@ -150,6 +151,10 @@ export function buildComposition(profile: ResolvedProfile): Composition {
       },
     ],
     [
+      AUDIT_SINK_REGISTRY,
+      { name: AUDIT_SINK_REGISTRY, owner: KERNEL_OWNER, schema: auditSinkEntrySchema, entries: [] },
+    ],
+    [
       SETTINGS_STORE_REGISTRY,
       {
         name: SETTINGS_STORE_REGISTRY,
@@ -235,6 +240,13 @@ export function buildComposition(profile: ResolvedProfile): Composition {
   if (authenticators.length > 1) {
     problems.push(
       `more than one module contributes to "${AUTHENTICATOR_REGISTRY}": ${authenticators.map((e) => e.module).join(', ')}`,
+    );
+  }
+
+  const sinks = registries.get(AUDIT_SINK_REGISTRY)!.entries;
+  if (sinks.length > 1) {
+    problems.push(
+      `more than one module contributes to "${AUDIT_SINK_REGISTRY}": ${sinks.map((e) => e.module).join(', ')}`,
     );
   }
 

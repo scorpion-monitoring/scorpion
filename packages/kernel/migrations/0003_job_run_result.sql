@@ -1,0 +1,1 @@
+ALTER TABLE "kernel_job_run" ADD COLUMN "result" jsonb;

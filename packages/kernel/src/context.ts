@@ -1,4 +1,5 @@
 // The context a module receives (`ctx`). See the kernel README for the full API.
+import type { AuditEntry } from './audit.ts';
 import type { Config } from './config.ts';
 import type { RegisteredPermission } from './composition.ts';
 import type { Db } from './db.ts';
@@ -33,6 +34,13 @@ export interface ModuleContext<
   readonly events: EventsApi;
   /** Queue runs of declared jobs. */
   readonly jobs: JobsApi;
+  /**
+   * Writes an audit entry for an administrative or permission-relevant action that has no domain
+   * event (ADR 0021). Call it inside `ctx.db.tx()` and it commits or rolls back with the change; a
+   * failure rejects, so the change does not happen without its trail. It does nothing in a profile
+   * without `core.audit`. Put names and ids in `payload`, never a secret or a mail body.
+   */
+  readonly audit: (entry: AuditEntry) => Promise<void>;
   /** The validated environment configuration. Contains no secrets other than `DATABASE_URL`. */
   readonly config: Config;
   /**
