@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { defineModule, listJobRuns } from '@scorpion/kernel';
 import {
   makeAuthMethod,
+  makeInboxItem,
   makeRoleAssignment,
   makeSession,
   makeToken,
@@ -198,6 +199,35 @@ describe('the purge of soft-deleted accounts', () => {
     expect(
       await rows(kernel, "select payload from kernel_outbox where name = 'identity.user.purged@1'"),
     ).toEqual([{ payload: { userId: gone.id, username: 'gone' } }]);
+  });
+
+  it('removes the inbox of the purged account (core.notifications, same transaction) and no one else’s', async () => {
+    const { kernel, cleanup } = await start();
+    const gone = await deletedAt(kernel, 'inboxgone', 31);
+    const kept = await deletedAt(kernel, 'inboxkept', 29);
+    await makeInboxItem(kernel.pool, { userId: gone.id });
+    await makeInboxItem(kernel.pool, { userId: gone.id, readAt: new Date() });
+    await makeInboxItem(kernel.pool, { userId: kept.id });
+    await cleanup.run();
+    expect(await rows(kernel, 'select user_id from notify_inbox_item')).toEqual([
+      { user_id: kept.id },
+    ]);
+  });
+
+  it('keeps the inbox when the purge rolls back', async () => {
+    const { kernel, cleanup } = await start();
+    const gone = await deletedAt(kernel, 'inboxroll', 31);
+    await makeInboxItem(kernel.pool, { userId: gone.id });
+    // Make the deletion of the user row fail, after the inbox was already removed in the same transaction.
+    await kernel.pool.query(
+      `create function fail_user_delete() returns trigger language plpgsql as $$ begin raise exception 'no'; end $$`,
+    );
+    await kernel.pool.query(
+      'create trigger fail_user_delete before delete on identity_user for each row execute function fail_user_delete()',
+    );
+    await expect(cleanup.run()).rejects.toThrow();
+    expect(await count(kernel, 'notify_inbox_item')).toBe(1);
+    await kernel.pool.query('drop trigger fail_user_delete on identity_user');
   });
 
   it('keeps a username and an address reserved until the purge, and frees both after it', async () => {

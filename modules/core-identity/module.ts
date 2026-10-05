@@ -127,6 +127,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     if (!currentCleanup) throw new Error('core.identity: the cleanup service is not ready');
     return currentCleanup;
   };
+  let currentUsers: ReturnType<typeof createUserService> | undefined;
+  const usersOrThrow = () => {
+    if (!currentUsers) throw new Error('core.identity: the user service is not ready');
+    return currentUsers;
+  };
   const tokensOrThrow = (): TokenService => {
     if (!currentTokens) throw new Error('core.identity: the token service is not ready');
     return currentTokens;
@@ -262,6 +267,14 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       [APPROVAL_POLICY_REGISTRY]: [manualPolicy],
       // The mails of this module. The rendering, the layout and the delivery are core.notifications'.
       'notify.template': IDENTITY_TEMPLATES,
+      // How core.notifications finds the address of the administrator who asks for a test mail.
+      'notify.recipientAddress': [
+        {
+          id: 'core.identity',
+          addressOf: async (userId: string) =>
+            (await usersOrThrow().findById(userId))?.email ?? null,
+        },
+      ],
       // What the role `user` can do once an account is approved: the self-service routes of this
       // module. Admin holds everything by resolution; Reviewer gets nothing from identity (its
       // permissions come from the modules that review things).
@@ -287,6 +300,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       currentSettings = settings;
       currentSecret = clientSecret;
       const users = createUserService(ctx);
+      currentUsers = users;
       const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
       const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
       current = sessions;
@@ -321,7 +335,12 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         links,
         authz,
       });
-      const cleanup = createCleanupService(ctx, { authz, blob, settings });
+      const cleanup = createCleanupService(ctx, {
+        authz,
+        blob,
+        notifications: ctx.deps['core.notifications'],
+        settings,
+      });
       currentCleanup = cleanup;
       return {
         bootstrap,
