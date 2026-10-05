@@ -16,6 +16,7 @@
     "@scorpion/core-authz": "workspace:*",
     "@scorpion/core-blob": "workspace:*",
     "@scorpion/core-identity": "workspace:*",
+    "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-settings": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "hono": "^4.13.12",
