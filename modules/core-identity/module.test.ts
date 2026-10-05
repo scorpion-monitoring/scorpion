@@ -64,6 +64,7 @@ describe('the module', () => {
       'auth.approvalPolicy',
       'authz.defaultRole',
       'kernel.authenticator',
+      'notify.recipientAddress',
       'notify.template',
     ]);
     expect(manifest.routes).toBeDefined();

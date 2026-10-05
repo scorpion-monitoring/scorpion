@@ -3,7 +3,7 @@
 ## Kernel follow-ups
 
 - Outbox retention: a job that deletes events whose deliveries are all `delivered` (and events
-  with no subscribers) after a configurable time. Requeue a `dead` delivery from the admin UI (M5).
+  with no subscribers) after a configurable time. Requeue of a `dead` mail delivery is done (M4 sprint 3); requeue of a `dead` outbox delivery is sprint 4.
 - Job-run retention: delete old `kernel_job_run` rows.
 - `scorpion worker` listens on no port, so it has no liveness or metrics endpoint. Add a small
   internal listener if operators need one (job durations are observed in the worker process, so
@@ -20,6 +20,30 @@
   CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
   repository secrets) needs a decision first; record it in an ADR.
 
+## Notifications follow-ups (M4 sprint 3)
+
+- **Unsubscribe links, digests and quiet hours.** Non-mandatory mail still has no unsubscribe link (it needs a public route and a token); no digest or
+  batching; no quiet hours. The preference switches are the only control (M4 plan §9).
+- **Per-user webhooks** (a webhook for a person's own notifications) and per-event transport routing.
+- **The UI** for the inbox bell, the preference form and the delivery list is M5; the routes are ready. The preference form should read
+  `GET /notifications/preferences/categories` and write `PUT /preferences/notifications.preferences` (which replaces the whole object).
+- **`inApp` is not switched on in `core.identity`.** The flag works for any recipient with a user id, and identity passes one for the administrators'
+  registration request and for the person's own mails. Turning it on (a registration request and an approval in the inbox) is a small change in
+  `identity-mail.ts` that needs a decision on which mails earn an inbox item; leave it for M5 together with the bell.
+- **Inbox size per user is not capped.** Only read items are deleted (after `inboxRetentionDays`). A sender that floods one user can grow the table;
+  a per-user cap (oldest read first) or a rate on `inApp` writes is the answer if it happens.
+- **Delivery rows keep the address of a purged account until `retentionDays`.** `recipient_user_id` has no foreign key (ADR-0019) and the address
+  stays on the row; clearing both for a purged user (a trusted call like `removeInboxOfUser`) would shorten that. Related: the personal data in
+  `queued` rows older than the retention.
+- **Preference definitions: done for `notifications.preferences` only.** The category list endpoint is the definition for that key; the general
+  `GET /preferences/definitions` of core.settings (registered keys with descriptions, schemas and defaults) is still open (see "Settings follow-ups").
+- **Requeue is one at a time.** A "requeue all dead" and a bulk filter are not built; the list filter makes a UI loop easy.
+- **The test mail has no result.** The route answers 202 with the delivery id; whether the relay accepted it shows in the delivery list. A synchronous
+  "sent / failed with code" answer would need the route to wait for one delivery pass.
+- **Job name.** The plan calls the daily job `notify.retention`; the kernel requires the module id as a prefix, so it is `core.notifications.retention`.
+- **Registry `notify.recipientAddress` has one use.** Only the test mail asks it. If the audit or a digest needs addresses too, extend the entry
+  rather than adding a second lookup.
+
 ## Notifications follow-ups (M4 sprint 2)
 
 - **The language of a request comes from the body.** `POST /auth/register` and `POST /auth/password-reset` take an optional `locale`; the server
@@ -35,7 +59,7 @@
   list after the commit would shorten the request.
 - **Templates of modules that do not exist yet live in core.notifications** (`registry.membership-*`, `onboarding.application-*`,
   `kpi.reporting-reminder`). When M6, M10 and M15 land, each module takes over its own (a rename of the contributor, same key).
-- **No unsubscribe link and no preference check yet.** `category` and `mandatory` are recorded on every template; the switch is sprint 3.
+- **No unsubscribe link.** Done in M4 sprint 3: `category` and `mandatory` drive the preference switches (ADR-0023). Still open: an unsubscribe link in the mail.
 - **The text and HTML of a template are not checked by a mail-client test.** The HTML is plain tables-free markup with inline styles; the
   layout is tested for escaping and structure, not rendered in real clients.
 - **A start-up message for a leftover `SMTP_URL` was left out.** The M4 plan's risk table asks for one; its definition of done (the old name
@@ -114,7 +138,7 @@
 - **Faster propagation.** A changed setting reaches another process within 5 seconds (cache TTL). If that is too slow for some setting, a `LISTEN/NOTIFY` message on write that empties the cache of the other processes would make it near-immediate; the kernel already has the listener machinery for the outbox.
 - **Secret hygiene checks.** A guard that refuses a `settings` schema with a key that looks like a secret (`password`, `secret`, `token`) at start-up, and a `verify-secrets` command that decrypts every row with the current keys and reports names that fail (useful before and after a rotation), are not built.
 - **Key escrow and backup.** The key lives in the environment only. A documented way to back it up with the deployment secrets of the operator's choice (and a `backup`/`restore` command that knows the key is not in the dump) belongs to the backup module.
-- **Preference definitions for the UI.** `GET /preferences` lists stored values only. The interface will want the registered keys with their descriptions, schemas and defaults (`GET /preferences/definitions`); add it with the first preference (M5). Preferences have no default in the registry entry yet.
+- **Preference definitions for the UI.** Done for `notifications.preferences` in M4 sprint 3 (its category list). `GET /preferences` lists stored values only. The interface will want the registered keys with their descriptions, schemas and defaults (`GET /preferences/definitions`); add it with the first preference (M5). Preferences have no default in the registry entry yet.
 - **The pipeline reads a module's setting.** The server's rate limit depends on the module id `core.settings` and the shape of its `rateLimits` setting (ADR-0017). A second pipeline setting would justify a kernel-level declaration of server settings.
 - **`getSecret` is not cached.** It decrypts on every call; the only caller is the OIDC code exchange. Cache it (short TTL, emptied on write) if a hot path needs a secret.
 - **Settings read before core.settings is built.** `ctx.settings.get()` called while services are being built, from a module that does not depend on `core.settings`, throws "not ready". Make the port fall back to the defaults in that window if a module needs it.

@@ -22,28 +22,42 @@ function sources(path = dir, found: string[] = []): string[] {
 }
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the one permission of sprint 1', () => {
+  it('has the id, the table prefix and the permissions of sprints 1 and 3', () => {
     expect(manifest.id).toBe('core.notifications');
     expect(manifest.tablePrefix).toBe('notify_');
-    expect(Object.keys(manifest.permissions ?? {})).toEqual(['core.notifications.status.read']);
+    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+      'core.notifications.deliveries.manage',
+      'core.notifications.deliveries.read',
+      'core.notifications.inbox.read',
+      'core.notifications.inbox.write',
+      'core.notifications.preference.read',
+      'core.notifications.status.read',
+      'core.notifications.test',
+    ]);
   });
 
-  it('declares the registries notify.transport and notify.template and the command seed-dev-mail', () => {
+  it('declares the registries notify.transport, notify.template and notify.recipientAddress and the command seed-dev-mail', () => {
     expect(Object.keys(manifest.registries ?? {}).sort()).toEqual([
+      'notify.recipientAddress',
       'notify.template',
       'notify.transport',
     ]);
     expect(manifest.commands?.map((command) => command.name)).toEqual(['seed-dev-mail']);
   });
 
-  it('declares the delivery job with a sweep every minute', () => {
+  it('declares the delivery job with a sweep every minute and the daily retention job', () => {
     expect(manifest.jobs?.map((job) => [job.name, job.schedule])).toEqual([
       ['core.notifications.deliver', '* * * * *'],
+      ['core.notifications.retention', '17 3 * * *'],
     ]);
   });
 
-  it('emits no events yet, and listens to the two settings events and system.ready', () => {
-    expect(Object.keys(manifest.events?.emits ?? {})).toEqual([]);
+  it('emits the three delivery events, and listens to the two settings events and system.ready', () => {
+    expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'notifications.delivery.dead@1',
+      'notifications.delivery.requeued@1',
+      'notifications.settings.tested@1',
+    ]);
     expect(Object.keys(manifest.events?.on ?? {}).sort()).toEqual([
       'settings.changed@1',
       'settings.secret.changed@1',
@@ -59,6 +73,7 @@ describe('the manifest', () => {
       .join('\n');
     expect([...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((match) => match[1])).toEqual([
       'notify_delivery',
+      'notify_inbox_item',
     ]);
     expect(sql).not.toMatch(/REFERENCES/i);
   });
@@ -116,9 +131,11 @@ describe('in a kernel', () => {
       .sort();
     expect(keys).toEqual([
       'fix.hello',
+      'fix.mandatory',
       'fix.partial',
       'fix.secret-link',
       'kpi.reporting-reminder',
+      'notifications.test',
       'onboarding.application-decided',
       'onboarding.application-submitted',
       'registry.membership-decided',

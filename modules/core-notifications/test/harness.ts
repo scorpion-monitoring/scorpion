@@ -37,6 +37,8 @@ import packageJson from '../package.json' with { type: 'json' };
 import { defineTemplate, type NotificationMessage, type TemplateMessage } from '../public.ts';
 
 export interface Mailer {
+  /** Tells the fixture's `notify.recipientAddress` entry which address a user has (for the test mail). */
+  setAddress(userId: string, address: string): void;
   /** Enqueues in its own `ctx.db.tx()`; `failAfter` throws after the insert, so the transaction rolls back. */
   send(message: NotificationMessage, options?: { failAfter?: boolean }): Promise<string | null>;
   /** Several messages in one transaction. */
@@ -46,6 +48,11 @@ export interface Mailer {
   ): Promise<(string | null)[]>;
   /** `enqueueTemplate` in its own `ctx.db.tx()`; `failAfter` throws after the insert. */
   sendTemplate(message: TemplateMessage, options?: { failAfter?: boolean }): Promise<string>;
+  /** Like `sendTemplate`, but resolves `null` when no mail was stored (a switched-off category, no address). */
+  sendTemplateOrNone(
+    message: TemplateMessage,
+    options?: { failAfter?: boolean },
+  ): Promise<string | null>;
   /** `enqueueTemplate` in a plain Drizzle transaction that is not `ctx.db.tx()`: must be refused. */
   templateOutsideTx(message: TemplateMessage): Promise<unknown>;
   /** Enqueues in a plain Drizzle transaction that is not `ctx.db.tx()`: must be refused. */
@@ -86,6 +93,25 @@ export const FIXTURE_SECRET_LINK = defineTemplate({
   }),
 });
 
+/** A non-sensitive template that no preference switches off, with a link. */
+export const FIXTURE_MANDATORY = defineTemplate({
+  key: 'fix.mandatory',
+  schema: z.strictObject({ link: z.url().optional() }),
+  mandatory: true,
+  category: 'safety',
+  catalogue: {
+    en: { subject: 'Important', body: 'Please read this.', go: 'Open' },
+    de: { subject: 'Wichtig', body: 'Bitte lesen.', go: 'Öffnen' },
+  },
+  content: (data, { t }) => ({
+    subject: t('subject'),
+    blocks: [
+      { kind: 'text', text: t('body') },
+      ...(data.link ? [{ kind: 'action' as const, label: t('go'), url: data.link }] : []),
+    ],
+  }),
+});
+
 /** A template whose German catalogue lacks `extra`: the English text is used and the gap is logged. */
 export const FIXTURE_PARTIAL = defineTemplate({
   key: 'fix.partial',
@@ -102,15 +128,31 @@ export const FIXTURE_PARTIAL = defineTemplate({
 });
 
 function mailerModule() {
+  const addresses = new Map<string, string>();
   return {
     id: 'fix.mailer',
     manifest: defineModule<Mailer, 'core.notifications'>({
       id: 'fix.mailer',
       version: '1.0.0',
-      contributes: { 'notify.template': [FIXTURE_HELLO, FIXTURE_SECRET_LINK, FIXTURE_PARTIAL] },
+      contributes: {
+        'notify.template': [FIXTURE_HELLO, FIXTURE_SECRET_LINK, FIXTURE_PARTIAL, FIXTURE_MANDATORY],
+        'notify.recipientAddress': [
+          {
+            id: 'fix.mailer',
+            addressOf: (userId: string) => Promise.resolve(addresses.get(userId) ?? null),
+          },
+        ],
+      },
       services: (ctx) => {
         const notifications = ctx.deps['core.notifications'];
+        const mailerSendTemplate = (message: TemplateMessage, options?: { failAfter?: boolean }) =>
+          ctx.db.tx(async (tx) => {
+            const id = await notifications.enqueueTemplate(tx, message);
+            if (options?.failAfter) throw new Error('the work failed after the mail was queued');
+            return id;
+          });
         return {
+          setAddress: (userId, address) => void addresses.set(userId, address),
           send: (message, options) =>
             ctx.db.tx(async (tx) => {
               const id = await notifications.enqueue(tx, message);
@@ -126,12 +168,12 @@ function mailerModule() {
                 throw new Error('the work failed after the messages were queued');
               return out;
             }),
-          sendTemplate: (message, options) =>
-            ctx.db.tx(async (tx) => {
-              const id = await notifications.enqueueTemplate(tx, message);
-              if (options?.failAfter) throw new Error('the work failed after the mail was queued');
-              return id;
-            }),
+          sendTemplateOrNone: mailerSendTemplate,
+          sendTemplate: async (message, options) => {
+            const id = await mailerSendTemplate(message, options);
+            if (id === null) throw new Error('enqueueTemplate stored no mail');
+            return id;
+          },
           templateOutsideTx: (message) =>
             ctx.db.transaction((tx) => notifications.enqueueTemplate(tx as never, message)),
           outsideTx: (message) =>
@@ -180,12 +222,19 @@ export interface Started {
 export interface NotificationsHarness {
   server: () => StartedPostgres;
   start: (options?: StartOptions) => Promise<Started>;
+  /**
+   * Like `start`, but the kernel lives until the end of the file: call it in `beforeAll`, and keep
+   * the tests of one file independent by giving each its own users and template keys. One boot costs
+   * seconds on a CI runner, so a file that does not need a fresh database shares one.
+   */
+  startShared: (options?: StartOptions) => Promise<Started>;
 }
 
 /** One Postgres container per test file; every `start()` without a `databaseUrl` gets an empty database. */
 export function useNotifications(): NotificationsHarness {
   let server: StartedPostgres;
   const open: { kernel: Kernel; notifications: NotificationsInternals }[] = [];
+  const shared: { kernel: Kernel; notifications: NotificationsInternals }[] = [];
   beforeAll(async () => {
     server = await startPostgres();
   }, 120_000);
@@ -196,11 +245,14 @@ export function useNotifications(): NotificationsHarness {
     }
   });
   afterAll(async () => {
+    for (const { kernel, notifications } of shared.splice(0)) {
+      await notifications.close();
+      await kernel.stop();
+    }
     await server?.stop();
   });
-  return {
-    server: () => server,
-    async start(options = {}) {
+  async function boot(options: StartOptions, keep: typeof open): Promise<Started> {
+    {
       const logs: string[] = [];
       const log = createLogger({
         level: 'trace',
@@ -266,7 +318,7 @@ export function useNotifications(): NotificationsHarness {
       await kernel.start();
       if (options.startWorkers) await kernel.startWorkers();
       const notifications = kernel.services.get('core.notifications') as NotificationsInternals;
-      open.push({ kernel, notifications });
+      keep.push({ kernel, notifications });
       const pool = kernel.pool;
       return {
         kernel,
@@ -299,7 +351,12 @@ export function useNotifications(): NotificationsHarness {
           );
         },
       };
-    },
+    }
+  }
+  return {
+    server: () => server,
+    start: (options = {}) => boot(options, open),
+    startShared: (options = {}) => boot(options, shared),
   };
 }
 

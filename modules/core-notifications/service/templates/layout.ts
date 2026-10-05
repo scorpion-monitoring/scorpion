@@ -163,3 +163,39 @@ export function renderLayout(
 
   return { subject, text, html };
 }
+
+/** The in-app form of a template's content: plain text, never HTML. A UI shows it as text. */
+export interface InAppContent {
+  /** One line, at most `INAPP_TITLE_MAX` characters. */
+  title: string;
+  /** At most `INAPP_TEXT_MAX` characters; may span lines. */
+  text: string;
+  /** The first action's link when it is one `safeUrl` accepts, else `null`. */
+  link: string | null;
+}
+
+export const INAPP_TITLE_MAX = 200;
+export const INAPP_TEXT_MAX = 2000;
+export const INAPP_LINK_MAX = 2048;
+
+/**
+ * Builds an inbox item from the blocks the mail is built from (so there is no second text source).
+ * Every interpolated value passes the same cleaning as the mail: bidi marks and control characters
+ * go, a title is one line. The text keeps paragraphs and list items; small print and the button's
+ * label are left out, and the first link becomes the item's link.
+ */
+export function inAppFromContent(content: Content): InAppContent {
+  const title = oneLine(content.heading ?? content.subject, INAPP_TITLE_MAX) || 'Notification';
+  const parts: string[] = [];
+  let link: string | null = null;
+  for (const block of content.blocks) {
+    if (block.kind === 'text') parts.push(multiLine(block.text, INAPP_TEXT_MAX));
+    else if (block.kind === 'list') {
+      parts.push(block.items.map((item) => `- ${oneLine(item, 500)}`).join('\n'));
+    } else if (block.kind === 'action' && link === null) {
+      const href = safeUrl(block.url);
+      if (href && href.length <= INAPP_LINK_MAX) link = href;
+    }
+  }
+  return { title, text: parts.join('\n\n').trim().slice(0, INAPP_TEXT_MAX), link };
+}

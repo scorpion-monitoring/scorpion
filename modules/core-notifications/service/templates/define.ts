@@ -3,7 +3,14 @@
 // The module that owns the event contributes its templates; `defineTemplate` builds the entry.
 import { z } from '@scorpion/contracts';
 import { createTranslator, type Catalogue, type Translate } from './i18n.ts';
-import { renderLayout, type Content, type RenderedMail, type TemplateBranding } from './layout.ts';
+import {
+  inAppFromContent,
+  renderLayout,
+  type Content,
+  type InAppContent,
+  type RenderedMail,
+  type TemplateBranding,
+} from './layout.ts';
 import type { Locale } from './locale.ts';
 
 export const TEMPLATE_REGISTRY = 'notify.template';
@@ -27,8 +34,13 @@ export interface TemplateEntry<Data = unknown> {
   schema: z.ZodType<Data>;
   /** The rendered body holds a credential: it is deleted from the delivery row once sent or dead (ADR 0019). */
   sensitive: boolean;
-  /** Groups templates for the user's notification preferences (sprint 3). */
+  /** Groups templates for the user's notification preferences. */
   category: string;
+  /**
+   * What the category means to a person, in both languages, shown next to its switches. A category
+   * takes the description of the first of its templates that has one.
+   */
+  categoryDescription?: { en: string; de: string };
   /** A security mail: no preference switches it off. */
   mandatory: boolean;
   /** Both languages are required; the start fails without them. */
@@ -39,6 +51,16 @@ export interface TemplateEntry<Data = unknown> {
     branding: TemplateBranding,
     options?: RenderOptions,
   ) => RenderedMail;
+  /**
+   * The in-app inbox item, from the same content blocks as the mail (no second text source): plain
+   * text, one line of title, a capped text and the first link. Never called for a `sensitive` template.
+   */
+  renderInApp?: (
+    data: Data,
+    locale: Locale,
+    branding: TemplateBranding,
+    options?: RenderOptions,
+  ) => InAppContent;
 }
 
 const catalogueSchema = z.record(z.string(), z.string()).refine((c) => Object.keys(c).length > 0, {
@@ -53,7 +75,13 @@ export const templateEntrySchema = z.strictObject({
     .regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/, 'use a key like "identity.welcome"'),
   schema: z.custom<z.ZodType>((value) => value instanceof z.ZodType, 'expected a Zod schema'),
   sensitive: z.boolean(),
-  category: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  category: z
+    .string()
+    .max(64)
+    .regex(/^[a-z][a-z0-9-]*$/),
+  categoryDescription: z
+    .strictObject({ en: z.string().min(1).max(300), de: z.string().min(1).max(300) })
+    .optional(),
   mandatory: z.boolean(),
   catalogue: z.strictObject(
     { en: catalogueSchema, de: catalogueSchema },
@@ -63,6 +91,12 @@ export const templateEntrySchema = z.strictObject({
     (value) => typeof value === 'function',
     'expected a function',
   ),
+  renderInApp: z
+    .custom<NonNullable<TemplateEntry['renderInApp']>>(
+      (value) => typeof value === 'function',
+      'expected a function',
+    )
+    .optional(),
 });
 
 export interface TemplateDefinition<S extends z.ZodType> {
@@ -70,6 +104,7 @@ export interface TemplateDefinition<S extends z.ZodType> {
   schema: S;
   sensitive?: boolean;
   category: string;
+  categoryDescription?: { en: string; de: string };
   mandatory?: boolean;
   catalogue: { en: Catalogue; de: Catalogue };
   /** The subject, heading and blocks of the mail; the layout does the rest. */
@@ -84,6 +119,7 @@ export function defineTemplate<S extends z.ZodType>(
     schema: definition.schema as z.ZodType<z.output<S>>,
     sensitive: definition.sensitive ?? false,
     category: definition.category,
+    categoryDescription: definition.categoryDescription,
     mandatory: definition.mandatory ?? false,
     catalogue: definition.catalogue,
     render(data, locale, branding, options = {}) {
@@ -95,6 +131,11 @@ export function defineTemplate<S extends z.ZodType>(
         locale,
         onFallback,
       );
+    },
+    renderInApp(data, locale, branding, options = {}) {
+      const onFallback = (key: string) => options.onFallback?.(key, locale);
+      const t = createTranslator(definition.catalogue, locale, { onFallback });
+      return inAppFromContent(definition.content(data, { t, branding, locale }));
     },
   };
 }

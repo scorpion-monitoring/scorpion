@@ -2,6 +2,7 @@
 // repeats the address, the subject or a body.
 import { Invalid, z } from '@scorpion/contracts';
 import { LOCALE } from '../settings-schema.ts';
+import { INAPP_LINK_MAX, INAPP_TEXT_MAX, INAPP_TITLE_MAX } from './templates/layout.ts';
 
 export const MAX_SUBJECT_LENGTH = 300;
 export const MAX_TEXT_LENGTH = 100_000;
@@ -35,6 +36,18 @@ const messageSchema = z
      * `sent` or `dead`, and a sensitive message cannot go to the webhook.
      */
     sensitive: z.boolean().default(false),
+    /**
+     * Also write an in-app inbox item for `recipientUserId`, in the same transaction. The caller
+     * supplies the plain text (there is no template to render it from); it is cleaned like the mail's
+     * blocks. Not for a sensitive message. Preferences are not consulted here: a raw message has no category.
+     */
+    inApp: z
+      .strictObject({
+        title: z.string().min(1).max(INAPP_TITLE_MAX),
+        text: z.string().max(INAPP_TEXT_MAX),
+        link: z.url().max(INAPP_LINK_MAX).optional(),
+      })
+      .optional(),
   })
   .superRefine((value, ctx) => {
     if (value.channel === 'email' && !value.recipientAddress) {
@@ -42,6 +55,20 @@ const messageSchema = z
         code: 'custom',
         path: ['recipientAddress'],
         message: 'The email channel needs a recipient address.',
+      });
+    }
+    if (value.inApp && !value.recipientUserId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['inApp'],
+        message: 'An inbox item needs recipientUserId.',
+      });
+    }
+    if (value.inApp && (value.sensitive || value.channel !== 'email')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['inApp'],
+        message: 'Only a non-sensitive email message can also go to the inbox.',
       });
     }
     if (value.channel === 'webhook' && value.sensitive) {

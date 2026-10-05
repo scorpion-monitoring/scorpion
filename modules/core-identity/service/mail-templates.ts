@@ -6,6 +6,19 @@
 import { z } from '@scorpion/contracts';
 import { defineTemplate } from '@scorpion/core-notifications/public';
 
+const CATEGORY_ACCOUNT = {
+  en: 'Messages about your account: welcome, approval and confirmation of your address.',
+  de: 'Nachrichten zu Ihrem Konto: Willkommen, Freischaltung und Bestätigung Ihrer Adresse.',
+};
+const CATEGORY_ADMINISTRATION = {
+  en: 'Tasks for administrators, such as registrations that wait for review.',
+  de: 'Aufgaben für Administratoren, etwa Registrierungen, die auf Prüfung warten.',
+};
+const CATEGORY_SECURITY = {
+  en: 'Security messages about your sign-in. These cannot be switched off.',
+  de: 'Sicherheitsnachrichten zu Ihrer Anmeldung. Sie lassen sich nicht abschalten.',
+};
+
 const url = z.url().max(2048);
 const name = z.string().min(1).max(200);
 
@@ -14,6 +27,7 @@ export const welcome = defineTemplate({
   // To the person who registered: the account exists; it waits for review unless a policy activated it.
   schema: z.strictObject({ username: name, pendingReview: z.boolean(), signInUrl: url }),
   category: 'account',
+  categoryDescription: CATEGORY_ACCOUNT,
   catalogue: {
     en: {
       subject: 'Welcome to {instance}',
@@ -61,6 +75,7 @@ export const registrationRequest = defineTemplate({
     reviewUrl: url,
   }),
   category: 'administration',
+  categoryDescription: CATEGORY_ADMINISTRATION,
   catalogue: {
     en: {
       subject: 'Registration request from {username}',
@@ -96,6 +111,7 @@ export const approved = defineTemplate({
   key: 'identity.approved',
   schema: z.strictObject({ username: name, signInUrl: url }),
   category: 'account',
+  categoryDescription: CATEGORY_ACCOUNT,
   catalogue: {
     en: {
       subject: 'Your account on {instance} was approved',
@@ -127,6 +143,7 @@ export const rejected = defineTemplate({
   key: 'identity.rejected',
   schema: z.strictObject({ username: name }),
   category: 'account',
+  categoryDescription: CATEGORY_ACCOUNT,
   catalogue: {
     en: {
       subject: 'Your registration on {instance} was not approved',
@@ -169,6 +186,7 @@ export const passwordReset = defineTemplate({
   sensitive: true,
   mandatory: true,
   category: 'security',
+  categoryDescription: CATEGORY_SECURITY,
   catalogue: {
     en: {
       subject: 'Reset your {instance} password',
@@ -206,6 +224,7 @@ export const emailVerification = defineTemplate({
   sensitive: true,
   mandatory: true,
   category: 'security',
+  categoryDescription: CATEGORY_SECURITY,
   catalogue: {
     en: {
       subject: 'Confirm your email address for {instance}',
@@ -243,6 +262,7 @@ export const registerAttempt = defineTemplate({
   schema: z.strictObject({ signInUrl: url, forgotPasswordUrl: url }),
   mandatory: true,
   category: 'security',
+  categoryDescription: CATEGORY_SECURITY,
   catalogue: {
     en: {
       subject: 'Someone tried to register on {instance} with your address',
