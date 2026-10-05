@@ -17,6 +17,8 @@ export default defineConfig(
     '**/.svelte-kit/',
     '**/test-results/',
     '**/playwright-report/',
+    // Written by the code-review-graph tool (git-ignored); not our source.
+    '.code-review-graph/',
     // Contains deliberate violations; linted by tools/eslint-plugin/test.
     'tools/lint-fixtures/',
   ]),
