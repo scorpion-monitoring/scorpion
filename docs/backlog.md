@@ -20,6 +20,27 @@
   CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
   repository secrets) needs a decision first; record it in an ADR.
 
+## Notifications follow-ups (M4 sprint 2)
+
+- **The language of a request comes from the body.** `POST /auth/register` and `POST /auth/password-reset` take an optional `locale`; the server
+  does not read `Accept-Language`. The UI (M5) sends the browser's language. Reading the header in the route is a small addition if a client needs it.
+- **Reset and register-attempt mails use the request's language, not the owner's preference.** The owner exists but the caller does not, and
+  reading their preference only on the known path would add a difference between the paths. A mail to a signed-in person or an administrator
+  uses the preference `notifications.locale`.
+- **A rejected applicant who registers again gets no mail.** The address of a soft-deleted account stays taken for the 30 days of the purge
+  retention (ADR-0013); a new registration with it is a quiet 202 and creates nothing. M5 should tell a rejected person what to do (contact address).
+- **At most 1000 administrators are mailed per registration** (`listHoldersAsSystem` caps its answer). A larger group would need a digest or a
+  fan-out job; nothing near it exists.
+- **Admin mails are sent one by one inside the registration transaction.** Fine for a handful; with many administrators a fan-out job reading the
+  list after the commit would shorten the request.
+- **Templates of modules that do not exist yet live in core.notifications** (`registry.membership-*`, `onboarding.application-*`,
+  `kpi.reporting-reminder`). When M6, M10 and M15 land, each module takes over its own (a rename of the contributor, same key).
+- **No unsubscribe link and no preference check yet.** `category` and `mandatory` are recorded on every template; the switch is sprint 3.
+- **The text and HTML of a template are not checked by a mail-client test.** The HTML is plain tables-free markup with inline styles; the
+  layout is tested for escaping and structure, not rendered in real clients.
+- **A start-up message for a leftover `SMTP_URL` was left out.** The M4 plan's risk table asks for one; its definition of done (the old name
+  appears only in documentation) wins. The changeset and the READMEs say the variable is ignored.
+
 ## Notifications follow-ups (M4 sprint 1)
 
 - **A module stop hook in the kernel.** `core.notifications` opens a `LISTEN` connection per process at `system.ready` and has no way to be
@@ -54,9 +75,9 @@
 - Sprint 2 follow-ups: (1) Done in M3 sprint 2: `approve` and `reject` check the permission and "not your own account" with `ctx.authz.require` in the service. (2) An `Origin` check as a third CSRF layer (ADR-0007) needs the public origin to be reliable behind every proxy; revisit with the settings in M3. (3) `POST /auth/register` answers 409 for a taken username or address, which tells a caller that it exists. Decided in sprint 5 to keep it for M2; see "Sprint 5 follow-ups". (4) Done in sprint 5: the purge of soft-deleted accounts after 30 days frees the username and the address (ADR-0013).
 - Sprint 4 follow-ups (OIDC): (1) A public `GET /auth/oidc/providers` (id and display name) for the login page, with the UI in M5. (2) Done in sprint 5: the hourly cleanup job removes expired `identity_login_state` rows. (3) `email_verified` sent as the string `"true"` by some providers is treated as not verified; add a per-provider option if a real provider needs it. (4) Provider icons (FEATURES asks for a display icon): the blob store exists since M3 sprint 4; add an icon hash to the provider setting with the login page (M5). (5) The code exchange cannot be aborted (arctic has no signal); revisit if arctic gains one. (6) Several identities of one provider per user are refused (409); lift that only with a product reason.
 - Sprint 5 follow-ups (recovery, profile, cleanup):
-  - **Settings and secrets wiring (M3).** Done in sprint 3: `IdentitySettings` reads `ctx.settings`, the retention numbers, the mail budgets and the pipeline's rate limits are settings, and `OIDC_<ID>_CLIENT_SECRET` is replaced by the secrets store. Done in sprint 4: `instanceName` and `mailFrom` are branding settings of core.settings (ADR-0018). Still open: `SMTP_URL` keeps its password in the environment until core.notifications (M4) moves the transport into settings and secrets.
-  - **Real mailer through core.notifications (M4).** The `Mailer` port and the two plain-text mails live in `modules/core-identity/service`. M4 moves the port behind core.notifications and brings templates, localisation, an HTML part, a queue with retries on the outbox (today a crash between commit and send loses one mail, and a failed send is only logged), delivery status in the admin list, and the mails the FEATURES list needs (welcome, approved, rejected). Check that the unconfigured mailer's "not sent" warning does not flood logs once registrations send mail in every deployment without SMTP.
-  - **Register without revealing.** `POST /auth/register` still answers 409 for a taken address. Hiding it needs a mail to the address's owner ("someone tried to register with your address", M4) and a UI that says "check your mail" for everybody (M5). The username 409 stays: usernames are public.
+  - **Settings and secrets wiring (M3).** Done in sprint 3: `IdentitySettings` reads `ctx.settings`, the retention numbers, the mail budgets and the pipeline's rate limits are settings, and `OIDC_<ID>_CLIENT_SECRET` is replaced by the secrets store. Done in sprint 4: `instanceName` and `mailFrom` are branding settings of core.settings (ADR-0018). Done in M4 sprint 2: `SMTP_URL` is gone; the relay is a core.notifications setting and its password a secret.
+  - **Real mailer through core.notifications (M4).** Done in M4 sprint 2: the `Mailer` port is deleted, every mail is a template of core.notifications queued in the transaction of the work, with retries and a visible status. Still open: the delivery status in an admin list (sprint 3).
+  - **Register without revealing.** Done in M4 sprint 2: `POST /auth/register` answers 202 for every well-formed request and the owner of a taken address gets a notice mail; the username stays a 409. Still open: the "check your mail" page (M5).
   - **Bio as Markdown.** FEATURES asks for a bio, not for Markdown, so it is plain text (max 2000). If wanted: render on the server and sanitise with DOMPurify. Also consider stripping Unicode format characters (bidi overrides) from display names; only control characters are refused today.
   - **Guessing one username from many addresses.** No lockout and no per-username counter (README, "Account locking"): both are a denial of service against a known username. Options that avoid it: alerting on failed logins per username, a proof-of-work or CAPTCHA step-up after repeated failures, 2FA.
   - **Revoke access tokens on a reset (optional).** A reset or a change ends sessions only (ADR-0012). A "revoke my tokens too" switch on the reset page, or a security-event setting, would cover the case of a token minted from a hijacked session.
