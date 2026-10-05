@@ -76,7 +76,7 @@ read.
 
 ### Routes
 
-All are internal (`/api/internal`). Settings and secrets are Admin's; no response carries a secret value.
+All are internal (`/api/internal`). Settings and secrets are Admin's; no response carries a secret value. The writes have `audit` (ADR-0021): `PUT /settings/{module}` and the vocabulary writes store their body (settings never hold secrets), `PUT` and `DELETE /secrets/{name}` store no body at all, so the value never reaches the trail. The events they emit name the actor (`actorId`).
 
 | Route                                  | Permission                       | Does                                                                                                      |
 | -------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
