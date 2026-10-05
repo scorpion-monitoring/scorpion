@@ -11,6 +11,7 @@ This file summarises how work gets into `main`.
 - If a requirement in `docs/FEATURES.md` looks wrong or conflicts with the architecture, stop
   and ask. Record the answer in an ADR (`docs/adr/`).
 - Add an ADR for every decision that changes the architecture.
+- Write issues, pull requests, commit messages, code comments and documentation in English.
 
 ## Branches
 
