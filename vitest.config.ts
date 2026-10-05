@@ -18,6 +18,11 @@ function packageDirs(): string[] {
   return [...dirs, ...extraProjects].filter((dir) => existsSync(join(dir, 'package.json')));
 }
 
+// Most tests start a Postgres container and a kernel. On a loaded CI runner (many files at once) a test
+// that takes 0.3 s on a laptop takes several seconds, and the 5 s / 10 s defaults then fail unrelated
+// tests (three different ones in one run). Tests that are heavy on purpose set their own, longer limit.
+const timeouts = { testTimeout: 30_000, hookTimeout: 60_000 };
+
 const CONFIG_FILE = /^vite(st)?\.config\.[cm]?[jt]s$/;
 
 function project(dir: string): TestProjectConfiguration {
@@ -25,7 +30,7 @@ function project(dir: string): TestProjectConfiguration {
   // so the config runs with the right root. Vitest then names it after package.json too.
   if (readdirSync(dir).some((file) => CONFIG_FILE.test(file))) return dir;
   const { name } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name: string };
-  return { test: { name, root: resolve(dir) } };
+  return { test: { name, root: resolve(dir), ...timeouts } };
 }
 
 export default defineConfig({
@@ -33,7 +38,7 @@ export default defineConfig({
     projects: [
       ...packageDirs().map(project),
       // Repository scripts (branch policy, changeset check) are not a package.
-      { test: { name: 'scripts', root: resolve('scripts') } },
+      { test: { name: 'scripts', root: resolve('scripts'), ...timeouts } },
     ],
     passWithNoTests: true,
   },
