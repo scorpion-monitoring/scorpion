@@ -3,7 +3,8 @@
 // Every pull request needs one: `pnpm changeset` for a change that belongs in CHANGELOG.md,
 // `pnpm changeset --empty` for one that does not. A release branch (it updates CHANGELOG.md
 // through `changeset version`) is exempt, and so is a pull request that changes only
-// documentation (see `isDocsFile`). Changesets may name only the root package `scorpion`,
+// documentation (see `isDocsFile`), and so is a Dependabot pull request that changes only
+// dependency files (see `isDependencyUpdate`). Changesets may name only the root package `scorpion`,
 // because the internal packages are ignored and would never reach the changelog.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -19,6 +20,35 @@ export function needsChangeset(changed: string[]): boolean {
   return !changed.every(isDocsFile);
 }
 
+/** Files that a Dependabot update (npm, github-actions, docker) may change. */
+export function isDependencyFile(file: string): boolean {
+  return (
+    file === 'pnpm-lock.yaml' ||
+    file === 'package.json' ||
+    file.endsWith('/package.json') ||
+    file === 'docker/Dockerfile' ||
+    /^\.github\/workflows\/[^/]+\.ya?ml$/.test(file)
+  );
+}
+
+/**
+ * True for a pull request that Dependabot opened and that changes only dependency files. Both the
+ * head branch and the pull request author must say Dependabot, and a bot pull request that touches
+ * anything else (a script, a module) still needs a changeset.
+ */
+export function isDependencyUpdate(
+  changed: string[],
+  headRef: string | undefined,
+  author: string | undefined,
+): boolean {
+  return (
+    changed.length > 0 &&
+    author === 'dependabot[bot]' &&
+    /^dependabot\/[^\s]+$/.test(headRef ?? '') &&
+    changed.every(isDependencyFile)
+  );
+}
+
 if (import.meta.main) main();
 
 function main() {
@@ -32,6 +62,11 @@ function main() {
   const changed = git('diff', '--name-only', `${base}...HEAD`);
   if (changed.includes('CHANGELOG.md')) {
     console.log('Release branch (CHANGELOG.md changed): no changeset needed.');
+    process.exit(0);
+  }
+  // Both values come from the environment (set from the pull request event in ci.yml), never from run:.
+  if (isDependencyUpdate(changed, process.env.HEAD_REF, process.env.PR_AUTHOR)) {
+    console.log('Dependabot update of dependency files only: no changeset needed.');
     process.exit(0);
   }
   if (!needsChangeset(changed)) {
