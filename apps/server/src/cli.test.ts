@@ -235,12 +235,13 @@ describe('the command line itself', () => {
     const none = run([], {});
     expect(none.code).toBe(2);
     expect(none.stderr).toContain('Usage: scorpion <command>');
-  });
+    // Two processes that each load every module: well over the default 5 s on a loaded CI runner.
+  }, 60_000);
 
   it('profile:generate --check passes on the committed profile', () => {
     const result = run(['profile:generate', 'full', '--check'], {});
     expect(result.code).toBe(0);
-  });
+  }, 60_000);
 });
 
 describe('scorpion create-admin', () => {
