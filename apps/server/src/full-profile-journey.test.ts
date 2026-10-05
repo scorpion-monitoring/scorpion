@@ -122,7 +122,13 @@ async function boot() {
 describe('a fresh full-profile instance, end to end, on the real authoriser', () => {
   it('goes from create-admin to a limited personal access token', async () => {
     const { kernel, call, login, bootstrap, logs } = await boot();
-    expect(moduleIds).toEqual(['core.authz', 'core.settings', 'core.blob', 'core.identity']);
+    expect(moduleIds).toEqual([
+      'core.authz',
+      'core.settings',
+      'core.blob',
+      'core.notifications',
+      'core.identity',
+    ]);
 
     // 1. The first administrator, as `scorpion create-admin` makes it: Admin, given by the system.
     const created = await bootstrap.createAdmin({
