@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 import { makeMember, useIdentity } from '../test/harness.ts';
 import { failOutbox, tokenFrom } from '../test/mail.ts';
 import { TooManyRequests } from './errors.ts';
-import { createMemoryMailer } from './mailer.ts';
 
 const identity = useIdentity();
 
@@ -19,15 +18,14 @@ const actorOf = (
 ): Actor => ({ kind: 'user', userId: user.id, username: user.username, roles: [], via });
 
 async function start() {
-  const mailer = createMemoryMailer();
-  const started = await identity.start({ mailer });
+  const started = await identity.start();
   const alice = await makeMember(started.kernel.pool, {
     username: 'alice',
     email: 'alice@example.org',
     emailVerified: true,
   });
   await makeAuthMethod(started.kernel.pool, alice);
-  return { ...started, mailer, alice, profile: started.identity.profile };
+  return { ...started, alice, profile: started.identity.profile };
 }
 
 describe('get', () => {
@@ -159,18 +157,18 @@ describe('update: name and bio', () => {
 
 describe('update: the address', () => {
   it('keeps the old address until the new one is confirmed, then swaps it', async () => {
-    const { identity: id, mailer, profile, alice } = await start();
+    const { identity: id, mail, profile, alice } = await start();
     const asked = await profile.update(actorOf(alice), { email: 'New@Example.org' });
     expect(asked).toMatchObject({
       email: 'alice@example.org',
       emailVerified: true,
       pendingEmail: 'New@Example.org',
     });
-    expect(mailer.sent.map((m) => [m.kind, m.to])).toEqual([
-      ['email-verification', 'New@Example.org'],
+    expect((await mail.all()).map((m) => [m.template, m.to])).toEqual([
+      ['identity.email-verification', 'New@Example.org'],
     ]);
 
-    await id.recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) });
+    await id.recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) });
     expect(await profile.get(actorOf(alice))).toMatchObject({
       email: 'New@Example.org',
       emailVerified: true,
@@ -179,24 +177,26 @@ describe('update: the address', () => {
   });
 
   it('asking again replaces the link that waits, and the old address stays meanwhile', async () => {
-    const { identity: id, mailer, profile, alice } = await start();
+    const { identity: id, mail, profile, alice } = await start();
     await profile.update(actorOf(alice), { email: 'one@example.org' });
     await profile.update(actorOf(alice), { email: 'two@example.org' });
     expect((await profile.get(actorOf(alice))).pendingEmail).toBe('two@example.org');
-    await expect(id.recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) })).rejects.toThrow();
-    await id.recovery.confirmEmail({ token: tokenFrom(mailer.sent[1]) });
+    await expect(
+      id.recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) }),
+    ).rejects.toThrow();
+    await id.recovery.confirmEmail({ token: tokenFrom((await mail.all())[1]) });
     expect((await profile.get(actorOf(alice))).email).toBe('two@example.org');
   });
 
   it('is a no-op for the address the account already has, whatever the case', async () => {
-    const { mailer, profile, alice } = await start();
+    const { mail, profile, alice } = await start();
     const result = await profile.update(actorOf(alice), { email: 'ALICE@example.org' });
     expect(result.pendingEmail).toBeNull();
-    expect(mailer.sent).toEqual([]);
+    expect(await mail.all()).toEqual([]);
   });
 
   it('looks the same for an address another account holds: pending, but no mail, and the link is no use', async () => {
-    const { kernel, identity: id, mailer, profile, alice } = await start();
+    const { kernel, identity: id, mail, profile, alice } = await start();
     await makeMember(kernel.pool, {
       username: 'bobby',
       email: 'bobby@example.org',
@@ -205,7 +205,7 @@ describe('update: the address', () => {
     const free = await profile.update(actorOf(alice), { email: 'free@example.org' });
     const taken = await profile.update(actorOf(alice), { email: 'Bobby@Example.org' });
     expect(taken).toEqual({ ...free, pendingEmail: 'Bobby@Example.org' });
-    expect(mailer.sent.map((m) => m.to)).toEqual(['free@example.org']); // bobby is not mailed
+    expect((await mail.all()).map((m) => m.to)).toEqual(['free@example.org']); // bobby is not mailed
     expect((await id.users.findByEmail('bobby@example.org'))?.username).toBe('bobby');
   });
 
@@ -221,10 +221,10 @@ describe('update: the address', () => {
   });
 
   it('works for an account that has no address yet', async () => {
-    const { kernel, identity: id, mailer, profile } = await start();
+    const { kernel, identity: id, mail, profile } = await start();
     const carol = await makeMember(kernel.pool, { username: 'carol', email: null });
     await profile.update(actorOf(carol), { email: 'carol@example.org' });
-    await id.recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) });
+    await id.recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) });
     expect(await profile.get(actorOf(carol))).toMatchObject({
       email: 'carol@example.org',
       emailVerified: true,
@@ -232,10 +232,10 @@ describe('update: the address', () => {
   });
 
   it('stores nothing and mails nothing when the event cannot be written (rollback)', async () => {
-    const { kernel, mailer, profile, alice } = await start();
+    const { kernel, mail, profile, alice } = await start();
     await failOutbox(kernel);
     await expect(profile.update(actorOf(alice), { email: 'new@example.org' })).rejects.toThrow();
     expect(await rows(kernel, 'select 1 from identity_mail_token')).toEqual([]);
-    expect(mailer.sent).toEqual([]);
+    expect(await mail.all()).toEqual([]);
   });
 });

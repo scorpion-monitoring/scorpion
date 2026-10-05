@@ -5,7 +5,6 @@ import { makePng, makeRole, makeRoleAssignment, makeUser } from '@scorpion/testi
 import { describe, expect, it } from 'vitest';
 import { makeMember, useIdentity } from '../test/harness.ts';
 import { failOutbox } from '../test/mail.ts';
-import { createMemoryMailer } from './mailer.ts';
 
 const identity = useIdentity();
 
@@ -19,7 +18,7 @@ const actorOf = (
 const png = (width: number) => Promise.resolve(makePng(width));
 
 async function start() {
-  const started = await identity.start({ mailer: createMemoryMailer() });
+  const started = await identity.start();
   const alice = await makeMember(started.kernel.pool, {
     username: 'alice',
     email: 'alice@example.org',

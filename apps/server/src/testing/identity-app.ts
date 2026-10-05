@@ -16,6 +16,12 @@ import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json'
 import blobModule from '@scorpion/core-blob/module';
 import blobPackage from '@scorpion/core-blob/package.json' with { type: 'json' };
 import {
+  createNotificationsModule,
+  type NotificationsInternals,
+  type NotificationsModuleOptions,
+} from '@scorpion/core-notifications/module';
+import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
+import {
   createSettingsModule,
   type SettingsInternalsBundle,
   type SettingsModuleOptions,
@@ -29,9 +35,11 @@ import {
   type ModuleManifest,
 } from '@scorpion/kernel';
 import {
+  mailbox,
   makeRole,
   makeRoleAssignment,
   makeSecretsKey,
+  makeSetting,
   startPostgres,
   type StartedPostgres,
 } from '@scorpion/testing';
@@ -40,7 +48,6 @@ import { createApp, SURFACE_PREFIX, type AppOptions } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
 import { limitsFromSettings } from '../pipeline/rate-limit.ts';
 
-export { createMemoryMailer } from '@scorpion/core-identity/module';
 export const API = SURFACE_PREFIX.internal;
 /**
  * The scopes of a test token that may do everything the role `user` may: a token is limited to
@@ -74,6 +81,18 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   extraModules?: { id: string; manifest: ModuleManifest }[];
   /** Use the limits stored in core.settings (as the server does) instead of the constants. */
   storedRateLimits?: boolean;
+  /**
+   * core.notifications is real. By default it has no wake-up listener and no worker runs, so a mail
+   * stays queued and `mail.all()` reads it with its body; `notificationSettings` stores the settings
+   * of the module before start (a relay), and `startWorkers` runs the jobs that deliver.
+   */
+  notifications?: NotificationsModuleOptions;
+  notificationSettings?: Record<string, unknown>;
+  /** Stored `branding` settings of core.settings. */
+  branding?: Record<string, unknown>;
+  startWorkers?: boolean;
+  /** Job tuning: how often workers poll and the cron schedule is checked. */
+  jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
 
 export interface Reply {
@@ -131,6 +150,7 @@ export function useIdentityApp() {
             'core.authz',
             'core.settings',
             'core.blob',
+            'core.notifications',
             'core.identity',
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
@@ -148,6 +168,10 @@ export function useIdentityApp() {
             packageJson: settingsPackage,
           },
           { manifest: blobModule, packageJson: blobPackage },
+          {
+            manifest: createNotificationsModule({ listen: false, ...options.notifications }),
+            packageJson: notificationsPackage,
+          },
           { manifest: createIdentityModule(options), packageJson },
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
@@ -161,6 +185,7 @@ export function useIdentityApp() {
           'core.authz': '@scorpion/core-authz',
           'core.settings': '@scorpion/core-settings',
           'core.blob': '@scorpion/core-blob',
+          'core.notifications': '@scorpion/core-notifications',
           'core.identity': '@scorpion/core-identity',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
@@ -174,10 +199,22 @@ export function useIdentityApp() {
           PROFILE: 'identity-http',
         }),
         log,
+        jobs: options.jobs,
       });
       open.push(kernel);
+      if (options.notificationSettings || options.branding) {
+        await kernel.migrate();
+        if (options.notificationSettings) {
+          await makeSetting(kernel.pool, 'core.notifications', options.notificationSettings);
+        }
+        if (options.branding) {
+          await makeSetting(kernel.pool, 'core.settings', { branding: options.branding });
+        }
+      }
       await kernel.start();
+      if (options.startWorkers) await kernel.startWorkers();
       const identity = kernel.services.get('core.identity') as IdentityInternals;
+      const notifications = kernel.services.get('core.notifications') as NotificationsInternals;
       const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
 
       const app = createApp({
@@ -272,6 +309,9 @@ export function useIdentityApp() {
       return {
         kernel,
         identity,
+        notifications,
+        /** The mail queued so far (bodies are kept while a mail is queued). */
+        mail: mailbox(kernel.pool),
         settings,
         databaseUrl,
         secretsKey,

@@ -1,8 +1,14 @@
-// Helpers for tests that read mail from the in-memory mailer and break the outbox on purpose.
-import type { Mail } from '../service/mailer.ts';
+// Helpers for tests that read the mail core.identity queued and break the outbox on purpose.
+//
+// core.notifications is real in these tests and no worker runs, so a mail stays `queued` and its
+// rendered body is still in its table. `mailbox` (in @scorpion/testing, with the other factories of
+// that table, so no module names another module's table) reads it.
+import type { QueuedMail } from '@scorpion/testing';
+
+export { mailbox, type Mailbox, type QueuedMail } from '@scorpion/testing';
 
 /** The token in the link of a mail (it is in the fragment, `#token=…`). */
-export function tokenFrom(mail: Mail | undefined): string {
+export function tokenFrom(mail: Pick<QueuedMail, 'text'> | undefined): string {
   const match = /#token=([A-Za-z0-9_%-]+)/.exec(mail?.text ?? '');
   if (!match) throw new Error('no link with a token in the mail');
   return decodeURIComponent(match[1]!);

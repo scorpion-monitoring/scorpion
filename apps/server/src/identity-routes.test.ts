@@ -7,33 +7,65 @@ const registration = { username: 'alice', email: 'alice@example.org', password: 
 const UNKNOWN_ID = '019a0000-0000-7000-8000-000000000000';
 
 describe('POST /auth/register', () => {
-  it('creates a pending account and answers 201 without a cookie or any secret', async () => {
-    const { post, logText } = await app.start();
+  it('creates a pending account and answers 202 { accepted: true } without a cookie, an id or any secret', async () => {
+    const { post, logText, identity } = await app.start();
     const reply = await post('/auth/register', { body: registration });
-    expect(reply.status).toBe(201);
-    expect(reply.body).toEqual({
-      user: expect.objectContaining({
-        username: 'alice',
-        status: 'pending',
-        emailVerified: false,
-      }) as unknown,
-    });
+    expect(reply.status).toBe(202);
+    expect(reply.body).toEqual({ accepted: true });
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
     expect(reply.setCookie).toBeUndefined();
+    expect(await identity.users.findByUsername('alice')).toMatchObject({
+      status: 'pending',
+      emailVerified: false,
+    });
     expect(JSON.stringify(reply.body)).not.toContain(PASSWORD);
     expect(logText()).not.toContain(PASSWORD);
   });
 
-  it('answers 409 problem+json for a taken username or email', async () => {
-    const { post } = await app.start();
+  it('answers 409 problem+json for a taken username, and the same 202 for a taken email address', async () => {
+    const { post, identity } = await app.start();
     await post('/auth/register', { body: registration });
-    for (const body of [
-      { ...registration, email: 'other@example.org' },
-      { ...registration, username: 'carol' },
-    ]) {
-      const reply = await post('/auth/register', { body });
-      expect(reply.status).toBe(409);
-      expect(reply.res.headers.get('content-type')).toContain('application/problem+json');
-    }
+    const sameName = await post('/auth/register', {
+      body: { ...registration, email: 'other@example.org' },
+    });
+    expect(sameName.status).toBe(409);
+    expect(sameName.res.headers.get('content-type')).toContain('application/problem+json');
+    const sameAddress = await post('/auth/register', {
+      body: { ...registration, username: 'carol' },
+    });
+    expect(sameAddress.status).toBe(202);
+    expect(sameAddress.body).toEqual({ accepted: true });
+    expect(await identity.users.findByUsername('carol')).toBeUndefined();
+  });
+
+  it('accepts the language of the mails in the body, a well-formed tag that is not shipped is fine, a malformed one is a 422', async () => {
+    const { post, mail } = await app.start();
+    expect((await post('/auth/register', { body: { ...registration, locale: 'de' } })).status).toBe(
+      202,
+    );
+    expect(
+      (
+        await post('/auth/register', {
+          body: { ...registration, username: 'bob', email: 'bob@example.org', locale: 'fr' },
+        })
+      ).status,
+    ).toBe(202);
+    expect(
+      (
+        await post('/auth/register', {
+          body: {
+            ...registration,
+            username: 'eve',
+            email: 'eve@example.org',
+            locale: 'not a tag!',
+          },
+        })
+      ).status,
+    ).toBe(422);
+    expect((await mail.of('identity.welcome')).map((m) => [m.to, m.locale])).toEqual([
+      ['alice@example.org', 'de'],
+      ['bob@example.org', 'en'],
+    ]);
   });
 
   it.each([
@@ -90,11 +122,11 @@ describe('POST /auth/register', () => {
         ).status,
       );
     }
-    expect(statuses).toEqual([201, 201, 429, 429]);
+    expect(statuses).toEqual([202, 202, 429, 429]);
     // The default bucket of other routes is a different one.
     expect(
       (await post('/auth/register', { body: registration, peer: '198.51.100.9' })).status,
-    ).toBe(201);
+    ).toBe(202);
   });
 });
 
@@ -338,10 +370,11 @@ describe('every protected route refuses the caller who may not use it', () => {
 
 describe('approval over HTTP', () => {
   it('registers, is approved by someone else, then can sign in and out (the whole journey)', async () => {
-    const { post, get, signedIn } = await app.start();
+    const { post, get, signedIn, identity, mail } = await app.start();
     const admin = await signedIn('admin', { roles: ['admin'] });
     const registered = await post('/auth/register', { body: registration });
-    const { id } = (registered.body as { user: { id: string } }).user;
+    expect(registered.status).toBe(202);
+    const { id } = (await identity.users.findByUsername('alice'))!;
     expect(
       (await post('/auth/login', { body: { username: 'alice', password: PASSWORD } })).status,
     ).toBe(403);
@@ -354,6 +387,15 @@ describe('approval over HTTP', () => {
 
     const approved = await post(`/users/${id}/approve`, { cookie: admin.cookie, csrf: admin.csrf });
     expect(approved.body).toEqual({ id, status: 'active' });
+    // The administrator was told about the request, and the person about the decision.
+    expect((await mail.all()).map((m) => [m.template, m.to]).sort()).toEqual(
+      [
+        ['identity.email-verification', 'alice@example.org'],
+        ['identity.welcome', 'alice@example.org'],
+        ['identity.registration-request', 'admin@example.org'],
+        ['identity.approved', 'alice@example.org'],
+      ].sort(),
+    );
 
     const login = await post('/auth/login', { body: { username: 'alice', password: PASSWORD } });
     expect(login.status).toBe(200);
@@ -368,13 +410,13 @@ describe('approval over HTTP', () => {
   });
 
   it('rejects an account, which then cannot sign in', async () => {
-    const { post, signedIn } = await app.start();
+    const { post, signedIn, identity, mail } = await app.start();
     const admin = await signedIn('admin', { roles: ['admin'] });
-    const { id } = (
-      (await post('/auth/register', { body: registration })).body as { user: { id: string } }
-    ).user;
+    await post('/auth/register', { body: registration });
+    const { id } = (await identity.users.findByUsername('alice'))!;
     const rejected = await post(`/users/${id}/reject`, { cookie: admin.cookie, csrf: admin.csrf });
     expect(rejected.body).toEqual({ id, status: 'rejected' });
+    expect(await mail.of('identity.rejected')).toMatchObject([{ to: 'alice@example.org' }]);
     expect(
       (await post('/auth/login', { body: { username: 'alice', password: PASSWORD } })).status,
     ).toBe(401);

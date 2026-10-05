@@ -1,14 +1,9 @@
 // Password reset, password change and email verification through the whole pipeline, on real
-// Postgres with the in-memory mailer: the same answer for every address, the denied requests, the
+// Postgres with the in-memory mail: the same answer for every address, the denied requests, the
 // bad input, and what the log may not hold.
+import { startSmtpServer, tablesContaining } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import {
-  ALL_USER_SCOPES,
-  createMemoryMailer,
-  PASSWORD,
-  settingsWith,
-  useIdentityApp,
-} from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, PASSWORD, settingsWith, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 const NEW_PASSWORD = 'another long passphrase';
@@ -16,16 +11,16 @@ const LINK = /#token=([A-Za-z0-9_%-]+)/;
 const strictTwo = { strict: { capacity: 2, refillPerSecond: 0.001 } };
 
 async function start(options: Parameters<typeof app.start>[0] = {}) {
-  const mailer = createMemoryMailer();
-  const started = await app.start({ mailer, tokenCacheTtlMs: 0, ...options });
-  const tokenOf = (index: number) =>
-    decodeURIComponent(LINK.exec(mailer.sent[index]?.text ?? '')?.[1] ?? '');
-  return { ...started, mailer, tokenOf };
+  const started = await app.start({ tokenCacheTtlMs: 0, ...options });
+  /** The token in the link of the n-th queued mail of a template. */
+  const tokenOf = async (template: string, n = 0) =>
+    decodeURIComponent(LINK.exec((await started.mail.of(template))[n]?.text ?? '')?.[1] ?? '');
+  return { ...started, tokenOf };
 }
 
 describe('requesting a reset', () => {
   it('answers exactly the same for a known and an unknown address', async () => {
-    const { post, signedIn, mailer } = await start();
+    const { post, signedIn, mail } = await start();
     await signedIn('alice', { email: 'alice@example.org' });
 
     const known = await post('/auth/password-reset', { body: { email: 'alice@example.org' } });
@@ -36,7 +31,10 @@ describe('requesting a reset', () => {
     expect(unknown.body).toEqual(known.body);
     expect(unknown.body).toEqual({ accepted: true });
     expect(unknown.res.headers.get('content-type')).toBe(known.res.headers.get('content-type'));
-    expect(mailer.sent.map((m) => m.to)).toEqual(['alice@example.org']);
+    // Only the known address was mailed, in one mail that carries the link.
+    expect((await mail.all()).map((m) => [m.template, m.to])).toEqual([
+      ['identity.password-reset', 'alice@example.org'],
+    ]);
   });
 
   it('is rate limited per client (429 with Retry-After), known address or not', async () => {
@@ -75,13 +73,13 @@ describe('requesting a reset', () => {
 
 describe('confirming a reset', () => {
   it('sets the password; the old cookie and the old password are dead; the new password works', async () => {
-    const { post, get, signedIn, mailer, tokenOf } = await start();
+    const { post, get, signedIn, mail, tokenOf } = await start();
     const session = await signedIn('alice', { email: 'alice@example.org' });
     await post('/auth/password-reset', { body: { email: 'alice@example.org' } });
-    expect(mailer.sent).toHaveLength(1);
+    expect(await mail.all()).toHaveLength(1);
 
     const done = await post('/auth/password-reset/confirm', {
-      body: { token: tokenOf(0), password: NEW_PASSWORD },
+      body: { token: await tokenOf('identity.password-reset'), password: NEW_PASSWORD },
     });
     expect(done.status).toBe(204);
 
@@ -98,7 +96,7 @@ describe('confirming a reset', () => {
     const { post, signedIn, tokenOf } = await start();
     await signedIn('alice', { email: 'alice@example.org' });
     await post('/auth/password-reset', { body: { email: 'alice@example.org' } });
-    const good = { token: tokenOf(0), password: NEW_PASSWORD };
+    const good = { token: await tokenOf('identity.password-reset'), password: NEW_PASSWORD };
     expect((await post('/auth/password-reset/confirm', { body: good })).status).toBe(204);
 
     const replies = [];
@@ -202,17 +200,19 @@ describe('changing the password', () => {
 
 describe('verifying an address', () => {
   it('registering mails a link, and the link confirms the address (no session needed)', async () => {
-    const { post, identity, mailer, tokenOf } = await start();
+    const { post, identity, mail, tokenOf } = await start();
     const registered = await post('/auth/register', {
       body: { username: 'alice', email: 'alice@example.org', password: PASSWORD },
     });
-    expect(registered.status).toBe(201);
-    expect(mailer.sent).toHaveLength(1);
-    expect(mailer.sent[0]!.text).toContain('/verify-email#token=sev_');
+    expect(registered.status).toBe(202);
+    expect((await mail.of('identity.email-verification'))[0]!.text).toContain(
+      '/verify-email#token=sev_',
+    );
 
-    expect((await post('/auth/verify-email', { body: { token: tokenOf(0) } })).status).toBe(204);
+    const token = await tokenOf('identity.email-verification');
+    expect((await post('/auth/verify-email', { body: { token } })).status).toBe(204);
     expect((await identity.users.findByUsername('alice'))?.emailVerified).toBe(true);
-    const again = await post('/auth/verify-email', { body: { token: tokenOf(0) } });
+    const again = await post('/auth/verify-email', { body: { token } });
     expect(again.status).toBe(400);
   });
 
@@ -224,11 +224,11 @@ describe('verifying an address', () => {
   });
 
   it('sends a new link on request, for the caller’s own address', async () => {
-    const { call, signedIn, mailer } = await start();
+    const { call, signedIn, mail } = await start();
     const session = await signedIn('alice', { email: 'alice@example.org' });
     const reply = await call('POST', '/account/email/verification', session);
     expect(reply.status).toBe(202);
-    expect(mailer.sent.map((m) => m.to)).toEqual(['alice@example.org']);
+    expect((await mail.all()).map((m) => m.to)).toEqual(['alice@example.org']);
   });
 });
 
@@ -291,39 +291,103 @@ describe('the session-only routes refuse the callers who may not use them', () =
   );
 });
 
-describe('what the log may not hold', () => {
-  it('has no token, link or address after a reset, a verification and a failed mail', async () => {
-    const { post, signedIn, mailer, tokenOf, logText } = await start();
-    await signedIn('alice', { email: 'alice@example.org' });
-    await post('/auth/password-reset', { body: { email: 'alice@example.org' } });
-    await post('/auth/register', {
-      body: { username: 'bobby', email: 'bobby@example.org', password: PASSWORD },
-    });
-    mailer.failWith(
-      Object.assign(new Error('550 carol@example.org smtp://u:pw@host'), { code: 'EENVELOPE' }),
-    );
-    await post('/auth/password-reset', { body: { email: 'alice@example.org' } });
-    await post('/auth/password-reset/confirm', {
-      body: { token: tokenOf(0), password: NEW_PASSWORD },
-    });
-    await post('/auth/verify-email', { body: { token: tokenOf(1) } });
+describe('what the log, the tables and the responses may not hold (ADR 0012, M4 plan §12)', () => {
+  it('keeps the reset and verification tokens in the mail only: not in a log line, a table, an event or a response', async () => {
+    const relay = await startSmtpServer();
+    try {
+      const { post, signedIn, mail, tokenOf, logText, kernel, notifications } = await start({
+        notificationSettings: {
+          emailTransport: 'smtp',
+          smtp: { host: '127.0.0.1', port: relay.port, tls: 'none', timeoutSeconds: 2 },
+        },
+      });
+      await signedIn('alice', { email: 'alice@example.org' });
+      const bodies: string[] = [];
+      const send = async (path: string, body: unknown) => {
+        const reply = await post(path, { body });
+        bodies.push(JSON.stringify(reply.body ?? ''), reply.setCookie ?? '');
+        return reply;
+      };
+      await send('/auth/password-reset', { email: 'alice@example.org' });
+      await send('/auth/password-reset', { email: 'alice@example.org' }); // replaces the first link
+      await send('/auth/register', {
+        username: 'bobby',
+        email: 'bobby@example.org',
+        password: PASSWORD,
+      });
+      const tokens = [
+        await tokenOf('identity.password-reset', 0),
+        await tokenOf('identity.password-reset', 1),
+        await tokenOf('identity.email-verification', 0),
+      ];
+      expect(tokens.every((token) => /^s(rt|ev)_[A-Za-z0-9_-]{43}$/.test(token))).toBe(true);
 
+      // Queued: the link is in the delivery row, which is what the relay will be given, and nowhere else.
+      for (const token of tokens) {
+        expect(await tablesContaining(kernel.pool, token)).toEqual(['notify_delivery']);
+      }
+
+      // Sent: the rendered body of a sensitive mail is gone from the row, and the relay has the mails.
+      const report = await notifications.deliverDue();
+      expect(report).toMatchObject({ sent: 4, retried: 0, dead: 0 });
+      expect(relay.received).toHaveLength(4);
+      const rows = await mail.all();
+      expect(rows.filter((m) => m.sensitive).map((m) => [m.text, m.html, m.status])).toEqual([
+        ['', '', 'sent'],
+        ['', '', 'sent'],
+        ['', '', 'sent'],
+      ]);
+      expect(rows.find((m) => m.template === 'identity.welcome')!.text).not.toBe(''); // not sensitive: kept
+      for (const token of tokens) expect(await tablesContaining(kernel.pool, token)).toEqual([]);
+
+      // Used: the confirmations leave no token behind either.
+      await send('/auth/password-reset/confirm', { token: tokens[1], password: NEW_PASSWORD });
+      await send('/auth/verify-email', { token: tokens[2] });
+
+      const log = logText();
+      expect(log).toContain('"msg"'); // the log is not empty, so the checks below mean something
+      for (const secret of [
+        ...tokens,
+        ...tokens.map((token) => token.slice(4)),
+        'reset-password',
+        'verify-email#',
+        '#token=',
+        'alice@example.org',
+        'bobby@example.org',
+        NEW_PASSWORD,
+        PASSWORD,
+      ]) {
+        expect(log).not.toContain(secret);
+        for (const body of bodies) expect(body).not.toContain(secret);
+      }
+      for (const token of tokens) expect(await tablesContaining(kernel.pool, token)).toEqual([]);
+    } finally {
+      await relay.stop();
+    }
+  });
+
+  it('logs only an error code when the relay is down, and the mail waits in the queue', async () => {
+    const relay = await startSmtpServer();
+    const { post, signedIn, mail, kernel, notifications, logText } = await start({
+      notificationSettings: {
+        emailTransport: 'smtp',
+        smtp: { host: '127.0.0.1', port: relay.port, tls: 'none', timeoutSeconds: 1 },
+      },
+    });
+    await relay.stop();
+    await signedIn('alice', { email: 'alice@example.org' });
+    expect(
+      (await post('/auth/password-reset', { body: { email: 'alice@example.org' } })).status,
+    ).toBe(202);
+
+    expect(await notifications.deliverDue()).toMatchObject({ claimed: 1, retried: 1, sent: 0 });
+    expect(await mail.all()).toMatchObject([{ status: 'queued', to: 'alice@example.org' }]);
+    expect(
+      (await kernel.pool.query('select last_error, attempts from notify_delivery')).rows,
+    ).toEqual([{ last_error: 'ESOCKET', attempts: 1 }]);
     const log = logText();
-    expect(log).toContain('"msg"'); // the log is not empty, so the checks below mean something
-    for (const secret of [
-      tokenOf(0),
-      tokenOf(1),
-      tokenOf(0).slice(4),
-      'reset-password',
-      'verify-email#',
-      '#token=',
-      'alice@example.org',
-      'bobby@example.org',
-      'carol@example.org',
-      'pw@host',
-      NEW_PASSWORD,
-      PASSWORD,
-    ]) {
+    expect(log).toContain('ESOCKET');
+    for (const secret of ['alice@example.org', '#token=', 'srt_', '127.0.0.1']) {
       expect(log).not.toContain(secret);
     }
   });

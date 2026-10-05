@@ -11,17 +11,11 @@
 import { randomUUID } from 'node:crypto';
 import { makeRole } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import {
-  ALL_USER_SCOPES,
-  createMemoryMailer,
-  PASSWORD,
-  useIdentityApp,
-  type Reply,
-} from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, PASSWORD, useIdentityApp, type Reply } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
-const start = () => app.start({ tokenCacheTtlMs: 0, mailer: createMemoryMailer() });
+const start = () => app.start({ tokenCacheTtlMs: 0 });
 type Started = Awaited<ReturnType<typeof start>>;
 
 interface Sample {
@@ -216,8 +210,9 @@ const register = async (s: Started, username: string) => {
   const reply = await s.post('/auth/register', {
     body: { username, email: `${username}@example.org`, password: PASSWORD },
   });
-  expect(reply.status).toBe(201);
-  return (reply.body as { user: { id: string } }).user.id;
+  // 202 `{ accepted: true }` for every well-formed request (register without revealing): the id comes from the service.
+  expect(reply.status).toBe(202);
+  return (await s.identity.users.findByUsername(username))!.id;
 };
 const problem = (reply: Reply) => reply.res.headers.get('content-type') ?? '';
 

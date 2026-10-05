@@ -3,7 +3,7 @@
 // administrator comes from the bootstrap service (what `scorpion create-admin` calls), a second
 // person registers, is approved with a role, uses the account, and a personal access token with a
 // limited scope works through the real pipeline, limited to its scopes and its owner's permissions.
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any --
+/* eslint-disable @typescript-eslint/no-explicit-any --
    the bodies of the responses are read as plain JSON */
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import { makePng, makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
@@ -149,8 +149,13 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
     const registered = await call('POST', '/auth/register', {
       body: { username: 'alice', email: 'alice@example.org', password: PASSWORD },
     });
-    expect(registered.status).toBe(201);
-    const aliceId = registered.body!.user.id as string;
+    expect(registered.status).toBe(202);
+    expect(registered.body).toEqual({ accepted: true });
+    const aliceId = (
+      await kernel.pool.query<{ id: string }>(
+        "select id from identity_user where username = 'alice'",
+      )
+    ).rows[0]!.id;
     expect(
       (await call('POST', '/auth/login', { body: { username: 'alice', password: PASSWORD } }))
         .status,

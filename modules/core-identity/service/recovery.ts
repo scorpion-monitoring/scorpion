@@ -6,14 +6,13 @@
 //   or may use the feature, and never say what they did.
 // - A token that is unknown, used, expired, of the wrong kind or for an account that cannot use it
 //   is one 400, so a link says nothing about the account behind it.
-// - The token is in the mail only: not in a response, an event, an error or a log line. A mail is
-//   sent after the transaction that stores its token has committed, and without making the caller
-//   wait for the transport.
-import { createHash } from 'node:crypto';
+// - The token is in the mail only: not in a response, an event, an error or a log line. The mail is
+//   stored in the transaction that stores the token (core.notifications, ADR 0019), so a rollback
+//   sends nothing and the request never waits for a relay: it only inserts a row.
 import { and, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import { Conflict, Forbidden, Invalid, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import { createRateLimiter, type ModuleContext } from '@scorpion/kernel';
+import { createRateLimiter, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { authMethod, mailToken, user } from '../db/schema.ts';
 import {
@@ -30,23 +29,23 @@ import {
   RESET_TTL_MS,
   VERIFICATION_TTL_MS,
 } from './mail-tokens.ts';
-import { resetMail, verificationMail, type MailContext } from './mail-messages.ts';
-import { dispatch, type Mail, type Mailer } from './mailer.ts';
+import type { IdentityMail } from './identity-mail.ts';
+import type { MailBudget } from './mail-budget.ts';
+import type { MailLinks } from './mail-links.ts';
 import { TooManyRequests } from './errors.ts';
 import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
-import { budgetLimit, type BrandingSource, type IdentitySettings } from './settings.ts';
-
-const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+import { budgetLimit, type IdentitySettings } from './settings.ts';
 
 export interface RecoveryService {
   /**
    * Mails a reset link to the account behind the address, when there is one that can use a
    * password. Resolves the same way in every case (also when the address is unknown, the account
    * cannot use a password, or the address has had its mails for the hour). 403 when local accounts
-   * are off, 422 for a malformed address.
+   * are off, 422 for a malformed address. `locale` in the input is the language of the mail
+   * (checked against the shipped list); it is optional.
    */
   requestReset(input: unknown, now?: Date): Promise<void>;
   /**
@@ -61,20 +60,35 @@ export interface RecoveryService {
    */
   changePassword(actor: Actor, input: unknown): Promise<void>;
   /**
-   * Stores a verification token for `email` and mails it to that address. `send: false` stores the
-   * token without a mail (a change to an address another account holds: the caller must not be
-   * able to tell). Never throws: a failure is logged, because registration and profile edits
-   * must not fail for it.
+   * Stores a verification token for `email` and queues the mail to that address, in one
+   * transaction. `send: false` stores the token without a mail (a change to an address another
+   * account holds: the caller must not be able to tell); so does an address whose mail budget is
+   * spent. A failure to store throws, and nothing is stored.
    */
-  startVerification(
+  startVerification(userId: string, email: string, options?: VerificationOptions): Promise<void>;
+  /**
+   * The same inside the caller's transaction `tx`, so the token, the mail and whatever else the
+   * caller writes commit together or not at all (register, an address change).
+   */
+  startVerificationIn(
+    tx: DbTx,
     userId: string,
     email: string,
-    options?: { send?: boolean; now?: Date },
+    options?: VerificationOptions,
   ): Promise<void>;
   /** Mails a fresh link for the caller's own address. 409 when it is already confirmed. */
   resendVerification(actor: Actor, now?: Date): Promise<void>;
   /** Confirms the address a token was sent to. 400 for any token that is not good. */
   confirmEmail(input: unknown, now?: Date): Promise<void>;
+}
+
+export interface VerificationOptions {
+  send?: boolean;
+  now?: Date;
+  /** The language of the mail: a request's, or a user's preference. Else the instance default. */
+  locale?: string;
+  /** The budget was spent already for this address by the caller (registration spends it once for both paths). */
+  budgetSpent?: boolean;
 }
 
 function invalid(error: ZodError): Invalid {
@@ -99,28 +113,15 @@ export function createRecoveryService(
   deps: {
     sessions: SessionService;
     settings: IdentitySettings;
-    branding: BrandingSource;
-    mailer: Mailer;
+    mail: IdentityMail;
+    budget: MailBudget;
+    links: MailLinks;
     authz: AuthzService;
   },
 ): RecoveryService {
-  const { sessions, settings, branding, mailer, authz } = deps;
+  const { sessions, settings, mail, budget, links, authz } = deps;
   const limiter = createRateLimiter(ctx.db);
-
-  async function mailContext(): Promise<MailContext> {
-    const { instanceName, mailFrom } = await branding.get();
-    return { config: ctx.config, instanceName, from: mailFrom };
-  }
-
-  /** Spends one mail from an address's budget; false when it has had its share. */
-  async function mayMail(address: string): Promise<boolean> {
-    const { mailBudgets } = await settings.get();
-    const decision = await limiter.consume(
-      `identity.mail:${sha256(address.toLowerCase())}`,
-      budgetLimit(mailBudgets.perAddress),
-    );
-    return decision.allowed;
-  }
+  const mayMail = (address: string) => budget.spend(address);
 
   /** The account that may use a password: active, not deleted, with a password method. */
   async function passwordAccountByEmail(email: string) {
@@ -144,37 +145,37 @@ export function createRecoveryService(
     if (!localAccounts) throw new Forbidden(`${what} with a password is turned off.`);
   }
 
-  /**
-   * After the commit: the mail is handed to the transport and nobody waits for the transport. The
-   * settings are read first, so the caller sees the same work whether or not it sends.
-   */
-  async function send(build: (context: MailContext) => Mail): Promise<void> {
-    const context = await mailContext();
-    void dispatch(mailer, ctx.log, build(context));
+  async function startVerificationIn(
+    tx: DbTx,
+    userId: string,
+    email: string,
+    options: VerificationOptions = {},
+  ): Promise<void> {
+    const { send = true, now = new Date(), locale, budgetSpent } = options;
+    const token = await issueMailToken(tx, {
+      userId,
+      purpose: 'email-verification',
+      email,
+      ttlMs: VERIFICATION_TTL_MS,
+      now,
+    });
+    if (send && (budgetSpent ?? (await mayMail(email)))) {
+      await mail.send(
+        tx,
+        'identity.email-verification',
+        { verifyUrl: links.verify(token), validForHours: VERIFICATION_TTL_MS / 3_600_000 },
+        { address: email, userId },
+        locale,
+      );
+    }
   }
 
   async function startVerification(
     userId: string,
     email: string,
-    options: { send?: boolean; now?: Date } = {},
+    options: VerificationOptions = {},
   ): Promise<void> {
-    const { send: mail = true, now = new Date() } = options;
-    try {
-      const token = await ctx.db.tx((tx) =>
-        issueMailToken(tx, {
-          userId,
-          purpose: 'email-verification',
-          email,
-          ttlMs: VERIFICATION_TTL_MS,
-          now,
-        }),
-      );
-      if (mail && (await mayMail(email))) {
-        await send((context) => verificationMail(context, email, token));
-      }
-    } catch (error) {
-      ctx.log.error({ err: error, userId }, 'could not start the verification of an address');
-    }
+    await ctx.db.tx((tx) => startVerificationIn(tx, userId, email, options));
   }
 
   return {
@@ -182,27 +183,34 @@ export function createRecoveryService(
       await requireLocalAccounts('Resetting a password');
       const parsed = resetRequestInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
-      const { email } = parsed.data;
+      const { email, locale } = parsed.data;
 
       // The budget is spent for every address, known or not, so it says nothing either.
       const allowed = await mayMail(email);
       const account = await passwordAccountByEmail(email);
       if (!allowed || !account) return;
 
-      const token = await ctx.db.tx(async (tx) => {
-        const issued = await issueMailToken(tx, {
+      // The token, the mail and the event are one transaction. The mail is queued before the event
+      // so a failing outbox rolls the mail back too (a test proves it).
+      await ctx.db.tx(async (tx) => {
+        const token = await issueMailToken(tx, {
           userId: account.id,
           purpose: 'password-reset',
           ttlMs: RESET_TTL_MS,
           now,
         });
+        await mail.send(
+          tx,
+          'identity.password-reset',
+          { resetUrl: links.reset(token), validForMinutes: RESET_TTL_MS / 60_000 },
+          { address: email, userId: account.id },
+          locale,
+        );
         await ctx.events.emit('identity.password.resetRequested@1', {
           userId: account.id,
           username: account.username,
         });
-        return issued;
       });
-      await send((context) => resetMail(context, email, token));
     },
 
     async confirmReset(input, now = new Date()) {
@@ -292,6 +300,7 @@ export function createRecoveryService(
     },
 
     startVerification,
+    startVerificationIn,
 
     async resendVerification(actor, now = new Date()) {
       const { userId } = requireSession(actor, 'Asking for a confirmation mail');
@@ -326,7 +335,10 @@ export function createRecoveryService(
       if (!waiting && account.verifiedAt !== null) {
         throw new Conflict('This email address is already confirmed.');
       }
-      await startVerification(userId, waiting?.email ?? account.email, { now });
+      await startVerification(userId, waiting?.email ?? account.email, {
+        now,
+        locale: await mail.preferredLocale(userId),
+      });
     },
 
     async confirmEmail(input, now = new Date()) {
