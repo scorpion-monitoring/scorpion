@@ -108,8 +108,8 @@ Work items
    branches, and weekly. It is a workflow file, not the repository's default setup, so Scorecard's SAST check detects it. Query suite
    `security-extended`. Triage the first run: fix a true finding in this pull request only if it is a one-line change in non-scoped code;
    otherwise open an issue and link it from the backlog.
-7. **Scorecard** (`.github/workflows/scorecard.yml`): `ossf/scorecard-action` pinned by SHA, on pushes to `main`, weekly, and on
-   `branch_protection_rule`, with `publish_results: true` and a SARIF upload. The job asks only for what the action documents. Add the
+7. **Scorecard** (`.github/workflows/scorecard.yml`): `ossf/scorecard-action` pinned by SHA, on pushes to `dev`, weekly, and on
+   `branch_protection_rule`, with `publish_results: true` and a SARIF upload. The action aborts outside the default branch, and the repository's default branch is `dev`, so `main` cannot be the trigger (settled with the maintainer during sprint 1). The job asks only for what the action documents. Add the
    badge to the README (a plain Markdown badge line now; the generated block of §8.5 takes it over in sprint 2).
 8. **Dependency audit in CI:** a `pnpm audit --audit-level high --prod` step in the `verify` job, or a separate job (Decision 7). It reads
    the lockfile only. A known-vulnerable transitive package that has no fix is recorded in an allow-list with a reason and an expiry, not
@@ -130,7 +130,7 @@ Work items
        `main` and `feature/merge-main-*` → `dev` flows on the next release.
     4. Register the project on bestpractices.dev, answer the passing criteria with links to files in the repository, and add the badge
        id to the README. Passing needs a second look at each criterion, so this item is the long one; it can finish after the pull request.
-    5. Run Scorecard once on `main` (after the first release that contains the workflow) and record the score and the checks below target
+    5. Run Scorecard once on `dev` (the default branch: the action refuses any other; it runs on the first push after the merge) and record the score and the checks below target
        in `docs/security/README.md` (created in sprint 2; hold the numbers until then).
 
 Definition of done: `pnpm check` and the workflow files are valid (run `actionlint` locally if available, or let CI show it); no action or

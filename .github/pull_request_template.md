@@ -16,4 +16,5 @@ write "n/a" next to the rest.
 - [ ] Touched FEATURES.md §5 defects have a `defect-NN.*.test.ts` regression test
 - [ ] No breaking change in the public OpenAPI diff (or the API version is bumped, with an ADR)
 - [ ] Module `README.md` updated: permissions, settings keys, events, registries, jobs
+- [ ] Security-scoped path changed (see CLAUDE.md, "Security assurance")? Updated the matching `docs/security/asvs/` chapter, or label `asvs-no-impact` and a line `ASVS impact: none because …` below. Otherwise n/a
 - [ ] Changeset added (`pnpm changeset`, or `--empty`); not needed for docs-only pull requests
