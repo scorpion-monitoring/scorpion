@@ -9,7 +9,7 @@
 //  2. The scenarios: what a plain User, an anonymous caller, a user without roles and a token
 //     with a broader scope than its owner's permissions can and cannot do.
 import { randomUUID } from 'node:crypto';
-import { makeRole } from '@scorpion/testing';
+import { makeInboxItem, makeRole } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { ALL_USER_SCOPES, PASSWORD, useIdentityApp, type Reply } from './testing/identity-app.ts';
 
@@ -32,7 +32,15 @@ interface Sample {
  */
 type Kind = 'admin' | 'self';
 const FOREIGN = randomUUID();
-const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sample }> = {
+const SAMPLES: Record<
+  string,
+  {
+    kind: Kind;
+    /** A self-service route on one of the caller's own items: the "plain User can use it" case needs the id of an item of theirs. */
+    own?: boolean;
+    sample: (ids: { id: string }) => Sample;
+  }
+> = {
   'POST /auth/logout': { kind: 'self', sample: () => ({ method: 'POST', path: '/auth/logout' }) },
   'POST /auth/logout-all': {
     kind: 'self',
@@ -172,6 +180,50 @@ const SAMPLES: Record<string, { kind: Kind; sample: (ids: { id: string }) => Sam
     kind: 'self',
     sample: () => ({ method: 'DELETE', path: '/account/avatar' }),
   },
+  // core.notifications (M4 sprint 3). The inbox and the category list are every user's own; the status,
+  // delivery list, requeue and test mail are Admin's.
+  'GET /notifications/inbox': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/notifications/inbox' }),
+  },
+  'GET /notifications/inbox/unread-count': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/notifications/inbox/unread-count' }),
+  },
+  'POST /notifications/inbox/read-all': {
+    kind: 'self',
+    sample: () => ({ method: 'POST', path: '/notifications/inbox/read-all' }),
+  },
+  'POST /notifications/inbox/{id}/read': {
+    kind: 'self',
+    own: true,
+    sample: ({ id }) => ({ method: 'POST', path: `/notifications/inbox/${id}/read` }),
+  },
+  'DELETE /notifications/inbox/{id}': {
+    kind: 'self',
+    own: true,
+    sample: ({ id }) => ({ method: 'DELETE', path: `/notifications/inbox/${id}` }),
+  },
+  'GET /notifications/preferences/categories': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/notifications/preferences/categories' }),
+  },
+  'GET /notifications/status': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/notifications/status' }),
+  },
+  'GET /notifications/deliveries': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/notifications/deliveries' }),
+  },
+  'POST /notifications/deliveries/{id}/requeue': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/notifications/deliveries/${id}/requeue` }),
+  },
+  'POST /notifications/test': {
+    kind: 'admin',
+    sample: () => ({ method: 'POST', path: '/notifications/test' }),
+  },
   'GET /preferences': { kind: 'self', sample: () => ({ method: 'GET', path: '/preferences' }) },
   'PUT /preferences/{key}': {
     kind: 'self',
@@ -293,10 +345,12 @@ describe('defect 1: the route table', () => {
   it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
     const s = await start();
     let n = 0;
-    for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
+    for (const [key, { kind, own, sample }] of Object.entries(SAMPLES)) {
       if (kind !== 'self') continue;
       const who = await s.signedIn(`selfservice${n++}`);
-      const reply = await send(s, sample({ id: FOREIGN }), session(who));
+      // An item id is the caller's own, or the answer is 403 by design (see notification-routes.test.ts).
+      const id = own ? (await makeInboxItem(s.kernel.pool, { userId: who.user.id })).id : FOREIGN;
+      const reply = await send(s, sample({ id }), session(who));
       expect([401, 403], key).not.toContain(reply.status);
     }
   });
@@ -319,6 +373,10 @@ describe('defect 1: the route table', () => {
       'core.settings.secret.write',
       'core.settings.vocabulary.write',
       'core.blob.manage',
+      'core.notifications.status.read',
+      'core.notifications.deliveries.read',
+      'core.notifications.deliveries.manage',
+      'core.notifications.test',
     ];
     // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
     const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 10)], permissions.slice(10)];
