@@ -1,30 +1,38 @@
 {
-  "name": "@scorpion/server",
+  "name": "@scorpion/core-audit",
   "version": "0.0.0",
   "license": "ISC",
   "private": true,
   "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "dev": "node --env-file-if-exists=../../.env --watch src/cli.ts start",
-    "start": "node src/cli.ts start",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.3",
-    "@hono/zod-openapi": "^1.6.3",
     "@scorpion/contracts": "workspace:*",
-    "@scorpion/core-audit": "workspace:*",
     "@scorpion/core-authz": "workspace:*",
-    "@scorpion/core-blob": "workspace:*",
     "@scorpion/core-identity": "workspace:*",
-    "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-settings": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "drizzle-orm": "^0.45.3",
     "hono": "^4.13.12",
-    "prom-client": "^15.1.3",
     "zod": "^4.6.5"
   },
+  "peerDependencies": {
+    "@scorpion/core-notifications": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@scorpion/core-notifications": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@scorpion/core-blob": "workspace:*",
+    "@scorpion/core-notifications": "workspace:*",
     "@scorpion/testing": "workspace:*",
     "@types/pg": "^8.23.1",
     "pg": "^8.23.0"
