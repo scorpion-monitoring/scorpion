@@ -227,6 +227,45 @@ describe('update', () => {
   });
 });
 
+describe('seed (trusted code, no human caller)', () => {
+  it('stores the values when nothing is stored, tells the module at once and emits the event', async () => {
+    const { service, admin, kernel } = await setup();
+    expect(await service.seed('fix.widgets', { limit: 7 })).toBe('seeded');
+    expect(await service.get(admin, 'fix.widgets')).toMatchObject({
+      version: 1,
+      values: { limit: 7 },
+      updatedBy: null,
+    });
+    expect((await events(kernel.pool)).map((e) => e.payload)).toEqual([
+      { module: 'fix.widgets', keys: ['limit'], version: 1 },
+    ]);
+  });
+
+  it('never overwrites what is stored, and emits nothing then', async () => {
+    const { service, admin, kernel } = await setup();
+    await service.update(admin, 'fix.widgets', { version: 0, values: { limit: 5 } });
+    expect(await service.seed('fix.widgets', { limit: 9 })).toBe('kept');
+    expect(await service.get(admin, 'fix.widgets')).toMatchObject({ values: { limit: 5 } });
+    expect(await events(kernel.pool)).toHaveLength(1);
+  });
+
+  it('refuses values the schema rejects (422) and a module with no settings (404), storing nothing', async () => {
+    const { service, kernel } = await setup();
+    await expect(service.seed('fix.widgets', { limit: 'many' })).rejects.toBeInstanceOf(Invalid);
+    await expect(service.seed('fix.widgets', [])).rejects.toBeInstanceOf(Invalid);
+    await expect(service.seed('no.such', {})).rejects.toBeInstanceOf(NotFound);
+    expect((await kernel.pool.query('select 1 from settings_setting')).rows).toEqual([]);
+  });
+
+  it('rolls the row back with the event when the event cannot be written', async () => {
+    const { service, kernel } = await setup();
+    const restore = await breakOutbox(kernel.pool);
+    await expect(service.seed('fix.widgets', { limit: 3 })).rejects.toThrow();
+    await restore();
+    expect((await kernel.pool.query('select 1 from settings_setting')).rows).toEqual([]);
+  });
+});
+
 describe('the cache', () => {
   it('serves a read from memory until the TTL passes, and a write empties it in this process', async () => {
     let now = 1_000;

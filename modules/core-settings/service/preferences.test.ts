@@ -196,3 +196,21 @@ describe('registration', () => {
     );
   });
 });
+
+describe('getForUser (trusted code, no human caller)', () => {
+  it('returns the stored value of another user, validated, and undefined when nothing is stored', async () => {
+    const { service, alice, bob } = await setup();
+    await service.set(alice, 'fix.widgets.theme', 'dark');
+    expect(await service.getForUser(alice.userId, 'fix.widgets.theme')).toBe('dark');
+    expect(await service.getForUser(bob.userId, 'fix.widgets.theme')).toBeUndefined();
+  });
+
+  it('answers undefined for an unregistered key, a malformed id and a stored value that no longer fits', async () => {
+    const { service, alice, kernel } = await setup();
+    await makePreference(kernel.pool, { id: alice.userId }, 'gone.module.setting', 'x');
+    await makePreference(kernel.pool, { id: alice.userId }, 'fix.widgets.theme', 'purple');
+    expect(await service.getForUser(alice.userId, 'gone.module.setting')).toBeUndefined();
+    expect(await service.getForUser('not-a-uuid', 'fix.widgets.theme')).toBeUndefined();
+    expect(await service.getForUser(alice.userId, 'fix.widgets.theme')).toBeUndefined();
+  });
+});

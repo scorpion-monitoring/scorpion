@@ -65,6 +65,18 @@ export interface AuthzService {
    * many assignments went.
    */
   removeAllAssignments(tx: DbTx, userId: string): Promise<number>;
+  /**
+   * The ids of the users who hold a role, in id order, at most `limit` (default and maximum 1000).
+   * For trusted code that must reach "all administrators" with no human caller (a mail to every
+   * admin): **no permission is checked**, no route calls it, and it names nobody but by opaque id
+   * (ADR-0015). Pass the `tx` of the caller so the answer is consistent with its write. An unknown
+   * role has no holders (`[]`).
+   */
+  listHoldersAsSystem(
+    tx: Pick<DbTx, 'select'>,
+    roleKey: string,
+    options?: { limit?: number },
+  ): Promise<string[]>;
   /** Whether any user holds the role (no permission check; it names nobody). `tx` reads inside a transaction. */
   hasHolders(roleKey: string, tx?: Pick<DbTx, 'select'>): Promise<boolean>;
   /**
