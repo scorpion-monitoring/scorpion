@@ -4,6 +4,7 @@ export const WORKSPACE_MODULES = {
   'core.authz': '@scorpion/core-authz',
   'core.blob': '@scorpion/core-blob',
   'core.identity': '@scorpion/core-identity',
+  'core.notifications': '@scorpion/core-notifications',
   'core.settings': '@scorpion/core-settings',
 } as const satisfies Record<string, string>;
 

@@ -6,6 +6,7 @@ export {
 } from './authorizer.ts';
 export { makePng } from './images.ts';
 export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
+export { makeDelivery, type DeliveryRow, type MakeDelivery } from './notifications.ts';
 export {
   makePreference,
   makeSecret,
