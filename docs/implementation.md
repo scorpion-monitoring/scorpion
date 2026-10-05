@@ -137,8 +137,14 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Templates for all events in FEATURES §3.15, plus membership decided, password reset and email verification.
 - In-app inbox (table + API) and per-user notification preferences.
 - Audit: an append-only `audit_event` table; middleware logs every public API call; `ctx.audit()` for admin and permission-relevant actions; viewer API with filters (method, user, endpoint, date range), CSV export; retention job.
+- Dependency order (ADR-0019): `core.authz` → `core.settings` → `core.blob` → `core.notifications` → `core.identity` → `core.audit`. `core.notifications` is user-agnostic (opaque user ids, recipients passed by the caller); `core.identity` depends on it and enqueues inside its own transactions. Delivery rows are the queue (a job and `pg_notify` only wake it); the rendered body of a `sensitive` mail (reset, verification) is deleted once the delivery is `sent` or `dead`.
+- The webhook transport is an admin-notification mirror (one signed URL), not a user channel. It refuses loopback, private, link-local and metadata addresses unless `allowPrivateTargets` is set, resolves once, and follows no redirects.
+- `SMTP_URL` is removed without a fallback: SMTP host, port and TLS mode are `core.notifications` settings and the password is a secret. The `Mailer` port in `core.identity` is deleted. Templates are typed TypeScript functions in English and German (user preference `locale`, else the instance default), with no new dependency.
+- `POST /auth/register` answers 202 for every well-formed request; the owner of a taken address gets a notice mail (register without revealing).
+- Audit (ADR-0021): `core.audit` subscribes to the events of authz, settings and identity, and the kernel gets an audit sink port that the pipeline and `ctx.audit()` use (a no-op without `core.audit`). Request bodies are stored only when a route opts in, redacted and capped at 8 KB, and never for auth routes. The table refuses `UPDATE` and ordinary `DELETE`. `core.authz` gains `authz.role.permissions.changed@1`.
+- Hosted in `core.audit`: the kernel's outbox and job-run retention jobs and the outbox requeue route, under `core.audit.system.*` permissions.
 
-**Acceptance:** registering produces the welcome and admin emails in Mailpit. If the SMTP relay is down, emails are retried and the failure shows in the admin status list. A role change creates an audit entry.
+**Acceptance:** registering produces the welcome and admin emails in Mailpit. If the SMTP relay is down, emails are retried and the failure shows in the admin status list. A role change creates an audit entry. No secret (reset token, SMTP password, webhook secret) appears in logs, the audit table or API responses, and a plain User gets 403 on every notification-admin, audit and system route.
 
 ### M5: `core.ui-shell` + web app skeleton (M)
 

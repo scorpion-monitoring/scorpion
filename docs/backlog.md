@@ -20,6 +20,27 @@
   CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
   repository secrets) needs a decision first; record it in an ADR.
 
+## Notifications follow-ups (M4 sprint 1)
+
+- **A module stop hook in the kernel.** `core.notifications` opens a `LISTEN` connection per process at `system.ready` and has no way to be
+  told about shutdown (`kernel.stop()` calls only the dispatcher and the jobs). The service exposes `close()` for tests and the socket is
+  unref'd, so the process still ends. A `system.stopping` event or a `stop()` on the service would let modules release resources; the kernel's
+  own outbox listener could then also be offered to modules (a `ctx.listen(channel, fn)`), which would replace the module's connection.
+- **No post-commit hook in `ctx.db.tx()`.** The wake-up goes through `pg_notify`, which Postgres delivers on commit, so the module needs its own
+  listener. An `afterCommit(fn)` on the transaction would let `enqueue` call `ctx.jobs.enqueue` directly.
+- **One wake-up job per process per commit burst.** Every process with a listener queues `core.notifications.deliver` when it hears a
+  notification (coalesced over 100 ms). The extra runs find nothing due. A singleton key on `ctx.jobs.enqueue` would remove them.
+- **Permanent SMTP failures are retried like transient ones.** A 5xx for the recipient (a mailbox that does not exist) is tried 8 times over
+  about two hours before the row is dead. Mapping `responseCode >= 500` to an immediate `dead` needs a decision on greylisting and relays that
+  answer 5xx for policy reasons.
+- **`emailTransport` is an enum in the settings schema.** The registry `notify.transport` is open, but the admin form needs the ids at validation
+  time, so a new email transport adds its id to `settingsSchema` in the same change. A schema that is told the registry's ids (a kernel hook
+  on settings schemas) would remove that edit.
+- **Webhook TLS pinning and per-event routing.** One signed URL for admin-addressed messages; per-user webhooks, per-event routing and
+  a retry-after header are out of scope (M4 plan §9).
+- **Drizzle's `execute` returns timestamps as text.** `claimDue` converts `created_at` itself; any other raw `db.execute` that selects a
+  timestamp must do the same.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.

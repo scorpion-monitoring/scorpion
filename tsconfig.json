@@ -17,6 +17,9 @@
       "path": "./modules/core-identity"
     },
     {
+      "path": "./modules/core-notifications"
+    },
+    {
       "path": "./modules/core-settings"
     },
     {
