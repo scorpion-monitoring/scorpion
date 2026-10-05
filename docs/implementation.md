@@ -158,6 +158,8 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - `tools/asvs-report` (validator and generator), pinned ASVS 5.0.0 source, `pnpm security:asvs` in CI, the `asvs-impact` job (rule 10) and the generated README badge block.
 - Skeletons for V6, V7, V8 and V10 with every L1/L2 id. Fill in what M2–M4 already delivered: tag the existing tests (including the `defect-NN.*` tests) and move the matching requirements to `pass` or `n/a`. Everything else stays `fail`, with an issue for each gap.
 
+**Release:** M4a changes no runtime behaviour and carries empty changesets, so it has no release of its own. It ships inside `0.6.0` with M5 (an exception to rule 1 above; decision 1 of [m4a-sprint-plan.md](m4a-sprint-plan.md)).
+
 **Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue assigned to M5 or to a fix before G1.
 
 ### M5: `core.ui-shell` + web app skeleton (M)
@@ -448,7 +450,7 @@ Then come the summary counts (pass / n/a / fail), and then one table row per req
 
 **Best Practices (bestpractices.dev).** Register the project and answer the passing criteria. For each answer, link to a file in the repo (CONTRIBUTING.md, SECURITY.md, CI config, test docs) rather than writing free text. `docs/security/README.md` keeps a short mapping from criterion to evidence, so the answers can be re-checked at G4. Silver and gold need a second maintainer (and two-person review for gold), so they go to the backlog.
 
-**Scorecard.** Add `.github/workflows/scorecard.yml` using `ossf/scorecard-action` (pinned by SHA). It runs on pushes to `main`, weekly, and on branch-protection changes, with `publish_results: true`, and it uploads SARIF to code scanning. Repository settings and files needed for the target score:
+**Scorecard.** Add `.github/workflows/scorecard.yml` using `ossf/scorecard-action` (pinned by SHA). It runs on pushes to the default branch (`dev`; the action refuses any other branch), weekly, and on branch-protection changes, with `publish_results: true`, and it uploads SARIF to code scanning. Repository settings and files needed for the target score:
 
 | Scorecard check | What to do |
 |---|---|
@@ -471,7 +473,7 @@ Also turn on GitHub secret scanning with push protection, Dependabot alerts and 
 
 ### 8.4 Keeping the claim current
 
-- **Security-scoped paths:** `modules/core-identity/**`, `modules/core-authz/**`, `apps/server/src/pipeline/**`, `packages/contracts/src/create-route.ts` and `docs/security/**`. Each path is mapped to its ASVS chapters in `tools/asvs-report/scope.ts`. List them in `.github/CODEOWNERS` too, so a future second maintainer is requested automatically.
+- **Security-scoped paths:** `modules/core-identity/**`, `modules/core-authz/**`, `apps/server/src/pipeline/**`, `packages/contracts/src/route.ts` and `docs/security/**`. Each path is mapped to its ASVS chapters in `tools/asvs-report/scope.ts`. List them in `.github/CODEOWNERS` too, so a future second maintainer is requested automatically.
 - **Pull requests:** if a scoped path changes and the matching chapter YAML does not, the `asvs-impact` CI job fails unless the PR has the `asvs-no-impact` label and a reason (rule 10).
 - **Releases:** on `release/*` branches, any chapter whose scoped paths changed after its `assessed_commit` is derived as `stale`, and CI fails. Re-assess (or confirm and bump `assessed_commit` with a new second pass) before the release.
 - **History:** each re-assessment adds a line to the history table in `docs/security/README.md`: date, commit, chapters, type, assessor, reviewer.

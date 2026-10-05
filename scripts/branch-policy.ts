@@ -3,7 +3,7 @@
 // `node scripts/branch-policy.ts <head> <base>` exits 1 if a pull request from <head> into <base>
 // breaks the policy. CI runs it on every pull request.
 
-export type BranchKind = 'main' | 'dev' | 'feature' | 'release' | 'hotfix';
+export type BranchKind = 'main' | 'dev' | 'feature' | 'release' | 'hotfix' | 'dependabot';
 
 const PATTERNS: [BranchKind, RegExp][] = [
   ['main', /^main$/],
@@ -11,17 +11,20 @@ const PATTERNS: [BranchKind, RegExp][] = [
   ['feature', /^feature\/[a-z0-9][a-z0-9.-]*$/],
   ['release', /^release\/\d+\.\d+\.\d+$/],
   ['hotfix', /^hotfix\/\d+\.\d+\.\d+$/],
+  // Dependabot names its branches itself (dependabot/<ecosystem>/<dependency>); see .github/dependabot.yml.
+  ['dependabot', /^dependabot\/[A-Za-z0-9][A-Za-z0-9._/-]*$/],
 ];
 
 /** Target branch kind → branch kinds that may be merged into it. */
 const ALLOWED_SOURCES: Record<BranchKind, BranchKind[]> = {
   main: ['release', 'hotfix'],
-  // Feature work, plus merging releases and hotfixes back.
-  dev: ['feature', 'release', 'hotfix', 'main'],
+  // Feature work, dependency updates, plus merging releases and hotfixes back.
+  dev: ['feature', 'dependabot', 'release', 'hotfix', 'main'],
   // Fixes found while stabilising a release.
   release: ['feature'],
   feature: [],
   hotfix: [],
+  dependabot: [],
 };
 
 export function branchKind(branch: string): BranchKind | undefined {
@@ -32,7 +35,7 @@ export function branchKind(branch: string): BranchKind | undefined {
 export function checkPullRequest(head: string, base: string): string | undefined {
   const headKind = branchKind(head);
   if (!headKind) {
-    return `Branch '${head}' does not follow the naming policy: use feature/<topic>, release/<x.y.z> or hotfix/<x.y.z>.`;
+    return `Branch '${head}' does not follow the naming policy: use feature/<topic>, release/<x.y.z> or hotfix/<x.y.z> (dependabot/* is for Dependabot).`;
   }
   const baseKind = branchKind(base);
   if (!baseKind) return `Pull requests may not target '${base}'.`;

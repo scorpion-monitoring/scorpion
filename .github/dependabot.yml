@@ -1,0 +1,56 @@
+# Dependabot version updates (OpenSSF Scorecard: Dependency-Update-Tool). One grouped pull request per
+# ecosystem and week, and a low limit on open pull requests, so the batching rule of CLAUDE.md
+# ("Working style") holds. Security updates ignore these limits and groups.
+#
+# Dependabot pull requests are named dependabot/<ecosystem>/... (scripts/branch-policy.ts allows them
+# into `dev`) and need no changeset when they touch dependency files only (scripts/changeset-check.ts).
+version: 2
+updates:
+  - package-ecosystem: npm
+    # The pnpm workspace root: Dependabot reads pnpm-lock.yaml and updates every workspace package.
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'deps'
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    # Node, TypeScript and pnpm move with the toolchain milestones (CLAUDE.md, "Stack").
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: 'ci'
+    groups:
+      actions:
+        patterns: ['*']
+
+  # Moves the tag and the digest of the base images in docker/Dockerfile together.
+  - package-ecosystem: docker
+    directory: /docker
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: 'docker'
+    groups:
+      base-images:
+        patterns: ['*']
+    # The runtime stays on the Node LTS line of .nvmrc; a new major is a deliberate change (M18).
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']

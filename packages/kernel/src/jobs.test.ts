@@ -527,3 +527,39 @@ describe('listJobRuns', () => {
     ).toHaveLength(1);
   });
 });
+
+describe('stopping while the send-only instance is still starting', () => {
+  // The first `enqueue` starts a send-only pg-boss instance, which takes a moment. A kernel that is
+  // stopped in that moment must close it too, or its connections outlive the kernel: in tests they
+  // die with the Postgres container (57P01) after the last test has passed.
+  it('leaves no pg-boss connection behind', async () => {
+    const url = await kernels.newDatabase();
+    const kernel = await kernels.inline([jobModule([{ name: 'ping' }])], {}, { databaseUrl: url });
+    await kernel.start();
+
+    const queued = enqueue(kernel)('ping').then(
+      () => 'queued',
+      (error: unknown) => `refused: ${(error as Error).message}`,
+    );
+    await kernel.stop();
+    await queued;
+
+    const probe = new pg.Client({ connectionString: url });
+    await probe.connect();
+    try {
+      // pg-boss ends its pool asynchronously: give a close that is under way a moment.
+      await vi.waitFor(
+        async () => {
+          const { rows } = await probe.query<{ application_name: string }>(
+            `select application_name from pg_stat_activity
+              where datname = current_database() and application_name like 'scorpion-jobs-%'`,
+          );
+          expect(rows).toEqual([]);
+        },
+        { timeout: 5_000, interval: 100 },
+      );
+    } finally {
+      await probe.end();
+    }
+  });
+});

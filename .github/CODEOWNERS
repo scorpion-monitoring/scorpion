@@ -1,0 +1,13 @@
+# Security-scoped paths (docs/implementation.md §8.4, CLAUDE.md "Security assurance").
+# Required reviews stay at 0 while there is one maintainer, so this requests a review and blocks
+# nothing. When a second maintainer joins, they are requested automatically.
+/modules/core-identity/**           @feserm
+/modules/core-authz/**              @feserm
+/apps/server/src/pipeline/**        @feserm
+/packages/contracts/src/route.ts    @feserm
+/docs/security/**                   @feserm
+/tools/asvs-report/**               @feserm
+
+# What decides how the project is built, checked and reported.
+/.github/**                         @feserm
+/SECURITY.md                        @feserm

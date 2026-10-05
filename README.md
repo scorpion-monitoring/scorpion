@@ -1,5 +1,7 @@
 # Scorpion
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/scorpion-monitoring/scorpion/badge)](https://scorecard.dev/viewer/?uri=github.com/scorpion-monitoring/scorpion)
+
 Scorpion is a service registry and KPI tracker for research infrastructures (de.NBI, NFDI).
 This repository is the rebuild as a **modular monolith**: one server, one PostgreSQL database,
 many modules. A deployment **profile** selects the modules at build time.
