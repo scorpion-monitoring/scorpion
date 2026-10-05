@@ -55,6 +55,13 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
       emits: {
         'authz.role.assigned@1': roleEvent,
         'authz.role.removed@1': roleEvent,
+        // The role key and the permission strings added and removed (sorted), and who did it.
+        'authz.role.permissions.changed@1': z.strictObject({
+          roleKey: z.string(),
+          added: z.array(z.string()),
+          removed: z.array(z.string()),
+          actorId: z.string().nullable(),
+        }),
       },
     },
 

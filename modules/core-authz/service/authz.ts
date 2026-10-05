@@ -411,12 +411,32 @@ export function createAuthzService(
         if (target.key === ADMIN_ROLE_KEY) {
           throw new Forbidden('Admin holds every permission and cannot be edited.');
         }
+        const before = new Set(
+          (
+            await tx
+              .select({ permission: rolePermission.permission })
+              .from(rolePermission)
+              .where(eq(rolePermission.roleId, target.id))
+          ).map((row) => row.permission),
+        );
         await tx.delete(rolePermission).where(eq(rolePermission.roleId, target.id));
         const wanted = [...new Set(permissions)];
         if (wanted.length > 0) {
           await tx
             .insert(rolePermission)
             .values(wanted.map((permission) => ({ roleId: target.id, permission })));
+        }
+        const added = wanted.filter((permission) => !before.has(permission)).sort();
+        const removed = [...before].filter((permission) => !wanted.includes(permission)).sort();
+        // Only a change leaves a trace; saving the same set again is not an event. Permission
+        // strings and the role key only: no user, no address.
+        if (added.length > 0 || removed.length > 0) {
+          await ctx.events.emit('authz.role.permissions.changed@1', {
+            roleKey: target.key,
+            added,
+            removed,
+            actorId: actor.kind === 'user' ? actor.userId : null,
+          });
         }
       });
       invalidate();
