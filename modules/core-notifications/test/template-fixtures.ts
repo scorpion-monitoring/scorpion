@@ -3,7 +3,7 @@
 import type { TemplateBranding } from '../service/templates/layout.ts';
 
 export const BRANDING: TemplateBranding = {
-  productName: 'Scorpion',
+  productName: 'Test Product',
   instanceName: 'Test Instance',
   contactEmail: 'help@example.org',
   imprintUrl: 'https://example.org/imprint',

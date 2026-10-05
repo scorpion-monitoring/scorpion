@@ -50,7 +50,7 @@ const sources = () =>
 describe('no hard-coded branding (rule 9)', () => {
   it('scans the source of every module and app', () => {
     const scanned = sources();
-    expect(scanned).toContain('modules/core-identity/service/mail-messages.ts');
+    expect(scanned).toContain('modules/core-identity/service/mail-templates.ts');
     expect(scanned).toContain('apps/server/src/cli.ts');
     expect(scanned.length).toBeGreaterThan(80);
   });

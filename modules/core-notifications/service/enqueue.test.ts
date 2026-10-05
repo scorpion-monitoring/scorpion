@@ -205,6 +205,7 @@ describe('status', () => {
       transportIsNone: true,
       webhookEnabled: false,
       counts: { queued: 1, sending: 0, sent: 0, dead: 0 },
+      sentWithoutTransport: 0,
       lastErrors: [],
     });
     expect(JSON.stringify(status)).not.toContain('ada@example.org');
