@@ -2,6 +2,11 @@
 import { z } from '@scorpion/contracts';
 import { defineTemplate } from '../service/templates/define.ts';
 
+const CATEGORY_ONBOARDING = {
+  en: 'News about onboarding applications you submitted.',
+  de: 'Neuigkeiten zu Onboarding-Bewerbungen, die Sie eingereicht haben.',
+};
+
 export const applicationSubmitted = defineTemplate({
   key: 'onboarding.application-submitted',
   // To the applicant, right after submitting: we have it.
@@ -9,6 +14,7 @@ export const applicationSubmitted = defineTemplate({
     service: z.string().min(1).max(200),
   }),
   category: 'onboarding',
+  categoryDescription: CATEGORY_ONBOARDING,
   catalogue: {
     en: {
       subject: 'We received your application for {service}',
@@ -37,6 +43,7 @@ export const applicationDecided = defineTemplate({
     note: z.string().max(1000).optional(),
   }),
   category: 'onboarding',
+  categoryDescription: CATEGORY_ONBOARDING,
   catalogue: {
     en: {
       'subject.approved': 'Your application for {service} was approved',

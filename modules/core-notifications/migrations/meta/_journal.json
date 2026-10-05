@@ -8,6 +8,13 @@
       "when": 1791180944849,
       "tag": "0000_delivery_table",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791191101912,
+      "tag": "0001_inbox_item",
+      "breakpoints": true
     }
   ]
 }

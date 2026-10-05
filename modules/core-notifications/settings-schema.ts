@@ -8,6 +8,7 @@ export const WEBHOOK_SECRET = 'notifications.webhook.secret';
 
 export const DEFAULT_MAX_ATTEMPTS = 8;
 export const DEFAULT_RETENTION_DAYS = 90;
+export const DEFAULT_INBOX_RETENTION_DAYS = 90;
 
 /** `en`, `de`, `pt-BR`: a language tag as the templates (sprint 2) and the user preference use it. */
 export const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/;
@@ -40,8 +41,10 @@ export const settingsSchema = z
     defaultLocale: z.string().regex(LOCALE).default('en'),
     /** Attempts before a delivery is `dead`. */
     maxAttempts: z.number().int().min(1).max(20).default(DEFAULT_MAX_ATTEMPTS),
-    /** How long delivered rows are kept (the job that deletes them comes with sprint 3). */
+    /** How long `sent` and `dead` delivery rows are kept; the daily job `core.notifications.retention` deletes the older ones. */
     retentionDays: z.number().int().min(1).max(3650).default(DEFAULT_RETENTION_DAYS),
+    /** How long a read inbox item is kept, counted from the moment it was read. Unread items are kept. */
+    inboxRetentionDays: z.number().int().min(1).max(3650).default(DEFAULT_INBOX_RETENTION_DAYS),
   })
   .superRefine((value, ctx) => {
     if (value.emailTransport === 'smtp' && value.smtp.host === '') {

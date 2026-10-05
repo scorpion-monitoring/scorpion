@@ -74,3 +74,40 @@ export const delivery = pgTable(
     index('notify_delivery_status_idx').on(table.status, table.createdAt),
   ],
 );
+
+/**
+ * One in-app notification of one user (sprint 3). `user_id` is an opaque id with no foreign key, like
+ * `recipient_user_id` (ADR 0019); core.identity removes a purged user's items through the trusted
+ * method `removeInboxOfUser` (ADR 0023). `title`, `text` and `link` are plain text: a UI shows them as
+ * text and never as HTML. A `sensitive` template never writes an item.
+ */
+export const inboxItem = pgTable(
+  'notify_inbox_item',
+  {
+    id: uuid().primaryKey(), // UUIDv7
+    userId: uuid('user_id').notNull(),
+    /** The template key the item came from: `registry.membership-decided`. */
+    template: text().notNull(),
+    title: text().notNull(),
+    text: text().notNull(),
+    /** An absolute link built from the instance's origin and base path; null when the template has none. */
+    link: text(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    readAt: timestamptz('read_at'),
+  },
+  (table) => [
+    check('notify_inbox_item_title_check', sql`char_length(${table.title}) between 1 and 200`),
+    check('notify_inbox_item_text_check', sql`char_length(${table.text}) <= 2000`),
+    check('notify_inbox_item_link_check', sql`char_length(${table.link}) <= 2048`),
+    // The list: a user's items, newest first, with the id as the tie-break.
+    index('notify_inbox_item_user_idx').on(table.userId, table.createdAt.desc(), table.id.desc()),
+    // The unread count of the bell.
+    index('notify_inbox_item_unread_idx')
+      .on(table.userId)
+      .where(sql`${table.readAt} is null`),
+    // The retention job: read items past their time.
+    index('notify_inbox_item_read_idx')
+      .on(table.readAt)
+      .where(sql`${table.readAt} is not null`),
+  ],
+);

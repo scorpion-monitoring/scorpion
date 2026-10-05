@@ -3,6 +3,11 @@
 import { z } from '@scorpion/contracts';
 import { defineTemplate } from '../service/templates/define.ts';
 
+const CATEGORY_MEMBERSHIP = {
+  en: 'Requests to join a provider and the decisions on them.',
+  de: 'Anfragen zur Mitgliedschaft bei einem Anbieter und die Entscheidungen dazu.',
+};
+
 const url = z.url().max(2048);
 
 export const membershipRequested = defineTemplate({
@@ -14,6 +19,7 @@ export const membershipRequested = defineTemplate({
     reviewUrl: url,
   }),
   category: 'membership',
+  categoryDescription: CATEGORY_MEMBERSHIP,
   catalogue: {
     en: {
       subject: 'Membership request from {applicant}',
@@ -49,6 +55,7 @@ export const membershipDecided = defineTemplate({
     note: z.string().max(1000).optional(),
   }),
   category: 'membership',
+  categoryDescription: CATEGORY_MEMBERSHIP,
   catalogue: {
     en: {
       'subject.approved': 'Your membership of {provider} was approved',

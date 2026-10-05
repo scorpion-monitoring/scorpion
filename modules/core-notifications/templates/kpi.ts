@@ -3,6 +3,11 @@
 import { z } from '@scorpion/contracts';
 import { defineTemplate } from '../service/templates/define.ts';
 
+const CATEGORY_REMINDERS = {
+  en: 'Reminders to report your indicators and to keep your service entries up to date.',
+  de: 'Erinnerungen, Kennzahlen zu melden und Ihre Diensteinträge aktuell zu halten.',
+};
+
 export const reportingReminder = defineTemplate({
   key: 'kpi.reporting-reminder',
   schema: z.strictObject({
@@ -13,6 +18,7 @@ export const reportingReminder = defineTemplate({
     reportUrl: z.url().max(2048),
   }),
   category: 'reminders',
+  categoryDescription: CATEGORY_REMINDERS,
   catalogue: {
     en: {
       subject: 'Reporting reminder for {provider}: {month}',
