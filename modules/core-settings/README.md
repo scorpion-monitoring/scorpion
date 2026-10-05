@@ -238,7 +238,7 @@ contributes: {
   except with `allowInactive` (keeping a value that already exists).
 - **From code:** `ctx.deps['core.settings'].listTerms('stage')` and `.validateTerm('stage', key, { path: 'stage' })`
   (`Invalid`, 422, naming the path). Neither checks a permission.
-- **Event** `settings.vocabulary.changed@1`: `{ vocabulary, key, change }`, never a label.
+- **Event** `settings.vocabulary.changed@1`: `{ vocabulary, key, change, actorId }`, never a label.
 
 ## Branding
 
@@ -266,14 +266,14 @@ The `branding` group of this module's settings, saved with `PUT /settings/core.s
 
 ## Events
 
-| Event                           | Payload                       | When                                                           |
-| ------------------------------- | ----------------------------- | -------------------------------------------------------------- |
-| `settings.changed@1`            | `{ module, keys, version }`   | A module's settings were saved. `keys`: names that changed     |
-| `settings.secret.changed@1`     | `{ name, removed }`           | A secret was set, replaced or removed (the CLI too)            |
-| `settings.preference.changed@1` | `{ userId, key, removed }`    | A user set or removed a preference                             |
-| `settings.vocabulary.changed@1` | `{ vocabulary, key, change }` | A term was created, updated, activated, deactivated or deleted |
+| Event                           | Payload                                | When                                                                                                     |
+| ------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `settings.changed@1`            | `{ module, keys, version, actorId }`   | A module's settings were saved. `keys`: names that changed. `actorId`: who saved them, `null` for a seed |
+| `settings.secret.changed@1`     | `{ name, removed, actorId }`           | A secret was set, replaced or removed (the CLI too: `actorId` is `null`)                                 |
+| `settings.preference.changed@1` | `{ userId, key, removed }`             | A user set or removed a preference                                                                       |
+| `settings.vocabulary.changed@1` | `{ vocabulary, key, change, actorId }` | A term was created, updated, activated, deactivated or deleted                                           |
 
-None carries a value, a secret, a key or a label. `core.blob` subscribes to `settings.changed@1` (for the logos); the rest nothing yet; the audit trail (M4) will.
+None carries a value, a secret, a key or a label. `actorId` was added in M4 sprint 4 (additive) for the audit trail. `core.blob` and `core.notifications` subscribe to `settings.changed@1`; `core.audit` records the changes, secret and vocabulary changes (not the preferences) ([ADR-0021](../../docs/adr/0021-audit-sink-redaction-and-append-only.md)).
 
 ## Tables
 

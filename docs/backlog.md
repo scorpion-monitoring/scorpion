@@ -2,9 +2,12 @@
 
 ## Kernel follow-ups
 
-- Outbox retention: a job that deletes events whose deliveries are all `delivered` (and events
-  with no subscribers) after a configurable time. Requeue of a `dead` mail delivery is done (M4 sprint 3); requeue of a `dead` outbox delivery is sprint 4.
-- Job-run retention: delete old `kernel_job_run` rows.
+- ~~Outbox retention~~ Done in M4 sprint 4: `deleteDeliveredEvents` in the kernel, the job `core.audit.system.outbox-retention` (setting
+  `outboxRetentionDays`, default 14) deletes events whose deliveries are all `delivered` and events with no subscribers; an event with a
+  `pending` or `dead` delivery stays. Requeue of a `dead` mail delivery is done (M4 sprint 3), requeue of a `dead` outbox delivery too
+  (`POST /system/outbox/deliveries/{id}/requeue`, ADR-0024).
+- ~~Job-run retention~~ Done in M4 sprint 4: `deleteJobRuns` and the job `core.audit.system.job-run-retention` (`jobRunRetentionDays`, 90).
+  `kernel_job_run` also has a `result` column now, filled from what a handler returns.
 - `scorpion worker` listens on no port, so it has no liveness or metrics endpoint. Add a small
   internal listener if operators need one (job durations are observed in the worker process, so
   its `/metrics` would be the only place to scrape them when `WORKER_MODE=separate`).
@@ -19,6 +22,30 @@
   build every release profile (not `fixture-ab`) with `docker/Dockerfile`, run the same smoke tests as
   CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
   repository secrets) needs a decision first; record it in an ADR.
+
+## Audit follow-ups (M4 sprint 4)
+
+What M4 deferred (plan §9) and what the sprint found. The viewer screens, the inbox bell and the system page are M5; the routes are ready.
+
+- **Rich search.** The viewer filters on method, user, endpoint prefix, action, outcome, source and a date range. Full-text search over bodies and payloads (a GIN index on the `jsonb` columns or `tsvector`), saved filters and "all entries about this subject" are not built.
+- **Export to an external log sink.** Syslog, OTLP logs or an S3 archive of old rows before retention deletes them. The trail is only in the database; the CSV export is the way out.
+- **Tamper evidence.** The table refuses `UPDATE`, `DELETE` and `TRUNCATE` for the application (ADR-0021) but a database superuser can drop the trigger. A hash chain over the rows, or a periodically signed digest, would make a change detectable; so would shipping rows to a second system as they are written.
+- **Partitioning.** `audit_event` is one table with an index on `(occurred_at, id)`. Revisit monthly range partitions (and dropping a partition instead of batched deletes) if the load test (M18) shows bloat. Batched `DELETE` under the flag leaves dead tuples until autovacuum.
+- **Audit volume of reads.** The three read routes of the viewer are audited (who looked). A busy admin screen that polls fills the table. Sample reads, or stop auditing the list and keep the export and the single entry, when the UI exists.
+- **Login, logout and failed sign-ins are not in the trail.** Auth routes are not `audit` routes: the actor of a login is anonymous when the pipeline writes the entry, and a failed-login flood would fill the table. A `identity.session.created@1` event (success) and a counted failure event would fix both; decide with the account-lockout question (identity follow-ups).
+- **Redaction is by name.** A secret under an innocent key, or in a value (a token pasted into a free-text field), is not recognised. A content check for the token and key formats this system issues (`scp_`, `srt_`) would catch the likeliest case. Routes that store a body should stay few and reviewed.
+- **Settings values are stored in the body of `PUT /settings/{module}`.** Settings never hold secrets by rule, but a URL with a token in its query would be stored. Add a secret-hygiene guard on the settings schemas (settings follow-ups) or `redact: ['url']` for that route.
+- **The old value of a setting is not in the trail.** The event names the keys, not the values (ADR-0017). If an operator needs "from what to what", store the diff in the audit payload for keys that a schema marks as non-sensitive.
+- **Event payloads without `username`.** The stored payload leaves the username out so a purge does not leave a name in an append-only table. The viewer shows ids; the admin UI must join the user table and show "deleted account" for a purged one.
+- **A purged account's id stays in the trail** as an actor or subject, until retention. That is the point of an audit trail; say so in the privacy text (M5).
+- **The public API channel has no writer yet.** `channels.api` and `apiRetentionDays` are in place, but `/api/v1` exists only from M8. The first public route sets `audit: true`; check that `surface: 'v1'` entries land under `channels.api`.
+- **Optional peers for later modules.** A module that declares events (M6 onwards) fails the decisions test until `core.audit` has a decision for it; add the module as an optional peer of `core.audit` at the same time. A registry through which a module contributes its own decisions would remove the edit to `decisions.ts`; not worth it for a few modules.
+- **`ctx.audit` has no caller yet** besides the module's own export and requeue entries. The first service that changes something without an event (M6 and later) uses it inside its transaction.
+- **A job-run page.** `kernel_job_run.result` is filled, and `listJobRuns` returns it, but there is no route to list job runs. Add `GET /system/job-runs` (`core.audit.system.read`) with the system page (M5).
+- **Dead outbox deliveries are kept for ever.** Outbox retention never deletes an event with a `dead` delivery. A dead delivery that nobody will fix should be dismissed on purpose: a `DELETE /system/outbox/deliveries/{id}` (audited) is not built.
+- **Requeue is one delivery at a time**, as for mail.
+- **CSV extras.** No BOM (Excel users import as UTF-8), no choice of columns, no XLSX. The row cap is a setting; a larger export is a background job that writes a file to the blob store, not built.
+- **Per-surface retention.** `retentionDays` and `apiRetentionDays` split by `source`. If administrators want the internal request log shorter than the events, split `api` rows by surface.
 
 ## Notifications follow-ups (M4 sprint 3)
 
@@ -110,7 +137,7 @@
   - **Admin user management (M3/M5).** List, deactivate, change email, force a reset, revoke sessions. Not in M2.
   - **2FA (TOTP, WebAuthn).** Not in M2.
   - **Public `GET /auth/oidc/providers`** for the login page (id and display name), with the UI in M5 (sprint 4 follow-up 1, still open).
-  - **Outbox retention** (kernel follow-up above) now also matters for the purge: events keep the usernames of purged accounts.
+  - ~~**Outbox retention** now also matters for the purge: events keep the usernames of purged accounts.~~ Done in M4 sprint 4: delivered events are deleted after `outboxRetentionDays`; a test proves the username of a purged account leaves the outbox. A `dead` delivery keeps its event (and the name) until somebody requeues it, see "Audit follow-ups".
 
 ## Authz follow-ups (M3 sprint 1)
 
@@ -128,11 +155,11 @@
 - **Old token scopes.** Tokens made in 0.3.0 keep their `read:kpi`-shaped scopes, which grant nothing. A cleanup that lists them for their owners, or a one-time migration that revokes them, is not built.
 - **Wildcard scopes.** A scope names one permission. `core.identity.*` or a "read-only" preset would help scripts with many scopes; decide with the first real script.
 - **Actor of kind `system`.** Trusted code with no human caller uses three methods of the authz service (ADR-0015). If jobs need to call methods that check permissions (`assignRole`), they need an actor for that; add it with the first such job and keep it out of the authenticator.
-- **Role events are not audited yet.** `authz.role.assigned@1` and `.removed@1` have no subscriber until M4's audit trail; `setRolePermissions` emits nothing.
+- ~~**Role events are not audited yet.**~~ Done in M4 sprint 4: `core.audit` records `authz.role.assigned@1`, `.removed@1` and the new `authz.role.permissions.changed@1`, which `setRolePermissions` emits when the set changes. There is still no HTTP route that calls `setRolePermissions`; the admin UI (M5) adds it.
 
 ## Settings follow-ups (M3 sprint 3)
 
-- **Admin form and history.** `GET /settings/{module}/schema` and the effective values are ready for the settings form (M5). The form needs per-field labels and grouping (Zod `.describe()` and `.meta()` flow into the JSON Schema); decide the convention with the first form. A history of changes comes from `settings.changed@1` with the audit trail (M4); the table keeps only the current version.
+- **Admin form and history.** `GET /settings/{module}/schema` and the effective values are ready for the settings form (M5). The form needs per-field labels and grouping (Zod `.describe()` and `.meta()` flow into the JSON Schema); decide the convention with the first form. The history of changes is the audit trail (M4 sprint 4: `settings.changed@1` with the actor and the names of the keys that changed, never the values; `GET /audit?action=settings.changed@1`); the table keeps only the current version, so the trail cannot show the old value.
 - **Partial updates.** `PUT` replaces the whole stored object, so the form sends every field. A `PATCH` that merges keys (and removes one with `null` to return to the default) would help scripts that change one setting; add it with the first such script.
 - **Declared secrets.** The API lists stored secrets only, so the admin UI cannot show "OIDC secret for provider X: not set". A registry where modules declare the secret names they use (with a description, and a pattern for per-provider names) would let the UI list the unset ones. Secret names are not namespaced by module today: an Admin can set any name, and nothing checks that a module uses it.
 - **Faster propagation.** A changed setting reaches another process within 5 seconds (cache TTL). If that is too slow for some setting, a `LISTEN/NOTIFY` message on write that empties the cache of the other processes would make it near-immediate; the kernel already has the listener machinery for the outbox.
@@ -146,7 +173,7 @@
 ## Vocabularies, blob store and branding follow-ups (M3 sprint 4)
 
 - **Usage checks for the built-in vocabularies.** `stage`, `thematic-category`, `necessity`, `sender-type` and `aggregate` have no `usage` check, so every term an administrator adds can be deleted. The module that starts storing a key (registry.services for `stage`, M7; kpi.framework for the rest, M8) adds its entry to the registry `vocabulary` and calls `validateTerm` when it saves.
-- **Vocabulary administration.** No import or export of terms, no list of locales to offer in the UI, no way to reorder many terms in one call, and no history beyond `settings.vocabulary.changed@1` (the audit trail, M4). Administrators cannot declare a vocabulary; that stays with modules.
+- **Vocabulary administration.** No import or export of terms, no list of locales to offer in the UI, no way to reorder many terms in one call, and no history beyond `settings.vocabulary.changed@1` (recorded by the audit trail since M4 sprint 4, without the labels). Administrators cannot declare a vocabulary; that stays with modules.
 - **A full Markdown parser.** Legal texts use a small in-house subset (`packages/sanitize`) because the sprint allowed no dependency beyond `sharp` and DOMPurify. Tables, nested lists, images and reference links need a CommonMark parser (for example `marked` or `markdown-it`) in front of the same DOMPurify step; it needs approval as a new runtime dependency. The bio (plain text today) could use it too.
 - **Legal texts per locale, and versions.** One text per page; no translations, no "accepted on" record, no history.
 - **Branding extras.** Favicon, login background and theme colours (FEATURES 3.19: they swap with the theme) are not settings yet; add them with the UI shell (M5). Saving a logo is two steps (upload with `POST /files`, paste the hash into the settings); M5's form can do both. The sender address check is length only, not an address syntax check, because `Name <a@b>` is allowed.

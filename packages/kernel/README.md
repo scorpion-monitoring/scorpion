@@ -336,6 +336,7 @@ export default defineModule<MyService, 'kpi.framework', 'kpi.impact'>({
 | `ctx.config`          | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`, `TRUSTED_PROXIES`.   |
 | `ctx.events`          | `emit(name, payload)` into the outbox.                                                                                                |
 | `ctx.jobs`            | `enqueue(name, data?)`.                                                                                                               |
+| `ctx.audit`           | `(entry) => Promise<void>`: one audit entry, in the caller's transaction; a no-op without `core.audit` ([below](#audit)).             |
 | `ctx.registry(name)`  | The validated entries of a registry of this module or of a dependency (frozen).                                                       |
 | `ctx.deps`            | The public service objects of the declared dependencies.                                                                              |
 | `ctx.permissions`     | Every permission the loaded manifests declare (`id`, `module`, `scope`, `description`), read-only. `core.authz` validates against it. |
@@ -424,7 +425,10 @@ export default defineModule<Service, 'core.settings', never, z.output<typeof set
   delivery is `dead`. The other subscribers are not called again. So a handler must be **idempotent**
   and must not depend on the order of events.
 - The dispatcher wakes on `LISTEN/NOTIFY` and also polls. It runs where the workers run.
-- Dead deliveries: `listDeadDeliveries(db)`; lag and counts: `outboxStats(db)` (the admin UI comes in M5).
+- Dead deliveries: `listDeadDeliveries(db)`; lag and counts: `outboxStats(db)`. Maintenance: `deleteDeliveredEvents(db, { olderThan, limit })`
+  removes events whose deliveries are all `delivered` (or that have none) and never one with a `pending` or `dead` delivery;
+  `requeueDelivery(db, deliveryId)` puts a `dead` delivery back (`undefined` for anything else). `core.audit` hosts the jobs and routes
+  that call them ([ADR-0024](../../docs/adr/0024-kernel-maintenance-job-results-and-export.md)); the admin screens are M5.
 
 ## Jobs
 
@@ -437,8 +441,11 @@ A job is `{ name, schedule?, data?, handler, retry, timeoutSeconds }`:
 - `retry` is `{ limit, delaySeconds, backoff? }`; `timeoutSeconds` is how long the handler may run. The
   handler gets a `signal` that is aborted on timeout and at the end of a shutdown that outlasts its
   grace period. Honour it.
-- Every attempt writes a row to `kernel_job_run` (status, start, end, duration, error, attempt):
-  `listJobRuns(db, { jobName, status, limit, offset })`.
+- Every attempt writes a row to `kernel_job_run` (status, start, end, duration, error, attempt, result):
+  `listJobRuns(db, { jobName, status, limit, offset })`. A handler may return a `JobResult`, a flat record
+  of counts and flags (`{ deleted: 12 }`); the kernel keeps it as `result` when the attempt succeeds, drops
+  anything nested and cuts strings at 200 characters. Return numbers, never a name or an address.
+  `deleteJobRuns(db, { olderThan, limit })` removes finished runs (never a `running` one).
 - `ctx.jobs.enqueue()` works from any process. **Jobs only run where the workers run**: in the web
   process with `WORKER_MODE=inline` (the default), or in `scorpion worker`.
 
@@ -458,8 +465,9 @@ registry entries, not `if` branches in the owner.
 - If a module has an optional dependency that is not in the profile, contributions and subscriptions
   to names that no module in the profile provides are skipped (and logged), because they may belong
   to that absent module. Without such a dependency they are errors.
-- The kernel declares three registries itself, `kernel.authenticator`, `kernel.authorizer` and
-  `kernel.settingsStore`, which any module may contribute to (see Routes and Settings). At most one entry may exist in each.
+- The kernel declares four registries itself, `kernel.authenticator`, `kernel.authorizer`,
+  `kernel.settingsStore` and `kernel.auditSink`, which any module may contribute to (see Routes, Settings and
+  Audit). At most one entry may exist in each.
 
 ## CLI commands
 
@@ -530,6 +538,20 @@ error mapper.
   need to get through use `testAuthorizer()` from `@scorpion/testing`.
 
 In the service layer, check resource-scoped permissions again (`ctx.authz.require`, M3).
+
+### Audit
+
+`createRoute({ audit })` takes `true` or `{ body?: boolean, redact?: string[] }`. With `audit` the pipeline writes an entry after the
+handler has returned, **also for a call that was turned away** (401, 403, 429) or was invalid (422): who (the actor, `anonymous` when the
+credentials failed), the route template, the outcome, the client address (the `TRUSTED_PROXIES` rule). The body and the query string are
+stored only with `body: true`, redacted by key name and capped; a route under `/auth/` cannot ask for it (registration fails). A failed
+write is logged by request id and error code and never changes the response.
+
+`ctx.audit(entry)` is for a service that changes something without emitting an event. Call it inside `ctx.db.tx()`: the entry commits or
+rolls back with the change, and a failure rejects the call. Put ids and names in `payload`, never a secret.
+
+Both go to the registry `kernel.auditSink`, which `core.audit` fills; without it they do nothing, so a profile without `core.audit`
+works ([ADR-0021](../../docs/adr/0021-audit-sink-redaction-and-append-only.md)).
 
 ## Profiles
 

@@ -118,7 +118,7 @@ and ignored.
 | `notifications.settings.tested@1`   | emits      | `deliveryId`, `template`, `requestedBy`                                |
 
 Ids, template keys and an error code only: **never an address, a subject, a body or a URL**. Each is emitted in the transaction of the change.
-`dead` is emitted where a row becomes dead (the `sending → dead` update and the event commit together); the other two by the admin methods.
+`dead` is emitted where a row becomes dead (the `sending → dead` update and the event commit together); the other two by the admin methods. `core.audit` records all three when it is in the profile; the routes for requeue and the test mail have `audit: true` (ADR-0021).
 
 ### Jobs
 
