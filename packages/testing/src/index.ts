@@ -43,3 +43,4 @@ export {
   type KeycloakUser,
   type StartedKeycloak,
 } from './keycloak.ts';
+export { HOSTILE_STRINGS, templateProblems, type TemplateLike } from './templates.ts';

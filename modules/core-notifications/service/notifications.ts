@@ -3,19 +3,26 @@
 import type { Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
-import { activeTransaction, ids, type DbTx, type ModuleContext } from '@scorpion/kernel';
+import { Invalid } from '@scorpion/contracts';
+import { activeTransaction, ids, mountPath, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import { desc, max, sql } from 'drizzle-orm';
 import { delivery } from '../db/schema.ts';
-import type { NotificationStatus, NotificationsService } from '../public.ts';
+import type { NotificationStatus, NotificationsService, TemplateMessage } from '../public.ts';
 import type { NotificationSettings } from '../settings-schema.ts';
 import { backoffSeconds } from './backoff.ts';
 import { claimDue, markDead, markRetry, markSent, type ClaimedDelivery } from './delivery.ts';
-import { parseMessage, type NotificationMessage } from './message.ts';
+import { parseMessage, type NotificationMessage, type ParsedMessage } from './message.ts';
+import type { TemplateBranding } from './templates/layout.ts';
+import { resolveLocale } from './templates/locale.ts';
+import type { TemplateIndex } from './templates/registry.ts';
 import type { TransportCache } from './transport-cache.ts';
 import { failureCode, TransportError, type OutgoingMessage } from './transports/types.ts';
 import { WAKE_CHANNEL } from './wake.ts';
 
 export const PERMISSION_STATUS_READ = 'core.notifications.status.read';
+
+/** Where core.blob serves a stored file below the internal API (`GET /files/{hash}`), for a logo in a mail. */
+const FILES_PATH = '/api/internal/files';
 
 /** Rows claimed in one statement. */
 const CLAIM_BATCH = 10;
@@ -37,6 +44,8 @@ export interface DeliveryPassReport {
   dead: number;
   /** Rows another worker took over while this one was sending: nothing was written for them. */
   lost: number;
+  /** Rows the transport `none` accepted and dropped (nobody configured a relay). */
+  dropped: number;
 }
 
 export interface NotificationsInternals extends NotificationsService {
@@ -52,14 +61,64 @@ export interface NotificationsDeps {
   authz: AuthzService;
   settingsService: Pick<SettingsService, 'getBranding'>;
   transports: TransportCache;
+  templates: TemplateIndex;
 }
 
 export function createNotificationsService(
   ctx: ModuleContext<'core.authz' | 'core.settings', never, NotificationSettings>,
   deps: NotificationsDeps,
 ): NotificationsInternals {
-  const { authz, transports } = deps;
+  const { authz, transports, templates } = deps;
   const { db, log } = ctx;
+
+  /** `<ORIGIN><BASE_PATH>`: where the instance is reached, whatever the number of path segments. */
+  const baseUrl = `${ctx.config.ORIGIN}${mountPath(ctx.config)}`;
+
+  /** The branding settings in the form the layout prints. */
+  async function templateBranding(): Promise<TemplateBranding> {
+    const branding = await deps.settingsService.getBranding();
+    return {
+      productName: branding.productName,
+      instanceName: branding.instanceName,
+      contactEmail: branding.contactEmail,
+      imprintUrl: branding.imprintUrl,
+      logoUrl: branding.logos.light ? `${baseUrl}${FILES_PATH}/${branding.logos.light}` : null,
+      baseUrl,
+    };
+  }
+
+  /** `enqueue` and `enqueueTemplate` call this: the one place a row is inserted. */
+  async function insert(
+    tx: DbTx,
+    message: ParsedMessage,
+    settings: NotificationSettings,
+  ): Promise<string> {
+    const id = ids.uuidv7();
+    await tx.insert(delivery).values({
+      id,
+      template: message.template,
+      channel: message.channel,
+      recipientAddress: message.channel === 'email' ? (message.recipientAddress ?? null) : null,
+      recipientUserId: message.recipientUserId ?? null,
+      locale: message.locale ?? settings.defaultLocale,
+      subject: message.subject,
+      textBody: message.text,
+      htmlBody: message.html ?? null,
+      sensitive: message.sensitive,
+    });
+    // Delivered on commit and never on rollback; the payload is the id only.
+    await tx.execute(sql`select pg_notify(${WAKE_CHANNEL}, ${id})`);
+    return id;
+  }
+
+  function requireTransaction(): void {
+    // Like `ctx.events.emit` (ADR 0003): the row commits with the change, or not at all.
+    if (!activeTransaction()) {
+      throw new NotificationError(
+        'core.notifications: enqueue() must be called inside ctx.db.tx(), so the message commits with the change',
+      );
+    }
+  }
 
   async function process(
     row: ClaimedDelivery,
@@ -92,6 +151,7 @@ export function createNotificationsService(
         };
         await transport.send(message, { signal });
         outcome = { ok: true };
+        if (transportId === 'none') report.dropped += 1;
       } catch (error) {
         outcome = { ok: false, code: failureCode(error) };
         if (error instanceof TransportError && error.code === 'unknown-transport') {
@@ -134,32 +194,58 @@ export function createNotificationsService(
 
   return {
     async enqueue(tx: DbTx, input: NotificationMessage): Promise<string | null> {
-      // Like `ctx.events.emit` (ADR 0003): the row commits with the change, or not at all.
-      if (!activeTransaction()) {
-        throw new NotificationError(
-          'core.notifications: enqueue() must be called inside ctx.db.tx(), so the message commits with the change',
-        );
-      }
+      requireTransaction();
       const message = parseMessage(input);
       const settings = await ctx.settings.get();
       // The webhook is an optional mirror: with it off there is nothing to deliver and nothing to fail.
       if (message.channel === 'webhook' && !settings.webhook.enabled) return null;
-      const id = ids.uuidv7();
-      await tx.insert(delivery).values({
-        id,
-        template: message.template,
-        channel: message.channel,
-        recipientAddress: message.channel === 'email' ? (message.recipientAddress ?? null) : null,
-        recipientUserId: message.recipientUserId ?? null,
-        locale: message.locale ?? settings.defaultLocale,
-        subject: message.subject,
-        textBody: message.text,
-        htmlBody: message.html ?? null,
-        sensitive: message.sensitive,
+      return insert(tx, message, settings);
+    },
+
+    async enqueueTemplate(tx: DbTx, input: TemplateMessage): Promise<string> {
+      requireTransaction();
+      const entry = templates.get(String(input.template));
+      if (!entry) {
+        // A programming error: the caller names a key no loaded module contributes.
+        throw new NotificationError(
+          `core.notifications: there is no template "${String(input.template).slice(0, 100)}"`,
+        );
+      }
+      const data = entry.schema.safeParse(input.data);
+      if (!data.success) {
+        // Field names and the schema's own messages; the offending value is never repeated.
+        throw new Invalid(
+          'The notification data is not valid.',
+          data.error.issues.map((issue) => ({
+            path: ['data', ...issue.path.map(String)].join('.'),
+            message: issue.message,
+          })),
+        );
+      }
+      const settings = await ctx.settings.get();
+      const locale = resolveLocale(input.locale, settings.defaultLocale);
+      const rendered = entry.render(data.data, locale, await templateBranding(), {
+        // The key and language only: the text of a message may hold a name.
+        onFallback: (key, missingIn) =>
+          log.warn(
+            { template: entry.key, key, locale: missingIn },
+            'a template message is missing in this language; English was used',
+          ),
       });
-      // Delivered on commit and never on rollback; the payload is the id only.
-      await tx.execute(sql`select pg_notify(${WAKE_CHANNEL}, ${id})`);
-      return id;
+      // The size limits and the one-line subject are checked on what was rendered, too.
+      const message = parseMessage({
+        template: entry.key,
+        channel: 'email',
+        recipientAddress: input.recipient.address,
+        recipientUserId: input.recipient.userId,
+        locale,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html,
+        // The template decides, not the caller: a reset link is always a sensitive body.
+        sensitive: entry.sensitive,
+      });
+      return insert(tx, message, settings);
     },
 
     async status(actor: Actor): Promise<NotificationStatus> {
@@ -171,6 +257,10 @@ export function createNotificationsService(
         .groupBy(delivery.status);
       const counts = { queued: 0, sending: 0, sent: 0, dead: 0 };
       for (const row of counted) counts[row.status as keyof typeof counts] = row.n;
+      const [dropped] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(delivery)
+        .where(sql`${delivery.status} = 'sent' and ${delivery.transport} = 'none'`);
       const errors = await db
         .select({
           code: delivery.lastError,
@@ -189,6 +279,7 @@ export function createNotificationsService(
         transportIsNone: settings.emailTransport === 'none',
         webhookEnabled: settings.webhook.enabled,
         counts,
+        sentWithoutTransport: dropped?.n ?? 0,
         lastErrors: errors.map((row) => ({
           code: row.code ?? 'unknown',
           count: row.count,
@@ -198,7 +289,14 @@ export function createNotificationsService(
     },
 
     async deliverDue(options = {}) {
-      const report: DeliveryPassReport = { claimed: 0, sent: 0, retried: 0, dead: 0, lost: 0 };
+      const report: DeliveryPassReport = {
+        claimed: 0,
+        sent: 0,
+        retried: 0,
+        dead: 0,
+        lost: 0,
+        dropped: 0,
+      };
       const deadline = Date.now() + (options.budgetMs ?? PASS_BUDGET_MS);
       const settings = await ctx.settings.get();
       const from = (await deps.settingsService.getBranding()).mailFrom;

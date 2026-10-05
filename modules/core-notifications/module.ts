@@ -1,4 +1,10 @@
+import { z } from '@scorpion/contracts';
 import { defineModule } from '@scorpion/kernel';
+import { createSeedDevMailCommand } from './service/seed-dev-mail-command.ts';
+import { templateEntrySchema, TEMPLATE_REGISTRY } from './service/templates/define.ts';
+import { SUPPORTED_LOCALES } from './service/templates/locale.ts';
+import { buildTemplateIndex } from './service/templates/registry.ts';
+import { SHIPPED_TEMPLATES } from './templates/index.ts';
 import { settingsSchema, type NotificationSettings } from './settings-schema.ts';
 import {
   createNotificationsService,
@@ -25,6 +31,8 @@ export {
 export type { NotificationsInternals } from './service/notifications.ts';
 
 export const DELIVER_JOB = 'core.notifications.deliver';
+/** The user preference that picks the language of a person's mail (M4 decision 5). */
+export const LOCALE_PREFERENCE = 'notifications.locale';
 
 export interface NotificationsModuleOptions {
   /** For tests: how long one process trusts a built transport. Default: 5 s, the settings port's bound. */
@@ -73,6 +81,8 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
 
+    commands: [createSeedDevMailCommand()],
+
     jobs: [
       {
         // Woken by the wake-up listener and `ctx.jobs.enqueue`, and a sweep every minute for
@@ -104,6 +114,13 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
           return Promise.resolve();
         },
         'system.ready': async (_event, ctx) => {
+          // One line instead of a warning per message: with no relay, mail is recorded and dropped.
+          // The counter is `status().sentWithoutTransport` and the `dropped` of the job's log line.
+          if ((await ctx.settings.get()).emailTransport === 'none') {
+            ctx.log.warn(
+              'emailTransport is "none": mail is recorded as sent and dropped. Set emailTransport and smtp.* in the settings of core.notifications to deliver it',
+            );
+          }
           if (options.listen === false) return;
           await startListener?.();
           ctx.log.info('notification delivery is listening for new messages');
@@ -111,8 +128,21 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
       },
     },
 
-    registries: { [TRANSPORT_REGISTRY]: transportEntrySchema },
+    registries: {
+      [TRANSPORT_REGISTRY]: transportEntrySchema,
+      [TEMPLATE_REGISTRY]: templateEntrySchema,
+    },
     contributes: {
+      // The templates of modules that do not exist yet ship here, registered and tested.
+      [TEMPLATE_REGISTRY]: SHIPPED_TEMPLATES,
+      // The language of a person's mail. Registered here because this module is what reads it.
+      'settings.userPreference': [
+        {
+          key: LOCALE_PREFERENCE,
+          description: 'The language of the mail and notifications you receive',
+          schema: z.enum(SUPPORTED_LOCALES),
+        },
+      ],
       [TRANSPORT_REGISTRY]: [
         smtpTransport,
         webhookTransportEntry(options.webhook),
@@ -139,6 +169,7 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
         authz: ctx.deps['core.authz'],
         settingsService,
         transports,
+        templates: buildTemplateIndex(ctx.registry(TEMPLATE_REGISTRY)),
       });
       const listener = createWakeListener({
         connectionString: ctx.config.DATABASE_URL,

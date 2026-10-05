@@ -6,22 +6,23 @@ webhook mirrors admin-addressed messages. It is user-agnostic like `core.authz` 
 it stores an opaque `recipient_user_id` with no foreign key and takes the address from the caller. The queue is a table
 ([ADR-0020](../../docs/adr/0020-delivery-queue-in-a-table.md)).
 
-Status: M4 sprint 1. The module is in the `full` and `kpi-tracker` profiles and **nothing uses it yet**: `core.identity` keeps its own
-mailer and `SMTP_URL` until sprint 2, which moves identity onto this module and removes the variable. This module never reads
-`SMTP_URL`. There are no routes, templates, inbox or preferences yet (sprints 2 and 3).
+Status: M4 sprint 2. Every mail of `core.identity` goes through this module, and the variable `SMTP_URL` is gone: the relay is
+configured in the settings below and its password is a secret. Templates and the two shipped languages (`en`, `de`) are here
+([Templates](#templates)). There are no routes, inbox or preferences UI yet (sprint 3).
 
 ## Manifest
 
-| Part           | Value                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| id             | `core.notifications`                                                                             |
-| table prefix   | `notify_` (set in the manifest; ADR-0004)                                                        |
-| dependencies   | `core.authz`, `core.settings` (a module that mails depends on this one, not the other way round) |
-| routes, CLI    | none                                                                                             |
-| jobs           | `core.notifications.deliver`, see "Jobs"                                                         |
-| events         | emits none; subscribes to `settings.changed@1` and `settings.secret.changed@1`, see "Events"     |
-| registries     | declares `notify.transport`, see "Registries"                                                    |
-| public service | `ctx.deps['core.notifications']`: `enqueue(tx, message)` and `status(actor)`, see "Public API"   |
+| Part           | Value                                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id             | `core.notifications`                                                                                                                                                                             |
+| table prefix   | `notify_` (set in the manifest; ADR-0004)                                                                                                                                                        |
+| dependencies   | `core.authz`, `core.settings` (a module that mails depends on this one, not the other way round)                                                                                                 |
+| routes         | none                                                                                                                                                                                             |
+| CLI            | `scorpion seed-dev-mail`, development only, see "Development setup"                                                                                                                              |
+| jobs           | `core.notifications.deliver`, see "Jobs"                                                                                                                                                         |
+| events         | emits none; subscribes to `settings.changed@1` and `settings.secret.changed@1`, see "Events"                                                                                                     |
+| registries     | declares `notify.transport` and `notify.template`; contributes the user preference `notifications.locale` to `settings.userPreference`, see "Registries"                                         |
+| public service | `ctx.deps['core.notifications']`: `enqueue(tx, message)`, `enqueueTemplate(tx, message)` and `status(actor)`; `public.ts` also exports `defineTemplate` and the locale helpers, see "Public API" |
 
 ### Permissions
 
@@ -37,20 +38,20 @@ boundary is the profile's module list. Admin holds every declared permission by 
 Stored by `core.settings` under the module id `core.notifications`; validated by the module's schema; a change reaches
 another server process within 5 seconds (ADR-0017).
 
-| Key                           | Default    | Meaning                                                                                                              |
-| ----------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| `emailTransport`              | `none`     | `smtp` or `none`. `none` accepts every message, records it as `sent` with transport `none` and sends nothing.        |
-| `smtp.host`                   | empty      | Required when `emailTransport` is `smtp`.                                                                            |
-| `smtp.port`                   | `587`      |                                                                                                                      |
-| `smtp.tls`                    | `starttls` | `starttls` (587), `tls` (implicit TLS, 465) or `none` (a local relay such as Mailpit).                               |
-| `smtp.user`                   | empty      | Empty means the relay needs no sign-in. The password is a secret.                                                    |
-| `smtp.timeoutSeconds`         | `10`       | Connection, greeting and socket stalls.                                                                              |
-| `webhook.enabled`             | `false`    | The webhook is an optional mirror for admin-addressed messages; a message for it is not queued while it is off.      |
-| `webhook.url`                 | empty      | `https://` only. `http://` is allowed only together with `allowPrivateTargets`. No user name or password in the URL. |
-| `webhook.allowPrivateTargets` | `false`    | Lifts the address-range check for an internal relay (and permits `http://`). Nothing else is lifted.                 |
-| `defaultLocale`               | `en`       | For a message that names no locale.                                                                                  |
-| `maxAttempts`                 | `8`        | Attempts before a delivery is `dead` (1 to 20).                                                                      |
-| `retentionDays`               | `90`       | How long delivered rows are kept. The job that deletes them comes with sprint 3.                                     |
+| Key                           | Default    | Meaning                                                                                                                   |
+| ----------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `emailTransport`              | `none`     | `smtp` or `none`. `none` accepts every message, records it as `sent` with transport `none` and sends nothing.             |
+| `smtp.host`                   | empty      | Required when `emailTransport` is `smtp`.                                                                                 |
+| `smtp.port`                   | `587`      |                                                                                                                           |
+| `smtp.tls`                    | `starttls` | `starttls` (587), `tls` (implicit TLS, 465) or `none` (a local relay such as Mailpit).                                    |
+| `smtp.user`                   | empty      | Empty means the relay needs no sign-in. The password is a secret.                                                         |
+| `smtp.timeoutSeconds`         | `10`       | Connection, greeting and socket stalls.                                                                                   |
+| `webhook.enabled`             | `false`    | The webhook is an optional mirror for admin-addressed messages; a message for it is not queued while it is off.           |
+| `webhook.url`                 | empty      | `https://` only. `http://` is allowed only together with `allowPrivateTargets`. No user name or password in the URL.      |
+| `webhook.allowPrivateTargets` | `false`    | Lifts the address-range check for an internal relay (and permits `http://`). Nothing else is lifted.                      |
+| `defaultLocale`               | `en`       | The language of a mail that names none (or names one that is not shipped). Shipped: `en`, `de`; anything else gives `en`. |
+| `maxAttempts`                 | `8`        | Attempts before a delivery is `dead` (1 to 20).                                                                           |
+| `retentionDays`               | `90`       | How long delivered rows are kept. The job that deletes them comes with sprint 3.                                          |
 
 The sender address and the instance name come from the branding settings of `core.settings` (`mailFrom`), read at send time.
 
@@ -66,16 +67,27 @@ setting, an event, a log line or an API response.
 
 A transport that needs a secret that is not stored fails with the code `not-configured` and the message is retried.
 
+**Moving from `SMTP_URL`** (0.4.x): the variable is no longer read and there is no fallback. Put the relay in the settings of
+`core.notifications` (`emailTransport: smtp`, `smtp.host`, `smtp.port`, `smtp.tls`, `smtp.user`) through `PUT /settings/core.notifications`,
+and the password with `scorpion set-secret notifications.smtp.password`. A server that starts with `SMTP_URL` set ignores it.
+
 ### Registries
 
-| Registry           | Entry                                                                 | Used for                                                                                                                              |
-| ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `notify.transport` | `{ id, channel: 'email' \| 'webhook', create({ settings, secret }) }` | A way to deliver. This module contributes `smtp`, `webhook` and `none`. `create` returns `{ id, send(message, { signal }), close? }`. |
+| Registry           | Entry                                                                                 | Used for                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `notify.template`  | `defineTemplate({ key, schema, sensitive, category, mandatory, catalogue, content })` | A mail. The module that owns the event contributes it; see [Templates](#templates). Both catalogues are required or the start fails.  |
+| `notify.transport` | `{ id, channel: 'email' \| 'webhook', create({ settings, secret }) }`                 | A way to deliver. This module contributes `smtp`, `webhook` and `none`. `create` returns `{ id, send(message, { signal }), close? }`. |
 
 The email channel uses the transport named by `emailTransport` (the settings schema lists the ids, so a new transport adds its id there
 in the same change); the webhook channel always uses `webhook`. The module keeps one built transport per id and rebuilds it when
 the settings it reads differ from the ones it was built from, when it is older than 5 seconds, and at once when this process hears
 a change event.
+
+### User preference
+
+| Key                    | Value        | Meaning                                                                                                 |
+| ---------------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `notifications.locale` | `en` or `de` | The language of the mail you receive. Set with `PUT /preferences/notifications.locale` (core.settings). |
 
 ### Events
 
@@ -91,6 +103,46 @@ The events of sprint 3 (`notifications.delivery.dead@1`, `.requeued@1`) are not 
 | Job                          | Schedule     | Does                                                                                             |
 | ---------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
 | `core.notifications.deliver` | every minute | Claims due rows and sends them until nothing is due. Also queued after every commit (see below). |
+
+## Templates
+
+A mail is a **template**: a typed TypeScript function, no template engine and no dependency (M4 decision 3). It is an entry of the
+registry `notify.template`, built with `defineTemplate` and contributed by the module that owns the event:
+
+```ts
+import { defineTemplate } from '@scorpion/core-notifications/public';
+
+export const approved = defineTemplate({
+  key: 'identity.approved', // lower-case segments joined by dots
+  schema: z.strictObject({ username: z.string(), signInUrl: z.url() }), // the data a caller passes
+  sensitive: false, // true: the rendered body is deleted once the mail is sent or dead (ADR-0019)
+  mandatory: false, // true: a security mail that no preference may switch off (sprint 3)
+  category: 'account', // groups templates for the preferences (sprint 3)
+  catalogue: {
+    en: { subject: 'Welcome, {name}' /* … */ },
+    de: { subject: 'Willkommen, {name}' /* … */ },
+  },
+  content: (data, { t, branding }) => ({
+    subject: t('subject', { name: data.username }),
+    blocks: [{ kind: 'action', label: t('action'), url: data.signInUrl }],
+  }),
+});
+```
+
+- **Both catalogues are required.** An entry without an `en` and a `de` catalogue, with an empty one, a bad key or a render that is not a
+  function fails the start with the entry named; two modules contributing one key fail it too. A message missing in `de` falls back to English at
+  run time, logs `{ template, key, locale }` (never a value) and fails the template's test (`templateProblems` in `@scorpion/testing`).
+- **The layout is shared.** A template returns `{ subject, heading?, blocks }` (`text`, `list`, `action`, `note`); the module turns the same blocks into
+  the plain-text part and the HTML part, with the instance name, logo, contact address and imprint link from the branding settings (rule 9).
+- **Escaping is by construction.** Every value put in with `t('key', { name })` is cut to one line and stripped of line breaks, control characters
+  and bidirectional marks; the HTML part escapes everything; a link is shown only if it is `https:`, `http:` or `mailto:`. The subject is one line
+  whatever a name holds, so a hostile name cannot add a header. Tests use `<script>`, a bidi override and a line break in every template and language.
+- **Language** (`enqueueTemplate`): the language the caller names (a user's `notifications.locale`, or one a request carried), checked against the
+  shipped list (`de-AT` gives `de`); else `defaultLocale`; else English. An unsupported value never fails a mail.
+- **Shipped here**, registered and tested, for modules that do not exist yet: `registry.membership-requested`, `registry.membership-decided`,
+  `onboarding.application-submitted`, `onboarding.application-decided` and `kpi.reporting-reminder`. The seven identity templates (`identity.welcome`,
+  `.registration-request`, `.approved`, `.rejected`, `.password-reset`, `.email-verification`, `.register-attempt`) belong to
+  [core.identity](../core-identity/README.md).
 
 ## How delivery works
 
@@ -127,7 +179,23 @@ Because an administrator types the URL, the call is built against SSRF:
 
 ## Public API
 
-`ctx.deps['core.notifications']` (declare `core.notifications` in your `package.json`; see `public.ts`):
+`ctx.deps['core.notifications']` (declare `core.notifications` in your `package.json`; see `public.ts`). Two ways to enqueue, both inside the caller's
+transaction and both checking no permission. **A caller that sends a registered template uses `enqueueTemplate`; `enqueue` takes a message that is already
+rendered** (an `identity` mail always uses the first):
+
+```ts
+await ctx.db.tx(async (tx) => {
+  // ... the work ...
+  await notifications.enqueueTemplate(tx, {
+    template: 'identity.password-reset',
+    data: { resetUrl, validForMinutes: 60 }, // validated by the template's schema (422 `Invalid`), never stored
+    recipient: { address: user.email, userId: user.id }, // userId is opaque, optional
+    locale: 'de', // optional; checked against the shipped list
+  });
+});
+```
+
+`sensitive` is the template's decision, not the caller's. An unknown template key throws `NotificationError` (a bug in the caller). The raw form:
 
 ```ts
 await ctx.db.tx(async (tx) => {
@@ -149,16 +217,27 @@ and `transportIsNone`, so an operator notices an instance that sends nothing. Th
 
 ## Operating notes
 
-- A fresh instance has `emailTransport = none`: messages are recorded and dropped, and `status().transportIsNone` is true.
+- A fresh instance has `emailTransport = none`: messages are recorded and dropped, and `status().transportIsNone` is true. The log says so **once**, at
+  start-up (a warning), not once per message; `status().sentWithoutTransport` and the `dropped` count in the delivery job's log line are the counter.
 - To use a relay: set `emailTransport`, `smtp.*` in the settings, and `scorpion set-secret notifications.smtp.password` if it needs a sign-in.
   A change reaches every server process within 5 seconds.
 - The module opens one extra Postgres connection per process for `LISTEN`. Without it, delivery still happens within a minute.
-- Upgrade note: `SMTP_URL` is **not** read by this module; `core.identity` still reads it until sprint 2 removes it.
+- Upgrade note: `SMTP_URL` is **not** read by anything any more ([Secrets](#secrets) says where the relay settings go).
+
+### Development setup
+
+`pnpm dev` starts Postgres and Mailpit (`docker-compose.dev.yml`) and then runs **`scorpion seed-dev-mail`**, which stores `emailTransport: smtp` with
+`localhost:1025` (no TLS) as this module's settings **only if none are stored**. Mail then shows up in the Mailpit UI at http://localhost:8025. The command
+refuses to run when `NODE_ENV=production` (every image sets it), so a production instance never gets a relay it did not configure, and it never overwrites
+settings an administrator saved. `--host` and `--port` serve a compose network (`--host mailpit`).
 
 ## Tests
 
 `pnpm test --filter @scorpion/core-notifications` (needs Docker): table-driven tests for the backoff schedule, the address-range check
 (IPv4, IPv6, mapped forms, DNS rebinding, `http://` downgrade) and the settings; integration tests for rollback, exactly-once delivery with
 racing workers, a relay that is down (growing attempts, dead, recovery), the sensitive-body scrub, leases, the job path, a transport change
-reaching a second kernel within the TTL, the webhook, denied permissions, and a grep of the log stream for secrets. Factory: `makeDelivery`
-in `packages/testing`.
+reaching a second kernel within the TTL, the webhook, denied permissions, and a grep of the log stream for secrets. Sprint 2 adds: table-driven tests of
+the escaping helpers, the locale choice and the translator; a snapshot per shipped template and language and the rules every template must keep
+(`templateProblems` of `@scorpion/testing`: same keys in both languages, no English fallback, hostile names); `enqueueTemplate` against Postgres (rollback,
+outside a transaction, locale choice, branding, header injection through a real relay); the start-up refusals of the registry; the seed command; and the quiet log.
+Factory: `makeDelivery` in `packages/testing`.

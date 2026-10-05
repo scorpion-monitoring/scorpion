@@ -27,13 +27,14 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll } from 'vitest';
+import { z } from '@scorpion/contracts';
 import {
   createNotificationsModule,
   type NotificationsInternals,
   type NotificationsModuleOptions,
 } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
-import type { NotificationMessage } from '../public.ts';
+import { defineTemplate, type NotificationMessage, type TemplateMessage } from '../public.ts';
 
 export interface Mailer {
   /** Enqueues in its own `ctx.db.tx()`; `failAfter` throws after the insert, so the transaction rolls back. */
@@ -43,9 +44,62 @@ export interface Mailer {
     messages: NotificationMessage[],
     options?: { failAfter?: boolean },
   ): Promise<(string | null)[]>;
+  /** `enqueueTemplate` in its own `ctx.db.tx()`; `failAfter` throws after the insert. */
+  sendTemplate(message: TemplateMessage, options?: { failAfter?: boolean }): Promise<string>;
+  /** `enqueueTemplate` in a plain Drizzle transaction that is not `ctx.db.tx()`: must be refused. */
+  templateOutsideTx(message: TemplateMessage): Promise<unknown>;
   /** Enqueues in a plain Drizzle transaction that is not `ctx.db.tx()`: must be refused. */
   outsideTx(message: NotificationMessage): Promise<unknown>;
 }
+
+/** A template with free text in it, and one that holds a credential. */
+export const FIXTURE_HELLO = defineTemplate({
+  key: 'fix.hello',
+  schema: z.strictObject({ name: z.string().min(1).max(100) }),
+  category: 'test',
+  catalogue: {
+    en: { subject: 'Hello {name}', body: 'Welcome, {name}.' },
+    de: { subject: 'Hallo {name}', body: 'Willkommen, {name}.' },
+  },
+  content: (data, { t }) => ({
+    subject: t('subject', { name: data.name }),
+    blocks: [{ kind: 'text', text: t('body', { name: data.name }) }],
+  }),
+});
+
+export const FIXTURE_SECRET_LINK = defineTemplate({
+  key: 'fix.secret-link',
+  schema: z.strictObject({ link: z.url() }),
+  sensitive: true,
+  mandatory: true,
+  category: 'security',
+  catalogue: {
+    en: { subject: 'Your link', body: 'Open it:' },
+    de: { subject: 'Ihr Link', body: 'Öffnen:' },
+  },
+  content: (data, { t }) => ({
+    subject: t('subject'),
+    blocks: [
+      { kind: 'text', text: t('body') },
+      { kind: 'action', label: t('body'), url: data.link },
+    ],
+  }),
+});
+
+/** A template whose German catalogue lacks `extra`: the English text is used and the gap is logged. */
+export const FIXTURE_PARTIAL = defineTemplate({
+  key: 'fix.partial',
+  schema: z.strictObject({ name: z.string().min(1).max(100) }),
+  category: 'test',
+  catalogue: {
+    en: { subject: 'Partial', extra: 'Only in English for {name}' },
+    de: { subject: 'Teilweise' },
+  },
+  content: (data, { t }) => ({
+    subject: t('subject'),
+    blocks: [{ kind: 'text', text: t('extra', { name: data.name }) }],
+  }),
+});
 
 function mailerModule() {
   return {
@@ -53,6 +107,7 @@ function mailerModule() {
     manifest: defineModule<Mailer, 'core.notifications'>({
       id: 'fix.mailer',
       version: '1.0.0',
+      contributes: { 'notify.template': [FIXTURE_HELLO, FIXTURE_SECRET_LINK, FIXTURE_PARTIAL] },
       services: (ctx) => {
         const notifications = ctx.deps['core.notifications'];
         return {
@@ -71,6 +126,14 @@ function mailerModule() {
                 throw new Error('the work failed after the messages were queued');
               return out;
             }),
+          sendTemplate: (message, options) =>
+            ctx.db.tx(async (tx) => {
+              const id = await notifications.enqueueTemplate(tx, message);
+              if (options?.failAfter) throw new Error('the work failed after the mail was queued');
+              return id;
+            }),
+          templateOutsideTx: (message) =>
+            ctx.db.transaction((tx) => notifications.enqueueTemplate(tx as never, message)),
           outsideTx: (message) =>
             ctx.db.transaction((tx) => notifications.enqueue(tx as never, message)),
         };
@@ -83,6 +146,10 @@ export interface StartOptions {
   databaseUrl?: string;
   /** Stored settings of `core.notifications`, as an administrator would have saved them. */
   settings?: Record<string, unknown>;
+  /** Environment variables for the kernel's config (BASE_PATH, ORIGIN). */
+  env?: Record<string, string>;
+  /** Stored `branding` settings of core.settings, as an administrator would have saved them. */
+  branding?: Record<string, unknown>;
   /** Secrets stored under these names before start. */
   secrets?: Record<string, string>;
   /** The key the secrets are stored under; default: a new random one. Pass the first kernel's to share a database. */
@@ -179,13 +246,19 @@ export function useNotifications(): NotificationsHarness {
           'core.notifications': '@scorpion/core-notifications',
           'fix.mailer': '@scorpion/fix-mailer',
         },
-        config: loadConfig({ DATABASE_URL: databaseUrl, PROFILE: 'notifications-test' }),
+        config: loadConfig({
+          DATABASE_URL: databaseUrl,
+          PROFILE: 'notifications-test',
+          ...options.env,
+        }),
         log,
       });
-      if (options.settings || options.secrets) {
+      if (options.settings || options.secrets || options.branding) {
         await kernel.migrate();
         if (options.settings)
           await makeSetting(kernel.pool, 'core.notifications', options.settings);
+        if (options.branding)
+          await makeSetting(kernel.pool, 'core.settings', { branding: options.branding });
         for (const [name, value] of Object.entries(options.secrets ?? {})) {
           await makeSecret(kernel.pool, { name, value, key: secretsKey });
         }

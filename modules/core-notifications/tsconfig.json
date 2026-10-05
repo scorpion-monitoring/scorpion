@@ -4,7 +4,7 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["*.ts", "package.json", "db", "service", "test"],
+  "include": ["*.ts", "package.json", "db", "service", "templates", "test"],
   "references": [
     { "path": "../../packages/kernel" },
     { "path": "../../packages/contracts" },
