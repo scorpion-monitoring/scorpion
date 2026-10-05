@@ -324,9 +324,13 @@ export function createJobs(options: JobsOptions): Jobs {
     startWorking,
     async stop(timeoutMs = 30_000) {
       working = false;
+      // A send-only instance that is still starting becomes `boss` when it is up. Let it finish, so it
+      // is stopped below and not left with open connections that die with the database (57P01).
+      const pending = starting;
+      starting = undefined;
+      if (pending) await pending.catch(() => undefined);
       const instance = boss;
       boss = undefined;
-      starting = undefined;
       if (instance) {
         // Running handlers get the whole timeout to finish; only then are they told to give up.
         const giveUp = setTimeout(() => {
