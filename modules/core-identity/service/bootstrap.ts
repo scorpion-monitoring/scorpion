@@ -143,7 +143,7 @@ export function createBootstrapService(
         [
           '',
           '================================================================================',
-          ' Scorpion has no administrator yet.',
+          ' This instance has no administrator yet.',
           ` First-run token (single use, valid until ${expiresAt.toISOString()}):`,
           '',
           `   ${token}`,

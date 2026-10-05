@@ -9,10 +9,12 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Invalid, NotFound, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
+import type { BlobService } from '@scorpion/core-blob/public';
 import { createRateLimiter, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { user } from '../db/schema.ts';
 import { updateProfileInput } from '../validation.ts';
+import { avatarReference } from './avatar-reference.ts';
 import { TooManyRequests } from './errors.ts';
 import { pendingVerificationEmail } from './mail-tokens.ts';
 import type { RecoveryService } from './recovery.ts';
@@ -27,9 +29,11 @@ export interface Profile {
   /** An address the owner asked to change to and has not confirmed yet. */
   pendingEmail: string | null;
   bio: string | null;
+  /** The SHA-256 of the avatar file, shown at `GET /files/{hash}`; `null` without an avatar. */
+  avatarHash: string | null;
 }
 
-export type ProfileField = 'displayName' | 'bio' | 'email';
+export type ProfileField = 'displayName' | 'bio' | 'email' | 'avatar';
 
 export interface ProfileService {
   /** The caller's own profile. */
@@ -40,6 +44,16 @@ export interface ProfileService {
    * changes. Returns the profile as it is afterwards.
    */
   update(actor: Actor, input: unknown, now?: Date): Promise<Profile>;
+  /**
+   * Sets the caller's own avatar from the bytes of an image. Session callers only, and only their own
+   * account: there is no user id in the input. The blob service checks the file and rewrites it
+   * (`Invalid` for a file it refuses); this replaces the previous avatar, which is released. Needs
+   * `core.identity.avatar.update` and `core.blob.upload`. Uploading the avatar the account already
+   * has changes nothing. Returns the profile as it is afterwards.
+   */
+  setAvatar(actor: Actor, bytes: Uint8Array, now?: Date): Promise<Profile>;
+  /** Removes the caller's own avatar (also when there is none). Session callers only. */
+  removeAvatar(actor: Actor, now?: Date): Promise<Profile>;
 }
 
 function invalid(error: ZodError): Invalid {
@@ -57,10 +71,11 @@ export function createProfileService(
   deps: {
     recovery: Pick<RecoveryService, 'startVerification'>;
     authz: AuthzService;
+    blob: Pick<BlobService, 'put' | 'describe' | 'setReference'>;
     settings: IdentitySettings;
   },
 ): ProfileService {
-  const { authz, settings } = deps;
+  const { authz, blob, settings } = deps;
   const limiter = createRateLimiter(ctx.db);
 
   async function load(userId: string, now: Date): Promise<Profile> {
@@ -71,6 +86,7 @@ export function createProfileService(
         email: user.email,
         verifiedAt: user.emailVerifiedAt,
         bio: user.bio,
+        avatarBlobId: user.avatarBlobId,
       })
       .from(user)
       .where(eq(user.id, userId))
@@ -83,7 +99,28 @@ export function createProfileService(
       emailVerified: row.verifiedAt !== null,
       pendingEmail: await pendingVerificationEmail(ctx.db, userId, row.email, now),
       bio: row.bio,
+      avatarHash: row.avatarBlobId ? ((await blob.describe(row.avatarBlobId))?.hash ?? null) : null,
     };
+  }
+
+  /** Points the account at `blobId` (or at nothing) and the reference with it, in one transaction. */
+  async function changeAvatar(userId: string, username: string, blobId: string | null) {
+    await ctx.db.tx(async (tx) => {
+      const [row] = await tx
+        .select({ avatarBlobId: user.avatarBlobId })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for('update');
+      if (!row) throw new NotFound('There is no such user.');
+      if (row.avatarBlobId === blobId) return;
+      await tx
+        .update(user)
+        .set({ avatarBlobId: blobId, updatedAt: sql`now()` })
+        .where(eq(user.id, userId));
+      // Released and referenced inside this transaction: a failure leaves both as they were.
+      await blob.setReference(avatarReference(userId), blobId);
+      await ctx.events.emit('identity.profile.updated@1', { userId, username, fields: ['avatar'] });
+    });
   }
 
   return {
@@ -148,6 +185,21 @@ export function createProfileService(
           now,
         });
       }
+      return load(userId, now);
+    },
+
+    async setAvatar(actor, bytes, now = new Date()) {
+      const { userId, username } = requireSession(actor, 'The avatar');
+      await authz.require(actor, 'core.identity.avatar.update');
+      const stored = await blob.put(actor, bytes);
+      await changeAvatar(userId, username, stored.id);
+      return load(userId, now);
+    },
+
+    async removeAvatar(actor, now = new Date()) {
+      const { userId, username } = requireSession(actor, 'The avatar');
+      await authz.require(actor, 'core.identity.avatar.update');
+      await changeAvatar(userId, username, null);
       return load(userId, now);
     },
   };

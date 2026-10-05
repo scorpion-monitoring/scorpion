@@ -4,6 +4,7 @@
 // The module is user-agnostic like core.authz (ADR 0014): `user_id` and `updated_by` are opaque ids
 // with no foreign key to the user table of core.identity, so a purge of a user is never blocked.
 import {
+  boolean,
   customType,
   index,
   integer,
@@ -66,4 +67,39 @@ export const secret = pgTable(
     uniqueIndex('settings_secret_name_uidx').on(table.name),
     index('settings_secret_key_idx').on(table.keyId),
   ],
+);
+
+/**
+ * A vocabulary: a list of terms that replaces a pg enum (CLAUDE.md rule 8). The id is declared by a
+ * module in the registry `vocabulary` (`stage`, `necessity`, ...); rows exist only for vocabularies
+ * that a loaded module declares, and are written when the module starts.
+ */
+export const vocabulary = pgTable('settings_vocabulary', {
+  id: text().primaryKey(),
+  description: text().notNull(),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+});
+
+/**
+ * One term of a vocabulary. `labels` maps a locale to the text people see (`{"en": "Production"}`);
+ * `key` is what other modules store and never changes. A term is deactivated, not deleted, once
+ * something uses it: it stays valid for what refers to it and cannot be chosen for anything new.
+ */
+export const vocabularyTerm = pgTable(
+  'settings_vocabulary_term',
+  {
+    id: uuid().primaryKey(), // UUIDv7
+    vocabularyId: text('vocabulary_id')
+      .notNull()
+      .references(() => vocabulary.id, { onDelete: 'cascade' }),
+    key: text().notNull(),
+    labels: jsonb().notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    active: boolean().notNull().default(true),
+    /** Declared by a module (as opposed to added by an administrator): never deleted, only deactivated. */
+    seeded: boolean().notNull().default(false),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('settings_vocabulary_term_key_uidx').on(table.vocabularyId, table.key)],
 );

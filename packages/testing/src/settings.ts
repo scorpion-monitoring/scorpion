@@ -80,3 +80,42 @@ export async function makePreference(
   );
   return rows[0]!;
 }
+
+export interface MakeVocabulary {
+  /** Default: a unique `vocab-<n>`. */
+  id?: string;
+  description?: string;
+  /** Terms as `[key, English label]` or with more. Default: none. */
+  terms?: { key: string; label?: string; sortOrder?: number; active?: boolean; seeded?: boolean }[];
+}
+
+/**
+ * A vocabulary and its terms, as rows. The module only keeps vocabularies that a loaded module
+ * declares (a row for another id is not listed), so use this to set up terms of a declared one or
+ * to check what a query function does with rows it was given.
+ */
+export async function makeVocabulary(db: Queryable, overrides: MakeVocabulary = {}) {
+  const id = overrides.id ?? `vocab-${next()}`;
+  await db.query(
+    'insert into settings_vocabulary (id, description) values ($1, $2) on conflict (id) do nothing',
+    [id, overrides.description ?? `Vocabulary ${id}`],
+  );
+  let order = 0;
+  for (const term of overrides.terms ?? []) {
+    order += 10;
+    await db.query(
+      `insert into settings_vocabulary_term (id, vocabulary_id, key, labels, sort_order, active, seeded)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        randomUUID(),
+        id,
+        term.key,
+        JSON.stringify({ en: term.label ?? term.key }),
+        term.sortOrder ?? order,
+        term.active ?? true,
+        term.seeded ?? false,
+      ],
+    );
+  }
+  return { id };
+}

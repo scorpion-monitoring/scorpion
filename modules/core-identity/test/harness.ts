@@ -5,6 +5,8 @@ import type { UserActor } from '@scorpion/contracts';
 import authzModule from '@scorpion/core-authz/module';
 import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
 import type { AuthzService } from '@scorpion/core-authz/public';
+import blobModule from '@scorpion/core-blob/module';
+import blobPackage from '@scorpion/core-blob/package.json' with { type: 'json' };
 import { createSettingsModule, type SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
@@ -112,6 +114,7 @@ export function useIdentity(): IdentityHarness {
           modules: [
             'core.authz',
             'core.settings',
+            'core.blob',
             'core.identity',
             ...(extra ? [extra.id] : []),
           ] as never,
@@ -125,6 +128,7 @@ export function useIdentity(): IdentityHarness {
             }),
             packageJson: settingsPackage,
           },
+          { manifest: blobModule, packageJson: blobPackage },
           { manifest, packageJson },
           ...(extra
             ? [
@@ -141,6 +145,7 @@ export function useIdentity(): IdentityHarness {
         modulePackages: {
           'core.authz': '@scorpion/core-authz',
           'core.settings': '@scorpion/core-settings',
+          'core.blob': '@scorpion/core-blob',
           'core.identity': '@scorpion/core-identity',
           ...(extra ? { [extra.id]: `@scorpion/${extra.id.replaceAll('.', '-')}` } : {}),
         },

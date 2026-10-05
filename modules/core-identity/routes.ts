@@ -9,6 +9,7 @@ import {
   type AppEnv,
   type RouteHandler,
 } from '@scorpion/contracts';
+import { MAX_UPLOAD_BYTES } from '@scorpion/core-blob/public';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import {
   clearLoginCookie,
@@ -342,6 +343,8 @@ const profileSchema = z.object({
   pendingEmail: z.string().nullable(),
   /** Plain text. Show it as text, never as HTML. */
   bio: z.string().nullable(),
+  /** SHA-256 of the avatar file, shown at `GET /files/{hash}`; `null` without an avatar. */
+  avatarHash: z.string().nullable(),
 });
 
 export const getProfileRoute = createRoute({
@@ -369,6 +372,42 @@ export const updateProfileRoute = createRoute({
       description: 'A field breaks the rules, an unknown field was sent, or nothing changes.',
     },
     429: { description: 'Too many address changes.' },
+  },
+});
+
+const imageBody = {
+  required: true as const,
+  description:
+    'The image as the request body (PNG, JPEG, WebP, GIF or SVG). Its `Content-Type` is ignored: the type is determined from the content, and the file is checked and rewritten before it is stored.',
+  content: {
+    'application/octet-stream': {
+      schema: z.string().openapi({ type: 'string', format: 'binary' }),
+    },
+  },
+};
+
+export const setAvatarRoute = createRoute({
+  method: 'put',
+  path: '/account/avatar',
+  permission: 'core.identity.avatar.update',
+  rateLimit: 'strict',
+  maxBodyBytes: MAX_UPLOAD_BYTES,
+  request: { body: imageBody },
+  responses: {
+    200: ok('The profile with the new avatar.', profileSchema),
+    403: { description: 'The caller uses an access token, not a session.' },
+    413: { description: 'The body is larger than the upload ceiling.' },
+    422: { description: 'The file is empty, too big, not a supported image, or damaged.' },
+  },
+});
+
+export const removeAvatarRoute = createRoute({
+  method: 'delete',
+  path: '/account/avatar',
+  permission: 'core.identity.avatar.update',
+  responses: {
+    200: ok('The profile without an avatar (also when there was none).', profileSchema),
+    403: { description: 'The caller uses an access token, not a session.' },
   },
 });
 
@@ -695,4 +734,16 @@ export function registerIdentityRoutes(
     c.header('cache-control', 'no-store');
     return c.json(await profile.update(c.get('actor'), c.req.valid('json')), 200);
   }) satisfies RouteHandler<typeof updateProfileRoute, AppEnv>);
+
+  r.internal(setAvatarRoute, (async (c) => {
+    // The body is capped by the route (`maxBodyBytes`); the service checks the caller and the file.
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    c.header('cache-control', 'no-store');
+    return c.json(await profile.setAvatar(c.get('actor'), bytes), 200);
+  }) satisfies RouteHandler<typeof setAvatarRoute, AppEnv>);
+
+  r.internal(removeAvatarRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json(await profile.removeAvatar(c.get('actor')), 200);
+  }) satisfies RouteHandler<typeof removeAvatarRoute, AppEnv>);
 }
