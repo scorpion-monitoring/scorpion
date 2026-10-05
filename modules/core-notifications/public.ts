@@ -23,6 +23,11 @@ export {
   type Locale,
 } from './service/templates/locale.ts';
 export { oneLine, escapeHtml } from './service/templates/text.ts';
+export {
+  RECIPIENT_ADDRESS_REGISTRY,
+  type RecipientAddressEntry,
+} from './service/recipient-address.ts';
+export { PREFERENCES_KEY } from './service/preferences.ts';
 
 /** What a caller hands to `enqueueTemplate`: a template key, its data, the recipient and, optionally, a language. */
 export interface TemplateMessage {
@@ -30,8 +35,18 @@ export interface TemplateMessage {
   template: string;
   /** Validated by the template's Zod schema; never stored (only the rendered mail is). */
   data: unknown;
-  /** Who gets it. `userId` is an opaque id kept for the status list (no foreign key, ADR 0019). */
-  recipient: { address: string; userId?: string };
+  /**
+   * Who gets it. `address` is where the mail goes; without one only the inbox can be used. `userId`
+   * is an opaque id (no foreign key, ADR 0019): it is kept on the delivery row, owns the inbox item
+   * and is how the person's preferences are looked up. At least one of the two is required.
+   */
+  recipient: { address?: string; userId?: string };
+  /**
+   * Also write an inbox item for `recipient.userId`, in the same transaction, rendered from the
+   * template's own content. Ignored for a `sensitive` template (its link is a credential) and when the
+   * person switched the template's category off in-app (unless the template is `mandatory`).
+   */
+  inApp?: boolean;
   /**
    * A language tag the caller chose (a user's preference, or the one a request carried). It is
    * checked against the shipped list (`SUPPORTED_LOCALES`); anything else falls back to the
@@ -70,9 +85,18 @@ export interface NotificationsService {
    * template's schema (`Invalid`, naming fields, never values); the language is the one the caller
    * names if it is shipped, else `defaultLocale`; the template, not the caller, decides whether the
    * mail is `sensitive`. An unknown template key is a `NotificationError` (a bug in the caller).
-   * Returns the delivery id. Checks no permission (trusted code, ADR 0019).
+   * Honours the recipient's preferences (`notifications.preferences`, ADR 0023): a `mandatory` template
+   * ignores them; otherwise a category switched off stops its mail and its inbox item. Returns the
+   * delivery id, or `null` when no mail was stored: no address, or the person switched email off.
+   * With nothing to store at all (no mail, no inbox item) it does nothing and says so only at debug
+   * level, with the template key. Checks no permission (trusted code, ADR 0019).
    */
-  enqueueTemplate(tx: DbTx, message: TemplateMessage): Promise<string>;
+  enqueueTemplate(tx: DbTx, message: TemplateMessage): Promise<string | null>;
+  /**
+   * Deletes every inbox item of a user, in the caller's transaction; returns how many. For the purge
+   * of an account in core.identity. Checks no permission and no route calls it (ADR 0015, 0023).
+   */
+  removeInboxOfUser(tx: DbTx, userId: string): Promise<number>;
   /** Needs `core.notifications.status.read`. Counts by status, recent error codes and whether email goes nowhere. */
   status(actor: Actor): Promise<NotificationStatus>;
 }

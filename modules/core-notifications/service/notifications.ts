@@ -4,15 +4,40 @@ import type { Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import { Invalid } from '@scorpion/contracts';
-import { activeTransaction, ids, mountPath, type DbTx, type ModuleContext } from '@scorpion/kernel';
+import {
+  activeTransaction,
+  createRateLimiter,
+  ids,
+  mountPath,
+  type DbTx,
+  type ModuleContext,
+} from '@scorpion/kernel';
 import { desc, max, sql } from 'drizzle-orm';
 import { delivery } from '../db/schema.ts';
 import type { NotificationStatus, NotificationsService, TemplateMessage } from '../public.ts';
+import {
+  createAdminService,
+  PERMISSION_DELIVERIES_MANAGE,
+  PERMISSION_DELIVERIES_READ,
+  PERMISSION_TEST,
+  type AdminService,
+} from './admin.ts';
+import {
+  createInboxService,
+  deleteInboxOfUser,
+  insertInboxItem,
+  PERMISSION_INBOX_READ,
+  PERMISSION_INBOX_WRITE,
+  type InboxService,
+} from './inbox.ts';
+import { PREFERENCES_KEY, resolveChannels } from './preferences.ts';
+import { RECIPIENT_ADDRESS_REGISTRY, recipientAddressEntrySchema } from './recipient-address.ts';
 import type { NotificationSettings } from '../settings-schema.ts';
 import { backoffSeconds } from './backoff.ts';
 import { claimDue, markDead, markRetry, markSent, type ClaimedDelivery } from './delivery.ts';
 import { parseMessage, type NotificationMessage, type ParsedMessage } from './message.ts';
-import type { TemplateBranding } from './templates/layout.ts';
+import { INAPP_TEXT_MAX, INAPP_TITLE_MAX, type TemplateBranding } from './templates/layout.ts';
+import { multiLine, oneLine, safeUrl } from './templates/text.ts';
 import { resolveLocale } from './templates/locale.ts';
 import type { TemplateIndex } from './templates/registry.ts';
 import type { TransportCache } from './transport-cache.ts';
@@ -20,6 +45,13 @@ import { failureCode, TransportError, type OutgoingMessage } from './transports/
 import { WAKE_CHANNEL } from './wake.ts';
 
 export const PERMISSION_STATUS_READ = 'core.notifications.status.read';
+export {
+  PERMISSION_DELIVERIES_MANAGE,
+  PERMISSION_DELIVERIES_READ,
+  PERMISSION_INBOX_READ,
+  PERMISSION_INBOX_WRITE,
+  PERMISSION_TEST,
+};
 
 /** Where core.blob serves a stored file below the internal API (`GET /files/{hash}`), for a logo in a mail. */
 const FILES_PATH = '/api/internal/files';
@@ -49,6 +81,12 @@ export interface DeliveryPassReport {
 }
 
 export interface NotificationsInternals extends NotificationsService {
+  /** The caller's own inbox (routes call these). */
+  inbox: InboxService;
+  /** Delivery list, requeue, test mail and the retention pass (routes and the job call these). */
+  admin: AdminService;
+  /** The template index, for the category list of the preferences. */
+  templates: TemplateIndex;
   /** One pass of the delivery job: claims due rows and sends them until nothing is due. */
   deliverDue(options?: { signal?: AbortSignal; budgetMs?: number }): Promise<DeliveryPassReport>;
   /** Forget the built transports (a setting or a notification secret changed). */
@@ -59,7 +97,7 @@ export interface NotificationsInternals extends NotificationsService {
 
 export interface NotificationsDeps {
   authz: AuthzService;
-  settingsService: Pick<SettingsService, 'getBranding'>;
+  settingsService: Pick<SettingsService, 'getBranding' | 'getUserPreference'>;
   transports: TransportCache;
   templates: TemplateIndex;
 }
@@ -108,6 +146,16 @@ export function createNotificationsService(
     });
     // Delivered on commit and never on rollback; the payload is the id only.
     await tx.execute(sql`select pg_notify(${WAKE_CHANNEL}, ${id})`);
+    if (message.inApp && message.recipientUserId) {
+      // Same transaction: the mail and its inbox item commit together or not at all.
+      await insertInboxItem(tx, {
+        userId: message.recipientUserId,
+        template: message.template,
+        title: oneLine(message.inApp.title, INAPP_TITLE_MAX) || 'Notification',
+        text: multiLine(message.inApp.text, INAPP_TEXT_MAX).trim(),
+        link: message.inApp.link && safeUrl(message.inApp.link) ? message.inApp.link : null,
+      });
+    }
     return id;
   }
 
@@ -118,6 +166,29 @@ export function createNotificationsService(
         'core.notifications: enqueue() must be called inside ctx.db.tx(), so the message commits with the change',
       );
     }
+  }
+
+  /**
+   * `sending → dead` and the event, in one transaction: the event exists exactly when the row became
+   * dead here. Ids, the template key and the error code; no address, subject or body.
+   */
+  function markDeadAndAnnounce(
+    row: ClaimedDelivery,
+    failure: { code: string; transport: string | null },
+  ): Promise<boolean> {
+    return db.tx(async (tx) => {
+      const became = await markDead(tx, row, failure);
+      if (became) {
+        await ctx.events.emit('notifications.delivery.dead@1', {
+          deliveryId: row.id,
+          template: row.template,
+          channel: row.channel,
+          attempts: row.attempts,
+          code: failure.code,
+        });
+      }
+      return became;
+    });
   }
 
   async function process(
@@ -174,7 +245,7 @@ export function createNotificationsService(
     }
     const exhausted = row.attempts >= settings.maxAttempts;
     const written = exhausted
-      ? await markDead(db, row, { code: outcome.code, transport: transportId })
+      ? await markDeadAndAnnounce(row, { code: outcome.code, transport: transportId })
       : await markRetry(db, row, {
           code: outcome.code,
           delaySeconds: backoffSeconds(row.attempts),
@@ -192,7 +263,28 @@ export function createNotificationsService(
     }
   }
 
-  return {
+  const inbox = createInboxService({ db, authz });
+  const admin = createAdminService({
+    db,
+    authz,
+    events: ctx.events,
+    limiter: createRateLimiter(db),
+    settings: () => ctx.settings.get(),
+    enqueueTemplate: (tx, message) => internals.enqueueTemplate(tx, message),
+    addresses: ctx
+      .registry(RECIPIENT_ADDRESS_REGISTRY)
+      .map((entry) => recipientAddressEntrySchema.parse(entry)),
+  });
+
+  const internals: NotificationsInternals = {
+    inbox,
+    admin,
+    templates,
+
+    async removeInboxOfUser(tx: DbTx, userId: string): Promise<number> {
+      return deleteInboxOfUser(tx, userId);
+    },
+
     async enqueue(tx: DbTx, input: NotificationMessage): Promise<string | null> {
       requireTransaction();
       const message = parseMessage(input);
@@ -202,7 +294,7 @@ export function createNotificationsService(
       return insert(tx, message, settings);
     },
 
-    async enqueueTemplate(tx: DbTx, input: TemplateMessage): Promise<string> {
+    async enqueueTemplate(tx: DbTx, input: TemplateMessage): Promise<string | null> {
       requireTransaction();
       const entry = templates.get(String(input.template));
       if (!entry) {
@@ -222,30 +314,71 @@ export function createNotificationsService(
           })),
         );
       }
+      const { address, userId } = input.recipient;
+      if (!address && !userId) {
+        // Nobody to reach: a bug in the caller, not a choice of the recipient.
+        throw new NotificationError(
+          `core.notifications: the recipient of "${entry.key}" has neither an address nor a user id`,
+        );
+      }
+      // Which channels the person wants (ADR 0023). A mandatory template does not ask; neither does a
+      // recipient with no user id (nothing to look up).
+      const wanted =
+        entry.mandatory || !userId
+          ? { email: true, inApp: true }
+          : resolveChannels(
+              entry,
+              await deps.settingsService.getUserPreference(userId, PREFERENCES_KEY),
+            );
+      const wantMail = Boolean(address) && wanted.email;
+      // A sensitive template never writes an inbox item: its link is a credential (ADR 0023).
+      const wantInbox = input.inApp === true && Boolean(userId) && !entry.sensitive && wanted.inApp;
+      if (!wantMail && !wantInbox) {
+        // Switched off, or no address and no inbox: nothing is stored. The key only, no id, no address.
+        log.debug({ template: entry.key }, 'a notification was not stored: no channel wanted');
+        return null;
+      }
+
       const settings = await ctx.settings.get();
       const locale = resolveLocale(input.locale, settings.defaultLocale);
-      const rendered = entry.render(data.data, locale, await templateBranding(), {
+      const branding = await templateBranding();
+      const options = {
         // The key and language only: the text of a message may hold a name.
-        onFallback: (key, missingIn) =>
+        onFallback: (key: string, missingIn: string) =>
           log.warn(
             { template: entry.key, key, locale: missingIn },
             'a template message is missing in this language; English was used',
           ),
-      });
-      // The size limits and the one-line subject are checked on what was rendered, too.
-      const message = parseMessage({
-        template: entry.key,
-        channel: 'email',
-        recipientAddress: input.recipient.address,
-        recipientUserId: input.recipient.userId,
-        locale,
-        subject: rendered.subject,
-        text: rendered.text,
-        html: rendered.html,
-        // The template decides, not the caller: a reset link is always a sensitive body.
-        sensitive: entry.sensitive,
-      });
-      return insert(tx, message, settings);
+      };
+      let deliveryId: string | null = null;
+      if (wantMail) {
+        const rendered = entry.render(data.data, locale, branding, options);
+        // The size limits and the one-line subject are checked on what was rendered, too.
+        const message = parseMessage({
+          template: entry.key,
+          channel: 'email',
+          recipientAddress: address,
+          recipientUserId: userId,
+          locale,
+          subject: rendered.subject,
+          text: rendered.text,
+          html: rendered.html,
+          // The template decides, not the caller: a reset link is always a sensitive body.
+          sensitive: entry.sensitive,
+        });
+        deliveryId = await insert(tx, message, settings);
+      }
+      if (wantInbox && userId) {
+        // The same content blocks as the mail, rendered once more as plain text.
+        const item = entry.renderInApp?.(data.data, locale, branding, options);
+        if (!item) {
+          throw new NotificationError(
+            `core.notifications: "${entry.key}" cannot render an inbox item`,
+          );
+        }
+        await insertInboxItem(tx, { userId, template: entry.key, ...item });
+      }
+      return deliveryId;
     },
 
     async status(actor: Actor): Promise<NotificationStatus> {
@@ -322,4 +455,5 @@ export function createNotificationsService(
     invalidateTransports: () => transports.invalidate(),
     close: () => Promise.resolve(transports.close()),
   };
+  return internals;
 }

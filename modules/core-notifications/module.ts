@@ -5,6 +5,19 @@ import { templateEntrySchema, TEMPLATE_REGISTRY } from './service/templates/defi
 import { SUPPORTED_LOCALES } from './service/templates/locale.ts';
 import { buildTemplateIndex } from './service/templates/registry.ts';
 import { SHIPPED_TEMPLATES } from './templates/index.ts';
+import { SYSTEM_TEMPLATES } from './templates/system.ts';
+import { registerNotificationRoutes, PERMISSION_PREFERENCE_READ } from './routes.ts';
+import {
+  PERMISSION_DELIVERIES_MANAGE,
+  PERMISSION_DELIVERIES_READ,
+  PERMISSION_TEST,
+} from './service/admin.ts';
+import { PERMISSION_INBOX_READ, PERMISSION_INBOX_WRITE } from './service/inbox.ts';
+import { PREFERENCES_KEY, preferencesSchema } from './service/preferences.ts';
+import {
+  RECIPIENT_ADDRESS_REGISTRY,
+  recipientAddressEntrySchema,
+} from './service/recipient-address.ts';
 import { settingsSchema, type NotificationSettings } from './settings-schema.ts';
 import {
   createNotificationsService,
@@ -31,6 +44,21 @@ export {
 export type { NotificationsInternals } from './service/notifications.ts';
 
 export const DELIVER_JOB = 'core.notifications.deliver';
+/** The daily job that deletes old deliveries and read inbox items (the plan calls it `notify.retention`; a job name carries the module id). */
+export const RETENTION_JOB = 'core.notifications.retention';
+
+/** What the role `user` holds from this module: your own inbox, and the list of categories to set switches for. */
+export const USER_PERMISSIONS = [
+  PERMISSION_INBOX_READ,
+  PERMISSION_INBOX_WRITE,
+  PERMISSION_PREFERENCE_READ,
+];
+
+const deliveryEvent = z.strictObject({
+  deliveryId: z.string(),
+  template: z.string(),
+  channel: z.enum(['email', 'webhook']),
+});
 /** The user preference that picks the language of a person's mail (M4 decision 5). */
 export const LOCALE_PREFERENCE = 'notifications.locale';
 
@@ -75,6 +103,20 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
       [PERMISSION_STATUS_READ]: {
         description: 'See the state of mail delivery: counts, recent error codes, the transport',
       },
+      [PERMISSION_DELIVERIES_READ]: {
+        description: 'List deliveries (metadata only, never the content or the address)',
+      },
+      [PERMISSION_DELIVERIES_MANAGE]: {
+        description: 'Put a dead delivery back in the queue',
+      },
+      [PERMISSION_TEST]: { description: 'Send a test mail to your own address' },
+      [PERMISSION_INBOX_READ]: { description: 'Read your own notifications' },
+      [PERMISSION_INBOX_WRITE]: {
+        description: 'Mark your own notifications read, and delete them',
+      },
+      [PERMISSION_PREFERENCE_READ]: {
+        description: 'List the notification categories you can switch on and off',
+      },
     },
     settings: settingsSchema,
 
@@ -97,9 +139,34 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
           if (report.claimed > 0) ctx.log.info(report, 'deliveries processed');
         },
       },
+      {
+        // Once a day: delivered and dead rows past `retentionDays`, read inbox items past `inboxRetentionDays`.
+        name: RETENTION_JOB,
+        schedule: '17 3 * * *', // daily, UTC
+        retry: { limit: 2, delaySeconds: 300 },
+        timeoutSeconds: 600,
+        handler: async (_job, ctx) => {
+          const report = await serviceOrThrow().admin.runRetention();
+          // Counts only.
+          ctx.log.info(report, 'notification retention finished');
+        },
+      },
     ],
 
     events: {
+      emits: {
+        // Ids, the template key and an error code. Never an address, a subject or a body.
+        'notifications.delivery.dead@1': deliveryEvent.extend({
+          attempts: z.number().int(),
+          code: z.string(),
+        }),
+        'notifications.delivery.requeued@1': deliveryEvent.extend({ requestedBy: z.string() }),
+        'notifications.settings.tested@1': z.strictObject({
+          deliveryId: z.string(),
+          template: z.string(),
+          requestedBy: z.string(),
+        }),
+      },
       on: {
         'settings.changed@1': (event) => {
           if ((event.payload as { module?: string }).module === 'core.notifications') {
@@ -131,16 +198,26 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
     registries: {
       [TRANSPORT_REGISTRY]: transportEntrySchema,
       [TEMPLATE_REGISTRY]: templateEntrySchema,
+      // A module that knows people (core.identity) contributes how to find a user's address, so
+      // this one can mail the caller's own address without importing it (ADR 0023).
+      [RECIPIENT_ADDRESS_REGISTRY]: recipientAddressEntrySchema,
     },
     contributes: {
       // The templates of modules that do not exist yet ship here, registered and tested.
-      [TEMPLATE_REGISTRY]: SHIPPED_TEMPLATES,
+      [TEMPLATE_REGISTRY]: [...SHIPPED_TEMPLATES, ...SYSTEM_TEMPLATES],
+      'authz.defaultRole': [{ role: 'user', permissions: USER_PERMISSIONS }],
       // The language of a person's mail. Registered here because this module is what reads it.
       'settings.userPreference': [
         {
           key: LOCALE_PREFERENCE,
           description: 'The language of the mail and notifications you receive',
           schema: z.enum(SUPPORTED_LOCALES),
+        },
+        {
+          key: PREFERENCES_KEY,
+          description:
+            'Which kinds of notification you want by mail and in the app, per category (see GET /notifications/preferences/categories)',
+          schema: preferencesSchema,
         },
       ],
       [TRANSPORT_REGISTRY]: [
@@ -189,6 +266,10 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
         },
       };
       return current;
+    },
+
+    routes: (r) => {
+      registerNotificationRoutes(r, r.service<NotificationsInternals>());
     },
   });
 }

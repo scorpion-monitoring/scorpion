@@ -104,7 +104,7 @@ const ownedClaim = (id: string, attempts: number) =>
 
 /** Moves a claimed row out of `sending`, if it is still this worker's. The edge is checked against `TRANSITIONS`. */
 async function move(
-  db: Db,
+  db: Pick<Db, 'update'>,
   row: ClaimedDelivery,
   to: Exclude<DeliveryStatus, 'sending'>,
   set: PgUpdateSetSource<typeof delivery>,
@@ -141,7 +141,7 @@ export function markRetry(
 
 /** `sending → dead`: no more attempts. The code stays, a sensitive body goes. */
 export function markDead(
-  db: Db,
+  db: Pick<Db, 'update'>,
   row: ClaimedDelivery,
   failure: { code: string; transport: string | null },
 ): Promise<boolean> {
