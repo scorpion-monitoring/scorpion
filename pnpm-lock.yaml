@@ -206,6 +206,9 @@ importers:
       '@scorpion/core-blob':
         specifier: workspace:*
         version: link:../core-blob
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../core-notifications
       '@scorpion/core-settings':
         specifier: workspace:*
         version: link:../core-settings
@@ -224,9 +227,6 @@ importers:
       jose:
         specifier: ^6.2.12
         version: 6.2.12
-      nodemailer:
-        specifier: ^10.0.13
-        version: 10.0.13
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -234,9 +234,6 @@ importers:
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
-      '@types/nodemailer':
-        specifier: ^8.0.2
-        version: 8.0.2
 
   modules/core-notifications:
     dependencies:

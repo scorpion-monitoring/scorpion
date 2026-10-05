@@ -92,3 +92,70 @@ export async function makeDelivery(
   );
   return rows[0]!;
 }
+
+// What a test sees of the mail a module queued, read straight from the table (no worker runs, so a
+// `queued` mail still has its body).
+/** A mail as core.notifications stored it. */
+export interface QueuedMail {
+  /** The template key: `identity.password-reset`. */
+  template: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  locale: string;
+  sensitive: boolean;
+  status: string;
+  userId: string | null;
+}
+
+export interface Mailbox {
+  /** Every mail queued so far, oldest first. */
+  all(): Promise<QueuedMail[]>;
+  /** The queued mails of one template key (or all), oldest first. */
+  of(template: string): Promise<QueuedMail[]>;
+  /** The recipients of every queued mail, in order. */
+  recipients(): Promise<string[]>;
+  /** The template keys of every queued mail, in order. */
+  templates(): Promise<string[]>;
+  /** Forgets what was queued, so a test can look at what the next step adds. */
+  clear(): Promise<void>;
+}
+
+type Row = {
+  template: string;
+  recipient_address: string;
+  subject: string;
+  text_body: string | null;
+  html_body: string | null;
+  locale: string;
+  sensitive: boolean;
+  status: string;
+  recipient_user_id: string | null;
+};
+
+export function mailbox(pool: Queryable): Mailbox {
+  const all = async (): Promise<QueuedMail[]> =>
+    (
+      await pool.query<Row>(
+        'select template, recipient_address, subject, text_body, html_body, locale, sensitive, status, recipient_user_id from notify_delivery order by created_at, id',
+      )
+    ).rows.map((row) => ({
+      template: row.template,
+      to: row.recipient_address,
+      subject: row.subject,
+      text: row.text_body ?? '',
+      html: row.html_body ?? '',
+      locale: row.locale,
+      sensitive: row.sensitive,
+      status: row.status,
+      userId: row.recipient_user_id,
+    }));
+  return {
+    all,
+    of: async (template) => (await all()).filter((mail) => mail.template === template),
+    recipients: async () => (await all()).map((mail) => mail.to),
+    templates: async () => (await all()).map((mail) => mail.template),
+    clear: async () => void (await pool.query('delete from notify_delivery')),
+  };
+}

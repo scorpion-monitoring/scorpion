@@ -7,6 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import authzModule from './module.ts';
 import { notesModule, useAuthz } from './test/harness.ts';
 
 const harness = useAuthz();
@@ -95,5 +96,30 @@ describe('what the module imports', () => {
         /core-identity|core\.identity|identity_|core-settings|core\.settings/,
       );
     }
+  });
+});
+
+describe('the system methods (ADR 0015)', () => {
+  // `listHoldersAsSystem`, `assignRoleAsSystem` and `removeAllAssignments` check no permission, so no
+  // route may reach them. core.authz registers no route, and no route file in the repository
+  // names them.
+  it('registers no route of its own', () => {
+    expect(authzModule.routes).toBeUndefined();
+  });
+
+  it('are not named in any route file of any module', () => {
+    const modulesDir = join(fileURLToPath(new URL('..', import.meta.url)));
+    const offenders: string[] = [];
+    for (const entry of readdirSync(modulesDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      for (const file of readdirSync(join(modulesDir, entry.name))) {
+        if (!/^routes(\..*)?\.ts$/.test(file) || file.endsWith('.test.ts')) continue;
+        const source = readFileSync(join(modulesDir, entry.name, file), 'utf8');
+        if (/listHoldersAsSystem|assignRoleAsSystem|removeAllAssignments/.test(source)) {
+          offenders.push(`${entry.name}/${file}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

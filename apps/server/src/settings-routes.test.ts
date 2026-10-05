@@ -41,10 +41,11 @@ describe('GET /settings', () => {
       metadata: Record<string, number>;
       result: { module: string; version: number; values: Record<string, unknown> }[];
     };
-    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 3, totalPages: 1 });
+    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 4, totalPages: 1 });
     expect(body.result.map((entry) => entry.module)).toEqual([
       'core.blob',
       'core.identity',
+      'core.notifications',
       'core.settings',
     ]);
     expect(body.result[1]).toMatchObject({

@@ -11,6 +11,7 @@
     { "path": "../../packages/testing" },
     { "path": "../core-authz" },
     { "path": "../core-blob" },
+    { "path": "../core-notifications" },
     { "path": "../core-settings" }
   ]
 }

@@ -1,6 +1,5 @@
-import { makeDelivery } from '@scorpion/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startSmtpServer, type TestSmtpServer } from '../test/smtp-server.ts';
+import { makeDelivery, startSmtpServer, type TestSmtpServer } from '@scorpion/testing';
 import { mail, useNotifications, type Started } from '../test/harness.ts';
 import { backoffSeconds } from './backoff.ts';
 import { claimDue, markSent } from './delivery.ts';
@@ -49,7 +48,7 @@ describe('delivery through a relay', () => {
       }),
     );
     const report = await t.notifications.deliverDue();
-    expect(report).toEqual({ claimed: 1, sent: 1, retried: 0, dead: 0, lost: 0 });
+    expect(report).toEqual({ claimed: 1, sent: 1, retried: 0, dead: 0, lost: 0, dropped: 0 });
     expect(smtp.received).toHaveLength(1);
     expect(smtp.received[0]).toMatchObject({ from: 'no-reply@localhost', to: ['ada@example.org'] });
     expect(smtp.received[0]!.data).toContain('Subject: Hello Ada');

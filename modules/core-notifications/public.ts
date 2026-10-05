@@ -7,6 +7,38 @@ import type { DbTx } from '@scorpion/kernel';
 import type { NotificationMessage } from './service/message.ts';
 
 export type { NotificationMessage };
+export {
+  defineTemplate,
+  TEMPLATE_REGISTRY,
+  type RenderOptions,
+  type TemplateContext,
+  type TemplateDefinition,
+  type TemplateEntry,
+} from './service/templates/define.ts';
+export type { Block, Content, RenderedMail, TemplateBranding } from './service/templates/layout.ts';
+export {
+  matchLocale,
+  resolveLocale,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from './service/templates/locale.ts';
+export { oneLine, escapeHtml } from './service/templates/text.ts';
+
+/** What a caller hands to `enqueueTemplate`: a template key, its data, the recipient and, optionally, a language. */
+export interface TemplateMessage {
+  /** A key of the registry `notify.template`, `identity.welcome`. */
+  template: string;
+  /** Validated by the template's Zod schema; never stored (only the rendered mail is). */
+  data: unknown;
+  /** Who gets it. `userId` is an opaque id kept for the status list (no foreign key, ADR 0019). */
+  recipient: { address: string; userId?: string };
+  /**
+   * A language tag the caller chose (a user's preference, or the one a request carried). It is
+   * checked against the shipped list (`SUPPORTED_LOCALES`); anything else falls back to the
+   * instance's `defaultLocale`, then to English.
+   */
+  locale?: string;
+}
 
 export interface NotificationStatus {
   /** The transport that carries email: `smtp` or `none`. */
@@ -15,6 +47,8 @@ export interface NotificationStatus {
   transportIsNone: boolean;
   webhookEnabled: boolean;
   counts: { queued: number; sending: number; sent: number; dead: number };
+  /** Messages the transport `none` accepted and dropped: the counter that replaces a warning per mail. */
+  sentWithoutTransport: number;
   /** Error codes of the last 7 days, newest first (at most 10): never a message, an address or a URL. */
   lastErrors: { code: string; count: number; lastAt: Date }[];
 }
@@ -30,6 +64,15 @@ export interface NotificationsService {
    * webhook channel. The address stays out of every log line.
    */
   enqueue(tx: DbTx, message: NotificationMessage): Promise<string | null>;
+  /**
+   * Renders a registered template and stores the mail **inside the caller's transaction**, like
+   * `enqueue` (and with the same refusal outside `ctx.db.tx()`). The data is validated by the
+   * template's schema (`Invalid`, naming fields, never values); the language is the one the caller
+   * names if it is shipped, else `defaultLocale`; the template, not the caller, decides whether the
+   * mail is `sensitive`. An unknown template key is a `NotificationError` (a bug in the caller).
+   * Returns the delivery id. Checks no permission (trusted code, ADR 0019).
+   */
+  enqueueTemplate(tx: DbTx, message: TemplateMessage): Promise<string>;
   /** Needs `core.notifications.status.read`. Counts by status, recent error codes and whether email goes nowhere. */
   status(actor: Actor): Promise<NotificationStatus>;
 }

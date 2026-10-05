@@ -49,7 +49,7 @@ describe('register', () => {
 
   it('creates a pending account with a password hash, under the manual policy', async () => {
     const { kernel, identity: id } = await identity.start();
-    const user = await id.accounts.register(input);
+    const user = (await id.accounts.register(input))!;
     expect(user).toMatchObject({
       username: 'alice',
       email: 'alice@example.org',
@@ -63,7 +63,7 @@ describe('register', () => {
 
   it('emits identity.user.registered@1 in the same transaction as the rows', async () => {
     const { kernel, identity: id } = await identity.start();
-    const user = await id.accounts.register(input);
+    const user = (await id.accounts.register(input))!;
     const events = await all(kernel, 'kernel_outbox');
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
@@ -100,16 +100,35 @@ describe('register', () => {
     expect(await all(kernel, 'identity_user')).toEqual([]);
   });
 
-  it('answers 409 for a taken username or email, whatever way its holder signs in', async () => {
+  it('answers 409 for a taken username, whatever way its holder signs in (usernames are public)', async () => {
     const { kernel, identity: id } = await identity.start();
     const oidc = await makeMember(kernel.pool, { username: 'bob', email: 'bob@example.org' });
     await makeAuthMethod(kernel.pool, oidc, { provider: 'lifescience-aai' });
     await expect(id.accounts.register({ ...input, username: 'bob' })).rejects.toBeInstanceOf(
       Conflict,
     );
+    // The username is checked first: a taken username with a taken address is the same 409.
+    await expect(
+      id.accounts.register({ ...input, username: 'bob', email: 'bob@example.org' }),
+    ).rejects.toBeInstanceOf(Conflict);
+  });
+
+  it('does not reveal a taken email address: nothing is created and the caller gets no error (M4 decision 4)', async () => {
+    const { kernel, identity: id, mail } = await identity.start();
+    const oidc = await makeMember(kernel.pool, { username: 'bob', email: 'bob@example.org' });
+    await makeAuthMethod(kernel.pool, oidc, { provider: 'lifescience-aai' });
+    await kernel.pool.query("update identity_user set status = 'active'");
+
     await expect(
       id.accounts.register({ ...input, email: 'BOB@example.org' }),
-    ).rejects.toBeInstanceOf(Conflict);
+    ).resolves.toBeUndefined();
+
+    expect(await all(kernel, 'identity_user')).toHaveLength(1); // still only bob
+    // The owner hears about it, in the one mail that exists; no welcome, no confirmation link.
+    expect(await mail.all()).toMatchObject([
+      { template: 'identity.register-attempt', to: 'bob@example.org', userId: oidc.id },
+    ]);
+    expect(await all(kernel, 'kernel_outbox')).toEqual([]); // and no event
   });
 
   it('lets a policy from another module decide the status from the registration context', async () => {
@@ -140,12 +159,12 @@ describe('register', () => {
       },
     });
 
-    const trusted = await id.accounts.register({ ...input, email: 'a@ipk-gatersleben.de' });
-    const other = await id.accounts.register({
+    const trusted = (await id.accounts.register({ ...input, email: 'a@ipk-gatersleben.de' }))!;
+    const other = (await id.accounts.register({
       ...input,
       username: 'carol',
       email: 'c@example.org',
-    });
+    }))!;
 
     expect(trusted.status).toBe('active');
     expect(other.status).toBe('pending');
@@ -163,7 +182,7 @@ describe('register', () => {
     const { identity: id } = await identity.start({
       settings: settingsOf({ approvalPolicy: 'gone' }),
     });
-    expect((await id.accounts.register(input)).status).toBe('pending');
+    expect((await id.accounts.register(input))?.status).toBe('pending');
   });
 
   describe('rollback', () => {
@@ -437,11 +456,11 @@ describe('roles and the second check, with core.authz', () => {
       },
     };
     const manual = await identity.start();
-    const waiting = await manual.identity.accounts.register({
+    const waiting = (await manual.identity.accounts.register({
       username: 'waiter',
       email: 'waiter@example.org',
       password: PASSWORD,
-    });
+    }))!;
     expect(waiting.status).toBe('pending');
     expect(await all(manual.kernel, 'authz_role_assignment')).toEqual([]);
 
@@ -449,11 +468,11 @@ describe('roles and the second check, with core.authz', () => {
       settings: { get: () => Promise.resolve(settingsSchema.parse({ approvalPolicy: 'auto' })) },
       extraModule: { id: 'test.auto', manifest: auto },
     });
-    const created = await started.identity.accounts.register({
+    const created = (await started.identity.accounts.register({
       username: 'quick',
       email: 'quick@example.org',
       password: PASSWORD,
-    });
+    }))!;
     expect(created.status).toBe('active');
     expect(await all(started.kernel, 'authz_role_assignment')).toEqual([
       expect.objectContaining({ user_id: created.id, assigned_by: null }),

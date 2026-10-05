@@ -3,9 +3,8 @@
 ---
 
 New module `core.notifications` (in the `full` and `kpi-tracker` profiles): a delivery queue for email and a signed webhook.
-**Nothing sends through it yet and `SMTP_URL` is still read by `core.identity`; this module never reads `SMTP_URL`, and the
-next release removes it** when identity moves onto the queue. Upgrading needs no action: the module starts with email
-transport `none`, which records messages and sends nothing, and says so in its status.
+Upgrading needs no action for this part: the module starts with email transport `none`, which records messages and sends
+nothing, and says so in its status. (The next changeset moves `core.identity` onto the queue and removes `SMTP_URL`.)
 
 - **New migration:** one table, `notify_delivery`.
 - **New settings** (stored by `core.settings` under `core.notifications`): `emailTransport` (`smtp` or `none`, default `none`), `smtp`

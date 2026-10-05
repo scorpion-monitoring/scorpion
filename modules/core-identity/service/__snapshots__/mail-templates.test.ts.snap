@@ -1,0 +1,293 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the identity templates > identity.approved in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ihr Konto bei Test Instance wurde freigegeben</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Ihr Konto ist freigegeben</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Hallo Ada Lovelace, ein Administrator hat Ihr Konto bei Test Instance freigegeben. Sie können sich jetzt anmelden.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/login" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Anmelden</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href="https://example.org/login">https://example.org/login</a></p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "Ihr Konto bei Test Instance wurde freigegeben",
+  "text": "Ihr Konto ist freigegeben
+
+Hallo Ada Lovelace, ein Administrator hat Ihr Konto bei Test Instance freigegeben. Sie können sich jetzt anmelden.
+
+Anmelden:
+https://example.org/login
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.approved in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your account on Test Instance was approved</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Your account is approved</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Hello Ada Lovelace, an administrator approved your account on Test Instance. You can sign in now.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/login" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Sign in</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If the button does not work, copy this link into your browser:<br><a href="https://example.org/login">https://example.org/login</a></p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Your account on Test Instance was approved",
+  "text": "Your account is approved
+
+Hello Ada Lovelace, an administrator approved your account on Test Instance. You can sign in now.
+
+Sign in:
+https://example.org/login
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.email-verification in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>E-Mail-Adresse für Test Instance bestätigen</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">E-Mail-Adresse bestätigen</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Bitte bestätigen Sie, dass diese E-Mail-Adresse zu Ihrem Konto bei Test Instance gehört.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Öffnen Sie diesen Link innerhalb von 24 Stunden. Er funktioniert nur einmal.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/verify-email#token=sev_AAAA" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">E-Mail-Adresse bestätigen</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href="https://example.org/verify-email#token=sev_AAAA">https://example.org/verify-email#token=sev_AAAA</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "E-Mail-Adresse für Test Instance bestätigen",
+  "text": "E-Mail-Adresse bestätigen
+
+Bitte bestätigen Sie, dass diese E-Mail-Adresse zu Ihrem Konto bei Test Instance gehört.
+
+Öffnen Sie diesen Link innerhalb von 24 Stunden. Er funktioniert nur einmal.
+
+E-Mail-Adresse bestätigen:
+https://example.org/verify-email#token=sev_AAAA
+
+Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.email-verification in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm your email address for Test Instance</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Confirm your email address</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Please confirm that this email address belongs to your account on Test Instance.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Open this link within 24 hours. It works once.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/verify-email#token=sev_AAAA" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Confirm email address</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If the button does not work, copy this link into your browser:<br><a href="https://example.org/verify-email#token=sev_AAAA">https://example.org/verify-email#token=sev_AAAA</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If you did not ask for this, ignore this email.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Confirm your email address for Test Instance",
+  "text": "Confirm your email address
+
+Please confirm that this email address belongs to your account on Test Instance.
+
+Open this link within 24 hours. It works once.
+
+Confirm email address:
+https://example.org/verify-email#token=sev_AAAA
+
+If you did not ask for this, ignore this email.
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.password-reset in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Passwort für Test Instance zurücksetzen</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Passwort zurücksetzen</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Jemand hat darum gebeten, das Passwort Ihres Kontos bei Test Instance zurückzusetzen.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Um ein neues Passwort zu wählen, öffnen Sie diesen Link innerhalb von 60 Minuten. Er funktioniert nur einmal.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/reset-password#token=srt_AAAA" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Neues Passwort wählen</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href="https://example.org/reset-password#token=srt_AAAA">https://example.org/reset-password#token=srt_AAAA</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail. Ihr Passwort bleibt unverändert.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "Passwort für Test Instance zurücksetzen",
+  "text": "Passwort zurücksetzen
+
+Jemand hat darum gebeten, das Passwort Ihres Kontos bei Test Instance zurückzusetzen.
+
+Um ein neues Passwort zu wählen, öffnen Sie diesen Link innerhalb von 60 Minuten. Er funktioniert nur einmal.
+
+Neues Passwort wählen:
+https://example.org/reset-password#token=srt_AAAA
+
+Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail. Ihr Passwort bleibt unverändert.
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.password-reset in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset your Test Instance password</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Reset your password</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Someone asked to reset the password of your account on Test Instance.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">To choose a new password, open this link within 60 minutes. It works once.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/reset-password#token=srt_AAAA" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Choose a new password</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If the button does not work, copy this link into your browser:<br><a href="https://example.org/reset-password#token=srt_AAAA">https://example.org/reset-password#token=srt_AAAA</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If you did not ask for this, ignore this email. Your password stays as it is.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Reset your Test Instance password",
+  "text": "Reset your password
+
+Someone asked to reset the password of your account on Test Instance.
+
+To choose a new password, open this link within 60 minutes. It works once.
+
+Choose a new password:
+https://example.org/reset-password#token=srt_AAAA
+
+If you did not ask for this, ignore this email. Your password stays as it is.
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.register-attempt in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jemand hat versucht, sich bei Test Instance mit Ihrer Adresse zu registrieren</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Eine Registrierung hat Ihre Adresse benutzt</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Jemand hat versucht, bei Test Instance ein Konto mit dieser E-Mail-Adresse anzulegen. Ein Konto mit dieser Adresse gibt es bereits, daher wurde nichts geändert.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Wenn Sie das waren, melden Sie sich an oder fordern Sie ein neues Passwort an, falls Sie es vergessen haben:</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/login" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Anmelden</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href="https://example.org/login">https://example.org/login</a></p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/forgot-password" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Passwort vergessen</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href="https://example.org/forgot-password">https://example.org/forgot-password</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn Sie das nicht waren, ignorieren Sie diese E-Mail. Niemand erhält auf diese Weise Zugang zu Ihrem Konto.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "Jemand hat versucht, sich bei Test Instance mit Ihrer Adresse zu registrieren",
+  "text": "Eine Registrierung hat Ihre Adresse benutzt
+
+Jemand hat versucht, bei Test Instance ein Konto mit dieser E-Mail-Adresse anzulegen. Ein Konto mit dieser Adresse gibt es bereits, daher wurde nichts geändert.
+
+Wenn Sie das waren, melden Sie sich an oder fordern Sie ein neues Passwort an, falls Sie es vergessen haben:
+
+Anmelden:
+https://example.org/login
+
+Passwort vergessen:
+https://example.org/forgot-password
+
+Wenn Sie das nicht waren, ignorieren Sie diese E-Mail. Niemand erhält auf diese Weise Zugang zu Ihrem Konto.
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.register-attempt in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Someone tried to register on Test Instance with your address</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">A registration used your address</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Someone tried to register an account on Test Instance with this email address. An account with this address already exists, so nothing was changed.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">If this was you, sign in, or ask for a new password if you forgot it:</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/login" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Sign in</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If the button does not work, copy this link into your browser:<br><a href="https://example.org/login">https://example.org/login</a></p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/forgot-password" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">I forgot my password</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If the button does not work, copy this link into your browser:<br><a href="https://example.org/forgot-password">https://example.org/forgot-password</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If it was not you, ignore this email. Nobody gets access to your account this way.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Someone tried to register on Test Instance with your address",
+  "text": "A registration used your address
+
+Someone tried to register an account on Test Instance with this email address. An account with this address already exists, so nothing was changed.
+
+If this was you, sign in, or ask for a new password if you forgot it:
+
+Sign in:
+https://example.org/login
+
+I forgot my password:
+https://example.org/forgot-password
+
+If it was not you, ignore this email. Nobody gets access to your account this way.
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.registration-request in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registrierungsanfrage von Ada Lovelace</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Eine Registrierung wartet auf Prüfung</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Ada Lovelace (Ada Lovelace) hat sich bei Test Instance registriert und wartet auf Freigabe.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/admin/users/pending" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Registrierungen prüfen</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">Wenn die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href="https://example.org/admin/users/pending">https://example.org/admin/users/pending</a></p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "Registrierungsanfrage von Ada Lovelace",
+  "text": "Eine Registrierung wartet auf Prüfung
+
+Ada Lovelace (Ada Lovelace) hat sich bei Test Instance registriert und wartet auf Freigabe.
+
+Registrierungen prüfen:
+https://example.org/admin/users/pending
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.registration-request in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registration request from Ada Lovelace</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">A registration waits for review</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Ada Lovelace (Ada Lovelace) registered on Test Instance and waits for approval.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;"><a href="https://example.org/admin/users/pending" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Review registrations</a></p><p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#52606d;">If the button does not work, copy this link into your browser:<br><a href="https://example.org/admin/users/pending">https://example.org/admin/users/pending</a></p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Registration request from Ada Lovelace",
+  "text": "A registration waits for review
+
+Ada Lovelace (Ada Lovelace) registered on Test Instance and waits for approval.
+
+Review registrations:
+https://example.org/admin/users/pending
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.rejected in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ihre Registrierung bei Test Instance wurde nicht freigegeben</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Ihre Registrierung wurde nicht freigegeben</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Hallo Ada Lovelace, ein Administrator hat Ihre Registrierung bei Test Instance nicht freigegeben.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Wenn Sie das für einen Irrtum halten, schreiben Sie an help@example.org.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "Ihre Registrierung bei Test Instance wurde nicht freigegeben",
+  "text": "Ihre Registrierung wurde nicht freigegeben
+
+Hallo Ada Lovelace, ein Administrator hat Ihre Registrierung bei Test Instance nicht freigegeben.
+
+Wenn Sie das für einen Irrtum halten, schreiben Sie an help@example.org.
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.rejected in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your registration on Test Instance was not approved</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Your registration was not approved</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Hello Ada Lovelace, an administrator did not approve your registration on Test Instance.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">If you think this is a mistake, write to help@example.org.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Your registration on Test Instance was not approved",
+  "text": "Your registration was not approved
+
+Hello Ada Lovelace, an administrator did not approve your registration on Test Instance.
+
+If you think this is a mistake, write to help@example.org.
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.welcome in de renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Willkommen bei Test Instance</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Willkommen, Ada Lovelace</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Ihr Konto bei Test Instance wurde angelegt.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Ein Administrator prüft neue Konten, in der Regel innerhalb von 1 bis 2 Werktagen. Wir schreiben Ihnen, sobald entschieden ist.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">Diese Nachricht wurde von Test Instance gesendet.<br>Fragen? Schreiben Sie an help@example.org.<br><a href="https://example.org/imprint">Impressum</a></p></div></body></html>",
+  "subject": "Willkommen bei Test Instance",
+  "text": "Willkommen, Ada Lovelace
+
+Ihr Konto bei Test Instance wurde angelegt.
+
+Ein Administrator prüft neue Konten, in der Regel innerhalb von 1 bis 2 Werktagen. Wir schreiben Ihnen, sobald entschieden ist.
+
+--
+Diese Nachricht wurde von Test Instance gesendet.
+Fragen? Schreiben Sie an help@example.org.
+Impressum: https://example.org/imprint
+",
+}
+`;
+
+exports[`the identity templates > identity.welcome in en renders as before (snapshot) 1`] = `
+{
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Welcome to Test Instance</title></head><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;"><p style="margin:0 0 24px;"><img src="https://example.org/api/internal/files/abc" alt="Test Instance" style="max-height:48px;max-width:240px;"></p><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Welcome, Ada Lovelace</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">Your account on Test Instance was created.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;">An administrator reviews new accounts, usually within 1 to 2 business days. We will write to you as soon as it is decided.</p><p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#7b8794;">This message was sent by Test Instance.<br>Questions? Write to help@example.org.<br><a href="https://example.org/imprint">Imprint</a></p></div></body></html>",
+  "subject": "Welcome to Test Instance",
+  "text": "Welcome, Ada Lovelace
+
+Your account on Test Instance was created.
+
+An administrator reviews new accounts, usually within 1 to 2 business days. We will write to you as soon as it is decided.
+
+--
+This message was sent by Test Instance.
+Questions? Write to help@example.org.
+Imprint: https://example.org/imprint
+",
+}
+`;

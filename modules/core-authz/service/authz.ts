@@ -372,6 +372,18 @@ export function createAuthzService(
       return removed.length;
     },
 
+    async listHoldersAsSystem(tx, roleKey, options = {}) {
+      const limit = Math.min(Math.max(options.limit ?? 1000, 1), 1000);
+      const rows = await tx
+        .select({ userId: roleAssignment.userId })
+        .from(roleAssignment)
+        .innerJoin(role, eq(role.id, roleAssignment.roleId))
+        .where(eq(role.key, roleKey))
+        .orderBy(roleAssignment.userId)
+        .limit(limit);
+      return rows.map((row) => row.userId);
+    },
+
     async hasHolders(roleKey, tx = ctx.db) {
       const [found] = await tx
         .select({ id: roleAssignment.id })

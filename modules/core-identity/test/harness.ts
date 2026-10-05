@@ -7,22 +7,29 @@ import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json'
 import type { AuthzService } from '@scorpion/core-authz/public';
 import blobModule from '@scorpion/core-blob/module';
 import blobPackage from '@scorpion/core-blob/package.json' with { type: 'json' };
+import {
+  createNotificationsModule,
+  type NotificationsInternals,
+} from '@scorpion/core-notifications/module';
+import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
 import { createSettingsModule, type SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
 import type { ModuleManifest } from '@scorpion/kernel';
 import {
+  mailbox,
   makeRoleAssignment,
   makeSecretsKey,
+  makeSetting,
   makeUser,
   startPostgres,
+  type Mailbox,
   type StartedPostgres,
 } from '@scorpion/testing';
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createIdentityModule, type IdentityInternals } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
-import type { Mailer } from '../service/mailer.ts';
 import type { IdentitySettings } from '../service/settings.ts';
 
 export interface StartOptions {
@@ -36,8 +43,12 @@ export interface StartOptions {
   /** Where the first-run token is shown; the default shows nothing under test. */
   announce?: (text: string) => void;
   firstRunTtlMs?: number;
-  /** Where mail goes (default: nowhere; the module refuses to send without SMTP_URL). */
-  mailer?: Mailer;
+  /**
+   * Stored settings of core.notifications, as an administrator would have saved them. The default is
+   * none: mail is queued and, with no worker running, stays queued, so a test reads it with
+   * `mail.all()` (bodies are kept while a mail is queued).
+   */
+  notificationSettings?: Record<string, unknown>;
   /** Where an OIDC client secret comes from (default: the environment). */
   clientSecret?: (providerId: string) => string | undefined;
   /** The HTTP client and timeouts used to talk to OIDC providers. */
@@ -71,6 +82,10 @@ export interface IdentityHarness {
     authz: AuthzService;
     /** core.settings in this kernel: the settings, secrets and preferences services. */
     settingsStore: SettingsInternalsBundle;
+    /** The mail queued so far, as core.notifications stored it (that module is real in this kernel). */
+    mail: Mailbox;
+    /** core.notifications in this kernel: `deliverDue()` sends what is queued, through the transport the settings name. */
+    notifications: NotificationsInternals;
     /** The manifest this kernel was built from. */
     manifest: ReturnType<typeof createIdentityModule>;
     /**
@@ -103,7 +118,6 @@ export function useIdentity(): IdentityHarness {
         tokenCacheTtlMs: options?.tokenCacheTtlMs,
         announce: options?.announce,
         firstRunTtlMs: options?.firstRunTtlMs,
-        mailer: options?.mailer,
         clientSecret: options?.clientSecret,
         oidcHttp: options?.oidcHttp,
       });
@@ -115,6 +129,7 @@ export function useIdentity(): IdentityHarness {
             'core.authz',
             'core.settings',
             'core.blob',
+            'core.notifications',
             'core.identity',
             ...(extra ? [extra.id] : []),
           ] as never,
@@ -129,6 +144,11 @@ export function useIdentity(): IdentityHarness {
             packageJson: settingsPackage,
           },
           { manifest: blobModule, packageJson: blobPackage },
+          {
+            // No wake-up listener: nothing delivers, so a queued mail stays readable.
+            manifest: createNotificationsModule({ listen: false }),
+            packageJson: notificationsPackage,
+          },
           { manifest, packageJson },
           ...(extra
             ? [
@@ -146,6 +166,7 @@ export function useIdentity(): IdentityHarness {
           'core.authz': '@scorpion/core-authz',
           'core.settings': '@scorpion/core-settings',
           'core.blob': '@scorpion/core-blob',
+          'core.notifications': '@scorpion/core-notifications',
           'core.identity': '@scorpion/core-identity',
           ...(extra ? { [extra.id]: `@scorpion/${extra.id.replaceAll('.', '-')}` } : {}),
         },
@@ -168,9 +189,15 @@ export function useIdentity(): IdentityHarness {
         jobs: options?.jobs,
       });
       open.push(kernel);
+      if (options?.notificationSettings) {
+        await kernel.migrate();
+        await makeSetting(kernel.pool, 'core.notifications', options.notificationSettings);
+      }
       await kernel.start();
       return {
         kernel,
+        mail: mailbox(kernel.pool),
+        notifications: kernel.services.get('core.notifications') as NotificationsInternals,
         identity: kernel.services.get('core.identity') as IdentityInternals,
         authz: kernel.services.get('core.authz') as AuthzService,
         settingsStore: kernel.services.get('core.settings') as SettingsInternalsBundle,

@@ -3,13 +3,16 @@
 // event: if the role cannot be given (unknown role, the approver may not assign roles), the account
 // stays pending. The route checks the permission, and the service checks it again with
 // `core.authz` and the approval resource, so nobody approves or rejects their own account, Admin
-// included.
+// included. The mail to the person is queued in the same transaction, before the event, so a
+// rollback sends nothing (core.notifications, ADR 0019).
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { Conflict, NotFound, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { user } from '../db/schema.ts';
 import type { User } from '../public.ts';
+import type { IdentityMail } from './identity-mail.ts';
+import type { MailLinks } from './mail-links.ts';
 import { requireUser } from './require-user.ts';
 import { DEFAULT_ROLE } from './roles.ts';
 import type { SessionService } from './sessions.ts';
@@ -41,9 +44,9 @@ export interface ApprovalService {
 
 export function createApprovalService(
   ctx: ModuleContext,
-  deps: { sessions: SessionService; authz: AuthzService },
+  deps: { sessions: SessionService; authz: AuthzService; mail: IdentityMail; links: MailLinks },
 ): ApprovalService {
-  const { authz } = deps;
+  const { authz, mail, links } = deps;
 
   async function decide(
     actor: Actor,
@@ -73,15 +76,28 @@ export function createApprovalService(
           updatedAt: sql`now()`,
         })
         .where(and(eq(user.id, userId), eq(user.status, 'pending'), isNull(user.deletedAt)))
-        .returning({ id: user.id, username: user.username });
+        .returning({ id: user.id, username: user.username, email: user.email });
       if (changed.length === 0) {
         const [existing] = await tx.select({ id: user.id }).from(user).where(eq(user.id, userId));
         if (!existing) throw new NotFound('There is no such user.');
         throw new Conflict('This account is not waiting for approval.');
       }
+      // The person hears in their own language when they chose one; an account with no address
+      // (an OIDC provider that sent none) gets no mail.
+      const recipient = changed[0]!.email ? { address: changed[0]!.email, userId } : undefined;
+      const locale = recipient ? await mail.preferredLocale(userId) : undefined;
       if (verb === 'approve') {
         // Joins this transaction: a role that cannot be given undoes the approval.
         await authz.assignRole(actor, { userId, roleKey: role });
+        if (recipient) {
+          await mail.send(
+            tx,
+            'identity.approved',
+            { username: changed[0]!.username, signInUrl: links.signIn() },
+            recipient,
+            locale,
+          );
+        }
         await ctx.events.emit('identity.user.approved@1', {
           userId,
           username: changed[0]!.username,
@@ -89,6 +105,15 @@ export function createApprovalService(
           role,
         });
       } else {
+        if (recipient) {
+          await mail.send(
+            tx,
+            'identity.rejected',
+            { username: changed[0]!.username },
+            recipient,
+            locale,
+          );
+        }
         await ctx.events.emit('identity.user.rejected@1', {
           userId,
           username: changed[0]!.username,

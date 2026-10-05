@@ -104,14 +104,6 @@ export interface IdentitySettings {
   get(): Promise<IdentitySettingsValues>;
 }
 
-/**
- * What the module needs of the instance's branding: the name that mails use and the sender. The
- * default reads `getBranding()` of core.settings, which owns both (ADR-0018); tests pass their own.
- */
-export interface BrandingSource {
-  get(): Promise<{ instanceName: string; mailFrom: string }>;
-}
-
 /** The token bucket for a mail budget. */
 export const budgetLimit = (budget: { burst: number; perHour: number }): RateLimit => ({
   capacity: budget.burst,

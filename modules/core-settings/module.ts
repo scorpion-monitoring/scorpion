@@ -153,14 +153,17 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
       const vocabularies = createVocabularyService(ctx, { authz });
       await vocabularies.seed();
       const branding = createBrandingService(settings);
+      const preferences = createPreferencesService(ctx, { authz });
       current = {
         settings,
         secrets,
-        preferences: createPreferencesService(ctx, { authz }),
+        preferences,
         vocabularies,
         branding,
         getSecret: (name) => secrets.getSecret(name),
         getBranding: (options) => branding.get(options),
+        getUserPreference: (userId, key) => preferences.getForUser(userId, key),
+        seedSettings: (moduleId, values) => settings.seed(moduleId, values),
         listTerms: (vocabularyId, options) => vocabularies.terms(vocabularyId, options),
         validateTerm: (vocabularyId, key, options) =>
           vocabularies.validateTerm(vocabularyId, key, options),

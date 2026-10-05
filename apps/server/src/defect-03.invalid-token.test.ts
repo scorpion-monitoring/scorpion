@@ -63,7 +63,7 @@ describe('defect 3: a bad key is a 401, never a 500', () => {
         headers: headers('garbage'),
         body: { username: 'alice', email: 'alice@example.org', password: PASSWORD },
       });
-      expect(reply.status).toBe(201);
+      expect(reply.status).toBe(202);
     });
   }
 

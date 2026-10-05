@@ -1,14 +1,13 @@
 // The profile routes through the whole pipeline: own profile only, session callers only, the
 // address change that waits for its link, and bad input.
 import { describe, expect, it } from 'vitest';
-import { ALL_USER_SCOPES, createMemoryMailer, useIdentityApp } from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
 
 async function start(options: Parameters<typeof app.start>[0] = {}) {
-  const mailer = createMemoryMailer();
-  const started = await app.start({ mailer, tokenCacheTtlMs: 0, ...options });
-  return { ...started, mailer };
+  const started = await app.start({ tokenCacheTtlMs: 0, ...options });
+  return started;
 }
 const patch = (
   s: Awaited<ReturnType<typeof start>>,
@@ -55,9 +54,9 @@ describe('GET and PATCH /account/profile', () => {
       email: 'alice@example.org',
       pendingEmail: 'new@example.org',
     });
-    expect(s.mailer.sent.map((m) => m.to)).toEqual(['new@example.org']);
+    expect((await s.mail.all()).map((m) => m.to)).toEqual(['new@example.org']);
 
-    const token = decodeURIComponent(/#token=([^\s]+)/.exec(s.mailer.sent[0]!.text)![1]!);
+    const token = decodeURIComponent(/#token=([^\s]+)/.exec((await s.mail.all())[0]!.text)![1]!);
     expect((await s.post('/auth/verify-email', { body: { token } })).status).toBe(204);
     expect((await s.get('/account/profile', alice)).body).toMatchObject({
       email: 'new@example.org',

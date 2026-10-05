@@ -12,7 +12,6 @@ import {
 } from '@scorpion/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { useIdentity } from '../test/harness.ts';
-import { createMemoryMailer } from './mailer.ts';
 import { DEFAULT_RETENTION, daysToMs } from './settings.ts';
 
 const PURGE_RETENTION_MS = daysToMs(DEFAULT_RETENTION.purgeAfterDays);
@@ -30,7 +29,7 @@ const count = async (kernel: { pool: Pool }, table: string) =>
 const ago = (ms: number, from = Date.now()) => new Date(from - ms);
 
 async function start(options: Parameters<typeof identity.start>[0] = {}) {
-  const started = await identity.start({ mailer: createMemoryMailer(), ...options });
+  const started = await identity.start(options);
   return { ...started, cleanup: started.identity.cleanup };
 }
 const insertLoginState = (kernel: { pool: Pool }, expiresAt: Date, linkUserId?: string) =>

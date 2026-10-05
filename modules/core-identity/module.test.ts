@@ -64,6 +64,7 @@ describe('the module', () => {
       'auth.approvalPolicy',
       'authz.defaultRole',
       'kernel.authenticator',
+      'notify.template',
     ]);
     expect(manifest.routes).toBeDefined();
     expect(manifest.commands?.map((command) => command.name)).toEqual(['create-admin']);
@@ -110,7 +111,7 @@ describe('the module', () => {
     const others = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_name not like 'identity\\_%' and table_name not like 'kernel\\_%'
-          and table_name not like 'authz\\_%' and table_name not like 'settings\\_%' and table_name not like 'blob\\_%'`, // the tables of the modules this one depends on
+          and table_name not like 'authz\\_%' and table_name not like 'settings\\_%' and table_name not like 'blob\\_%' and table_name not like 'notify\\_%'`, // the tables of the modules this one depends on
     );
     expect(others.rows).toEqual([]);
   });

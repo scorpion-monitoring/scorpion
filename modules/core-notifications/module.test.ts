@@ -28,6 +28,14 @@ describe('the manifest', () => {
     expect(Object.keys(manifest.permissions ?? {})).toEqual(['core.notifications.status.read']);
   });
 
+  it('declares the registries notify.transport and notify.template and the command seed-dev-mail', () => {
+    expect(Object.keys(manifest.registries ?? {}).sort()).toEqual([
+      'notify.template',
+      'notify.transport',
+    ]);
+    expect(manifest.commands?.map((command) => command.name)).toEqual(['seed-dev-mail']);
+  });
+
   it('declares the delivery job with a sweep every minute', () => {
     expect(manifest.jobs?.map((job) => [job.name, job.schedule])).toEqual([
       ['core.notifications.deliver', '* * * * *'],
@@ -72,9 +80,11 @@ describe('the manifest', () => {
     }
   });
 
-  it('does not read SMTP_URL (M4 decision 7)', () => {
+  it('does not read the old SMTP variable (M4 decision 7)', () => {
+    // Built from pieces so that a search for the name finds documentation only.
+    const variable = ['SMTP', 'URL'].join('_');
     for (const file of sources().filter((path) => !/\.test\.ts$/.test(path))) {
-      expect(readFileSync(file, 'utf8'), relative(dir, file)).not.toContain('SMTP_URL');
+      expect(readFileSync(file, 'utf8'), relative(dir, file)).not.toContain(variable);
     }
   });
 
@@ -96,6 +106,38 @@ describe('in a kernel', () => {
       'smtp',
       'webhook',
     ]);
+  });
+
+  it('registers the shipped templates, the identity templates are the identity module’s', async () => {
+    const t = await harness.start();
+    const keys = t.kernel.composition.registries
+      .get('notify.template')!
+      .entries.map((entry) => (entry.value as { key: string }).key)
+      .sort();
+    expect(keys).toEqual([
+      'fix.hello',
+      'fix.partial',
+      'fix.secret-link',
+      'kpi.reporting-reminder',
+      'onboarding.application-decided',
+      'onboarding.application-submitted',
+      'registry.membership-decided',
+      'registry.membership-requested',
+    ]);
+  });
+
+  it('registers the user preference notifications.locale, limited to the shipped languages', async () => {
+    const t = await harness.start();
+    const entry = t.kernel.composition.registries
+      .get('settings.userPreference')!
+      .entries.map(
+        (e) => e.value as { key: string; schema: { safeParse(v: unknown): { success: boolean } } },
+      )
+      .find((e) => e.key === 'notifications.locale')!;
+    expect(entry.schema.safeParse('de').success).toBe(true);
+    expect(entry.schema.safeParse('en').success).toBe(true);
+    expect(entry.schema.safeParse('fr').success).toBe(false);
+    expect(entry.schema.safeParse('').success).toBe(false);
   });
 
   it('is a different manifest per createNotificationsModule() call, so tests can tune it', () => {

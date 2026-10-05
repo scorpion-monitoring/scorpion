@@ -82,9 +82,12 @@ export const registerRoute = createRoute({
   rateLimit: 'strict',
   request: { body: json(registerInput) },
   responses: {
-    201: ok('The account was created.', z.object({ user: userSchema })),
+    202: ok(
+      'The request was accepted. Always the same answer for a well-formed request, whether the email address is new or already has an account: a new address gets an account that waits for review, a taken one gets a mail to its owner and nothing else. Check your mail.',
+      z.object({ accepted: z.literal(true) }),
+    ),
     403: { description: 'Local accounts are turned off.' },
-    409: { description: 'The username or email address is taken.' },
+    409: { description: 'The username is taken (usernames are public).' },
   },
 });
 
@@ -552,8 +555,11 @@ export function registerIdentityRoutes(
   { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
-    const user = await accounts.register(c.req.valid('json'));
-    return c.json({ user: view(user) }, 201);
+    // The same answer whether the account was created or the address was taken: nothing of the
+    // new account is returned (register without revealing).
+    await accounts.register(c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.json({ accepted: true as const }, 202);
   }) satisfies RouteHandler<typeof registerRoute, AppEnv>);
 
   r.internal(loginRoute, (async (c) => {
