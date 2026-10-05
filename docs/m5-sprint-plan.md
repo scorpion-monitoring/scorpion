@@ -11,7 +11,7 @@ branch and one pull request into `dev`. M5 is released once, after sprint 4.
 
 ## 0. Before sprint 1
 
-1. **M4a has not been done.** `tools/asvs-report`, `docs/security/asvs/` and `SECURITY.md` do not exist, and
+1. **M4a has not been done; its plan is [m4a-sprint-plan.md](m4a-sprint-plan.md).** `tools/asvs-report`, `docs/security/asvs/` and `SECURITY.md` do not exist, and
    implementation.md says M5 is built with them in place. Decision 1 asks whether M4a runs first (recommended, size S) or
    is folded into sprint 1. CLAUDE.md already tells contributors to update the ASVS files in scoped paths; with no tool,
    that rule cannot be followed or enforced.
