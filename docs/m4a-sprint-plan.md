@@ -1,6 +1,6 @@
 # M4a Sprint Plan: Security assurance tooling
 
-Status: proposed, 2026-10-05. Decisions 1 to 8 in §9 are open and need an answer before sprint 1 starts.
+Status: proposed, 2026-10-05. Decisions 1 to 8 (§9) were answered on 2026-10-05; every answer took the recommendation.
 Scope source: [implementation.md](implementation.md) §3, M4a, and §8 (security assurance signals). Closes no defect of FEATURES §5.
 Releases with `0.6.0` (Decision 1), together with M5.
 
@@ -13,7 +13,7 @@ its workflows; the second adds the tool and the assessment data.
 ## 0. Before sprint 1
 
 1. `dev` carries `0.5.0` (tag `v0.5.0`, merge-back #50). Both sprints start from `dev`.
-2. Answer §9. Two answers decide the shape of the work: Dependabot or Renovate (Decision 2) and the tracking-issue rule for `fail` entries
+2. §9 is answered. Two answers decide the shape of the work: Dependabot (Decision 2) and the tracking-issue rule for `fail` entries
    (Decision 5).
 3. **What the repository looks like today** (checked 2026-10-05, so the plan starts from facts):
    - Public repository `scorpion-monitoring/scorpion`, default branch `dev`. Secret scanning is enabled; push protection, Dependabot
@@ -235,9 +235,9 @@ days: the tool is one day, and the honest pass through roughly a hundred require
 If the assessment pass alone passes two days, split it: merge the tool with the skeletons (all `fail`, all with a tracking issue) as sprint
 2, and send the retro-tagging and the `pass` entries as a third pull request, so the tool is not held up by the reading.
 
-## 9. Decisions to take
+## 9. Decisions taken (2026-10-05)
 
-Each has a recommendation.
+All eight took the recommendation.
 
 1. **Does M4a get its own release?** Recommended: no. It changes no runtime behaviour, and every pull request carries an empty changeset, so
    `changeset version` would not bump anything. It ships inside `0.6.0` with M5. This departs from "every milestone ends with a

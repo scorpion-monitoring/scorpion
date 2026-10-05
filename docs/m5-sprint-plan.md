@@ -1,6 +1,6 @@
 # M5 Sprint Plan: `core.ui-shell` + web app skeleton
 
-Status: proposed, 2026-10-05. Decisions 1 to 9 in §10 are open and need an answer before sprint 1 starts.
+Status: proposed, 2026-10-05. Decisions 1 to 9 (§10) were answered on 2026-10-05. Eight took the recommendation; Decision 9 chose server-sent events instead of polling.
 Scope source: [implementation.md](implementation.md) §3, M5. Closes defects 11 and 12 (FEATURES §5); it also adds the
 first Playwright journeys. Releases as `0.6.0`. Gate 1 follows.
 
@@ -12,11 +12,10 @@ branch and one pull request into `dev`. M5 is released once, after sprint 4.
 ## 0. Before sprint 1
 
 1. **M4a has not been done; its plan is [m4a-sprint-plan.md](m4a-sprint-plan.md).** `tools/asvs-report`, `docs/security/asvs/` and `SECURITY.md` do not exist, and
-   implementation.md says M5 is built with them in place. Decision 1 asks whether M4a runs first (recommended, size S) or
-   is folded into sprint 1. CLAUDE.md already tells contributors to update the ASVS files in scoped paths; with no tool,
+   implementation.md says M5 is built with them in place. Decision 1: M4a runs first (plan: [m4a-sprint-plan.md](m4a-sprint-plan.md), size S). CLAUDE.md already tells contributors to update the ASVS files in scoped paths; with no tool,
    that rule cannot be followed or enforced.
 2. `dev` carries `0.5.0` (done: tag `v0.5.0`, merge-back #50). Sprint 1 starts from `dev`.
-3. Answer §10. Write ADR-0025 (how the shell finds module pages and talks to the API) as the first commit of sprint 1.
+3. §10 is answered. Write ADR-0025 (how the shell finds module pages and talks to the API) as the first commit of sprint 1.
 4. Add the lines in §11 to M5's scope in `implementation.md`. FEATURES §3.19 describes the legacy app; where it conflicts
    with the architecture or this plan, the plan and the ADRs win.
 5. **Prototype the catch-all route in the first days of sprint 1** (risk in §12). If SSR hooks per route or `load` data
@@ -243,9 +242,16 @@ Work items
 3. **Admin → Notification status:** the counts from `status()`, the delivery list without bodies, the last error codes, requeue of
    a dead mail (one at a time; "requeue all" stays in the backlog), the test-mail form, and a clear banner when the transport is
    `none`.
-4. **Inbox bell** in the header: unread count, a dropdown list, mark read and mark all read, a full page. Updates by polling the
-   unread count with a back-off when the tab is hidden (no WebSocket, no SSE; Decision 9). Which identity mails earn an inbox
-   item is decided here and recorded in the notifications README.
+4. **Inbox bell** in the header: unread count, a dropdown list, mark read and mark all read, a full page. Which identity mails
+   earn an inbox item is decided here and recorded in the notifications README. **Live updates by server-sent events**
+   (Decision 9): `GET /inbox/stream` in `core.notifications` (`text/event-stream`, cookie or token authenticated, permission
+   `core.notifications.inbox.read`), driven by the kernel's existing `pg_notify` listener. It sends only `unread` counts and a
+   25 s heartbeat, never message content; the page fetches the list through the normal route. Rules: a cap of streams per
+   user and a global cap (settings), the stream ends when the session is revoked or expires (the session is re-checked on each
+   heartbeat), no `Last-Event-ID` replay (a reconnect starts with the current count), `Cache-Control: no-store`, and the web
+   proxy must not buffer or time out the response. The page falls back to polling every 60 s when the stream fails or a proxy
+   cuts it. ADR-0026 records the design. Tests: two kernels over one database (a delivery on one reaches a stream on the
+   other), the caps, the end on logout (defect 4 seen from a stream), and a plain User cannot open another user's stream.
 5. **Preference form** for notifications: switches per mandatory and optional kind, mandatory ones shown as locked with the reason;
    the form reads the registered preference keys, as the backlog asks.
 6. **Dashboard** at `/`: the widget slot (`ui.widget`) with the cards core modules can offer (pending approvals for a reviewer, dead
@@ -287,18 +293,18 @@ Additional gates this plan adds: no secret in a Playwright trace, a log line or 
   the registry slots they will use.
 - A visual editor for themes or a user-uploaded theme; more than the two shipped themes.
 - A third language, right-to-left layout, locale-specific number and date formats beyond `Intl`.
-- Real-time updates (WebSocket, SSE) for the inbox.
+- WebSockets, and live updates for anything but the inbox count.
 - 2FA, passkeys, "remember this device".
 - Create and delete custom roles; a bulk "requeue all"; full-text audit search; saved audit filters.
 - A PWA, offline mode, mobile app.
 - Visual regression testing.
 - Per-module help pages and a product tour.
 
-## 10. Decisions to take
+## 10. Decisions taken (2026-10-05)
 
-Each has a recommendation. They are the blocking ones for sprint 1; the smaller ones appear in the sprint they affect.
+They are the blocking ones for sprint 1; the smaller ones appear in the sprint they affect. Each entry shows the answer first.
 
-1. **M4a first?** Recommended: yes, as a short separate milestone (a sprint of its own, a docs and CI pull request) before
+1. **M4a first: yes** (the plan is [m4a-sprint-plan.md](m4a-sprint-plan.md)), as a short separate milestone (a sprint of its own, a docs and CI pull request) before
    sprint 1, because implementation.md promises M5 is built with the ASVS tool in place and CLAUDE.md's scoped-path rule is not
    enforceable without it. The alternative is to fold the tool into sprint 1, which makes sprint 1 too large to review.
 2. **How the web process learns `ui.routes`.** Recommended: the profile generator also writes a `generated/ui.ts` in `apps/web`
@@ -325,8 +331,9 @@ Each has a recommendation. They are the blocking ones for sprint 1; the smaller 
 8. **Where the e2e suite runs.** Recommended: the existing CI job, with a second Playwright project for the nested base path, the
    server started from the built profile image and web app together. If the job passes 15 minutes, split it into a parallel job
    (the unit job is 11 to 13 minutes today).
-9. **Inbox updates.** Recommended: polling every 60 s with back-off in a hidden tab, because there is no SSE endpoint and adding
-   one is a kernel decision. Revisit if the unread latency matters to users.
+9. **Inbox updates: server-sent events** (the recommendation was polling every 60 s). This adds a long-lived response to the
+   API, which is new for the server: connection caps, session re-checks, proxy buffering and idle timeouts are now ours to get
+   right, and the web proxy of Decision 3 must stream. Polling stays as the fallback. Recorded in ADR-0026 and the risks.
 
 ## 11. Additions to M5's scope in `implementation.md` (to approve with this plan)
 
@@ -335,6 +342,7 @@ Each has a recommendation. They are the blocking ones for sprint 1; the smaller 
 - The typed client is generated from the OpenAPI document (Decision 4) and shared with `url()`; both live in `packages/contracts`.
 - New routes the screens need: `GET /auth/oidc/providers`, user management (`GET /users`, `/users/{id}`, `/users/{id}/roles`,
   `/users/{id}/tokens`, deactivate, revoke sessions), `PUT /roles/{key}/permissions`, `GET /system/job-runs`, `GET /ui/navigation`.
+- `GET /inbox/stream` (server-sent events, unread count only) in `core.notifications`, with ADR-0026.
 - Screens: inbox bell, notification preferences, audit viewer, system page and job runs join the list in M5.
 - Acceptance additions: no secret in a browser trace or log; CSP and security headers; axe checks on every screen; the lint rules
   that make the typed client, `url()`, `SafeHtml` and thrown loader errors mandatory.
@@ -342,13 +350,14 @@ Each has a recommendation. They are the blocking ones for sprint 1; the smaller 
 
 ## 12. Risks
 
-| Risk                                                                                             | Impact                                           | Mitigation                                                                                                                |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| The catch-all route limits SvelteKit (per-route SSR options, streaming `load`, preloading)       | Rework of the shell after screens exist          | Prototype in the first days of sprint 1 (§0 item 5); fallback: generated filesystem routes from a build step              |
-| M4a is skipped, then ASVS evidence is retro-fitted at Gate 1                                     | Gate 1 slips, evidence is thin                   | Decision 1; each sprint from 2 on has an ASVS item                                                                        |
-| The OpenAPI-generated client drifts from the server or loses the problem+json types              | Runtime errors the compiler did not catch        | Generate in `pnpm check`, fail on a diff; one test calls each client function against the contract fixtures               |
-| CSRF token handling breaks under SSR (the server renders a page and the browser then posts)      | Writes fail with 401 after a reload              | The layout gets the token from `/auth/me` on every request (ADR-0007); a journey reloads before every write               |
-| `BASE_PATH` bugs come back in places not covered (assets, redirects, cookie path, OIDC callback) | Defect 11 returns                                | Every journey runs under `/a/b`; the lint rule bans literal paths; `url()` is the only constructor                        |
-| Server-rendered Markdown or an admin-entered text reaches the DOM unsanitised                    | Stored XSS in a security milestone               | One `SafeHtml` component, a lint rule, a hostile-text e2e test, CSP without `unsafe-inline`                               |
-| Admin screens grow beyond three weeks (settings forms for every module, user management)         | Release slips                                    | Sprint 3 builds three areas only; further forms are generated from schemas and add no new code per module                 |
-| E2E tests are slow or flaky in CI (Postgres, server, web, browser in one job)                    | Two CI runs per sprint grow, flakes block merges | Journeys, not screens; reuse one server per project; the known 57P01 teardown flake is fixed or tolerated before sprint 1 |
+| Risk                                                                                                   | Impact                                                 | Mitigation                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| The catch-all route limits SvelteKit (per-route SSR options, streaming `load`, preloading)             | Rework of the shell after screens exist                | Prototype in the first days of sprint 1 (§0 item 5); fallback: generated filesystem routes from a build step                           |
+| M4a is skipped, then ASVS evidence is retro-fitted at Gate 1                                           | Gate 1 slips, evidence is thin                         | Decision 1; each sprint from 2 on has an ASVS item                                                                                     |
+| The OpenAPI-generated client drifts from the server or loses the problem+json types                    | Runtime errors the compiler did not catch              | Generate in `pnpm check`, fail on a diff; one test calls each client function against the contract fixtures                            |
+| CSRF token handling breaks under SSR (the server renders a page and the browser then posts)            | Writes fail with 401 after a reload                    | The layout gets the token from `/auth/me` on every request (ADR-0007); a journey reloads before every write                            |
+| `BASE_PATH` bugs come back in places not covered (assets, redirects, cookie path, OIDC callback)       | Defect 11 returns                                      | Every journey runs under `/a/b`; the lint rule bans literal paths; `url()` is the only constructor                                     |
+| Server-rendered Markdown or an admin-entered text reaches the DOM unsanitised                          | Stored XSS in a security milestone                     | One `SafeHtml` component, a lint rule, a hostile-text e2e test, CSP without `unsafe-inline`                                            |
+| Admin screens grow beyond three weeks (settings forms for every module, user management)               | Release slips                                          | Sprint 3 builds three areas only; further forms are generated from schemas and add no new code per module                              |
+| E2E tests are slow or flaky in CI (Postgres, server, web, browser in one job)                          | Two CI runs per sprint grow, flakes block merges       | Journeys, not screens; reuse one server per project; the known 57P01 teardown flake is fixed or tolerated before sprint 1              |
+| SSE connections tie up server resources or are cut by proxies, and a stream outlives a revoked session | Exhaustion, or a revoked session still receives counts | Per-user and global caps, session re-check on each heartbeat, polling fallback, a test for the end on logout, no content on the stream |
