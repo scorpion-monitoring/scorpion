@@ -13,10 +13,10 @@ would exist when the work was rolled back, or not exist when the process died be
 ## Decision
 
 - **The table `notify_delivery` is the queue and the source of truth.** `enqueue(tx, message)` inserts a row (`status =
-  'queued'`, `next_attempt_at = now()`) and calls `pg_notify('notify_delivery', <id>)` in the same transaction. A job is
+'queued'`, `next_attempt_at = now()`) and calls `pg_notify('notify_delivery', <id>)` in the same transaction. A job is
   only a way to wake a worker; losing every wake-up delays delivery and loses nothing.
 - **Status is a text column with a state machine in the service**, every move one `UPDATE … WHERE status = <from>`: `queued →
-  sending` (claim), `sending → sent`, `sending → queued` (retry, with `next_attempt_at`), `sending → dead`. Nothing else moves a
+sending` (claim), `sending → sent`, `sending → queued` (retry, with `next_attempt_at`), `sending → dead`. Nothing else moves a
   row in sprint 1 (a `dead → queued` requeue is sprint 3). `status_changed_at` is set by every move. A pg enum was
   rejected (CLAUDE.md rule 8 spirit; a text check is easier to extend).
 - **Claiming is one statement with a lease**, as in ADR-0003: select due rows (`queued` and due, or `sending` with an expired

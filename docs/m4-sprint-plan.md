@@ -17,19 +17,19 @@ about one week, each one `feature/m4-*` branch and one pull request into `dev`. 
 
 ## 1. What M2 and M3 hand to M4
 
-| Hand-off                                                                                                                     | Where it was recorded                            | Sprint |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------ |
-| The `Mailer` port and the two plain-text mails move behind `core.notifications`; the port in `core-identity` is deleted     | ADR-0012, identity README, backlog               | 2      |
-| `SMTP_URL` (can hold a password) is replaced by notification settings and a secret                                           | backlog (sprint 5 follow-ups)                    | 1, 2   |
-| A crash between commit and send loses one mail; a failed send is only logged: queue with retries and visible status          | ADR-0012                                         | 1, 2   |
-| The unconfigured mailer's "not sent" warning must not flood logs once every registration sends mail                          | backlog                                          | 2      |
-| Welcome, admin "registration request", approved and rejected mails (FEATURES §3.15)                                          | FEATURES §3.15                                   | 2      |
-| `POST /auth/register` answers 409 for a taken address; hide it with a mail to the owner                                      | backlog ("Register without revealing")           | 2      |
-| `authz.role.assigned@1` and `.removed@1` have no subscriber; `setRolePermissions` emits nothing                              | backlog (authz follow-ups), M3 plan §9           | 4      |
-| `settings.changed@1`, `settings.secret.changed@1`, `settings.vocabulary.changed@1` have no subscriber (history of changes)   | backlog (settings follow-ups)                    | 4      |
-| Outbox retention (events keep usernames of purged accounts), job-run retention, requeue of dead deliveries                   | backlog (kernel follow-ups), ADR-0003            | 4      |
-| Registries `notify.transport` and `notify.template`; in-app inbox; user preferences; admin status list; log viewer and CSV   | implementation.md M4, architecture               | 1 to 4 |
-| Module README "until M4" sentences removed                                                                                   | identity README                                  | 2      |
+| Hand-off                                                                                                                   | Where it was recorded                  | Sprint |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------ |
+| The `Mailer` port and the two plain-text mails move behind `core.notifications`; the port in `core-identity` is deleted    | ADR-0012, identity README, backlog     | 2      |
+| `SMTP_URL` (can hold a password) is replaced by notification settings and a secret                                         | backlog (sprint 5 follow-ups)          | 1, 2   |
+| A crash between commit and send loses one mail; a failed send is only logged: queue with retries and visible status        | ADR-0012                               | 1, 2   |
+| The unconfigured mailer's "not sent" warning must not flood logs once every registration sends mail                        | backlog                                | 2      |
+| Welcome, admin "registration request", approved and rejected mails (FEATURES §3.15)                                        | FEATURES §3.15                         | 2      |
+| `POST /auth/register` answers 409 for a taken address; hide it with a mail to the owner                                    | backlog ("Register without revealing") | 2      |
+| `authz.role.assigned@1` and `.removed@1` have no subscriber; `setRolePermissions` emits nothing                            | backlog (authz follow-ups), M3 plan §9 | 4      |
+| `settings.changed@1`, `settings.secret.changed@1`, `settings.vocabulary.changed@1` have no subscriber (history of changes) | backlog (settings follow-ups)          | 4      |
+| Outbox retention (events keep usernames of purged accounts), job-run retention, requeue of dead deliveries                 | backlog (kernel follow-ups), ADR-0003  | 4      |
+| Registries `notify.transport` and `notify.template`; in-app inbox; user preferences; admin status list; log viewer and CSV | implementation.md M4, architecture     | 1 to 4 |
+| Module README "until M4" sentences removed                                                                                 | identity README                        | 2      |
 
 ## 2. Cross-sprint rules
 
@@ -55,12 +55,12 @@ about one week, each one `feature/m4-*` branch and one pull request into `dev`. 
 
 ## 3. Sprint overview
 
-| Sprint | Branch                               | Theme                                                                          | Closes |
-| ------ | ------------------------------------ | ------------------------------------------------------------------------------ | ------ |
-| 1      | `feature/m4-notifications-core`      | `core.notifications`: delivery queue, retries, transports, settings, secret    | none   |
+| Sprint | Branch                               | Theme                                                                                | Closes |
+| ------ | ------------------------------------ | ------------------------------------------------------------------------------------ | ------ |
+| 1      | `feature/m4-notifications-core`      | `core.notifications`: delivery queue, retries, transports, settings, secret          | none   |
 | 2      | `feature/m4-templates-identity-mail` | Templates and locales, identity moved onto notifications, register without revealing | none   |
-| 3      | `feature/m4-inbox-preferences`       | In-app inbox, preferences, admin status, deliveries, requeue and test routes   | none   |
-| 4      | `feature/m4-audit-release`           | `core.audit`: sink, subscriber, viewer, CSV, retention; kernel jobs; release   | none   |
+| 3      | `feature/m4-inbox-preferences`       | In-app inbox, preferences, admin status, deliveries, requeue and test routes         | none   |
+| 4      | `feature/m4-audit-release`           | `core.audit`: sink, subscriber, viewer, CSV, retention; kernel jobs; release         | none   |
 
 Order matters: notifications comes first because identity depends on it (Decision 1) and because sprint 2 removes `SMTP_URL`.
 Sprint 3 needs sprint 2's templates only for the inbox text, so it could start once sprint 1 is merged if there is a second
@@ -152,8 +152,8 @@ Work items
    service plus their addresses; if `core.authz` has no method for it, add one that follows ADR-0015's trusted-caller rule, with a
    test that a route cannot reach it). Rejected and approved mails are enqueued in the same transaction as the status change, so a
    rollback sends nothing.
-5a. The mail-budget rate limits of ADR-0012 stay as they are; the "never wait for SMTP" timing rule now holds by construction,
-    because the request only inserts a row.
+   5a. The mail-budget rate limits of ADR-0012 stay as they are; the "never wait for SMTP" timing rule now holds by construction,
+   because the request only inserts a row.
 6. **Register without revealing** (Decision 4): `POST /auth/register` answers 202 `{ accepted: true }` for every well-formed request.
    A new address gets the account, the welcome mail and the verification mail; a taken address gets `identity.register-attempt`
    and nothing else. The taken username stays a 409 (usernames are public, backlog). The budget is spent on both paths and the work
@@ -190,8 +190,8 @@ Work items
    definitions" backlog item for this key only).
 4. **Admin routes** (permissions `core.notifications.status.read`, `.deliveries.read`, `.deliveries.manage`, `.test`; Admin by default,
    through the `authz.defaultRole` registry): `GET /notifications/status` (counts, transport, last error codes), `GET
-   /notifications/deliveries` (filters: status, template, channel, date range; paginated; **no bodies**, only metadata), `POST
-   /notifications/deliveries/{id}/requeue` (only `dead`, resets attempts, audited), `POST /notifications/test` (sends a test mail to
+/notifications/deliveries` (filters: status, template, channel, date range; paginated; **no bodies**, only metadata), `POST
+/notifications/deliveries/{id}/requeue` (only `dead`, resets attempts, audited), `POST /notifications/test` (sends a test mail to
    the caller's own address; rate-limited). Deliveries are deleted after `retentionDays` by a daily job `notify.retention`.
 5. **Events** declared by notifications for the audit trail: `notifications.delivery.dead@1`, `notifications.delivery.requeued@1`,
    `notifications.settings.tested@1` (ids and template keys only, no address).
@@ -235,7 +235,7 @@ Work items
    settings history item).
 7. **Viewer API** (permissions `core.audit.read`, `core.audit.export`; Admin by default): `GET /audit` with filters (method, user,
    endpoint prefix, action, outcome, date range), the standard envelope with a stable order (`occurred_at` desc, then id), `GET
-   /audit/{id}`, and `GET /audit/export.csv` (streamed, escaped, formula-injection guard for cells that start with `= + - @`, a row
+/audit/{id}`, and `GET /audit/export.csv` (streamed, escaped, formula-injection guard for cells that start with `= + - @`, a row
    cap from settings, **the export itself is an audit entry**). Reading the log needs no permission other than these two (the
    defect-1 matrix gets the "log reads" case here).
 8. **Retention**: daily job `audit.retention` (setting `retentionDays`, default 365; separate `apiRetentionDays`, default 90) deleting in
@@ -262,15 +262,15 @@ User gets 403 on every audit and system route; profiles that do not list `core.a
 
 ## 8. Acceptance (from implementation.md) mapped to tests
 
-| Acceptance criterion                                                                    | Where it is proved                                                                                         |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Registering produces the welcome and admin emails in Mailpit                            | `apps/server/src/notifications-journey.test.ts` (sprint 2, Mailpit Testcontainer)                           |
-| If the SMTP relay is down, emails are retried                                           | `core-notifications/service/delivery.test.ts`: relay down, `queued`, attempts grow, delivered on recovery   |
-| …and the failure shows in the admin status list                                         | `apps/server/src/notification-routes.test.ts`: `dead` row listed without body, `last_error` code (sprint 3) |
-| A role change creates an audit entry                                                    | `core-audit/service/subscriber.test.ts`, extended in the journey (sprint 4)                                 |
+| Acceptance criterion                                                                     | Where it is proved                                                                                          |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Registering produces the welcome and admin emails in Mailpit                             | `apps/server/src/notifications-journey.test.ts` (sprint 2, Mailpit Testcontainer)                           |
+| If the SMTP relay is down, emails are retried                                            | `core-notifications/service/delivery.test.ts`: relay down, `queued`, attempts grow, delivered on recovery   |
+| …and the failure shows in the admin status list                                          | `apps/server/src/notification-routes.test.ts`: `dead` row listed without body, `last_error` code (sprint 3) |
+| A role change creates an audit entry                                                     | `core-audit/service/subscriber.test.ts`, extended in the journey (sprint 4)                                 |
 | Templates for all events of FEATURES §3.15, plus membership decided, reset, verification | `core-notifications/templates.test.ts`: every key in en and de, snapshots, escaping                         |
-| In-app inbox and per-user preferences                                                   | `inbox.test.ts`, `preferences.test.ts`; own-only 403 cases                                                  |
-| Middleware logs every public API call; viewer filters; CSV export; retention job        | `core-audit/service/sink.test.ts`, `viewer.test.ts`, `export.test.ts`, `retention.test.ts`                  |
+| In-app inbox and per-user preferences                                                    | `inbox.test.ts`, `preferences.test.ts`; own-only 403 cases                                                  |
+| Middleware logs every public API call; viewer filters; CSV export; retention job         | `core-audit/service/sink.test.ts`, `viewer.test.ts`, `export.test.ts`, `retention.test.ts`                  |
 
 Additional gates this plan adds: the route-table walker covers every new route; no secret in logs, the audit table or responses
 (grep tests); the append-only trigger; sensitive bodies are scrubbed; the webhook refuses private targets; a transport change
@@ -326,12 +326,12 @@ removes delivered events and keeps pending ones.
 
 ## 12. Risks
 
-| Risk                                                                                           | Impact                                            | Mitigation                                                                                                     |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Moving identity's mails changes the most security-sensitive flows (reset, verify, register)   | A regression reopens an account-recovery weakness | Sprint 2 keeps ADR-0012's tests unchanged and adds the log, table and timing greps; no test is weakened          |
-| `core.audit` as a late subscriber misses events of modules not in its dependency list          | A gap in the trail for M6+ modules                | Optional peers per module; a test fails when a declared event has no audit decision (logged or explicitly skipped) |
-| The pipeline audit hook adds latency or loses entries on a crash                               | Slow requests, missing API entries                | The write happens after the response, errors are logged by id only; an `audit: true` route test checks the entry     |
-| Audit volume from public API calls grows fast                                                  | Table bloat                                       | `apiRetentionDays` is shorter, batched deletes, an index on `occurred_at`; revisit partitioning if the load test (M18) says so |
-| Webhook protection is bypassed (rebinding, redirects, IPv6 forms)                              | SSRF from an admin account                        | Resolve once and connect to the address, no redirects, table-driven range tests including mapped IPv6            |
-| Removing `SMTP_URL` breaks existing dev setups                                                 | Confusion for contributors                        | The Mailpit seed in dev, a clear start-up message when the variable is set but unused, README and changeset      |
-| Sprint 4 passes the 1500-line limit (audit, kernel jobs, release)                              | A PR too large to review                          | Split the kernel maintenance (item 9) into a stacked second PR if the diff grows past the limit                  |
+| Risk                                                                                        | Impact                                            | Mitigation                                                                                                                     |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Moving identity's mails changes the most security-sensitive flows (reset, verify, register) | A regression reopens an account-recovery weakness | Sprint 2 keeps ADR-0012's tests unchanged and adds the log, table and timing greps; no test is weakened                        |
+| `core.audit` as a late subscriber misses events of modules not in its dependency list       | A gap in the trail for M6+ modules                | Optional peers per module; a test fails when a declared event has no audit decision (logged or explicitly skipped)             |
+| The pipeline audit hook adds latency or loses entries on a crash                            | Slow requests, missing API entries                | The write happens after the response, errors are logged by id only; an `audit: true` route test checks the entry               |
+| Audit volume from public API calls grows fast                                               | Table bloat                                       | `apiRetentionDays` is shorter, batched deletes, an index on `occurred_at`; revisit partitioning if the load test (M18) says so |
+| Webhook protection is bypassed (rebinding, redirects, IPv6 forms)                           | SSRF from an admin account                        | Resolve once and connect to the address, no redirects, table-driven range tests including mapped IPv6                          |
+| Removing `SMTP_URL` breaks existing dev setups                                              | Confusion for contributors                        | The Mailpit seed in dev, a clear start-up message when the variable is set but unused, README and changeset                    |
+| Sprint 4 passes the 1500-line limit (audit, kernel jobs, release)                           | A PR too large to review                          | Split the kernel maintenance (item 9) into a stacked second PR if the diff grows past the limit                                |
