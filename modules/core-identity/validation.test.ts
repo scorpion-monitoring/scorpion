@@ -151,19 +151,20 @@ describe('createUserInput', () => {
 
 describe('scope', () => {
   it.each<[string, string, boolean]>([
-    ['read a resource', 'read:kpi', true],
-    ['write a dotted resource', 'write:registry.services', true],
-    ['kebab case', 'read:kpi-ingestion', true],
-    ['an unknown action', 'delete:kpi', false],
-    ['no action', 'kpi', false],
-    ['no resource', 'read:', false],
-    ['upper case', 'read:KPI', false],
-    ['a wildcard', 'read:*', false],
-    ['a space', 'read: kpi', false],
-    ['a trailing dot', 'read:kpi.', false],
-    ['a leading digit in a segment', 'read:1kpi', false],
-    ['too long', `read:${'a'.repeat(60)}`, false],
-    ['non-ASCII', 'read:kpí', false],
+    ['a permission id', 'core.identity.me.read', true],
+    ['kebab case in a segment', 'core.identity.auth-method.link', true],
+    ['two segments', 'kpi.read', true],
+    ['the legacy shape read:<resource>', 'read:kpi', false],
+    ['the legacy shape write:<resource>', 'write:registry.services', false],
+    ['one segment', 'kpi', false],
+    ['upper case', 'core.Identity.me.read', false],
+    ['a wildcard', 'core.identity.*', false],
+    ['a space', 'core.identity. me', false],
+    ['a trailing dot', 'core.identity.me.', false],
+    ['a leading dot', '.core.identity', false],
+    ['a leading digit in a segment', 'core.1identity.me', false],
+    ['too long', `core.${'a'.repeat(100)}`, false],
+    ['non-ASCII', 'core.identitý.me', false],
   ])('%s: %j', (_name, value, valid) => {
     expect(ok(scope, value)).toBe(valid);
   });
@@ -171,32 +172,46 @@ describe('scope', () => {
 
 describe('createTokenInput', () => {
   const future = new Date(Date.now() + 86_400_000).toISOString();
-  it('defaults to no scopes and no expiry, trims the name, sorts and de-duplicates scopes', () => {
-    expect(createTokenInput.parse({ name: ' ci ' })).toEqual({
+  const GOOD = ['core.a.read'];
+  it('defaults to no expiry, trims the name, sorts and de-duplicates scopes', () => {
+    expect(createTokenInput.parse({ name: ' ci ', scopes: ['core.identity.me.read'] })).toEqual({
       name: 'ci',
-      scopes: [],
+      scopes: ['core.identity.me.read'],
       expiresAt: null,
     });
     expect(
       createTokenInput.parse({
         name: 'a',
-        scopes: ['write:b', 'read:a', 'read:a'],
+        scopes: ['core.b.write', 'core.a.read', 'core.a.read'],
         expiresAt: future,
       }),
-    ).toEqual({ name: 'a', scopes: ['read:a', 'write:b'], expiresAt: new Date(future) });
+    ).toEqual({
+      name: 'a',
+      scopes: ['core.a.read', 'core.b.write'],
+      expiresAt: new Date(future),
+    });
   });
 
   it.each<[string, unknown]>([
-    ['no name', {}],
-    ['an empty name', { name: '  ' }],
-    ['a long name', { name: 'x'.repeat(65) }],
-    ['a control character in the name', { name: 'a\u0000b' }],
-    ['a number for the name', { name: 7 }],
+    ['no name', { scopes: ['core.a.read'] }],
+    ['no scopes at all', { name: 'a' }],
+    ['an empty scope list', { name: 'a', scopes: [] }],
+    ['an empty name', { name: '  ', scopes: GOOD }],
+    ['a long name', { name: 'x'.repeat(65), scopes: GOOD }],
+    ['a control character in the name', { name: 'a\u0000b', scopes: GOOD }],
+    ['a number for the name', { name: 7, scopes: GOOD }],
     ['an unknown scope shape', { name: 'a', scopes: ['everything'] }],
-    ['too many scopes', { name: 'a', scopes: Array.from({ length: 21 }, (_, i) => `read:a${i}`) }],
-    ['an expiry that is not a date', { name: 'a', expiresAt: 'tomorrow' }],
-    ['an expiry without a time zone', { name: 'a', expiresAt: '2030-01-01T00:00:00' }],
-    ['an extra field', { name: 'a', admin: true }],
+    ['a legacy scope', { name: 'a', scopes: ['read:kpi'] }],
+    [
+      'too many scopes',
+      { name: 'a', scopes: Array.from({ length: 21 }, (_, i) => `core.a.read${i}`) },
+    ],
+    ['an expiry that is not a date', { name: 'a', scopes: GOOD, expiresAt: 'tomorrow' }],
+    [
+      'an expiry without a time zone',
+      { name: 'a', scopes: GOOD, expiresAt: '2030-01-01T00:00:00' },
+    ],
+    ['an extra field', { name: 'a', scopes: GOOD, admin: true }],
   ])('refuses %s', (_name, value) => {
     expect(ok(createTokenInput, value)).toBe(false);
   });

@@ -8,10 +8,22 @@
       "path": "./packages/kernel"
     },
     {
+      "path": "./modules/core-authz"
+    },
+    {
+      "path": "./modules/core-blob"
+    },
+    {
       "path": "./modules/core-identity"
     },
     {
+      "path": "./modules/core-settings"
+    },
+    {
       "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/sanitize"
     },
     {
       "path": "./packages/ui-kit"

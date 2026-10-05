@@ -11,21 +11,25 @@ approve or reject new accounts, a signed-in person can create tokens for scripts
 profile, a person who forgot their password gets a link by mail, and a fresh install gets its first administrator
 from `scorpion create-admin` or a one-time first-run token.
 
-**Nothing is reachable in a real deployment yet.** Production denies every route that is not public until
-`core.authz` exists in M3 ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md)), so register and login
-work, and everything behind a session answers 403. Tests use `testAuthorizer()` from `@scorpion/testing`.
+**Authorisation is `core.authz`'s** ([ADR-0005](../../docs/adr/0005-deny-by-default-before-authz.md),
+[ADR-0014](../../docs/adr/0014-authorisation-model-and-dependency-direction.md),
+[ADR-0015](../../docs/adr/0015-identity-on-authz.md)). This module **depends on `core.authz`**: it contributes the
+permissions of the role `user` ([Roles](#roles-and-permissions)), asks `core.authz` for the roles of the caller and for
+every decision in the service layer, and owns the routes that give and take roles. A signed-in account without a
+role gets 403 on everything that is not public; a freshly approved account holds the role `user` and can use the
+account routes.
 
 ## Manifest
 
-| Part         | Now                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Later                                        |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Permissions  | `core.identity.session.manage`, `core.identity.me.read`, `core.identity.user.list-pending`, `core.identity.user.approve`, `core.identity.user.reject`, `core.identity.token.read`, `core.identity.token.manage`, `core.identity.auth-method.link`, `core.identity.password.change`, `core.identity.email.verify`, `core.identity.profile.read`, `core.identity.profile.update`                                                                                                                                                                                                                                                                | M3 adds the role-assignment permission       |
-| Settings     | `localAccounts` (default `true`, enforced on the server), `approvalPolicy` (default `manual`), `oidcProviders` (default none: OIDC is off; [below](#oidc-sign-in)), `instanceName` and `mailFrom` (for the mails, [below](#password-reset-password-change-and-email-verification))                                                                                                                                                                                                                                                                                                                                                            | M3: stored settings replace the defaults     |
-| Events       | emits `identity.admin.created@1`, `identity.user.registered@1`, `identity.user.approved@1`, `identity.user.rejected@1`, `identity.authMethod.linked@1`, `identity.token.created@1`, `identity.token.revoked@1`, `identity.token.rotated@1`, `identity.password.resetRequested@1`, `identity.password.reset@1`, `identity.password.changed@1`, `identity.email.verified@1`, `identity.profile.updated@1`, `identity.user.purged@1` through the outbox; handles `system.ready` only (issues the first-run token, below)                                                                                                                         | handlers arrive with core.notifications (M4) |
-| Registries   | declares `auth.approvalPolicy`, contributes `manual` to it; contributes the one entry to `kernel.authenticator` (session cookie, `Authorization: Bearer`, `X-API-Key`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | none                                         |
-| Jobs         | `core.identity.cleanup`, hourly (`0 * * * *`, UTC), 2 retries, 5 minutes ([below](#cleanup-job))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | none                                         |
-| CLI commands | `scorpion create-admin --username <name> --email <address>` (password from the prompt or stdin)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | none                                         |
-| Routes       | internal API: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`, `GET /users/pending`, `POST /users/{id}/approve`, `POST /users/{id}/reject`, `GET /tokens`, `POST /tokens`, `DELETE /tokens/{id}`, `POST /tokens/{id}/rotate`, `POST /bootstrap/first-admin`, `POST /auth/oidc/{provider}/start`, `POST /auth/oidc/{provider}/link`, `GET /auth/oidc/{provider}/callback`, `POST /auth/password-reset`, `POST /auth/password-reset/confirm`, `POST /auth/verify-email`, `POST /account/password`, `POST /account/email/verification`, `GET /account/profile`, `PATCH /account/profile` | none                                         |
+| Part         | Now                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Later                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| Permissions  | `core.identity.session.manage`, `core.identity.me.read`, `core.identity.user.list-pending`, `core.identity.user.approve`, `core.identity.user.reject`, `core.identity.token.read`, `core.identity.token.manage`, `core.identity.token.manage-any`, `core.identity.auth-method.link`, `core.identity.password.change`, `core.identity.email.verify`, `core.identity.profile.read`, `core.identity.profile.update`, `core.identity.role.read`, `core.identity.role.assign`                                                                                                                                                                                                                                                                                                                                                 | none                                         |
+| Settings     | `localAccounts` (default `true`, enforced on the server), `approvalPolicy` (default `manual`), `oidcProviders` (default none: OIDC is off; [below](#oidc-sign-in)), `retention` and `mailBudgets` (today's constants as defaults; [below](#settings)). Read through `ctx.settings` (stored by [core.settings](../core-settings/README.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | none                                         |
+| Events       | depends on `core.authz` (which emits `authz.role.assigned@1` and `authz.role.removed@1` for the changes made here) on `core.settings` (settings, secrets and the branding that mails use) and on `core.blob` (the avatar); emits `identity.admin.created@1`, `identity.user.registered@1`, `identity.user.approved@1`, `identity.user.rejected@1`, `identity.authMethod.linked@1`, `identity.token.created@1`, `identity.token.revoked@1`, `identity.token.rotated@1`, `identity.password.resetRequested@1`, `identity.password.reset@1`, `identity.password.changed@1`, `identity.email.verified@1`, `identity.profile.updated@1`, `identity.user.purged@1` through the outbox; handles `system.ready` only (issues the first-run token, below, and names the OIDC providers without a stored client secret in the log) | handlers arrive with core.notifications (M4) |
+| Registries   | declares `auth.approvalPolicy`, contributes `manual` to it; contributes the one entry to `kernel.authenticator` (session cookie, `Authorization: Bearer`, `X-API-Key`); contributes to `authz.defaultRole` the permissions of the role `user` ([below](#roles-and-permissions))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | none                                         |
+| Jobs         | `core.identity.cleanup`, hourly (`0 * * * *`, UTC), 2 retries, 5 minutes ([below](#cleanup-job))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | none                                         |
+| CLI commands | `scorpion create-admin --username <name> --email <address>` (password from the prompt or stdin)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | none                                         |
+| Routes       | internal API: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`, `GET /users/pending`, `POST /users/{id}/approve`, `POST /users/{id}/reject`, `GET /roles`, `POST /users/{id}/roles`, `DELETE /users/{id}/roles/{role}`, `GET /tokens`, `POST /tokens`, `DELETE /tokens/{id}`, `POST /tokens/{id}/rotate`, `POST /bootstrap/first-admin`, `POST /auth/oidc/{provider}/start`, `POST /auth/oidc/{provider}/link`, `GET /auth/oidc/{provider}/callback`, `POST /auth/password-reset`, `POST /auth/password-reset/confirm`, `POST /auth/verify-email`, `POST /account/password`, `POST /account/email/verification`, `GET /account/profile`, `PATCH /account/profile`, `PUT /account/avatar`, `DELETE /account/avatar`                                                | none                                         |
 
 The README changes together with the manifest.
 
@@ -40,23 +44,25 @@ cross-site HTML form from reaching them ([ADR-0007](../../docs/adr/0007-session-
 | `POST /auth/login`            | public (strict rate limit)        | `{ username, password }` → 200 `{ user, csrfToken }` and the cookie. 401 for an unknown user, a wrong password, a rejected or deleted account (same answer); 403 for a pending account (after the right password) or when `localAccounts` is off                                              |
 | `POST /auth/logout`           | `core.identity.session.manage`    | 204, ends the caller's session, clears the cookie                                                                                                                                                                                                                                             |
 | `POST /auth/logout-all`       | `core.identity.session.manage`    | `{ revoked }`, ends every session of the caller                                                                                                                                                                                                                                               |
-| `GET /auth/me`                | `core.identity.me.read`           | `{ user, roles, csrfToken }`; roles are empty until M3                                                                                                                                                                                                                                        |
+| `GET /auth/me`                | `core.identity.me.read`           | `{ user, roles, csrfToken }`; `roles` are the keys `core.authz` holds for the caller right now (never cached here)                                                                                                                                                                            |
 | `GET /users/pending`          | `core.identity.user.list-pending` | list envelope, oldest first                                                                                                                                                                                                                                                                   |
-| `POST /users/{id}/approve`    | `core.identity.user.approve`      | pending → active. 404 unknown, 409 not pending, 403 your own account                                                                                                                                                                                                                          |
-| `POST /users/{id}/reject`     | `core.identity.user.reject`       | pending → rejected and soft-deleted (the username stays reserved). Same refusals                                                                                                                                                                                                              |
+| `POST /users/{id}/approve`    | `core.identity.user.approve`      | `{ role? }` (optional body; default `user`) → pending → active **and** the role, in one transaction with the event. 404 unknown account or role, 409 not pending, 403 your own account (Admin too) or a caller without `core.authz.role.assign`; on any refusal the account stays pending     |
+| `POST /users/{id}/reject`     | `core.identity.user.reject`       | pending → rejected and soft-deleted (the username stays reserved). 403 your own account, 404, 409                                                                                                                                                                                             |
 | `GET /tokens`                 | `core.identity.token.read`        | the caller's live tokens, oldest first, list envelope; never a secret                                                                                                                                                                                                                         |
-| `POST /tokens`                | `core.identity.token.manage`      | `{ name, scopes?, expiresAt? }` → 201 with `token` (shown once), `Cache-Control: no-store`. Strict rate limit. 409 for a taken name or more than 50 tokens, 422 for bad input                                                                                                                 |
-| `DELETE /tokens/{id}`         | `core.identity.token.manage`      | 204; also when it was already revoked; 404 for an unknown id and for someone else's                                                                                                                                                                                                           |
+| `POST /tokens`                | `core.identity.token.manage`      | `{ name, scopes, expiresAt? }` → 201 with `token` (shown once); `scopes` are permission ids, at least one, `Cache-Control: no-store`. Strict rate limit. 409 for a taken name or more than 50 tokens, 422 for bad input                                                                       |
+| `DELETE /tokens/{id}`         | `core.identity.token.manage`      | 204; also when it was already revoked; 404 for an unknown id and for someone else's (`core.identity.token.manage-any` revokes any token)                                                                                                                                                      |
 | `POST /bootstrap/first-admin` | public (strict rate limit)        | `{ token, username, email, password }` → 201 `{ user }` (an active administrator; no cookie). 401 for a token that is unknown, used, expired or malformed, and for any token once an active user exists; 409 for a taken name or address and 422 for bad input, both leaving the token usable |
 | `POST /tokens/{id}/rotate`    | `core.identity.token.manage`      | `{ expiresAt? }` (send `{}`) → the new token, same name and scopes, shown once; the old one is dead. Strict rate limit. 404 as above                                                                                                                                                          |
 
+| `GET /roles` | `core.identity.role.read` | list envelope of `{ key, label, system, permissions }`, by key. Also needs `core.authz.role.read` (service). Admin lists every declared permission |
+| `POST /users/{id}/roles` | `core.identity.role.assign` | `{ role }` → 200 `{ id, role, changed }` (`changed` false when held already). Also needs `core.authz.role.assign`. 404 unknown user (or deleted) or role, 403 your own roles (Admin too) |
+| `DELETE /users/{id}/roles/{role}` | `core.identity.role.assign` | 204, also when the user did not hold it. 403 your own roles, 404, 409 for the last Admin |
 | `POST /auth/oidc/{provider}/start` | public (strict rate limit) | no body → 200 `{ authorizationUrl }` and the `__Host-oidc-login` cookie. 404 unknown provider, 422 malformed id, 502 provider unreachable |
 | `POST /auth/oidc/{provider}/link` | `core.identity.auth-method.link`, session only | as `start`, but the callback adds the identity to the caller's account. Strict rate limit. 401 anonymous, 403 token caller |
 | `GET /auth/oidc/{provider}/callback` | public (strict rate limit) | `?state&code` (or `?state&error`) → 302 to the application root and the session cookie. 400 bad state / refused, 401 bad id_token or refused account, 403 pending, 409, 422 bad query, 502 |
 
-The token routes are described under [Access tokens](#access-tokens), the OIDC routes under [OIDC sign-in](#oidc-sign-in). The three approval routes are not in plan §5 item 6, which lists five routes. The plan's definition of done asks for a
-denied-permission test for approve and reject, and before `ctx.authz` exists (M3) the route's `permission` is the only
-place that can be checked. The service still refuses an anonymous caller and your own account.
+The token routes are described under [Access tokens](#access-tokens), the OIDC routes under [OIDC sign-in](#oidc-sign-in). Every route has a denied-request test, and `apps/server/src/defect-01.privilege-escalation.test.ts` walks the live route
+table and fails when a non-public route has no entry in its "denied for a plain User" matrix.
 
 Registering tells a caller when a username or address is taken (409), and signing in tells an account that is pending
 (after the right password) to wait; signing in does not tell whether a username exists.
@@ -73,11 +79,19 @@ Registering tells a caller when a username or address is taken (409), and signin
   prefix). On a `public: true` route a bad token means "not signed in".
 - **A request with a token is a token request:** the cookie is ignored (no CSRF check, no session privileges). A bad
   token is a 401 even with a good cookie.
-- **Scopes** are `read:<resource>` or `write:<resource>`, resource in dotted kebab case, at most 20 per token; anything
-  else is a 422. They limit nothing until `core.authz` (M3) intersects them with the owner's permissions.
+- **Scopes** are permission ids ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)), for example
+  `core.identity.me.read`: dotted kebab case, at most 20 per token and 100 characters each. A token needs at least one
+  (without scopes it could do nothing), and each must be a permission that a loaded module declares (422 otherwise,
+  also for the legacy `read:kpi` shape). **What a token may do is its scopes ∩ the permissions of its owner**, decided by
+  `core.authz` at every call, for the route and again in the service: a scope the owner does not hold grants nothing, and
+  an owner who loses a role takes it away from the token within the cache bound below. A session is not limited by
+  scopes. Scopes of tokens made in 0.3.0 had the shape `read:kpi`; they match no permission and so grant nothing (create
+  a new token).
 - **Managing tokens needs a session.** Create, list, revoke and rotate answer 403 to a caller who used a token, so a
   stolen token cannot mint another. Every query is scoped to the caller; someone else's token id gets the same 404 as an
-  unknown one. Until `ctx.authz` exists (M3) that, with the route's permission, is the whole check.
+  unknown one, unless the caller holds `core.identity.token.manage-any`, which revokes any token (it never lists or
+  rotates someone else's: the new secret would go to the administrator). The service checks the permission again with
+  `core.authz` (`token.read`, `token.manage`).
 - **Cache and the staleness bound.** A verified token is trusted in memory for **5 seconds** (`TOKEN_CACHE_TTL_MS`,
   keyed by the SHA-256 of the token), because argon2id on every call is too expensive. Revoke and rotate drop the entries
   of _this_ process at once. **With several server processes another process can accept a revoked token for at most
@@ -100,10 +114,14 @@ Registering tells a caller when a username or address is taken (409), and signin
   governs the password only; **OIDC has no setting of its own and ignores `localAccounts`**.
 - **Redirect URI** is fixed by the route: `<ORIGIN><BASE_PATH>/api/internal/auth/oidc/<id>/callback`. Register exactly
   that at the provider.
-- **Client secret**: environment variable `OIDC_<ID>_CLIENT_SECRET`, the id upper-cased with `-` replaced by `_`
-  (`life-science-aai` → `OIDC_LIFE_SCIENCE_AAI_CLIENT_SECRET`). Unset means a public client (PKCE only). One function,
-  `service/oidc-secret.ts`, reads it; M3 changes that function to the encrypted secrets store. It is in no setting, log,
-  response, event or error.
+- **Client secret**: the encrypted secrets store of [core.settings](../core-settings/README.md), under the name
+  `oidc.<provider id>.client-secret` (`life-science-aai` → `oidc.life-science-aai.client-secret`). Set it with
+  `scorpion set-secret oidc.life-science-aai.client-secret` (the value is asked for or read from standard input), or
+  with `PUT /secrets/{name}` as an administrator. A provider without a stored secret is a public client (PKCE only);
+  the start-up log names such providers (never a secret). **There is no environment fallback: `OIDC_<ID>_CLIENT_SECRET`
+  is not read** (M3 decision 4, [ADR-0016](../../docs/adr/0016-secrets-store-and-key-rotation.md)), so an instance
+  that upgrades from 0.3.x must store its secrets once. One function, `service/oidc-secret.ts`, asks the store; the
+  value goes to the code exchange and is in no setting, log, response, event or error.
 - **Flow.** `POST …/start` creates a login state and returns the provider URL (authorisation code flow, PKCE S256,
   `state`, `nonce`); the browser goes there and the provider redirects it to `GET …/callback`. A signed-in browser may
   start a login too (switching accounts); the session it held ends when the new one begins.
@@ -132,10 +150,10 @@ Registering tells a caller when a username or address is taken (409), and signin
 - **Events**: provisioning emits `identity.user.registered@1` in the transaction that creates the user and its identity;
   linking emits `identity.authMethod.linked@1 { userId, username, provider, via: 'email' | 'profile' }`. Signing in emits
   nothing. No subject, address or secret is in either.
-- **Bootstrap**: OIDC provisioning never sets the temporary administrator marker. "No administrator yet" stays "no active,
-  non-deleted user", so with `manual` an OIDC account (pending) does not end the first-run bootstrap. An approval policy
-  that activates OIDC accounts automatically would make the first such account an active user and end the bootstrap path
-  (the safe side: nobody becomes administrator by it); a policy author must know that.
+- **Bootstrap**: OIDC provisioning never makes an administrator. "No administrator yet" means "no user holds the Admin
+  role", so an OIDC account, pending or active, does not end the first-run bootstrap. An approval policy that
+  activates OIDC accounts at once gives them the role `user` in the transaction that creates them; a pending one gets
+  its role with the approval.
 - **Trust.** The provider's `email_verified` is believed for linking, so list only providers that verify addresses.
 - **Not yet:** a public list of providers for the login page (M5), cleanup of expired login states (sprint 5's hourly job).
 
@@ -176,14 +194,16 @@ Design and reasons: [ADR-0012](../../docs/adr/0012-mail-tokens-and-mail-ordering
 - **Mail setup.** `SMTP_URL` (for development the Mailpit at `smtp://localhost:1025`, see `.env.example`;
   `smtps://user:pass@host:465` for TLS). Without it the module refuses to send and logs only
   `an email was not sent: no mail transport is configured`, with the mail kind. The sender and the instance name in the
-  mail come from the settings `mailFrom` and `instanceName` (defaults `no-reply@localhost` and `Scorpion`) until
-  core.settings (M3) and core.notifications (M4) take over.
+  mail come from the branding settings of core.settings (`branding.mailFrom` and `branding.instanceName`, read with
+  `getBranding()`; defaults `no-reply@localhost` and the product name), not from identity's own settings. core.notifications
+  (M4) takes over the mail transport. The mail budgets are settings too
+  ([Settings](#settings)).
 
 ### Profile (`service/profile.ts`)
 
 | Route                    | Access                                       | Notes                                                                                                                                                                                                                                                                                                                               |
 | ------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /account/profile`   | `core.identity.profile.read`, session only   | `{ username, displayName, email, emailVerified, pendingEmail, bio }`, `Cache-Control: no-store`                                                                                                                                                                                                                                     |
+| `GET /account/profile`   | `core.identity.profile.read`, session only   | `{ username, displayName, email, emailVerified, pendingEmail, bio, avatarHash }`, `Cache-Control: no-store`                                                                                                                                                                                                                         |
 | `PATCH /account/profile` | `core.identity.profile.update`, session only | `{ displayName?, bio?, email? }`, at least one. Returns the profile. 422 for a rule broken, an unknown field (`username`, `status`, `userId`, roles: a profile edit changes nothing else) or no change at all; 429 after five address changes in an hour; 401 anonymous (or a write without the CSRF token), 403 for a token caller |
 
 - **Own profile only.** There is no id in the route or the body: the row is the caller's, from the session. Nobody
@@ -191,16 +211,32 @@ Design and reasons: [ADR-0012](../../docs/adr/0012-mail-tokens-and-mail-ordering
 - **Fields.** `displayName` (trimmed, 1 to 100 characters, no control characters, one line) and `bio` (trimmed, at most
   2000 characters, line breaks and tabs allowed). `null` or an empty text clears a field. Both are **plain text**:
   FEATURES asks for a bio but not for Markdown, so nothing is rendered server-side and a UI must show them as text
-  (never `{@html}`). Markdown with server-side sanitising is a backlog item if it is wanted. There is no avatar until the
-  blob store exists (M3; `avatar_blob_id` stays unused).
+  (never `{@html}`). Markdown with server-side sanitising is a backlog item if it is wanted. The avatar is a file
+  ([below](#avatar)).
 - **Changing the address.** The old address stays, **with its verified state**, until the owner opens the link mailed
   to the new one; then the new address replaces it and is verified. Until then `pendingEmail` shows the new one. Asking
   again replaces the waiting link. An address another account holds is **not refused**: the token is stored and
   `pendingEmail` is shown as for a free address, but no mail is sent, so a caller cannot probe which addresses exist
   (the link would be refused anyway: the address is taken). Five address changes an hour per user; each target
   address also has its 3-mails-an-hour budget.
-- **Event.** `identity.profile.updated@1 { userId, username, fields }` where `fields` lists `displayName`, `bio` and/or
+- **Event.** `identity.profile.updated@1 { userId, username, fields }` where `fields` lists `displayName`, `bio`, `avatar` and/or
   `email` (a change was asked for), never values. A request that changes nothing emits nothing.
+
+### Avatar
+
+| Route                    | Access                                      | Notes                                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /account/avatar`    | `core.identity.avatar.update`, session only | The image as the raw request body (any `Content-Type`; the type comes from the content). Returns the profile. Rate limited (strict). Body limit 8 MiB. 422 for a file the blob store refuses; 413 over the ceiling; 403 for a token |
+| `DELETE /account/avatar` | `core.identity.avatar.update`, session only | Removes it (also when there is none). Returns the profile                                                                                                                                                                           |
+
+- **Own account only, sessions only.** There is no user id in the input; a token caller gets 403 even with the scope.
+- **Through the blob service.** The file is checked and rewritten by [core.blob](../core-blob/README.md) (rasters re-encoded
+  without metadata and capped in size, SVG sanitised, anything else refused), so the caller also needs `core.blob.upload`
+  (the role `user` holds both). `identity_user.avatar_blob_id` and the reference `core.identity:avatar:<user id>` are written
+  in one transaction; the previous file is released and removed after the grace period. Uploading the avatar the account
+  already has changes nothing. The purge of an account releases its avatar.
+- **Showing it.** The profile has `avatarHash`; the image is at `GET /files/{avatarHash}` (public, immutable, cacheable).
+- Event: `identity.profile.updated@1` with `fields: ['avatar']`.
 
 ### Cleanup job
 
@@ -225,10 +261,13 @@ reasons: [ADR-0013](../../docs/adr/0013-cleanup-job-and-retention.md).
   The outbox rows that mention the user (`registered`, `rejected`, ...) are **kept** (outbox retention is a backlog
   item) so history still has the username.
 - **Other modules.** Their tables must not keep a hard foreign key to `identity_user` that blocks the delete; they
-  subscribe to `identity.user.purged@1` and delete or anonymise their rows (document it in their README). M3's role
-  assignments are the first case.
-- The retention constants (`PURGE_RETENTION_MS`, `TOKEN_GRACE_MS`, `PURGE_BATCH` in `service/cleanup.ts`) become settings
-  in M3.
+  subscribe to `identity.user.purged@1` and delete or anonymise their rows (document it in their README).
+  **Role assignments are the exception** ([ADR-0014](../../docs/adr/0014-authorisation-model-and-dependency-direction.md)):
+  `core.authz` may not subscribe to this module's events (ADR-0003), so the purge transaction calls
+  `removeAllAssignments(tx, userId)` of the authz service for each purged account **before** it deletes the user rows.
+  A purge that fails rolls the assignments back with it, and no event is involved.
+- The retention numbers are the setting `retention` ([Settings](#settings)): `purgeAfterDays` (30), `tokenGraceDays`
+  (30) and `purgeBatch` (500). The job reads them at the start of each run, so a change applies to the next one.
 - There is no actor and no route: nobody can call the cleanup, so it has no permission or denied-request test; the
   tests cover the controllable clock (`run(now)`), the live rows it must not touch, the cascade, the batch limit, the
   rollback (a trigger that refuses the delete) and a run through the real jobs facade.
@@ -245,8 +284,7 @@ reasons: [ADR-0013](../../docs/adr/0013-cleanup-job-and-retention.md).
   whether the user exists or not; a mail budget per address (3 an hour) and per user (5 an hour); 8-character
   minimum passwords.
 - **The residual risk** is a guess campaign spread over many client addresses against one username. The per-address
-  bucket does not cap that. It is accepted for M2 (the strict bucket and the cost of argon2 make it slow, and nothing
-  is reachable before M3 anyway) and recorded in `docs/backlog.md` with the options that avoid the DoS: alerting on
+  bucket does not cap that. It is accepted for M2 (the strict bucket and the cost of argon2 make it slow) and recorded in `docs/backlog.md` with the options that avoid the DoS: alerting on
   failures per username, a proof-of-work or CAPTCHA step-up after repeated failures, and 2FA.
 
 ### Registering still answers 409
@@ -262,26 +300,27 @@ routes never reveal. Backlog entry added.
 [ADR-0010](../../docs/adr/0010-first-run-token-and-bootstrap-admin.md) and [ADR-0009](../../docs/adr/0009-module-cli-commands.md)
 have the reasoning. The "first registrant becomes admin" rule is gone (defect 1).
 
-- **`scorpion create-admin --username <name> --email <address>`** creates an _active_ local account and marks it as
-  administrator. The password is read from the terminal prompt (no echo) or, without a terminal, as the first line of
+- **`scorpion create-admin --username <name> --email <address>`** creates an _active_ local account and gives it
+  the Admin role (by the system: `assigned_by` is null). The password is read from the terminal prompt (no echo) or, without a terminal, as the first line of
   standard input: `printf '%s\n' "$PW" | scorpion create-admin …`. It is **never** taken from an argument:
   `--password` is refused, and the password appears in no output and no log. Exit codes: 0 created, 1 refused (invalid
   input, taken name or address; the message names fields, never values), 2 wrong usage. The command can be run again to
   add another administrator. It is contributed by this module (`commands`), so a profile without it has no such command.
-- **The first-run token.** When the server (or worker) starts and the install has **no active user** and no first-run
-  token that is still good, it issues one and shows it _once_ as a plain-text block on **standard error**: `sfr_` and 43
+- **The first-run token.** When the server (or worker) starts and **no user holds the Admin role** and there is no
+  first-run token that is still good, it issues one and shows it _once_ as a plain-text block on **standard error**: `sfr_` and 43
   characters, valid for 1 hour, single use. It is the one secret printed anywhere: it does not go through the structured
   logger, and nothing repeats it (not a later line, a response, an event or the database, which keeps only its SHA-256).
   Use it with `POST /api/internal/bootstrap/first-admin` (below `BASE_PATH`) and the body `{ token, username, email,
 password }`. A failed attempt that is the caller's mistake (taken name, weak password) does not use the token up.
 - A restart while the token is still good cannot show it again; the log says that one is outstanding (without the
   secret). Wait for it to expire, or run `create-admin`. `create-admin` also ends any outstanding token.
-- "No administrator yet" is decided as "no active, non-deleted user", **not** from the marker column (which nothing
-  may read). With the `manual` policy an account becomes active only through an approver, so this is exact for M2;
-  M3 replaces it with "no user holds the Admin role".
+- "No administrator yet" means "no user holds the Admin role" (`hasHolders('admin')` of the authz service). A
+  deactivated administrator still counts until the purge removes their assignment. Other users, active or not, do not end
+  the bootstrap path.
 - Under `NODE_ENV=test` the default shows nothing; a test passes `announce` to receive the text.
 - **Events.** Both paths emit `identity.admin.created@1 { userId, username, origin: 'cli' | 'first-run' }` in the
-  same transaction as the account, the marker and the end of the tokens. No password or token is in it.
+  same transaction as the account, the Admin role (`authz.role.assigned@1`, actor `null`) and the end of the tokens. No
+  password or token is in it.
 
 ### Events
 
@@ -311,20 +350,32 @@ module, later, records those from requests). The module handles only `system.rea
 
 ### Settings
 
-The manifest declares these keys (`service/settings.ts`). The kernel only validates and stores a module's settings today
-and `ctx` has no settings access, so the module reads them through one internal port, `IdentitySettings`, whose
-default implementation is `settingsSchema.parse({})`. **M3 replaces that default and nothing else.**
+The manifest declares these keys (`service/settings.ts`). The module reads them through `ctx.settings`
+([ADR-0017](../../docs/adr/0017-settings-port.md)): the values an administrator saved with
+`PUT /settings/core.identity` (see [core.settings](../core-settings/README.md)), validated by this schema, with its
+defaults. A stored key that the schema rejects falls back to its default and is logged by name. Without core.settings the
+defaults would apply, but this module depends on it. The internal port `IdentitySettings` stays so that tests can inject
+values.
 
-| Key                        | Default                          | Meaning                                                                                                                                                                                                                                    |
-| -------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `localAccounts`            | `true`                           | Whether people may register and sign in with a password. Enforced on the server (defect 13): register, login, reset and password change answer 403 when it is off. Existing sessions, logout, OIDC and email verification are not affected |
-| `approvalPolicy`           | `manual`                         | The id of the `auth.approvalPolicy` entry that decides the status of a new account                                                                                                                                                         |
-| `oidcProviders`            | none                             | The OIDC providers ([OIDC sign-in](#oidc-sign-in)); none means OIDC is off                                                                                                                                                                 |
-| `instanceName`, `mailFrom` | `Scorpion`, `no-reply@localhost` | The name and the sender address in mails (rule 9: no hard-coded branding). They are not identity's to own: core.settings (M3) and core.notifications (M4) take them over                                                                   |
+| Key                        | Default                    | Meaning                                                                                                                                                                                                                                    |
+| -------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `localAccounts`            | `true`                     | Whether people may register and sign in with a password. Enforced on the server (defect 13): register, login, reset and password change answer 403 when it is off. Existing sessions, logout, OIDC and email verification are not affected |
+| `approvalPolicy`           | `manual`                   | The id of the `auth.approvalPolicy` entry that decides the status of a new account                                                                                                                                                         |
+| `oidcProviders`            | none                       | The OIDC providers ([OIDC sign-in](#oidc-sign-in)); none means OIDC is off                                                                                                                                                                 |
+| `retention.purgeAfterDays` | `30`                       | How long a soft-deleted account keeps its username and address before the cleanup purges it (1 to 3650)                                                                                                                                    |
+| `retention.tokenGraceDays` | `30`                       | How long an expired or revoked access token is shown to its owner before it is removed (1 to 3650)                                                                                                                                         |
+| `retention.purgeBatch`     | `500`                      | At most this many accounts are purged per hourly run (1 to 10000)                                                                                                                                                                          |
+| `mailBudgets.perAddress`   | `{ burst: 3, perHour: 3 }` | Mails (reset and confirmation links) that one address can be sent: a burst, then a rate per hour. It protects the owner of an address                                                                                                      |
+| `mailBudgets.perUser`      | `{ burst: 5, perHour: 5 }` | Confirmation mails a signed-in user can ask for, and address changes they can make                                                                                                                                                         |
+
+The rate limit of the server's pipeline (the `default` and `strict` buckets) is not identity's: it is the `rateLimits`
+setting of core.settings.
 
 **Environment variables** (not settings, because they are secrets or deployment facts): `SMTP_URL` (mail transport,
-[above](#password-reset-password-change-and-email-verification)), `OIDC_<ID>_CLIENT_SECRET` (per provider), and the
-kernel's `ORIGIN`, `BASE_PATH` and `TRUSTED_PROXIES`. M3's secrets store takes over the two secret ones.
+[above](#password-reset-password-change-and-email-verification); a password in it still lives in the environment until
+core.notifications, M4), and the kernel's `ORIGIN`, `BASE_PATH` and `TRUSTED_PROXIES`. `OIDC_<ID>_CLIENT_SECRET` is gone:
+client secrets are in the secrets store. `SECRETS_KEY` belongs to core.settings, which this module depends on, so every
+profile with core.identity needs it.
 
 ### Approval policies (`auth.approvalPolicy`)
 
@@ -334,31 +385,70 @@ setting names the entry in force. `manual` (contributed here) returns `pending` 
 registration context, so `auto-by-email-domain` and `invite-only` (`docs/backlog.md`) are contributions from other
 modules that depend on `core.identity`, and need no change here; a test contributes one from a second module. If the
 configured policy is not installed the account stays `pending` and a warning is logged, so a typo never approves anyone.
-Approving only flips the status; roles are assigned in M3.
+Approving flips the status and gives the role in the same transaction ([Roles](#roles-and-permissions)).
 
 ## Tables
 
-| Table                      | Holds                                                                                                                                                                                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity_user`            | The person: unique `username`, `email` (a verified address is unique, case-insensitively), `display_name`, `bio` (plain text, length-checked), `status`, soft delete, `avatar_blob_id` (nullable, unused until M3), `is_bootstrap_admin` (temporary, below) |
-| `identity_auth_method`     | One way to sign in: `(provider, subject)` unique; at most one `local` (password) method per user; the argon2id hash for `local`                                                                                                                             |
-| `identity_mail_token`      | A mailed single-use token: `purpose` (`password-reset` or `email-verification`), the SHA-256 hash, the address a verification confirms, `expires_at`, `used_at`                                                                                             |
-| `identity_session`         | A browser session: SHA-256 of the 256-bit session id, sliding expiry, `revoked_at`                                                                                                                                                                          |
-| `identity_login_state`     | An OIDC login in progress: provider id, hashes of `state`, `nonce` and the PKCE challenge, the user id when linking, expiry (10 minutes, single use)                                                                                                        |
-| `identity_first_run_token` | The one-time token a fresh install prints: SHA-256 `secret_hash`, `expires_at`, `redeemed_at` (single use)                                                                                                                                                  |
-| `identity_token`           | A personal access token: unique 8-character `prefix`, argon2id `secret_hash`, scopes, expiry, last use; name unique per user                                                                                                                                |
+| Table                      | Holds                                                                                                                                                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity_user`            | The person: unique `username`, `email` (a verified address is unique, case-insensitively), `display_name`, `bio` (plain text, length-checked), `status`, soft delete, `avatar_blob_id` (nullable; a file of core.blob, [Avatar](#avatar)) |
+| `identity_auth_method`     | One way to sign in: `(provider, subject)` unique; at most one `local` (password) method per user; the argon2id hash for `local`                                                                                                           |
+| `identity_mail_token`      | A mailed single-use token: `purpose` (`password-reset` or `email-verification`), the SHA-256 hash, the address a verification confirms, `expires_at`, `used_at`                                                                           |
+| `identity_session`         | A browser session: SHA-256 of the 256-bit session id, sliding expiry, `revoked_at`                                                                                                                                                        |
+| `identity_login_state`     | An OIDC login in progress: provider id, hashes of `state`, `nonce` and the PKCE challenge, the user id when linking, expiry (10 minutes, single use)                                                                                      |
+| `identity_first_run_token` | The one-time token a fresh install prints: SHA-256 `secret_hash`, `expires_at`, `redeemed_at` (single use)                                                                                                                                |
+| `identity_token`           | A personal access token: unique 8-character `prefix`, argon2id `secret_hash`, scopes, expiry, last use; name unique per user                                                                                                              |
 
 Keys are UUIDv7 (`ids.uuidv7()` from the kernel). No secret is stored in the clear: sessions and login
 states are SHA-256 hashes of random 256-bit values, passwords and token secrets are argon2id hashes.
 
-### `is_bootstrap_admin` is temporary
+### The bootstrap marker is gone
 
-It marks the administrator that `scorpion create-admin` or the first-run token creates, because roles
-are data seeded only in M3. **Nothing reads it:** the service does not select it, no route uses it, a test fails
-if a file other than the schema mentions it. The bootstrap service writes it through `BOOTSTRAP_ADMIN_MARK`, a value
-that `db/schema.ts` exports, so the schema stays the only file that names the column; a second test pins that the
-constant is used in one place, as the argument of an update. M3's seed migration turns it into an Admin role assignment and
-**drops the column completely**, with a test that it is gone ([ADR-0006](../../docs/adr/0006-actor-authenticator-interim-authorisation.md)).
+M2 marked the administrator that `create-admin` or the first-run token created with a column `is_bootstrap_admin`,
+because roles did not exist yet (ADR-0006). Migration `0006_bootstrap_admin_to_authz.sql` copies every marked user into
+`authz_role_assignment` with the Admin role (`assigned_by` null) and drops the column, in one transaction. It creates
+the Admin role row itself when `core.authz` has not seeded it yet (same key, `ON CONFLICT DO NOTHING`, so the seed
+stays idempotent), and changes nothing when no user was marked. **It is the one place in the repository that touches
+another module's tables** (CLAUDE.md rule 3; the exception is recorded in ADR-0014). `bootstrap-migration.test.ts`
+proves the data cases (none, one, several marked users), that the migration is atomic, that the column is gone, that no
+source file outside the migrations mentions it, and that no other migration or source file names a table of another
+module.
+
+## Roles and permissions
+
+Roles are data owned by `core.authz` ([ADR-0014](../../docs/adr/0014-authorisation-model-and-dependency-direction.md),
+[ADR-0015](../../docs/adr/0015-identity-on-authz.md)). This module does three things with them.
+
+- **The role `user`.** Identity contributes to `authz.defaultRole` the permissions an approved account needs for its own
+  account: `me.read`, `session.manage`, `profile.read`, `profile.update`, `avatar.update`, `password.change`, `email.verify`,
+  `auth-method.link`, `token.read` and `token.manage` (`USER_PERMISSIONS` in `module.ts`, pinned by a test). They are
+  applied once, so an administrator who removes one from `user` does not see it come back. **Admin** holds every
+  permission by resolution. **Reviewer gets nothing from identity**: reviewing is the job of the modules that have
+  something to review. The administrative permissions (`user.approve`, `user.reject`, `user.list-pending`,
+  `role.read`, `role.assign`, `token.manage-any`) belong to Admin only until an administrator gives them to a role.
+- **Approval gives the role.** `POST /users/{id}/approve` takes `{ role? }` (default `user`). The status change, the
+  role assignment (`authz.role.assigned@1`) and `identity.user.approved@1` are one transaction: if the role cannot be
+  given (it does not exist, or the approver lacks `core.authz.role.assign`) the account stays pending. An account that an
+  approval policy makes active at once (registration, first OIDC sign-in) gets `user` in the transaction that creates it.
+- **Role routes.** `GET /roles`, `POST /users/{id}/roles` and `DELETE /users/{id}/roles/{role}`. **Two permissions guard
+  a role change on purpose**: the route and the service check this module's `core.identity.role.read` / `.assign` (who
+  may administer users here), and `core.authz` checks `core.authz.role.read` / `.assign` again inside its own methods
+  (who may change roles at all, for every caller including jobs and other modules). Admin holds both pairs; a custom
+  role needs both. The built-in protections of `core.authz` hold for Admin too: nobody changes their own roles (403) and
+  the last Admin stays (409).
+
+Every service of this module that acts for a caller checks its permission with `core.authz` again (the route checks it
+first): approve, reject and the pending list, the token methods, the profile, password, e-mail and OIDC-link methods, `me`
+and the logouts. Those that act on "the caller's own account" take no user id: the row is the caller's from the actor, so
+another account cannot even be named (there is no 404 to leak). A caller without the permission gets 403.
+
+## Scopes
+
+A token scope is the id of a permission. The authoriser of `core.authz` allows a token only a permission that its scopes
+name **and** its owner holds (scope ∩ owner), for the route and for `require`/`can` in a service; a token without scopes
+can do nothing. Tokens still cannot manage tokens, and the routes that are session-only (profile, password, e-mail,
+OIDC link) answer 403 to a token whatever its scopes. A token can end the sessions of its owner (`POST /auth/logout-all`)
+only when a scope names `core.identity.session.manage`; that is the M2 behaviour, now limited by scope.
 
 ## Sessions, the cookie and CSRF
 
@@ -370,7 +460,7 @@ constant is used in one place, as the argument of an update. M3's seed migration
 - Cookie `__Host-session`: `Secure; HttpOnly; SameSite=Lax; Path=/`, no `Domain`.
 - The authenticator (`authenticator.ts`, the entry in `kernel.authenticator`) reads only headers. No cookie: the
   caller is anonymous. A cookie the session service refuses: `Unauthorized`. A good cookie: `Actor`
-  `{ kind: 'user', via: 'session', roles: [] }` (roles arrive with core.authz in M3). A session also ends when
+  `{ kind: 'user', via: 'session', roles: [] }`; the authenticator never fills `roles`, `core.authz` resolves the roles of `userId` itself and this module never caches them. A session also ends when
   its user is no longer `active` or is soft-deleted.
 - **CSRF.** A request with the session cookie and a method other than GET, HEAD or OPTIONS must send
   `X-CSRF-Token`, the session's token (a hash of the session id under its own label; the login and `me`
@@ -394,7 +484,7 @@ constant is used in one place, as the argument of an update. M3's seed migration
   soft-deleted users included (the caller refuses their login).
 
 The register, login, session and approval services are internal to the module; the routes call them through
-`r.service()`. Other modules read users and, in M3, ask `core.authz` about permissions.
+`r.service()`. Other modules read users and ask `core.authz` about permissions.
 
 ## Rules for input (`validation.ts`)
 
@@ -411,11 +501,13 @@ The parameters are in one place; a unit test pins them. Under `NODE_ENV=test` on
 ## Testing
 
 `pnpm test --filter @scorpion/core-identity` needs Docker (Testcontainers). Use the factories `makeUser`,
-`makeAuthMethod`, `makeSession` and `makeToken` from `@scorpion/testing`, and `testAuthorizer()` when a test must get
-through the pipeline before `core.authz` exists.
+`makeAuthMethod`, `makeSession`, `makeToken`, `makeRole` and `makeRoleAssignment` from `@scorpion/testing`. The harness
+`test/harness.ts` starts the real `core.authz` next to this module, so permissions are decided by roles in the database,
+never by a stand-in: `makeMember(pool)` makes a user who holds the role `user` (as an approved account does) and
+`actorOf(user, ...roles)` an actor whose roles are rows. `testAuthorizer()` is only for tests of the pipeline itself.
 
 The routes are tested through the whole pipeline, on real Postgres, in `apps/server/src` (a module cannot import the
-server; `cli.test.ts` runs the real `scorpion create-admin` and `scorpion start` as processes): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, `defect-03.invalid-token.test.ts`, `tokens-routes.test.ts`, `bootstrap-routes.test.ts`, `oidc-routes.test.ts`, `defect-05.oidc-validation.test.ts`, `recovery-routes.test.ts`, `profile-routes.test.ts` and `identity-journey.test.ts` (the whole story from registration to a dead cookie, with the log checked for secrets at the end), with
+server; `cli.test.ts` runs the real `scorpion create-admin` and `scorpion start` as processes): `identity-routes.test.ts`, `defect-04.logout-revokes.test.ts` and `defect-13.local-accounts.test.ts`, `defect-03.invalid-token.test.ts`, `tokens-routes.test.ts`, `bootstrap-routes.test.ts`, `oidc-routes.test.ts`, `defect-05.oidc-validation.test.ts`, `recovery-routes.test.ts`, `profile-routes.test.ts`, `defect-01.privilege-escalation.test.ts` (defect 1, with the route-table walker) and `identity-journey.test.ts` (the whole story from registration to a dead cookie, with the log checked for secrets at the end), with
 `useIdentityApp()` from `src/testing/identity-app.ts`. The OIDC tests talk to `startStubIdp()` from `@scorpion/testing`, a
 provider on a local port (discovery, authorisation, a token endpoint that checks PKCE and the secret, a JWKS) whose
 `faults` break the id_token one way at a time; `oidc-keycloak.test.ts` runs the same flow against a Keycloak container. A test builds its own manifest with

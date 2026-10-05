@@ -21,7 +21,7 @@ describe('the account journey', () => {
       mailer,
       tokenCacheTtlMs: 0,
     });
-    const admin = await signedIn('admin');
+    const admin = await signedIn('admin', { roles: ['admin'] });
 
     // Register: pending, a confirmation mail goes out, and the account cannot sign in yet.
     const registered = await post('/auth/register', {
@@ -53,7 +53,9 @@ describe('the account journey', () => {
     });
 
     // An access token, and a call with it instead of the cookie.
-    const created = (await post('/tokens', { ...session, body: { name: 'ci' } })).body as {
+    const created = (
+      await post('/tokens', { ...session, body: { name: 'ci', scopes: ['core.identity.me.read'] } })
+    ).body as {
       token: string;
     };
     const bearer = { authorization: `Bearer ${created.token}` };

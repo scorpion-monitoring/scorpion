@@ -1,9 +1,9 @@
 // The profile on real Postgres: reading and editing one's own, the address change that waits for
 // its confirmation, and what a refusal or a rollback leaves behind.
 import { ANONYMOUS, Forbidden, Invalid, Unauthorized, type Actor } from '@scorpion/contracts';
-import { makeAuthMethod, makeUser } from '@scorpion/testing';
+import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import { useIdentity } from '../test/harness.ts';
+import { makeMember, useIdentity } from '../test/harness.ts';
 import { failOutbox, tokenFrom } from '../test/mail.ts';
 import { TooManyRequests } from './errors.ts';
 import { createMemoryMailer } from './mailer.ts';
@@ -21,7 +21,7 @@ const actorOf = (
 async function start() {
   const mailer = createMemoryMailer();
   const started = await identity.start({ mailer });
-  const alice = await makeUser(started.kernel.pool, {
+  const alice = await makeMember(started.kernel.pool, {
     username: 'alice',
     email: 'alice@example.org',
     emailVerified: true,
@@ -33,7 +33,7 @@ async function start() {
 describe('get', () => {
   it('shows the caller’s own profile, and only that', async () => {
     const { kernel, profile, alice } = await start();
-    await makeUser(kernel.pool, { username: 'bobby', email: 'bobby@example.org' });
+    await makeMember(kernel.pool, { username: 'bobby', email: 'bobby@example.org' });
     expect(await profile.get(actorOf(alice))).toEqual({
       username: 'alice',
       displayName: null,
@@ -41,6 +41,7 @@ describe('get', () => {
       emailVerified: true,
       pendingEmail: null,
       bio: null,
+      avatarHash: null,
     });
   });
 
@@ -95,7 +96,7 @@ describe('update: name and bio', () => {
 
   it('changes only the caller’s own row', async () => {
     const { kernel, profile, alice } = await start();
-    const bobby = await makeUser(kernel.pool, { username: 'bobby', email: 'bobby@example.org' });
+    const bobby = await makeMember(kernel.pool, { username: 'bobby', email: 'bobby@example.org' });
     await profile.update(actorOf(alice), { displayName: 'Alice', bio: 'Mine' });
     expect(
       await rows(kernel, 'select display_name, bio from identity_user where id = $1', [bobby.id]),
@@ -196,7 +197,7 @@ describe('update: the address', () => {
 
   it('looks the same for an address another account holds: pending, but no mail, and the link is no use', async () => {
     const { kernel, identity: id, mailer, profile, alice } = await start();
-    await makeUser(kernel.pool, {
+    await makeMember(kernel.pool, {
       username: 'bobby',
       email: 'bobby@example.org',
       emailVerified: true,
@@ -221,7 +222,7 @@ describe('update: the address', () => {
 
   it('works for an account that has no address yet', async () => {
     const { kernel, identity: id, mailer, profile } = await start();
-    const carol = await makeUser(kernel.pool, { username: 'carol', email: null });
+    const carol = await makeMember(kernel.pool, { username: 'carol', email: null });
     await profile.update(actorOf(carol), { email: 'carol@example.org' });
     await id.recovery.confirmEmail({ token: tokenFrom(mailer.sent[0]) });
     expect(await profile.get(actorOf(carol))).toMatchObject({

@@ -1,14 +1,17 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { startPostgres, type StartedPostgres } from '@scorpion/testing';
+import { makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // These run the real command line, as an operator does: `node apps/server/src/cli.ts <command>`.
-// The committed generated profile is `full`, which has no modules yet, so what is under test is the
-// kernel's own start-up, migrations, probes and shutdown.
+// The committed generated profile is `full`: the kernel's own start-up, migrations, probes and
+// shutdown, and the commands of its modules.
 const root = join(import.meta.dirname, '../../..');
 const cli = join(root, 'apps/server/src/cli.ts');
+
+/** The profile has core.settings, which will not start without a key (ADR 0016). */
+const SECRETS_KEY = makeSecretsKey();
 
 let server: StartedPostgres;
 beforeAll(async () => {
@@ -21,7 +24,7 @@ afterAll(async () => {
 function run(args: string[], env: Record<string, string> = {}, input?: string) {
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: root,
-    env: { PATH: process.env.PATH ?? '', ...env },
+    env: { PATH: process.env.PATH ?? '', SECRETS_KEY, ...env },
     encoding: 'utf8',
     timeout: 60_000,
     input,
@@ -33,7 +36,7 @@ function run(args: string[], env: Record<string, string> = {}, input?: string) {
 function launch(args: string[], env: Record<string, string>) {
   const child = spawn(process.execPath, [cli, ...args], {
     cwd: root,
-    env: { PATH: process.env.PATH ?? '', ...env },
+    env: { PATH: process.env.PATH ?? '', SECRETS_KEY, ...env },
   });
   let output = '';
   child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
@@ -248,8 +251,10 @@ describe('scorpion create-admin', () => {
     await client.connect();
     try {
       return (
-        await client.query<{ username: string; status: string; marked: boolean; hash: string }>(
-          `select u.username, u.status, u.is_bootstrap_admin as marked, a.password_hash as hash
+        await client.query<{ username: string; status: string; admin: boolean; hash: string }>(
+          `select u.username, u.status, a.password_hash as hash,
+                  exists (select 1 from authz_role_assignment ra join authz_role r on r.id = ra.role_id
+                           where ra.user_id = u.id and r.key = 'admin' and ra.assigned_by is null) as admin
              from identity_user u join identity_auth_method a on a.user_id = u.id order by u.username`,
         )
       ).rows;
@@ -276,7 +281,7 @@ describe('scorpion create-admin', () => {
       {
         username: 'root',
         status: 'active',
-        marked: true,
+        admin: true, // the Admin role, given by the system
         hash: expect.stringMatching(/^\$argon2id\$/) as unknown,
       },
     ]);
@@ -386,5 +391,139 @@ describe('the first-run token of a fresh install', () => {
     expect(await second.exited).toBe(0);
     expect(second.output()).not.toMatch(TOKEN);
     expect(second.output()).not.toContain('no administrator yet');
+  }, 120_000);
+});
+
+describe('SECRETS_KEY', () => {
+  const HOW = /openssl rand -base64 32/;
+
+  it('is needed by start, which exits 1 with how to make one and prints no value', async () => {
+    const url = await server.createDatabase();
+    for (const key of ['', 'short-and-invalid-key-text']) {
+      const proc = launch(['start'], {
+        DATABASE_URL: url,
+        PORT: String(freePort()),
+        SECRETS_KEY: key,
+      });
+      expect(await proc.exited).toBe(1);
+      expect(proc.output()).toMatch(/Cannot start core\.settings:/);
+      expect(proc.output()).toMatch(HOW);
+      expect(proc.output()).not.toContain('short-and-invalid-key-text');
+    }
+  }, 90_000);
+
+  it('is needed by worker as well', async () => {
+    const url = await server.createDatabase();
+    const proc = launch(['worker'], { DATABASE_URL: url, SECRETS_KEY: '' });
+    expect(await proc.exited).toBe(1);
+    expect(proc.output()).toMatch(HOW);
+  }, 60_000);
+
+  it('is not needed by migrate', async () => {
+    const url = await server.createDatabase();
+    expect(run(['migrate'], { DATABASE_URL: url, SECRETS_KEY: '' }).code).toBe(0);
+  }, 60_000);
+
+  it('never appears in the log of a running server', async () => {
+    const url = await server.createDatabase();
+    const port = freePort();
+    const proc = launch(['start'], { DATABASE_URL: url, PORT: String(port), LOG_LEVEL: 'trace' });
+    await waitFor(
+      async () => (await fetch(`http://127.0.0.1:${port}/readyz`)).status === 200,
+      '/readyz',
+    );
+    proc.child.kill('SIGTERM');
+    expect(await proc.exited).toBe(0);
+    expect(proc.output().length).toBeGreaterThan(0);
+    expect(proc.output()).not.toContain(SECRETS_KEY);
+  }, 90_000);
+});
+
+describe('scorpion set-secret and rotate-secrets', () => {
+  const secret = 'an-oidc-client-secret-8f2a41';
+  const stored = async (url: string) => {
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+      return (
+        await client.query<{ name: string; key_id: string; ciphertext: Buffer }>(
+          'select name, key_id, ciphertext from settings_secret order by name',
+        )
+      ).rows;
+    } finally {
+      await client.end();
+    }
+  };
+
+  it('are listed in the usage text, with no database', () => {
+    const result = run([]);
+    expect(result.stderr).toContain('set-secret <name>');
+    expect(result.stderr).toContain('rotate-secrets [--batch-size <n>]');
+  });
+
+  it('stores a secret read from stdin, prints only its name, and keeps it out of the table in clear', async () => {
+    const url = await server.createDatabase();
+    const result = run(
+      ['set-secret', 'oidc.keycloak.client-secret'],
+      { DATABASE_URL: url },
+      `${secret}\n`,
+    );
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Stored the secret "oidc.keycloak.client-secret"');
+    expect(result.stdout + result.stderr).not.toContain(secret);
+    const rows = await stored(url);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.ciphertext.includes(Buffer.from(secret))).toBe(false);
+  }, 90_000);
+
+  it('refuses a value on the command line and a bad name, and stores nothing', async () => {
+    const url = await server.createDatabase();
+    const onCommandLine = run(['set-secret', 'a.b', secret], { DATABASE_URL: url }, `${secret}\n`);
+    expect(onCommandLine.code).toBe(2);
+    expect(onCommandLine.stderr).toContain('never taken from the command line');
+    expect(onCommandLine.stdout + onCommandLine.stderr).not.toContain(secret);
+    expect(run(['set-secret', 'Bad Name'], { DATABASE_URL: url }, `${secret}\n`).code).toBe(2);
+    expect(await stored(url)).toEqual([]);
+  }, 90_000);
+
+  it('rotates to a new key: the rows move, the old key is no longer needed afterwards', async () => {
+    const url = await server.createDatabase();
+    const next = makeSecretsKey();
+    expect(run(['set-secret', 'a.one'], { DATABASE_URL: url }, 'first-value\n').code).toBe(0);
+    expect(run(['set-secret', 'b.two'], { DATABASE_URL: url }, 'second-value\n').code).toBe(0);
+    const before = await stored(url);
+
+    const withoutNext = run(['rotate-secrets'], { DATABASE_URL: url });
+    expect(withoutNext.code).toBe(1);
+    expect(withoutNext.stderr).toMatch(/SECRETS_KEY_NEXT/);
+
+    const rotated = run(['rotate-secrets', '--batch-size', '1'], {
+      DATABASE_URL: url,
+      SECRETS_KEY_NEXT: next,
+    });
+    expect(rotated.code).toBe(0);
+    expect(rotated.stdout).toContain('Re-encrypted 2 secret(s); 0 remain on another key.');
+    expect(rotated.stdout + rotated.stderr).not.toMatch(/first-value|second-value/);
+    expect(rotated.stdout + rotated.stderr).not.toContain(next);
+    const after = await stored(url);
+    expect(after.map((row) => row.key_id)).not.toEqual(before.map((row) => row.key_id));
+    expect(new Set(after.map((row) => row.key_id)).size).toBe(1);
+
+    // The operator then swaps the keys: the new key alone reads everything.
+    const again = run(['rotate-secrets'], { DATABASE_URL: url, SECRETS_KEY: next });
+    expect(again.code).toBe(1); // no SECRETS_KEY_NEXT: it says what to set
+    const reads = run(
+      ['set-secret', 'c.three'],
+      { DATABASE_URL: url, SECRETS_KEY: next },
+      'third\n',
+    );
+    expect(reads.code).toBe(0);
+    // The old key does not read the rotated rows any more: rotation really re-encrypted them.
+    const withOld = run(['rotate-secrets'], {
+      DATABASE_URL: url,
+      SECRETS_KEY_NEXT: makeSecretsKey(),
+    });
+    expect(withOld.code).toBe(1);
+    expect(withOld.stderr).toMatch(/Rotation stopped/);
   }, 120_000);
 });

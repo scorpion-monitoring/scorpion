@@ -44,7 +44,7 @@ describe('createUser', () => {
     expect(created.id).toMatch(UUID_V7);
     const users = await rowsOf(kernel, 'identity_user');
     expect(users).toHaveLength(1);
-    expect(users[0]).toMatchObject({ id: created.id, is_bootstrap_admin: false });
+    expect(users[0]).toMatchObject({ id: created.id });
     const methods = await rowsOf(kernel, 'identity_auth_method');
     expect(methods).toHaveLength(1);
     expect(methods[0]).toMatchObject({

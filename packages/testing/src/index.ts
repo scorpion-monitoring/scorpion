@@ -4,6 +4,19 @@ export {
   testAuthorizerEntry,
   type TestAuthorizationRequest,
 } from './authorizer.ts';
+export { makePng } from './images.ts';
+export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
+export {
+  makePreference,
+  makeSecret,
+  makeVocabulary,
+  makeSecretsKey,
+  makeSetting,
+  type MakePreference,
+  type MakeSecret,
+  type MakeSetting,
+  type MakeVocabulary,
+} from './settings.ts';
 export {
   hashSecret,
   makeAuthMethod,

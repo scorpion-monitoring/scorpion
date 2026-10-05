@@ -2,19 +2,19 @@
 // (defect 1). Two ways, both through here: `scorpion create-admin` (an operator with a shell) and
 // the one-time first-run token (an operator with the server's console).
 //
-// Roles are data owned by `core.authz` (M3), so M2 only *marks* the administrator it creates
-// (`BOOTSTRAP_ADMIN_MARK`, temporary, ADR 0006). Nothing here reads that mark. "No administrator
-// yet" is decided without it: an install with no active user cannot have one, because the only
-// ways to an active account are an approver (an administrator) and these two. M3 replaces the
-// check by "no user holds the Admin role".
+// The administrator holds the Admin role of `core.authz`, given by the system (no human caller,
+// `assigned_by` null) in the transaction that creates the account (ADR 0015). "No administrator
+// yet" means "no user holds the Admin role".
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { Invalid, Unauthorized } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import { ids, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
-import { BOOTSTRAP_ADMIN_MARK, firstRunToken, user } from '../db/schema.ts';
+import { firstRunToken } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
 import { createAdminInput, redeemFirstRunInput, type CreateAdminInput } from '../validation.ts';
+import { ADMIN_ROLE } from './roles.ts';
 
 /** How long a first-run token lives. */
 export const FIRST_RUN_TTL_MS = 60 * 60 * 1000;
@@ -28,13 +28,13 @@ export type AdminOrigin = 'cli' | 'first-run';
 
 export interface BootstrapService {
   /**
-   * Creates an active user with a password, marked as administrator (until M3), and ends every
-   * outstanding first-run token. 422 for bad input, 409 for a taken name or address.
+   * Creates an active user with a password and the Admin role, and ends every outstanding
+   * first-run token. 422 for bad input, 409 for a taken name or address.
    */
   createAdmin(input: unknown, origin?: AdminOrigin): Promise<User>;
   /**
-   * Issues a first-run token and announces it, once, when the install has no active user and no
-   * token that is still good. Returns whether it issued one.
+   * Issues a first-run token and announces it, once, when no user holds the Admin role and there
+   * is no token that is still good. Returns whether it issued one.
    */
   issueFirstRunToken(now?: Date): Promise<boolean>;
   /**
@@ -61,6 +61,7 @@ export function createBootstrapService(
   ctx: ModuleContext,
   deps: {
     users: UserService;
+    authz: AuthzService;
     /**
      * Where the first-run token is shown: the process's console, as plain text. This is the one
      * place a secret may be printed, so it is never the structured logger (whose lines also go to
@@ -70,20 +71,13 @@ export function createBootstrapService(
     ttlMs?: number;
   },
 ): BootstrapService {
-  const { users, announce } = deps;
+  const { users, authz, announce } = deps;
   const ttlMs = deps.ttlMs ?? FIRST_RUN_TTL_MS;
 
-  /** Active, not deleted: see the note at the top for why this stands in for "has an admin". */
-  const anActiveUserExists = async (tx: Pick<DbTx, 'select'>) => {
-    const [found] = await tx
-      .select({ id: user.id })
-      .from(user)
-      .where(and(eq(user.status, 'active'), isNull(user.deletedAt)))
-      .limit(1);
-    return found !== undefined;
-  };
+  /** Somebody holds the Admin role. A deactivated administrator counts until the purge removes the role. */
+  const anAdminExists = (tx: Pick<DbTx, 'select'>) => authz.hasHolders(ADMIN_ROLE, tx);
 
-  /** The user, the marker, the end of every outstanding token and the event: one write. */
+  /** The user, the Admin role, the end of every outstanding token and the event: one write. */
   async function create(admin: CreateAdminInput, origin: AdminOrigin) {
     return ctx.db.tx(async (tx) => {
       const created = await users.createUser({
@@ -92,7 +86,7 @@ export function createBootstrapService(
         auth: { provider: 'local', password: admin.password },
         status: 'active',
       });
-      await tx.update(user).set(BOOTSTRAP_ADMIN_MARK).where(eq(user.id, created.id));
+      await authz.assignRoleAsSystem(tx, { userId: created.id, roleKey: ADMIN_ROLE });
       await tx
         .update(firstRunToken)
         .set({ redeemedAt: sql`now()` })
@@ -120,7 +114,7 @@ export function createBootstrapService(
 
       const issued = await ctx.db.tx(async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${ISSUE_LOCK}))`);
-        if (await anActiveUserExists(tx)) return false;
+        if (await anAdminExists(tx)) return false;
         const [live] = await tx
           .select({ id: firstRunToken.id, expiresAt: firstRunToken.expiresAt })
           .from(firstRunToken)
@@ -149,7 +143,7 @@ export function createBootstrapService(
         [
           '',
           '================================================================================',
-          ' Scorpion has no administrator yet.',
+          ' This instance has no administrator yet.',
           ` First-run token (single use, valid until ${expiresAt.toISOString()}):`,
           '',
           `   ${token}`,
@@ -186,7 +180,7 @@ export function createBootstrapService(
           )
           .returning({ id: firstRunToken.id });
         if (!used) throw refused();
-        if (await anActiveUserExists(tx)) throw refused();
+        if (await anAdminExists(tx)) throw refused();
         return create(account, 'first-run');
       });
     },

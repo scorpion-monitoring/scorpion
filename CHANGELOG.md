@@ -1,5 +1,115 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- d0475ff: Add the `core.authz` module to the `full` and `kpi-tracker` profiles. It stores roles as data (Admin, Reviewer
+  and User are created at start-up) and replaces the deny-everything default for routes that need a permission. Admin
+  holds every permission that a loaded module declares; other roles hold the permissions stored for them, and a stored
+  permission that no loaded module declares is logged and never granted. Nobody can change their own roles, approve their own
+  request or remove the last Admin. A new migration creates the `authz_` tables; there is nothing to configure.
+
+  What you will notice: a signed-in user still gets 403 on every route that is not public, because `core.identity`
+  does not assign roles yet (the next release does), and a request without credentials to such a route now gets 401
+  instead of 403. Role changes reach other server processes within 5 seconds. Modules can read the permissions that the
+  loaded manifests declare as `ctx.permissions`.
+
+- 4a8957c: Roles now work. Approving an account gives it a role, and a signed-in person can use their own account: this is the first
+  release in which a person who registered can do anything.
+
+  - **First administrator.** `scorpion create-admin` and the first-run token now give the new account the Admin role
+    (recorded as given by the system). The first-run token is shown at start-up while nobody holds the Admin role, instead
+    of while no user is active.
+  - **Approving.** `POST /api/internal/users/{id}/approve` takes an optional `{ "role": "reviewer" }` (default `user`); the
+    account and its role change together, or not at all. The approver needs `core.authz.role.assign` as well as
+    `core.identity.user.approve`. Nobody, Admin included, can approve or reject their own account.
+  - **Roles.** New routes `GET /roles`, `POST /users/{id}/roles` and `DELETE /users/{id}/roles/{role}`, and
+    `GET /auth/me` returns the real roles. New permissions: `core.identity.role.read`, `core.identity.role.assign` (a role
+    change needs these and the matching `core.authz.role.*`) and `core.identity.token.manage-any`. The role `user` holds the
+    self-service permissions; Reviewer holds none from this module; Admin holds everything.
+  - **Access tokens are limited to their scopes.** A scope is now a permission id such as `core.identity.me.read`, and a token
+    can do only what its scopes name and its owner holds. A new token needs at least one scope. The `read:kpi`-shaped
+    scopes of 0.3.0 grant nothing: create a new token. Role changes reach other server processes within 5 seconds.
+  - **Database.** Migration `0006` copies every user marked as administrator in 0.3.0 into an Admin role assignment and drops
+    the column `identity_user.is_bootstrap_admin`. An existing 0.3.0 database keeps its administrators and needs no manual
+    step; a database with no marked user changes nothing. Purging a rejected account now also removes its role assignments.
+    Two events are new (`authz.role.assigned@1`, `authz.role.removed@1`), `identity.user.approved@1` gains `role` and
+    `identity.token.revoked@1` gains `revokedBy`.
+  - **Defect 1.** The privilege-escalation regression suite is in place, including a check that fails when a route has no
+    decision in its "denied for a plain User" table.
+
+- 671ffbb: Settings, preferences and secrets are stored by the application instead of fixed in code or the environment. **This release
+  needs a new environment variable, `SECRETS_KEY`, and stops reading `OIDC_<ID>_CLIENT_SECRET`.**
+
+  - **`SECRETS_KEY` is required** by every profile that includes `core.settings` (`full` and `kpi-tracker`, and every profile
+    with `core.identity`). It is 32 random bytes, base64 encoded: generate one with `openssl rand -base64 32`. Without a valid
+    one `scorpion start`, `scorpion worker` and every module command stop with `Cannot start core.settings:` and say how to
+    make one; `scorpion migrate` does not need it. Keep it with your backups of the database: without it the stored secrets
+    cannot be read (set them again). `pnpm dev` generates one into `.env`; the image smoke test and `docker-compose.dev.yml`
+    pass it through.
+  - **OIDC client secrets move to an encrypted store.** `OIDC_<ID>_CLIENT_SECRET` is no longer read, with no fallback. After
+    upgrading, store each secret once: `scorpion set-secret oidc.<provider id>.client-secret` (the value is asked for or read
+    from standard input, never taken from an argument). Until then a provider is a public client (PKCE only), which most
+    providers refuse for a confidential client, and the start-up log names the providers that have no stored secret. Values
+    are AES-256-GCM encrypted, write-only through the API, and in no log, event, error or response.
+  - **New commands.** `scorpion set-secret <name>` and `scorpion rotate-secrets [--batch-size <n>]`. To change the key: set
+    `SECRETS_KEY_NEXT` to the new key everywhere and restart, run `scorpion rotate-secrets` (resumable; each row is verified
+    before its batch commits), then set `SECRETS_KEY` to the new key, remove `SECRETS_KEY_NEXT` and restart. Steps in the
+    README of `core.settings`.
+  - **New routes** (internal API). `GET /settings`, `GET /settings/{module}`, `GET /settings/{module}/schema` (JSON Schema for
+    the admin form) and `PUT /settings/{module}` (validated by the module's own schema, `422` with the failing fields, `409`
+    when the version is stale); `GET /secrets`, `PUT /secrets/{name}` and `DELETE /secrets/{name}` (names only, never a
+    value); `GET /preferences`, `PUT /preferences/{key}` and `DELETE /preferences/{key}` (your own, for keys that modules
+    register).
+  - **New permissions.** `core.settings.read`, `core.settings.write` and `core.settings.secret.write` belong to Admin only.
+    `core.settings.preference.read` and `.write` are held by the role `user` (and Admin). New events:
+    `settings.changed@1` (module and the names of the changed keys), `settings.secret.changed@1` and
+    `settings.preference.changed@1`; none carries a value.
+  - **Settings take effect without a restart.** A change is seen at once by the process that saved it and by the other server
+    processes within 5 seconds. Turning off `localAccounts` through `PUT /settings/core.identity` now makes register and
+    login answer `403` everywhere within that time. The numbers that were fixed in code are now settings with the same
+    values as defaults: the server's rate limits (`core.settings`: `rateLimits`), the retention of the cleanup job and the
+    mail budgets (`core.identity`: `retention`, `mailBudgets`).
+  - **Database.** One new migration in the new module `core.settings` adds the tables `settings_setting`,
+    `settings_user_preference` and `settings_secret`. An existing 0.3.x database loses nothing and needs no manual step
+    except the two above (`SECRETS_KEY`, the OIDC secrets).
+
+- 1376b35: Vocabularies, a file store and branding settings complete the configuration of an instance, and a signed-in person can
+  upload an avatar. **`kpi-tracker` and `full` now include the new module `core.blob`, which brings `sharp` (a native library
+  with prebuilt binaries per platform) and DOMPurify to their images; an image runs on the CPU architecture it was built for.**
+  No new environment variable.
+
+  - **Vocabularies replace enums.** Stages (`DEV`, `DEMO`, `PROD`, `TERM`), thematic categories, necessity levels, sender types
+    and aggregate functions are terms an administrator can relabel, reorder, deactivate and extend, and modules declare their
+    own in the registry `vocabulary`. New routes (internal API): `GET /vocabularies`, `GET /vocabularies/{vocabulary}/terms`,
+    `POST /vocabularies/{vocabulary}/terms`, `PATCH` and `DELETE /vocabularies/{vocabulary}/terms/{key}`. A term a module
+    declared, or one that is in use, is deactivated instead of deleted. New permissions: `core.settings.vocabulary.read`
+    (role `user`) and `core.settings.vocabulary.write` (Admin). New event `settings.vocabulary.changed@1` (no labels).
+  - **A file store, `core.blob`.** Files are stored in the database, named by the SHA-256 of their content and served at
+    `GET /files/{hash}` (`/api/internal/files/{hash}`, public) with `nosniff`, a strict Content-Security-Policy, a one-year
+    cache and the hash as ETag. An upload is never stored as sent: the type is determined from the content (the client's
+    `Content-Type` is ignored), rasters are decoded and written again without metadata and scaled to at most 2048 pixels,
+    SVG is sanitised, anything else is refused with 422. Settings of `core.blob`: `maxBytes` (2 MiB, at most 8 MiB),
+    `maxDimension`, `maxPixels` (decompression bombs) and `unreferencedGraceHours`. A file nothing refers to is removed by the
+    hourly job `core.blob.cleanup` after 24 hours. `POST /files` (Admin, `core.blob.manage`) uploads logos; routes may now
+    raise the 1 MiB request body limit for themselves. New permissions: `core.blob.upload` (role `user`) and
+    `core.blob.manage` (Admin).
+  - **Avatar.** `PUT /account/avatar` (the image as the request body) and `DELETE /account/avatar` for the signed-in person's own
+    account; sessions only (an access token gets 403). The profile shows `avatarHash`. New permission
+    `core.identity.avatar.update` (role `user`).
+  - **Branding settings.** Product name, instance name, sender address, contact email, imprint link, light and dark logo (by
+    file hash) and the terms, privacy policy and imprint as Markdown are the `branding` settings of `core.settings`
+    (`PUT /settings/core.settings`). Public routes need no login: `GET /branding` and `GET /legal/{page}` (`terms`, `privacy`,
+    `imprint`, rendered on the server and sanitised; raw HTML in a text shows as text). Mails use the instance name and sender
+    from here. With no setting, the product is called `Scorpion` and the sender is `no-reply@localhost`.
+  - **`instanceName` and `mailFrom` moved** from the settings of `core.identity` to `branding.instanceName` and
+    `branding.mailFrom`. An existing database keeps them: a migration copies a stored value into the new place and removes
+    it from the old one. A script that saves `core.identity` settings with those two keys now gets `422`.
+  - **Database.** Three new migrations: two in `core.settings` (the vocabulary tables with their seeds written at start-up,
+    and the branding move) and one in the new `core.blob` (`blob_blob`, `blob_reference`). An existing 0.3.x or 0.4 development
+    database loses nothing and needs no manual step.
+
 ## 0.3.0
 
 ### Minor Changes

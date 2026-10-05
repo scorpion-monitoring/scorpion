@@ -13,7 +13,7 @@ const { app, idp, startApp: startOidcApp } = useOidcApp();
  * accepted: a missing refusal then shows as a session, not as "pending".
  */
 async function startApp(withKnownUser = false) {
-  const started = await startOidcApp({ permissions: ['*'] });
+  const started = await startOidcApp();
   const count = async (table: string) =>
     Number(
       (

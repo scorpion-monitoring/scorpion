@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { defineModule, listJobRuns } from '@scorpion/kernel';
 import {
   makeAuthMethod,
+  makeRoleAssignment,
   makeSession,
   makeToken,
   makeUser,
@@ -12,7 +13,11 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { useIdentity } from '../test/harness.ts';
 import { createMemoryMailer } from './mailer.ts';
-import { PURGE_BATCH, PURGE_RETENTION_MS, TOKEN_GRACE_MS } from './cleanup.ts';
+import { DEFAULT_RETENTION, daysToMs } from './settings.ts';
+
+const PURGE_RETENTION_MS = daysToMs(DEFAULT_RETENTION.purgeAfterDays);
+const TOKEN_GRACE_MS = daysToMs(DEFAULT_RETENTION.tokenGraceDays);
+const PURGE_BATCH = DEFAULT_RETENTION.purgeBatch;
 
 const identity = useIdentity();
 const DAY = 24 * 3600 * 1000;
@@ -305,4 +310,95 @@ describe('the job', () => {
       live.row.id,
     ]);
   }, 60_000);
+});
+
+describe('role assignments and the purge (ADR 0014)', () => {
+  const assignments = (kernel: { pool: Pool }) =>
+    rows(kernel, 'select user_id from authz_role_assignment order by user_id');
+
+  it('removes the role assignments of a purged account, and only theirs', async () => {
+    const { kernel, cleanup } = await start();
+    const gone = await makeUser(kernel.pool, {
+      username: 'gone',
+      deleted: true,
+      status: 'rejected',
+    });
+    const kept = await makeUser(kernel.pool, { username: 'kept' });
+    await kernel.pool.query(
+      "update identity_user set deleted_at = now() - interval '60 days' where id = $1",
+      [gone.id],
+    );
+    await makeRoleAssignment(kernel.pool, gone, 'user');
+    await makeRoleAssignment(kernel.pool, gone, 'reviewer');
+    await makeRoleAssignment(kernel.pool, kept, 'user');
+    // A soft-deleted account within the retention period keeps its roles too.
+    const recent = await makeUser(kernel.pool, {
+      username: 'recent',
+      deleted: true,
+      status: 'rejected',
+    });
+    await makeRoleAssignment(kernel.pool, recent, 'user');
+
+    expect((await cleanup.run()).purgedUsers).toBe(1);
+
+    expect((await assignments(kernel)).map((r) => r.user_id).sort()).toEqual(
+      [kept.id, recent.id].sort(),
+    );
+    // No event for authz: the purge calls it directly (authz cannot subscribe, ADR 0003).
+    expect(await rows(kernel, "select 1 from kernel_outbox where name like 'authz.%'")).toEqual([]);
+  });
+
+  it('is not blocked by role assignments: there is no foreign key from them to the user', async () => {
+    const { kernel, cleanup } = await start();
+    const gone = await makeUser(kernel.pool, { deleted: true, status: 'rejected' });
+    await kernel.pool.query("update identity_user set deleted_at = now() - interval '60 days'");
+    await makeRoleAssignment(kernel.pool, gone, 'admin');
+    await expect(cleanup.run()).resolves.toMatchObject({ purgedUsers: 1 });
+    expect(await assignments(kernel)).toEqual([]);
+  });
+
+  it('rolls the removal of the assignments back together with a purge that fails', async () => {
+    const { kernel, cleanup } = await start();
+    const doomed = await makeUser(kernel.pool, {
+      username: 'doomed',
+      deleted: true,
+      status: 'rejected',
+    });
+    await kernel.pool.query("update identity_user set deleted_at = now() - interval '60 days'");
+    await makeRoleAssignment(kernel.pool, doomed, 'user');
+    await kernel.pool.query(`
+      create function identity_test_no_purge() returns trigger language plpgsql as
+        $$ begin raise exception 'purge refused'; end $$;
+      create trigger identity_test_no_purge before delete on identity_user
+        for each row execute function identity_test_no_purge();`);
+
+    await expect(cleanup.run()).rejects.toThrow();
+
+    expect(await assignments(kernel)).toEqual([{ user_id: doomed.id }]);
+    expect(await count(kernel, 'identity_user')).toBe(1);
+  });
+
+  it('rolls the purge back when the assignments cannot be removed', async () => {
+    const { kernel, cleanup } = await start();
+    const doomed = await makeUser(kernel.pool, {
+      username: 'doomed',
+      deleted: true,
+      status: 'rejected',
+    });
+    await kernel.pool.query("update identity_user set deleted_at = now() - interval '60 days'");
+    await makeRoleAssignment(kernel.pool, doomed, 'user');
+    await kernel.pool.query(`
+      create function identity_test_keep() returns trigger language plpgsql as
+        $$ begin raise exception 'assignment stays'; end $$;
+      create trigger identity_test_keep before delete on authz_role_assignment
+        for each row execute function identity_test_keep();`);
+
+    await expect(cleanup.run()).rejects.toThrow();
+
+    expect(await count(kernel, 'identity_user')).toBe(1);
+    expect(await assignments(kernel)).toEqual([{ user_id: doomed.id }]);
+    expect(
+      await rows(kernel, "select 1 from kernel_outbox where name = 'identity.user.purged@1'"),
+    ).toEqual([]);
+  });
 });

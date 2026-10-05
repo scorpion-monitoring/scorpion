@@ -12,7 +12,8 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import { Conflict, Forbidden, Invalid, type Actor } from '@scorpion/contracts';
-import { createRateLimiter, type ModuleContext, type RateLimit } from '@scorpion/kernel';
+import type { AuthzService } from '@scorpion/core-authz/public';
+import { createRateLimiter, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { authMethod, mailToken, user } from '../db/schema.ts';
 import {
@@ -36,18 +37,7 @@ import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
-import { DEFAULT_INSTANCE_NAME, DEFAULT_MAIL_FROM, type IdentitySettings } from './settings.ts';
-
-/** Mails to one address: a burst of 3, then 3 an hour. It protects the owner of an address. */
-export const MAIL_BUDGET_PER_ADDRESS: Readonly<RateLimit> = {
-  capacity: 3,
-  refillPerSecond: 3 / 3600,
-};
-/** Verification mails a signed-in user may ask for: a burst of 5, then 5 an hour. */
-export const MAIL_BUDGET_PER_USER: Readonly<RateLimit> = {
-  capacity: 5,
-  refillPerSecond: 5 / 3600,
-};
+import { budgetLimit, type BrandingSource, type IdentitySettings } from './settings.ts';
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -106,25 +96,28 @@ function isUniqueViolation(error: unknown): boolean {
 
 export function createRecoveryService(
   ctx: ModuleContext,
-  deps: { sessions: SessionService; settings: IdentitySettings; mailer: Mailer },
+  deps: {
+    sessions: SessionService;
+    settings: IdentitySettings;
+    branding: BrandingSource;
+    mailer: Mailer;
+    authz: AuthzService;
+  },
 ): RecoveryService {
-  const { sessions, settings, mailer } = deps;
+  const { sessions, settings, branding, mailer, authz } = deps;
   const limiter = createRateLimiter(ctx.db);
 
   async function mailContext(): Promise<MailContext> {
-    const { instanceName, mailFrom } = await settings.get();
-    return {
-      config: ctx.config,
-      instanceName: instanceName ?? DEFAULT_INSTANCE_NAME,
-      from: mailFrom ?? DEFAULT_MAIL_FROM,
-    };
+    const { instanceName, mailFrom } = await branding.get();
+    return { config: ctx.config, instanceName, from: mailFrom };
   }
 
   /** Spends one mail from an address's budget; false when it has had its share. */
   async function mayMail(address: string): Promise<boolean> {
+    const { mailBudgets } = await settings.get();
     const decision = await limiter.consume(
       `identity.mail:${sha256(address.toLowerCase())}`,
-      MAIL_BUDGET_PER_ADDRESS,
+      budgetLimit(mailBudgets.perAddress),
     );
     return decision.allowed;
   }
@@ -257,6 +250,7 @@ export function createRecoveryService(
 
     async changePassword(actor, input) {
       const { userId, username } = requireSession(actor, 'Changing the password');
+      await authz.require(actor, 'core.identity.password.change');
       await requireLocalAccounts('Changing the password');
       const parsed = changePasswordInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
@@ -301,13 +295,18 @@ export function createRecoveryService(
 
     async resendVerification(actor, now = new Date()) {
       const { userId } = requireSession(actor, 'Asking for a confirmation mail');
+      await authz.require(actor, 'core.identity.email.verify');
       const [account] = await ctx.db
         .select({ email: user.email, verifiedAt: user.emailVerifiedAt })
         .from(user)
         .where(eq(user.id, userId))
         .limit(1);
       if (!account?.email) throw new Conflict('This account has no email address.');
-      const budget = await limiter.consume(`identity.verify:${userId}`, MAIL_BUDGET_PER_USER);
+      const { mailBudgets } = await settings.get();
+      const budget = await limiter.consume(
+        `identity.verify:${userId}`,
+        budgetLimit(mailBudgets.perUser),
+      );
       if (!budget.allowed)
         throw new TooManyRequests('Too many confirmation mails. Try again later.');
       // The address to confirm: a new one that is waiting, else the current one.

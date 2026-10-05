@@ -1,9 +1,10 @@
 // The access-token routes through the whole pipeline, on real Postgres: PATs end to end, the
 // denied requests, bad input, the secret that is shown once, and what the log may not hold.
 import { describe, expect, it } from 'vitest';
-import { PASSWORD, useIdentityApp } from './testing/identity-app.ts';
+import { ALL_USER_SCOPES, PASSWORD, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
+const GOOD = ['core.identity.me.read'];
 const UNKNOWN_ID = '019a0000-0000-7000-8000-000000000000';
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
@@ -19,7 +20,7 @@ async function withToken(options: Parameters<typeof app.start>[0] = {}, name = '
   const session = await started.signedIn(name);
   const reply = await started.post('/tokens', {
     ...session,
-    body: { name: 'ci', scopes: ['read:kpi'] },
+    body: { name: 'ci', scopes: ALL_USER_SCOPES },
   });
   expect(reply.status).toBe(201);
   return { ...started, session, created: reply.body as Created };
@@ -70,7 +71,7 @@ describe('using a token', () => {
     const both = await post('/tokens', {
       cookie: session.cookie,
       headers: bearer(created.token),
-      body: { name: 'second' },
+      body: { name: 'second', scopes: ALL_USER_SCOPES },
     });
     expect(both.status).toBe(403);
     // A bad token is not rescued by a good cookie.
@@ -89,14 +90,20 @@ describe('the token routes', () => {
   it('create: 201 with the token once, no-store, and the list never shows it again', async () => {
     const { get, post, session, created } = await withToken();
     expect(created.token).toMatch(/^scp_[A-Za-z0-9]{8}_[A-Za-z0-9_-]{43}$/);
-    const second = await post('/tokens', { ...session, body: { name: 'second' } });
+    const second = await post('/tokens', {
+      ...session,
+      body: { name: 'second', scopes: ['core.identity.me.read'] },
+    });
     expect(second.res.headers.get('cache-control')).toBe('no-store');
 
     const list = await get('/tokens', session);
     expect(list.status).toBe(200);
     expect(list.body).toMatchObject({
       metadata: { currentPage: 0, totalCount: 2 },
-      result: [{ name: 'ci', scopes: ['read:kpi'], prefix: created.prefix }, { name: 'second' }],
+      result: [
+        { name: 'ci', scopes: [...ALL_USER_SCOPES].sort(), prefix: created.prefix },
+        { name: 'second', scopes: ['core.identity.me.read'] },
+      ],
     });
     const text = JSON.stringify(list.body);
     for (const secret of [created.token, (second.body as Created).token]) {
@@ -111,7 +118,7 @@ describe('the token routes', () => {
     const rotated = await post(`/tokens/${created.id}/rotate`, { ...session, body: {} });
     expect(rotated.status).toBe(200);
     const next = rotated.body as Created;
-    expect(next).toMatchObject({ name: 'ci', scopes: ['read:kpi'] });
+    expect(next).toMatchObject({ name: 'ci', scopes: [...ALL_USER_SCOPES].sort() });
     expect(next.id).not.toBe(created.id);
     expect((await get('/auth/me', { headers: bearer(created.token) })).status).toBe(401);
     expect((await get('/auth/me', { headers: bearer(next.token) })).status).toBe(200);
@@ -150,7 +157,7 @@ describe('the token routes', () => {
   describe('denied requests', () => {
     const routes: [string, string, (id: string) => string, unknown][] = [
       ['GET', 'list', () => '/tokens', undefined],
-      ['POST', 'create', () => '/tokens', { name: 'x' }],
+      ['POST', 'create', () => '/tokens', { name: 'x', scopes: ['core.identity.me.read'] }],
       ['DELETE', 'revoke', (id) => `/tokens/${id}`, undefined],
       ['POST', 'rotate', (id) => `/tokens/${id}/rotate`, {}],
     ];
@@ -191,14 +198,18 @@ describe('the token routes', () => {
 
   describe('bad input is 422, never 500', () => {
     it.each([
-      ['no name', {}],
-      ['an empty name', { name: '' }],
+      ['no name', { scopes: GOOD }],
+      ['no scopes', { name: 'a' }],
+      ['an empty scope list', { name: 'a', scopes: [] }],
+      ['an empty name', { name: '', scopes: GOOD }],
       ['an unknown scope shape', { name: 'a', scopes: ['superuser'] }],
-      ['a wildcard scope', { name: 'a', scopes: ['read:*'] }],
-      ['an expiry in the past', { name: 'a', expiresAt: '2001-01-01T00:00:00Z' }],
-      ['an expiry that is not a date', { name: 'a', expiresAt: 'tomorrow' }],
-      ['an extra field', { name: 'a', userId: 'someone-else' }],
-      ['a name of the wrong type', { name: 7 }],
+      ['a legacy scope', { name: 'a', scopes: ['read:kpi'] }],
+      ['a permission that no module declares', { name: 'a', scopes: ['core.identity.nothing'] }],
+      ['a wildcard scope', { name: 'a', scopes: ['core.identity.*'] }],
+      ['an expiry in the past', { name: 'a', scopes: GOOD, expiresAt: '2001-01-01T00:00:00Z' }],
+      ['an expiry that is not a date', { name: 'a', scopes: GOOD, expiresAt: 'tomorrow' }],
+      ['an extra field', { name: 'a', scopes: GOOD, userId: 'someone-else' }],
+      ['a name of the wrong type', { name: 7, scopes: GOOD }],
     ])('create: %s', async (_name, body) => {
       const { post, session } = await withToken();
       const reply = await post('/tokens', { ...session, body });
@@ -208,7 +219,9 @@ describe('the token routes', () => {
 
     it('create: 409 for a taken name', async () => {
       const { post, session } = await withToken();
-      expect((await post('/tokens', { ...session, body: { name: 'ci' } })).status).toBe(409);
+      expect(
+        (await post('/tokens', { ...session, body: { name: 'ci', scopes: GOOD } })).status,
+      ).toBe(409);
     });
 
     it('rotate: an expiry in the past, and an id that is not a UUID', async () => {

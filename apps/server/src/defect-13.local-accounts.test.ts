@@ -2,15 +2,10 @@
 // still accepted the request, and it accepted any text as an email address. The server enforces the
 // setting and validates the address. Never weaken this test.
 import { describe, expect, it } from 'vitest';
-import { PASSWORD, useIdentityApp } from './testing/identity-app.ts';
+import { PASSWORD, settingsWith, useIdentityApp } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
-const off = {
-  settings: {
-    get: () =>
-      Promise.resolve({ localAccounts: false, approvalPolicy: 'manual', oidcProviders: [] }),
-  },
-};
+const off = { settings: settingsWith({ localAccounts: false }) };
 const registration = { username: 'alice', email: 'alice@example.org', password: PASSWORD };
 
 describe('defect 13: local accounts', () => {
@@ -70,5 +65,99 @@ describe('defect 13: local accounts', () => {
     expect(
       (await post('/auth/register', { body: { ...registration, email: 'not-an-email' } })).status,
     ).toBe(422);
+  });
+});
+
+describe('defect 13: turning local accounts off through the settings API', () => {
+  const as = (who: { cookie: string; csrf: string }) => ({ cookie: who.cookie, csrf: who.csrf });
+  const turnOff = (
+    s: { call: Awaited<ReturnType<typeof app.start>>['call'] },
+    who: { cookie: string; csrf: string },
+    version = 0,
+  ) =>
+    s.call('PUT', '/settings/core.identity', {
+      ...as(who),
+      body: { version, values: { localAccounts: false } },
+    });
+
+  it('takes effect at once in the process that saved it: register and login answer 403', async () => {
+    const s = await app.start();
+    const boss = await s.signedIn('boss', { roles: ['admin'] });
+    const member = await s.signedIn('member');
+    expect((await turnOff(s, boss)).status).toBe(200);
+    const register = await s.post('/auth/register', { body: registration });
+    expect(register.status).toBe(403);
+    const login = await s.post('/auth/login', { body: { username: 'member', password: PASSWORD } });
+    expect(login.status).toBe(403);
+    expect(login.cookie).toBeUndefined();
+    expect(
+      (await s.kernel.pool.query("select 1 from identity_user where username = 'alice'")).rows,
+    ).toEqual([]);
+    void member;
+  });
+
+  it('cannot be done by a user who is not an administrator, and nothing changes', async () => {
+    const s = await app.start();
+    const member = await s.signedIn('member');
+    expect((await turnOff(s, member)).status).toBe(403);
+    expect((await s.kernel.pool.query('select 1 from settings_setting')).rows).toEqual([]);
+    expect((await s.post('/auth/register', { body: registration })).status).toBe(201);
+    // An anonymous caller is refused too.
+    expect(
+      (
+        await s.call('PUT', '/settings/core.identity', {
+          body: { version: 0, values: { localAccounts: false } },
+        })
+      ).status,
+    ).toBe(401);
+  });
+
+  it('turns back on the same way', async () => {
+    const s = await app.start();
+    const boss = await s.signedIn('boss', { roles: ['admin'] });
+    await turnOff(s, boss);
+    const back = await s.call('PUT', '/settings/core.identity', {
+      ...as(boss),
+      body: { version: 1, values: { localAccounts: true } },
+    });
+    expect(back.status).toBe(200);
+    expect((await s.post('/auth/register', { body: registration })).status).toBe(201);
+  });
+
+  it('reaches a second server process within the cache TTL (two kernels over one database)', async () => {
+    let nowB = 1_000;
+    const a = await app.start({ settingsModule: { cacheTtlMs: 5_000 } });
+    const b = await app.start({
+      databaseUrl: a.databaseUrl,
+      settingsModule: { cacheTtlMs: 5_000, now: () => nowB },
+    });
+    const boss = await a.signedIn('boss', { roles: ['admin'] });
+    // B has read the setting (local accounts are on) and holds it in its cache.
+    expect(
+      (await b.post('/auth/register', { body: { ...registration, username: 'first' } })).status,
+    ).toBe(201);
+
+    expect((await turnOff(a, boss)).status).toBe(200);
+    expect((await a.post('/auth/register', { body: registration })).status).toBe(403); // A at once
+
+    // Inside the bound B may still answer from its cache ...
+    expect(
+      (
+        await b.post('/auth/register', {
+          body: { ...registration, username: 'second', email: 'second@example.org' },
+        })
+      ).status,
+    ).toBe(201);
+    // ... and once the TTL has passed, B refuses as well: register and login.
+    nowB += 5_000;
+    expect(
+      (
+        await b.post('/auth/register', {
+          body: { ...registration, username: 'third', email: 'third@example.org' },
+        })
+      ).status,
+    ).toBe(403);
+    const login = await b.post('/auth/login', { body: { username: 'boss', password: PASSWORD } });
+    expect(login.status).toBe(403);
   });
 });

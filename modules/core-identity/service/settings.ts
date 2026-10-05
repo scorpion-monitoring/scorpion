@@ -1,7 +1,8 @@
-// The module's settings and the one place that reads them. The manifest `settings` field is only
-// validated and stored by the kernel today and `ctx` has no settings access (docs/backlog.md), so
-// the module reads through this port. Its default implementation yields the defaults of the
-// module's own schema; M3 (core.settings) replaces `defaultSettings` and nothing else.
+// The module's settings and the one place that reads them. The module reads through the
+// `IdentitySettings` port, whose default implementation is `ctx.settings` (ADR 0017): the values an
+// administrator saved through core.settings, validated by the schema below, with its defaults. Tests
+// pass their own port.
+import type { RateLimit } from '@scorpion/kernel';
 import { z } from 'zod';
 import { providerId } from '../validation.ts';
 
@@ -16,7 +17,7 @@ export function isSecureUrl(value: string): boolean {
   }
 }
 
-/** One OIDC provider. The client secret is not here: it comes from the environment (`oidc-secret.ts`). */
+/** One OIDC provider. The client secret is not here: it is in the secrets store (`oidc-secret.ts`). */
 export const oidcProviderSchema = z.strictObject({
   /** Lower-case letters, digits and "-"; in the callback URL and in `identity_auth_method.provider`. */
   id: providerId.max(32).refine((value) => value !== 'local', 'is reserved for password accounts'),
@@ -33,20 +34,54 @@ export const oidcProviderSchema = z.strictObject({
 
 export type OidcProvider = z.infer<typeof oidcProviderSchema>;
 
-/** What a mail says when the settings do not name the instance or the sender. */
-export const DEFAULT_INSTANCE_NAME = 'Scorpion';
-export const DEFAULT_MAIL_FROM = 'no-reply@localhost';
+const DAY_MS = 24 * 3600 * 1000;
+
+/** What the cleanup job keeps and how much it removes at once (README, "Cleanup"). */
+export const DEFAULT_RETENTION = {
+  purgeAfterDays: 30,
+  tokenGraceDays: 30,
+  purgeBatch: 500,
+} as const;
+
+/** Mails that one address, and one signed-in user, may cause: a burst, then a steady rate per hour. */
+export const DEFAULT_MAIL_BUDGETS = {
+  perAddress: { burst: 3, perHour: 3 },
+  perUser: { burst: 5, perHour: 5 },
+} as const;
+
+const mailBudget = z.strictObject({
+  burst: z.number().int().min(1).max(1000),
+  perHour: z.number().min(0.1).max(10_000),
+});
 
 export const settingsSchema = z.strictObject({
   /** Whether people may register and sign in with a password. Enforced on the server (defect 13). */
   localAccounts: z.boolean().default(true),
   /**
-   * How mails from core.identity name the instance and who they come from. Until core.settings
-   * (M3) and core.notifications (M4) own branding and the sender address, they live here; no
-   * mail text hard-codes either.
+   * How long the hourly cleanup keeps things. A soft-deleted account keeps its username and address
+   * for `purgeAfterDays` before it is purged (ADR 0013); an expired or revoked access token is shown
+   * to its owner for `tokenGraceDays`; at most `purgeBatch` accounts go per run.
    */
-  instanceName: z.string().trim().min(1).max(100).optional(),
-  mailFrom: z.string().trim().min(3).max(254).optional(),
+  retention: z
+    .strictObject({
+      purgeAfterDays: z.number().int().min(1).max(3650).default(DEFAULT_RETENTION.purgeAfterDays),
+      tokenGraceDays: z.number().int().min(1).max(3650).default(DEFAULT_RETENTION.tokenGraceDays),
+      purgeBatch: z.number().int().min(1).max(10_000).default(DEFAULT_RETENTION.purgeBatch),
+    })
+    .default({ ...DEFAULT_RETENTION }),
+  /**
+   * How many mails one address can be sent (reset and confirmation links) and how many confirmation
+   * mails one signed-in user can ask for. They protect the owner of an address from a flood.
+   */
+  mailBudgets: z
+    .strictObject({
+      perAddress: mailBudget.default({ ...DEFAULT_MAIL_BUDGETS.perAddress }),
+      perUser: mailBudget.default({ ...DEFAULT_MAIL_BUDGETS.perUser }),
+    })
+    .default({
+      perAddress: { ...DEFAULT_MAIL_BUDGETS.perAddress },
+      perUser: { ...DEFAULT_MAIL_BUDGETS.perUser },
+    }),
   /** The id of the `auth.approvalPolicy` entry that decides the status of a new account. */
   approvalPolicy: z.string().min(1).default('manual'),
   /**
@@ -69,7 +104,19 @@ export interface IdentitySettings {
   get(): Promise<IdentitySettingsValues>;
 }
 
-/** Until M3: no stored settings, so the defaults of the schema apply. */
-export const defaultSettings: IdentitySettings = {
-  get: () => Promise.resolve(settingsSchema.parse({})),
-};
+/**
+ * What the module needs of the instance's branding: the name that mails use and the sender. The
+ * default reads `getBranding()` of core.settings, which owns both (ADR-0018); tests pass their own.
+ */
+export interface BrandingSource {
+  get(): Promise<{ instanceName: string; mailFrom: string }>;
+}
+
+/** The token bucket for a mail budget. */
+export const budgetLimit = (budget: { burst: number; perHour: number }): RateLimit => ({
+  capacity: budget.burst,
+  refillPerSecond: budget.perHour / 3600,
+});
+
+/** Days as milliseconds, for the cutoffs of the cleanup job. */
+export const daysToMs = (days: number): number => days * DAY_MS;

@@ -14,6 +14,7 @@ import {
   type Profile,
 } from '@scorpion/kernel';
 import { createApp } from './app.ts';
+import { limitsFromSettings } from './pipeline/rate-limit.ts';
 import { createMetrics, type Metrics } from './metrics.ts';
 import type { ReadinessResult, SystemProbes } from './system-routes.ts';
 
@@ -56,6 +57,16 @@ function newKernel(options: RuntimeOptions, metrics?: Metrics): Kernel {
     onJobRun: metrics?.onJobRun,
     ...options.kernelOptions,
   });
+}
+
+/**
+ * The rate limits an administrator saved, when the profile has core.settings (the module that
+ * owns the `rateLimits` setting); else nothing, and the constants of the pipeline apply.
+ */
+function storedRateLimits(kernel: Kernel) {
+  if (!kernel.profile.modules.some((module) => module.id === 'core.settings')) return undefined;
+  const settings = kernel.settingsOf('core.settings');
+  return async () => limitsFromSettings(await settings.get());
 }
 
 /** Asks the database, briefly, whether the server can do its work. */
@@ -125,6 +136,7 @@ export function startServer(options: RuntimeOptions): RunningServer {
     probes,
     onRequest: metrics.onRequest,
     rateLimiter: kernel.rateLimiter,
+    storedRateLimits: storedRateLimits(kernel),
   };
 
   let current = createApp({ ...common, routes: [], authorizer: kernel.authorizer, booting: true });

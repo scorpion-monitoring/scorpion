@@ -51,7 +51,9 @@ pnpm test:e2e                  # Playwright
 pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a module (from db/schema.ts)
 pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts (build time)
 pnpm scorpion start | worker | migrate   # web server, jobs and events only, migrations only
-                               # (seed and create-admin arrive with the modules that need them)
+                               # (seed arrives with the modules that need it)
+pnpm scorpion create-admin | set-secret <name> | rotate-secrets   # commands of core.identity and core.settings;
+                               # profiles with core.settings need SECRETS_KEY (openssl rand -base64 32)
 pnpm modules:sync              # regenerate the module id list that defineProfile() checks against
 pnpm build --profile <name>    # build one profile image
 pnpm changeset                 # describe your change for CHANGELOG.md (--empty if none is needed)
@@ -118,7 +120,8 @@ These are FEATURES §5; each has a regression test. Do not bring these patterns 
 ## Working style
 
 - Keep changes inside the current milestone's scope. Put anything else in `docs/backlog.md` rather than implementing it.
-- Small, reviewable commits. Commit messages: `<module>: <imperative summary>` (for example `kpi-ingestion: add XLSX adapter`).
+- **Pull requests are expensive: batch them.** Every PR costs two CI runs of more than 5 minutes each (one on the PR, one after the merge into `dev`) plus a review. Open one PR per meaningful, reviewable unit: a sprint of a plan, or a milestone slice that a reviewer can judge on its own, not one per small change. Put follow-up fixes, docs, backlog entries, ADRs and README updates into the PR they belong to; add them to a PR that is already open instead of opening another. Do not open a PR for a typo, a single backlog line or a one-file doc change; collect such changes and ship them with the next PR. Split a PR only when it passes about 1500 changed lines of non-test code or mixes unrelated concerns, and then into as few stacked PRs as possible. Do not push a branch or open the PR before the work is complete and verified locally (lint, format, type check, tests of touched modules); a PR that fails CI and needs a fix commit costs another full run. A release (`release/*`, the merge-back into `dev`) is the exception: those PRs are required by CONTRIBUTING.md.
+- Small, reviewable commits (commits, not PRs: many commits per PR is fine). Commit messages: `<module>: <imperative summary>` (for example `kpi-ingestion: add XLSX adapter`).
 - **Branches:** never commit to `main` or `dev` directly. Work on `feature/<topic>` from `dev` (lower-case kebab case, milestone first: `feature/m1-module-loader`) and open the pull request into `dev`. Only `release/<x.y.z>` and `hotfix/<x.y.z>` branches merge into `main`. See CONTRIBUTING.md, "Branches" and "Releases".
 - **Every pull request adds a changeset** (`pnpm changeset`, package `scorpion`; `pnpm changeset --empty` for tests, CI or refactoring). Docs-only pull requests (every file in `docs/**`, `**/*.md` other than `CHANGELOG.md`, or `.github/ISSUE_TEMPLATE/**`) are exempt. Write it for operators and API users. Never edit `CHANGELOG.md` by hand; `changeset version` writes it at a release. CI fails a pull request without a changeset.
 - When a manifest changes (permissions, settings, events, registries, jobs), update the module's `README.md` in the same commit.

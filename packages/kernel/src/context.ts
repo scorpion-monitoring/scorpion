@@ -1,9 +1,12 @@
 // The context a module receives (`ctx`). See the kernel README for the full API.
 import type { Config } from './config.ts';
+import type { RegisteredPermission } from './composition.ts';
 import type { Db } from './db.ts';
 import type { Logger } from './logger.ts';
 import type { JobsApi } from './jobs.ts';
 import type { EventsApi } from './outbox.ts';
+import type { SettingsPort } from './settings.ts';
+import type { z } from 'zod';
 
 /**
  * Public service objects by module id. Each module's `public.ts` adds its own entry:
@@ -18,6 +21,7 @@ export interface ModuleServices {}
 export interface ModuleContext<
   Required extends keyof ModuleServices = never,
   Optional extends keyof ModuleServices = never,
+  Settings = unknown,
 > {
   /** The id of the module this context belongs to. */
   readonly moduleId: string;
@@ -40,4 +44,19 @@ export interface ModuleContext<
   };
   /** Validated entries of a registry declared by this module or one of its dependencies. */
   registry(name: string): readonly unknown[];
+  /**
+   * Every permission the manifests of the loaded profile declare, in module order. Read-only and
+   * open to any module; `core.authz` uses it to know which permissions can exist.
+   */
+  readonly permissions: readonly RegisteredPermission[];
+  /**
+   * The module's own settings: validated by its manifest `settings` schema, defaults applied. Backed
+   * by `core.settings` when the profile has it, else the schema's defaults (ADR 0017).
+   */
+  readonly settings: SettingsPort<Settings>;
+  /**
+   * The `settings` schema of every loaded module that declares one, by module id. Read-only and open
+   * to any module; `core.settings` validates what an administrator writes against it.
+   */
+  readonly settingsSchemas: ReadonlyMap<string, z.ZodType>;
 }

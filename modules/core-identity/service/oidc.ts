@@ -3,6 +3,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
 import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
+import type { AuthzService } from '@scorpion/core-authz/public';
 import { ids, type ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
@@ -18,6 +19,7 @@ import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
 import { verifyIdToken, type IdentityClaims } from './oidc-token.ts';
 import { requireSession } from './require-user.ts';
+import { grantDefaultRole } from './roles.ts';
 import type { SessionService } from './sessions.ts';
 import type { IdentitySettings, OidcProvider } from './settings.ts';
 import { usernameBase, usernameCandidates } from './username.ts';
@@ -63,6 +65,7 @@ export interface OidcService {
 type Reason = string;
 
 export interface OidcDeps {
+  authz: AuthzService;
   users: UserService;
   sessions: SessionService;
   settings: IdentitySettings;
@@ -83,7 +86,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcService {
-  const { users, sessions, settings, states, providers } = deps;
+  const { authz, users, sessions, settings, states, providers } = deps;
   const exchangeTimeoutMs = deps.exchangeTimeoutMs ?? TOKEN_EXCHANGE_TIMEOUT_MS;
 
   const redirectUri = (providerId: string): string => {
@@ -98,10 +101,14 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     return found;
   }
 
-  const clientFor = (provider: OidcProvider) =>
+  /**
+   * The client that talks to the provider. Only the code exchange needs the secret, so only it reads
+   * the store; a provider without a stored secret is a public client (PKCE only).
+   */
+  const clientFor = async (provider: OidcProvider, withSecret: boolean) =>
     new OAuth2Client(
       provider.clientId,
-      deps.clientSecret(provider.id) ?? null,
+      withSecret ? ((await deps.clientSecret(provider.id)) ?? null) : null,
       redirectUri(provider.id),
     );
 
@@ -114,7 +121,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     const provider = await providerOrThrow(providerId);
     const discovery = await providers.discovery(provider);
     const fresh = await states.create(provider.id, linkUserId);
-    const url = clientFor(provider).createAuthorizationURLWithPKCE(
+    const url = (await clientFor(provider, false)).createAuthorizationURLWithPKCE(
       discovery.authorizationEndpoint,
       fresh.state,
       CodeChallengeMethod.S256,
@@ -204,7 +211,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       })) ?? { status: 'pending' as const };
       try {
         // The user, its auth method and the event are one write.
-        return await ctx.db.tx(async () => {
+        return await ctx.db.tx(async (tx) => {
           const created = await users.createUser({
             username: candidate,
             email,
@@ -212,6 +219,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
             status: decision.status,
             auth: { provider: provider.id, subject: claims.subject },
           });
+          await grantDefaultRole(authz, tx, created);
           await ctx.events.emit('identity.user.registered@1', {
             userId: created.id,
             username: created.username,
@@ -285,6 +293,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
     async startLink(actor, providerId) {
       const caller = requireSession(actor, 'Linking a sign-in provider');
+      await authz.require(actor, 'core.identity.auth-method.link');
       return begin(providerId, caller.userId);
     },
 
@@ -313,14 +322,13 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
       const discovery = await providers.discovery(provider);
 
+      // Read outside the try: a secret that cannot be decrypted is an operator's error (a 500 that the
+      // log explains without the value), not something to report as a failed sign-in.
+      const client = await clientFor(provider, true);
       let idToken: string;
       try {
         const tokens = await withTimeout(
-          clientFor(provider).validateAuthorizationCode(
-            discovery.tokenEndpoint,
-            input.code,
-            input.verifier,
-          ),
+          client.validateAuthorizationCode(discovery.tokenEndpoint, input.code, input.verifier),
           exchangeTimeoutMs,
         );
         try {

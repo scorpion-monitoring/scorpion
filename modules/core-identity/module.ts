@@ -1,5 +1,5 @@
 import { z } from '@scorpion/contracts';
-import { defineModule } from '@scorpion/kernel';
+import { defineModule, type ModuleContext } from '@scorpion/kernel';
 import { createAuthenticator } from './authenticator.ts';
 import type { IdentityService } from './public.ts';
 import { registerIdentityRoutes } from './routes.ts';
@@ -13,15 +13,25 @@ import { createRecoveryService, type RecoveryService } from './service/recovery.
 import { mailerFromEnvironment, type Mailer } from './service/mailer.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
 import { createOidcService, type OidcService } from './service/oidc.ts';
-import { clientSecretFor, type ClientSecretLookup } from './service/oidc-secret.ts';
+import {
+  clientSecretFrom,
+  clientSecretName,
+  type ClientSecretLookup,
+} from './service/oidc-secret.ts';
 import { createProviderClient } from './service/oidc-provider.ts';
 import {
   APPROVAL_POLICY_REGISTRY,
   approvalPolicyEntrySchema,
   manualPolicy,
 } from './service/approval-policy.ts';
+import { createRoleService, type RoleService } from './service/roles.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
-import { defaultSettings, settingsSchema, type IdentitySettings } from './service/settings.ts';
+import {
+  settingsSchema,
+  type BrandingSource,
+  type IdentitySettings,
+  type IdentitySettingsValues,
+} from './service/settings.ts';
 import { createTokenService, type TokenService } from './service/tokens.ts';
 import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
@@ -39,13 +49,19 @@ export interface IdentityInternals extends IdentityService {
   oidc: OidcService;
   profile: ProfileService;
   recovery: RecoveryService;
+  roles: RoleService;
   sessions: SessionService;
   tokens: TokenService;
 }
 
 export interface IdentityModuleOptions {
-  /** Where the settings come from. Until M3 (core.settings) that is the schema's defaults. */
+  /** Where the settings come from. Default: `ctx.settings`, the values saved through core.settings. */
   settings?: IdentitySettings;
+  /**
+   * Where the instance name and the mail sender come from. Default: `getBranding()` of core.settings,
+   * which owns them (ADR-0018).
+   */
+  branding?: BrandingSource;
   /** For tests: how long a verified session is trusted without asking the database. */
   sessionCacheTtlMs?: number;
   /** For tests: how long a verified access token is trusted without verifying it again. */
@@ -64,8 +80,8 @@ export interface IdentityModuleOptions {
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
   /**
-   * Where an OIDC client secret comes from. The default reads `OIDC_<ID>_CLIENT_SECRET` from the
-   * environment (`service/oidc-secret.ts`); M3 changes that default to the secrets store.
+   * Where an OIDC client secret comes from. The default is the secrets store of core.settings
+   * (`service/oidc-secret.ts`); there is no environment fallback.
    */
   clientSecret?: ClientSecretLookup;
   /** For tests: the HTTP client and timeouts used to talk to OIDC providers. */
@@ -76,6 +92,20 @@ export interface IdentityModuleOptions {
     now?: () => number;
   };
 }
+
+/** What the role `user` holds: every self-service permission of this module (README, "Roles"). */
+export const USER_PERMISSIONS = [
+  'core.identity.me.read',
+  'core.identity.session.manage',
+  'core.identity.profile.read',
+  'core.identity.profile.update',
+  'core.identity.avatar.update',
+  'core.identity.password.change',
+  'core.identity.email.verify',
+  'core.identity.auth-method.link',
+  'core.identity.token.read',
+  'core.identity.token.manage',
+];
 
 const toConsole = (text: string) => void process.stderr.write(`${text}\n`);
 const toNowhere = () => undefined;
@@ -111,7 +141,33 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     return currentTokens;
   };
 
-  return defineModule<IdentityInternals>({
+  let currentSettings: IdentitySettings | undefined;
+  let currentSecret: ClientSecretLookup | undefined;
+  /**
+   * Names, in the start-up log, the providers that have no stored client secret and therefore run as
+   * public clients (PKCE only). Names only: a secret is never read into the log.
+   */
+  async function reportProvidersWithoutSecret(log: ModuleContext['log']) {
+    if (!currentSettings || !currentSecret) return;
+    const { oidcProviders } = await currentSettings.get();
+    const without: string[] = [];
+    for (const provider of oidcProviders) {
+      if ((await currentSecret(provider.id)) === undefined) without.push(provider.id);
+    }
+    if (without.length > 0) {
+      log.info(
+        { providers: without, secrets: without.map(clientSecretName) },
+        'OIDC providers without a stored client secret run as public clients (set one with: scorpion set-secret <secret>)',
+      );
+    }
+  }
+
+  return defineModule<
+    IdentityInternals,
+    'core.authz' | 'core.settings' | 'core.blob',
+    never,
+    IdentitySettingsValues
+  >({
     id: 'core.identity',
     version: '0.1.0',
     // Short on purpose: the module's tables are `identity_user`, not `core_identity_user` (ADR 0004).
@@ -128,6 +184,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       },
       'core.identity.profile.read': { description: 'Read your own profile' },
       'core.identity.profile.update': { description: 'Edit your own profile' },
+      'core.identity.avatar.update': { description: 'Set and remove your own avatar' },
       'core.identity.password.change': { description: 'Change your own password' },
       'core.identity.email.verify': {
         description: 'Ask for a new confirmation mail for your own address',
@@ -136,6 +193,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'core.identity.token.manage': {
         description: 'Create, revoke and rotate your own access tokens',
       },
+      'core.identity.token.manage-any': {
+        description: "Revoke any user's access token, not only your own",
+      },
+      'core.identity.role.read': { description: 'List the roles and the permissions they hold' },
+      'core.identity.role.assign': { description: 'Give a role to a user and take it away' },
     },
     settings: settingsSchema,
 
@@ -168,13 +230,19 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           } catch (err) {
             ctx.log.warn({ err }, 'could not issue a first-run token');
           }
+          try {
+            await reportProvidersWithoutSecret(ctx.log);
+          } catch (err) {
+            ctx.log.warn({ err }, 'could not check the OIDC client secrets');
+          }
         },
       },
       emits: {
         'identity.user.registered@1': userEvent.extend({
           status: z.enum(['pending', 'active']),
         }),
-        'identity.user.approved@1': userEvent.extend({ approvedBy: z.string() }),
+        // `role` is the key of the role the account got with the approval.
+        'identity.user.approved@1': userEvent.extend({ approvedBy: z.string(), role: z.string() }),
         'identity.user.rejected@1': userEvent.extend({ rejectedBy: z.string() }),
         'identity.authMethod.linked@1': userEvent.extend({
           provider: z.string(),
@@ -188,11 +256,12 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         // After the retention period (ADR 0013): subscribers delete or anonymise what refers to the user.
         'identity.user.purged@1': userEvent,
         'identity.profile.updated@1': userEvent.extend({
-          fields: z.array(z.enum(['displayName', 'bio', 'email'])).min(1),
+          fields: z.array(z.enum(['displayName', 'bio', 'email', 'avatar'])).min(1),
         }),
         'identity.admin.created@1': userEvent.extend({ origin: z.enum(['cli', 'first-run']) }),
         'identity.token.created@1': tokenEvent,
-        'identity.token.revoked@1': tokenEvent,
+        // `revokedBy` is the caller; it differs from `userId` when an administrator revoked it.
+        'identity.token.revoked@1': tokenEvent.extend({ revokedBy: z.string() }),
         'identity.token.rotated@1': tokenEvent.extend({ previousTokenId: z.string() }),
       },
     },
@@ -200,6 +269,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     registries: { [APPROVAL_POLICY_REGISTRY]: approvalPolicyEntrySchema },
     contributes: {
       [APPROVAL_POLICY_REGISTRY]: [manualPolicy],
+      // What the role `user` can do once an account is approved: the self-service routes of this
+      // module. Admin holds everything by resolution; Reviewer gets nothing from identity (its
+      // permissions come from the modules that review things).
+      'authz.defaultRole': [{ role: 'user', permissions: USER_PERMISSIONS }],
       'kernel.authenticator': [
         {
           authenticate: createAuthenticator({ sessions: sessionsOrThrow, tokens: tokensOrThrow }),
@@ -208,20 +281,30 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     services: (ctx) => {
-      const settings = options.settings ?? defaultSettings;
+      const authz = ctx.deps['core.authz'];
+      const settings: IdentitySettings = options.settings ?? { get: () => ctx.settings.get() };
+      const clientSecret = options.clientSecret ?? clientSecretFrom(ctx.deps['core.settings']);
+      const branding: BrandingSource = options.branding ?? {
+        get: () => ctx.deps['core.settings'].getBranding(),
+      };
+      const blob = ctx.deps['core.blob'];
+      currentSettings = settings;
+      currentSecret = clientSecret;
       const users = createUserService(ctx);
       const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
-      const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs });
+      const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
       current = sessions;
       currentTokens = tokens;
       const bootstrap = createBootstrapService(ctx, {
         users,
+        authz,
         announce: options.announce ?? (process.env.NODE_ENV === 'test' ? toNowhere : toConsole),
         ttlMs: options.firstRunTtlMs,
       });
       currentBootstrap = bootstrap;
       const loginStates = createLoginStateService(ctx);
       const oidc = createOidcService(ctx, {
+        authz,
         users,
         sessions,
         settings,
@@ -231,33 +314,36 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           timeoutMs: options.oidcHttp?.timeoutMs,
           now: options.oidcHttp?.now,
         }),
-        clientSecret: options.clientSecret ?? clientSecretFor,
+        clientSecret,
         exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
       });
       const recovery = createRecoveryService(ctx, {
         sessions,
         settings,
+        branding,
         mailer: options.mailer ?? mailerFromEnvironment(process.env),
+        authz,
       });
-      const cleanup = createCleanupService(ctx);
+      const cleanup = createCleanupService(ctx, { authz, blob, settings });
       currentCleanup = cleanup;
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery }),
+        profile: createProfileService(ctx, { recovery, authz, blob, settings }),
+        roles: createRoleService({ authz, users }),
         recovery,
         loginStates,
         oidc,
         users,
         sessions,
         tokens,
-        accounts: createAccountService(ctx, { users, sessions, settings, recovery }),
-        approval: createApprovalService(ctx, { sessions }),
+        accounts: createAccountService(ctx, { users, sessions, settings, recovery, authz }),
+        approval: createApprovalService(ctx, { sessions, authz }),
       };
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, oidc, profile, recovery, tokens } =
+      const { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens } =
         r.service<IdentityInternals>();
       registerIdentityRoutes(r, {
         accounts,
@@ -266,6 +352,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         oidc,
         profile,
         recovery,
+        roles,
         tokens,
       });
     },

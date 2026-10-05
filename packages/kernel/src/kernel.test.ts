@@ -161,6 +161,96 @@ describe('ctx.deps', () => {
   });
 });
 
+describe('ctx.permissions', () => {
+  it('lists the permissions of every loaded module, read-only', async () => {
+    let seen: readonly unknown[] = [];
+    const kernel = await inlineKernel([
+      defineModule({
+        id: 'one',
+        version: '1.0.0',
+        permissions: { 'one.read': { description: 'Read ones' } },
+      }),
+      defineModule({
+        id: 'two',
+        version: '1.0.0',
+        permissions: { 'two.edit': { description: 'Edit twos', scope: 'two' } },
+        services: (ctx) => {
+          seen = ctx.permissions;
+          return {};
+        },
+      }),
+    ]);
+    await kernel.start();
+    expect(seen).toEqual([
+      { id: 'one.read', module: 'one', description: 'Read ones' },
+      { id: 'two.edit', module: 'two', description: 'Edit twos', scope: 'two' },
+    ]);
+    expect(Object.isFrozen(seen)).toBe(true);
+    expect(Object.isFrozen(seen[0])).toBe(true);
+  });
+});
+
+describe('ctx.settings', () => {
+  const settings = z.strictObject({ flag: z.boolean().default(true) });
+  const reader = () =>
+    defineModule<unknown, never, never, z.output<typeof settings>>({
+      id: 'reader',
+      version: '1.0.0',
+      settings,
+      services: (ctx) => ({ read: () => ctx.settings.get() }),
+    });
+  const store = (value: unknown) =>
+    defineModule({
+      id: 'store',
+      version: '1.0.0',
+      contributes: { 'kernel.settingsStore': [{ read: () => Promise.resolve(value) }] },
+    });
+  const read = async (kernel: Kernel) => {
+    await kernel.start();
+    return (kernel.services.get('reader') as { read(): Promise<unknown> }).read();
+  };
+
+  it('yields the schema defaults when no module provides a store', async () => {
+    expect(await read(await inlineKernel([reader()]))).toEqual({ flag: true });
+  });
+
+  it('yields the stored value of the module when a store is present', async () => {
+    const kernel = await inlineKernel([store({ flag: false }), reader()]);
+    expect(await read(kernel)).toEqual({ flag: false });
+  });
+
+  it('lets the server read a module’s settings, and refuses a module that is not loaded', async () => {
+    const kernel = await inlineKernel([store({ flag: false }), reader()]);
+    expect(await kernel.settingsOf('reader').get()).toEqual({ flag: false });
+    expect(() => kernel.settingsOf('nobody')).toThrowError(/not in the profile/);
+  });
+
+  it('shows modules the settings schemas of every loaded module, and no values', async () => {
+    let seen: ReadonlyMap<string, unknown> | undefined;
+    const looker = defineModule({
+      id: 'looker',
+      version: '1.0.0',
+      services: (ctx) => {
+        seen = ctx.settingsSchemas;
+        return {};
+      },
+    });
+    await (await inlineKernel([reader(), looker])).start();
+    expect([...seen!.keys()]).toEqual(['reader']);
+  });
+
+  it('refuses two stores', async () => {
+    const second = defineModule({
+      id: 'store2',
+      version: '1.0.0',
+      contributes: { 'kernel.settingsStore': [{ read: () => Promise.resolve({}) }] },
+    });
+    await expect(inlineKernel([store({}), second])).rejects.toThrowError(
+      /more than one module contributes to "kernel.settingsStore"/,
+    );
+  });
+});
+
 describe('ctx.registry', () => {
   const widget = z.strictObject({ label: z.string() });
 

@@ -20,7 +20,7 @@ import {
 } from '@scorpion/kernel';
 import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
-import { DEFAULT_MAX_BODY_BYTES, limitBody } from './pipeline/body-limit.ts';
+import { DEFAULT_MAX_BODY_BYTES, limitBodyPerRoute } from './pipeline/body-limit.ts';
 import { createClientIpResolver } from './pipeline/client-ip.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
@@ -45,8 +45,13 @@ export interface AppOptions {
    * is limited, which only tests want.
    */
   rateLimiter?: RateLimiter;
-  /** Limits per route group, for tests. Default: `RATE_LIMITS`. */
+  /** Limits per route group, for tests. They win over the stored ones. Default: `RATE_LIMITS`. */
   rateLimits?: Partial<Record<RateLimitGroup, RateLimit>>;
+  /**
+   * The limits an administrator saved (core.settings), read for every request from the settings
+   * cache. An answer of `undefined`, or an error, leaves the constants in force.
+   */
+  storedRateLimits?: () => Promise<Partial<Record<RateLimitGroup, RateLimit>> | undefined>;
   /** Largest accepted request body. Default 1 MiB. */
   maxBodyBytes?: number;
   /** Called after every request; the metrics use it. */
@@ -92,10 +97,35 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.use('*', requestId());
   app.use('*', securityHeaders());
   app.use('*', requestLogging(log, options.onRequest));
-  app.use('*', limitBody(options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES));
+  app.use(
+    '*',
+    limitBodyPerRoute(
+      options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
+      options.routes.flatMap(({ surface, route }) =>
+        route.maxBodyBytes === undefined
+          ? []
+          : [
+              {
+                method: route.method,
+                path: `${base}${SURFACE_PREFIX[surface]}${route.path}`,
+                maxBytes: route.maxBodyBytes,
+              },
+            ],
+      ),
+    ),
+  );
 
   const clientIp = createClientIpResolver(config.TRUSTED_PROXIES ?? []);
-  const limits = { ...RATE_LIMITS, ...options.rateLimits };
+  const limitFor = (group: RateLimitGroup) => async (): Promise<RateLimit> => {
+    const fixed = options.rateLimits?.[group];
+    if (fixed) return fixed;
+    try {
+      return (await options.storedRateLimits?.())?.[group] ?? RATE_LIMITS[group];
+    } catch (err) {
+      log.warn({ err }, 'could not read the stored rate limits; the defaults apply');
+      return RATE_LIMITS[group];
+    }
+  };
 
   const mount = (
     route: AppRoute,
@@ -110,11 +140,10 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
       const honoPath = `${base}${path}`.replace(/\{(\w+)\}/g, ':$1');
       const method = route.method.toUpperCase();
       if (options.rateLimiter) {
-        const limit = limits[group];
         app.on(
           method,
           honoPath,
-          rateLimit({ limiter: options.rateLimiter, group, limit, clientIp, log }),
+          rateLimit({ limiter: options.rateLimiter, group, limit: limitFor(group), clientIp, log }),
         );
       }
       app.on(

@@ -28,7 +28,6 @@ export interface UserRow {
   email_verified_at: Date | null;
   status: string;
   deleted_at: Date | null;
-  is_bootstrap_admin: boolean;
 }
 
 export interface MakeUser {
@@ -38,7 +37,6 @@ export interface MakeUser {
   /** Default `active`. */
   status?: 'pending' | 'active' | 'rejected';
   deleted?: boolean;
-  isBootstrapAdmin?: boolean;
 }
 
 /** A user without any way to sign in; add one with `makeAuthMethod`. Unique names by default. */
@@ -52,7 +50,6 @@ export function makeUser(db: Queryable, overrides: MakeUser = {}): Promise<UserR
     email_verified_at: overrides.emailVerified && email ? new Date() : null,
     status: overrides.status ?? 'active',
     deleted_at: overrides.deleted ? new Date() : null,
-    is_bootstrap_admin: overrides.isBootstrapAdmin ?? false,
   });
 }
 

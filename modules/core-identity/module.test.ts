@@ -1,8 +1,13 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { makeAuthMethod, makeSession, makeToken, makeUser } from '@scorpion/testing';
+import { randomUUID } from 'node:crypto';
+import {
+  makeAuthMethod,
+  makeRoleAssignment,
+  makeSession,
+  makeToken,
+  makeUser,
+} from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
-import manifest from './module.ts';
+import manifest, { USER_PERMISSIONS } from './module.ts';
 import { useIdentity } from './test/harness.ts';
 
 const identity = useIdentity();
@@ -22,13 +27,17 @@ describe('the module', () => {
     expect(manifest).toMatchObject({ id: 'core.identity', tablePrefix: 'identity_' });
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
       'core.identity.auth-method.link',
+      'core.identity.avatar.update',
       'core.identity.email.verify',
       'core.identity.me.read',
       'core.identity.password.change',
       'core.identity.profile.read',
       'core.identity.profile.update',
+      'core.identity.role.assign',
+      'core.identity.role.read',
       'core.identity.session.manage',
       'core.identity.token.manage',
+      'core.identity.token.manage-any',
       'core.identity.token.read',
       'core.identity.user.approve',
       'core.identity.user.list-pending',
@@ -53,6 +62,7 @@ describe('the module', () => {
     expect(Object.keys(manifest.registries ?? {})).toEqual(['auth.approvalPolicy']);
     expect(Object.keys(manifest.contributes ?? {}).sort()).toEqual([
       'auth.approvalPolicy',
+      'authz.defaultRole',
       'kernel.authenticator',
     ]);
     expect(manifest.routes).toBeDefined();
@@ -75,6 +85,9 @@ describe('the module', () => {
       localAccounts: true,
       approvalPolicy: 'manual',
       oidcProviders: [],
+      // Today's constants are the defaults (README, "Settings").
+      retention: { purgeAfterDays: 30, tokenGraceDays: 30, purgeBatch: 500 },
+      mailBudgets: { perAddress: { burst: 3, perHour: 3 }, perUser: { burst: 5, perHour: 5 } },
     });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
@@ -96,7 +109,8 @@ describe('the module', () => {
     ]);
     const others = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
-        where table_schema = 'public' and table_name not like 'identity\\_%' and table_name not like 'kernel\\_%'`,
+        where table_schema = 'public' and table_name not like 'identity\\_%' and table_name not like 'kernel\\_%'
+          and table_name not like 'authz\\_%' and table_name not like 'settings\\_%' and table_name not like 'blob\\_%'`, // the tables of the modules this one depends on
     );
     expect(others.rows).toEqual([]);
   });
@@ -106,7 +120,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(6); // 0000 to 0005, each once
+    expect(journal.rows).toHaveLength(7); // 0000 to 0006, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -139,60 +153,39 @@ describe('the module', () => {
   });
 });
 
-describe('the temporary isBootstrapAdmin column (ADR 0006)', () => {
-  it('exists, is false by default and is the only trace of it', async () => {
-    const { kernel } = await identity.start();
-    const { rows } = await kernel.pool.query<{ is_nullable: string; column_default: string }>(
-      `select is_nullable, column_default from information_schema.columns
-        where table_name = 'identity_user' and column_name = 'is_bootstrap_admin'`,
+describe('the permissions identity gives to roles (authz.defaultRole)', () => {
+  it('gives the role user every self-service permission, Reviewer nothing, and Admin everything', async () => {
+    const { kernel, authz } = await identity.start();
+    const admin = {
+      kind: 'user',
+      userId: randomUUID(),
+      username: 'a',
+      roles: [],
+      via: 'session',
+    } as const;
+    await makeRoleAssignment(kernel.pool, { id: admin.userId }, 'admin');
+    const roles = Object.fromEntries((await authz.listRoles(admin)).map((r) => [r.key, r]));
+    expect(roles.user!.permissions.filter((p) => p.startsWith('core.identity.'))).toEqual(
+      [...USER_PERMISSIONS].sort(),
     );
-    expect(rows).toEqual([{ is_nullable: 'NO', column_default: 'false' }]);
-    expect((await makeUser(kernel.pool)).is_bootstrap_admin).toBe(false);
+    expect(roles.reviewer!.permissions).toEqual([]);
+    expect(roles.admin!.permissions).toEqual(
+      expect.arrayContaining(['core.identity.role.assign', 'core.identity.token.manage-any']),
+    );
   });
 
-  it('is read by no code of the module (M3 drops the column, so nothing may depend on it)', () => {
-    const files: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (['node_modules', 'migrations', 'dist'].includes(entry.name)) continue;
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) walk(path);
-        else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) files.push(path);
-      }
-    };
-    walk(import.meta.dirname);
-    const mentioning = files
-      .filter((file) => /isBootstrapAdmin|is_bootstrap_admin/.test(readFileSync(file, 'utf8')))
-      .map((file) => file.slice(import.meta.dirname.length + 1));
-    // Only the schema knows the column. `create-admin` and the first-run token set it through the
-    // exported `BOOTSTRAP_ADMIN_MARK` (a value, not a mention), and nothing reads it or decides by it.
-    expect(mentioning).toEqual(['db/schema.ts']);
-  });
-});
-
-describe('the marker is written, never read (ADR 0006)', () => {
-  it('is used only by the bootstrap service, and only as the argument of a `.set()`', () => {
-    const source = (file: string) => readFileSync(join(import.meta.dirname, file), 'utf8');
-    const mentioning: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (['node_modules', 'migrations', 'dist'].includes(entry.name)) continue;
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) walk(path);
-        else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-          if (readFileSync(path, 'utf8').includes('BOOTSTRAP_ADMIN_MARK'))
-            mentioning.push(path.slice(import.meta.dirname.length + 1));
-        }
-      }
-    };
-    walk(import.meta.dirname);
-    expect(mentioning.sort()).toEqual(['db/schema.ts', 'service/bootstrap.ts']);
-    const uses = source('service/bootstrap.ts').match(/.*BOOTSTRAP_ADMIN_MARK.*/g) ?? [];
-    expect(
-      uses.filter((line) => !line.includes('import') && !line.trim().startsWith('//')),
-    ).toEqual([
-      '      await tx.update(user).set(BOOTSTRAP_ADMIN_MARK).where(eq(user.id, created.id));',
+  it('keeps administration out of the role user: nothing that approves, assigns roles or manages any token', () => {
+    const declared = Object.keys(manifest.permissions ?? {});
+    const adminOnly = declared.filter((permission) => !USER_PERMISSIONS.includes(permission));
+    expect(adminOnly.sort()).toEqual([
+      'core.identity.role.assign',
+      'core.identity.role.read',
+      'core.identity.token.manage-any',
+      'core.identity.user.approve',
+      'core.identity.user.list-pending',
+      'core.identity.user.reject',
     ]);
+    for (const permission of USER_PERMISSIONS) expect(declared).toContain(permission);
   });
 });
 
@@ -360,7 +353,7 @@ describe('the constraints of the tables', () => {
     expect(await refused(insert())).toBe('identity_login_state_hash_uidx');
   });
 
-  it('has a nullable avatar column that nothing sets', async () => {
+  it('starts every account without an avatar', async () => {
     const { kernel } = await identity.start();
     const user = await makeUser(kernel.pool);
     expect(
