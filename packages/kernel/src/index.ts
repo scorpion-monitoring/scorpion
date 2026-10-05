@@ -1,3 +1,12 @@
+export {
+  AUDIT_SINK_REGISTRY,
+  noAuditSink,
+  routeAudit,
+  type AuditActor,
+  type AuditEntry,
+  type AuditSink,
+  type RouteAudit,
+} from './audit.ts';
 export { buildComposition, tablePrefixOf } from './composition.ts';
 export type {
   Composition,
@@ -83,6 +92,12 @@ export {
 export type { Dispatcher, DispatcherOptions, EventsApi, Subscription } from './outbox.ts';
 export { listDeadDeliveries, outboxStats, type DeadDelivery, type OutboxStats } from './queries.ts';
 export {
+  deleteDeliveredEvents,
+  deleteJobRuns,
+  requeueDelivery,
+  type RequeuedDelivery,
+} from './maintenance.ts';
+export {
   createJobs,
   JobError,
   type Jobs,
@@ -90,6 +105,7 @@ export {
   type JobsOptions,
   type JobRunReport,
 } from './jobs.ts';
+export type { JobResult } from './manifest.ts';
 export { listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';
 export {
   AUTHORIZER_REGISTRY,

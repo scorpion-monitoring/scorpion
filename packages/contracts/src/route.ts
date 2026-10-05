@@ -30,6 +30,17 @@ export type RouteAccess =
  */
 export type RateLimitGroup = 'default' | 'strict';
 
+/**
+ * What a route asks of the audit trail (`core.audit`, ADR 0021). `true` records who called, what,
+ * and the outcome, including denied (401, 403) and invalid (422) calls. The body and the query
+ * string are stored only with `body: true`, redacted and capped; `redact` adds key names to the
+ * sink's own list. A route under `/auth/` can never store a body.
+ */
+export type RouteAuditOption = boolean | { body?: boolean; redact?: string[] };
+
+/** Routes under `/auth/` carry credentials: the audit trail never stores their body or query. */
+export const NEVER_AUDIT_BODY = /^\/auth\//;
+
 export type AppRouteConfig = RouteConfig &
   RouteAccess & {
     /** Default: `default`. */
@@ -40,8 +51,8 @@ export type AppRouteConfig = RouteConfig &
      * it is refused with 413 before the body is read.
      */
     maxBodyBytes?: number;
-    /** Write an audit entry for every call (`core.audit`, M4). */
-    audit?: boolean;
+    /** Write an audit entry for every call (`core.audit`, ADR 0021). */
+    audit?: RouteAuditOption;
   };
 
 export type AppRoute = RouteConfig & {
@@ -50,7 +61,7 @@ export type AppRoute = RouteConfig & {
   publicReason?: string;
   rateLimit?: RateLimitGroup;
   maxBodyBytes?: number;
-  audit?: boolean;
+  audit?: RouteAuditOption;
 };
 
 export type { RouteHandler };
@@ -104,6 +115,8 @@ export function checkRouteAccess(
   route: AppRoute,
   declaredPermissions: ReadonlySet<string>,
 ): string | undefined {
+  const audit = checkRouteAudit(route);
+  if (audit) return audit;
   const { permission } = route;
   if (route.public === true) {
     if (permission !== undefined) return 'is public but also names a permission';
@@ -118,6 +131,32 @@ export function checkRouteAccess(
   }
   if (!declaredPermissions.has(permission)) {
     return `names permission "${permission}", which its module does not declare`;
+  }
+  return undefined;
+}
+
+/** What is wrong with the `audit` option of a route, or `undefined`. */
+export function checkRouteAudit(route: AppRoute): string | undefined {
+  const { audit } = route;
+  if (audit === undefined || typeof audit === 'boolean') return undefined;
+  if (audit === null || typeof audit !== 'object' || Array.isArray(audit)) {
+    return 'has an invalid audit option';
+  }
+  if (Object.keys(audit).some((key) => key !== 'body' && key !== 'redact')) {
+    return 'has an audit option with unknown keys (use body and redact)';
+  }
+  if (audit.body !== undefined && typeof audit.body !== 'boolean') {
+    return 'has an audit option whose body is not a boolean';
+  }
+  if (
+    audit.redact !== undefined &&
+    (!Array.isArray(audit.redact) ||
+      audit.redact.some((key) => typeof key !== 'string' || key === ''))
+  ) {
+    return 'has an audit option whose redact is not a list of key names';
+  }
+  if (audit.body === true && NEVER_AUDIT_BODY.test(route.path)) {
+    return 'stores a body in the audit trail, which a route under /auth/ must never do';
   }
   return undefined;
 }

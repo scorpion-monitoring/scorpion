@@ -197,6 +197,7 @@ export function createSettingsService(
           module: moduleId,
           keys: Object.keys(values).sort(),
           version: 1,
+          actorId: null,
         });
         return true;
       });
@@ -246,7 +247,12 @@ export function createSettingsService(
           }
         }
         if (keys.length > 0) {
-          await ctx.events.emit('settings.changed@1', { module: moduleId, keys, version });
+          await ctx.events.emit('settings.changed@1', {
+            module: moduleId,
+            keys,
+            version,
+            actorId: updatedBy,
+          });
         }
         return { keys, version };
       });

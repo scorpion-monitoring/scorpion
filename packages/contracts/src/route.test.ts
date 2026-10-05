@@ -177,3 +177,48 @@ describe('generateOpenApiDocument', () => {
     expect(generateOpenApiDocument([], { title: 'T', version: '1' }).paths).toEqual({});
   });
 });
+
+describe('the audit option of a route (ADR 0021)', () => {
+  const declared = new Set(['mod.things.write']);
+  const route = (audit: unknown, path = '/things'): AppRoute => ({
+    method: 'post',
+    path,
+    responses: {},
+    permission: 'mod.things.write',
+    audit: audit as never,
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['true', true],
+    ['false', false],
+    ['an empty object', {}],
+    ['body: true', { body: true }],
+    ['redact names', { redact: ['iban', 'pin'] }],
+    ['both', { body: true, redact: ['iban'] }],
+  ])('accepts %s', (_name, audit) => {
+    expect(checkRouteAccess(route(audit), declared)).toBeUndefined();
+  });
+
+  it.each([
+    ['null', null, 'invalid audit option'],
+    ['an array', [], 'invalid audit option'],
+    ['a string', 'yes', 'invalid audit option'],
+    ['an unknown key', { bodies: true }, 'unknown keys'],
+    ['a body that is not a boolean', { body: 'yes' }, 'not a boolean'],
+    ['a redact that is not a list', { redact: 'iban' }, 'not a list of key names'],
+    ['a redact with a non-string', { redact: [1] }, 'not a list of key names'],
+    ['a redact with an empty name', { redact: [''] }, 'not a list of key names'],
+  ])('rejects %s', (_name, audit, message) => {
+    expect(checkRouteAccess(route(audit), declared)).toContain(message);
+  });
+
+  it('never stores a body for a route under /auth/, whatever else it says', () => {
+    expect(checkRouteAccess(route({ body: true }, '/auth/login'), declared)).toContain('/auth/');
+    expect(
+      checkRouteAccess(route({ body: true }, '/auth/oidc/{provider}/start'), declared),
+    ).toContain('/auth/');
+    expect(checkRouteAccess(route(true, '/auth/login'), declared)).toBeUndefined();
+    expect(checkRouteAccess(route({ body: true }, '/authors'), declared)).toBeUndefined();
+  });
+});

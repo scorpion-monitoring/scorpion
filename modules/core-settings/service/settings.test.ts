@@ -29,6 +29,8 @@ const events = async (pool: { query: (text: string) => Promise<{ rows: unknown[]
   (await pool.query("select name, payload from kernel_outbox where name = 'settings.changed@1'"))
     .rows as { name: string; payload: Record<string, unknown> }[];
 
+const userIdOf = (actor: { kind: string; userId?: string }) => actor.userId;
+
 describe('changedKeys', () => {
   it.each([
     ['nothing', {}, {}, []],
@@ -130,8 +132,8 @@ describe('update', () => {
     });
     const emitted = await events(kernel.pool);
     expect(emitted.map((e) => e.payload)).toEqual([
-      { module: 'fix.widgets', keys: ['label', 'limit'], version: 1 },
-      { module: 'fix.widgets', keys: ['label'], version: 2 },
+      { module: 'fix.widgets', keys: ['label', 'limit'], version: 1, actorId: userIdOf(admin) },
+      { module: 'fix.widgets', keys: ['label'], version: 2, actorId: userIdOf(admin) },
     ]);
     expect(JSON.stringify(emitted)).not.toContain('hunter2-label');
   });
@@ -237,7 +239,7 @@ describe('seed (trusted code, no human caller)', () => {
       updatedBy: null,
     });
     expect((await events(kernel.pool)).map((e) => e.payload)).toEqual([
-      { module: 'fix.widgets', keys: ['limit'], version: 1 },
+      { module: 'fix.widgets', keys: ['limit'], version: 1, actorId: null }, // a seed has no human caller
     ]);
   });
 

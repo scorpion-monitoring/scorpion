@@ -136,6 +136,9 @@ export const moduleBoundaries = {
       if (!target) return;
 
       const subpath = specifier.slice(name.length);
+      // A file that composes a profile (the generated one, a test harness) imports manifests to put
+      // modules in a kernel. That wires modules together; it is not a dependency of the package.
+      const composing = isManifestImporter && MANIFEST_ENTRIES.includes(subpath);
       if (subpath !== PUBLIC_ENTRY) {
         if (MANIFEST_ENTRIES.includes(subpath)) {
           if (!isManifestImporter) {
@@ -145,7 +148,7 @@ export const moduleBoundaries = {
           context.report({ node, messageId: 'deep', data: { specifier, target: name } });
         }
       }
-      if (target !== own && ownPackage && !declares(ownPackage, name, modules)) {
+      if (!composing && target !== own && ownPackage && !declares(ownPackage, name, modules)) {
         context.report({
           node,
           messageId: 'undeclared',

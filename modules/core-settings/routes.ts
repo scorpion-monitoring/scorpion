@@ -125,6 +125,7 @@ export const updateSettingsRoute = createRoute({
   method: 'put',
   path: '/settings/{module}',
   permission: PERMISSION_SETTINGS_WRITE,
+  audit: { body: true },
   request: { params: moduleParam, body: json(updateSettingsInput) },
   responses: {
     200: ok('The saved settings.', settingsSchema),
@@ -147,6 +148,7 @@ export const setSecretRoute = createRoute({
   method: 'put',
   path: '/secrets/{name}',
   permission: PERMISSION_SECRET_WRITE,
+  audit: true,
   rateLimit: 'strict',
   request: { params: secretParam, body: json(setSecretInput) },
   responses: {
@@ -161,6 +163,7 @@ export const removeSecretRoute = createRoute({
   method: 'delete',
   path: '/secrets/{name}',
   permission: PERMISSION_SECRET_WRITE,
+  audit: true,
   request: { params: secretParam },
   responses: {
     204: { description: 'The secret is removed.' },
@@ -275,6 +278,7 @@ export const createTermRoute = createRoute({
   method: 'post',
   path: '/vocabularies/{vocabulary}/terms',
   permission: PERMISSION_VOCABULARY_WRITE,
+  audit: { body: true },
   request: { params: vocabularyParam, body: json(createTermInput) },
   responses: {
     201: ok('The term was added.', termSchema),
@@ -287,6 +291,7 @@ export const updateTermRoute = createRoute({
   method: 'patch',
   path: '/vocabularies/{vocabulary}/terms/{key}',
   permission: PERMISSION_VOCABULARY_WRITE,
+  audit: { body: true },
   request: { params: termParam, body: json(updateTermInput) },
   responses: {
     200: ok('The term after the change.', termSchema),
@@ -298,6 +303,7 @@ export const removeTermRoute = createRoute({
   method: 'delete',
   path: '/vocabularies/{vocabulary}/terms/{key}',
   permission: PERMISSION_VOCABULARY_WRITE,
+  audit: true,
   request: { params: termParam },
   responses: {
     200: ok(

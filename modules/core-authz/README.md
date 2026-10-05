@@ -14,16 +14,16 @@ no settings (ADR-0014).
 
 ## Manifest
 
-| Part           | Value                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| id             | `core.authz`                                                                                       |
-| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                           |
-| dependencies   | none (ADR-0014)                                                                                    |
-| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)) |
-| jobs, CLI      | none                                                                                               |
-| events         | emits `authz.role.assigned@1` and `authz.role.removed@1`, see "Events"                             |
-| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                              |
-| public service | `ctx.deps['core.authz']`, see "Public API"                                                         |
+| Part           | Value                                                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| id             | `core.authz`                                                                                               |
+| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                                   |
+| dependencies   | none (ADR-0014)                                                                                            |
+| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md))         |
+| jobs, CLI      | none                                                                                                       |
+| events         | emits `authz.role.assigned@1`, `authz.role.removed@1` and `authz.role.permissions.changed@1`, see "Events" |
+| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                                      |
+| public service | `ctx.deps['core.authz']`, see "Public API"                                                                 |
 
 ### Permissions
 
@@ -126,8 +126,11 @@ roles uses them; the trust boundary is the profile's module list, as for contrib
 
 `authz.role.assigned@1` and `authz.role.removed@1`, emitted inside the transaction of the change:
 `{ userId, roleKey, actorId }`, where `actorId` is the caller or `null` for the system. Nothing else (no permission list,
-no secret). A repeat of a change (the role was held already, or not) emits nothing. There is no subscriber yet; M4's audit
-trail subscribes. `setRolePermissions` emits no event in M3.
+no secret). A repeat of a change (the role was held already, or not) emits nothing.
+
+`authz.role.permissions.changed@1`, emitted by `setRolePermissions` in the transaction that replaces the set:
+`{ roleKey, added, removed, actorId }`, where `added` and `removed` are sorted permission strings (never user data) and
+`actorId` is the caller. Saving the set a role already has emits nothing. `core.audit` subscribes to all three (ADR-0021).
 
 ## Tables
 
