@@ -12,6 +12,7 @@ import { deriveStatus, parseAssessment, validate, type DerivedStatus } from './a
 import { CHAPTERS, PATHS, reportPath, yamlPath } from './config.ts';
 import { collectTags, parseJunit, type TagResults, type TestCase } from './junit.ts';
 import { renderBadgeBlock, renderReport, replaceBadgeBlock } from './report.ts';
+import { headingAnchors } from './markdown.ts';
 import { chaptersForFiles } from './scope.ts';
 import { checkSourceHash, readChapter } from './source.ts';
 
@@ -85,6 +86,8 @@ export function run(options: Options): Outcome {
     const validation = validate(assessment, config, chapter, {
       tags,
       exists: (path) => existsSync(join(options.root, path)),
+      anchors: (path) =>
+        existsSync(join(options.root, path)) ? headingAnchors(read(path)) : undefined,
     });
     problems.push(...validation.problems);
     unverified.push(...validation.unverified.map((tag) => `ASVS-${tag}`));

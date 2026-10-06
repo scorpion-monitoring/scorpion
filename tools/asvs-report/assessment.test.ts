@@ -20,6 +20,7 @@ const tags = (passed: string[] = [], failed: string[] = []) => ({
 const context = (overrides: Partial<ValidationContext> = {}): ValidationContext => ({
   tags: tags(),
   exists: (path) => path === 'README.md',
+  anchors: (path) => (path === 'docs/m4b-sprint-plan.md' ? ['4-sprint-1-sessions'] : undefined),
   ...overrides,
 });
 
@@ -146,7 +147,7 @@ describe('rule 3: n/a needs a reason, fail needs an issue', () => {
     'fails on a fail with the note %j',
     (note) => {
       expect(check(entries({ status: 'fail', note })).problems).toEqual([
-        'v5.0.0-6.1.1: fail needs a note that links to an issue (#123 or the issue URL)',
+        'v5.0.0-6.1.1: fail needs a note that links to an issue (#123 or its URL) or to a sprint plan section (docs/<plan>.md#<heading>)',
       ]);
     },
   );
@@ -157,6 +158,32 @@ describe('rule 3: n/a needs a reason, fail needs an issue', () => {
     ['https://github.com/scorpion-monitoring/scorpion/issues/12'],
   ])('accepts a fail with the note %j', (note) => {
     expect(check(entries({ status: 'fail', note })).problems).toEqual([]);
+  });
+
+  it('accepts a fail whose note links a heading of a sprint plan', () => {
+    const note = 'Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions.';
+    expect(check(entries({ status: 'fail', note })).problems).toEqual([]);
+  });
+
+  it.each([
+    [
+      'docs/m4b-sprint-plan.md#9-no-such-heading',
+      /has no heading with the anchor #9-no-such-heading/,
+    ],
+    ['docs/m9-sprint-plan.md#4-sprint-1-sessions', /plan docs\/m9-sprint-plan.md does not exist/],
+  ])('refuses a plan link to %s', (link, message) => {
+    expect(check(entries({ status: 'fail', note: `Planned: ${link}` })).problems[0]).toMatch(
+      message,
+    );
+  });
+
+  it('does not take a plain file link or a link outside docs as a plan section', () => {
+    expect(
+      check(entries({ status: 'fail', note: 'See docs/backlog.md#later' })).problems,
+    ).toHaveLength(1);
+    expect(
+      check(entries({ status: 'fail', note: 'See ../x/m4b-sprint-plan.md#a' })).problems,
+    ).toHaveLength(1);
   });
 
   it('does not take an issue of another repository', () => {

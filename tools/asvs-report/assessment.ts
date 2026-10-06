@@ -62,6 +62,8 @@ export interface ValidationContext {
   tags: TagResults | undefined;
   /** True when a repository path exists. */
   exists: (path: string) => boolean;
+  /** The heading anchors (GitHub's slugs) of a Markdown file, or undefined when it does not exist. */
+  anchors: (path: string) => string[] | undefined;
 }
 
 export interface Validation {
@@ -76,6 +78,8 @@ const TYPES: readonly string[] = ['self', 'peer', 'external'];
 const ISSUE_LINK = new RegExp(
   `(?:^|[^\\w/])#\\d+\\b|https://github\\.com/${REPOSITORY.org}/${REPOSITORY.repo}/issues/\\d+`,
 );
+/** A section of a sprint plan that schedules the fix: `docs/m4b-sprint-plan.md#4-sprint-1-sessions`. */
+const PLAN_LINK = /(?:^|[\s(])(docs\/[a-z0-9-]+-sprint-plan\.md)#([a-z0-9_-]+)/g;
 const SHA = /^[0-9a-f]{40}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -179,10 +183,21 @@ export function validate(
           );
         reasons.set(key, entry.id);
       }
-    } else if (blank(entry.note) || !ISSUE_LINK.test(entry.note!)) {
-      problems.push(
-        `${entry.id}: fail needs a note that links to an issue (#123 or the issue URL)`,
-      );
+    } else {
+      // Rule 3: an issue, or the section of a sprint plan that schedules the fix.
+      const note = entry.note ?? '';
+      const plans = [...note.matchAll(PLAN_LINK)];
+      if (blank(entry.note) || (!ISSUE_LINK.test(note) && plans.length === 0)) {
+        problems.push(
+          `${entry.id}: fail needs a note that links to an issue (#123 or its URL) or to a sprint plan section (docs/<plan>.md#<heading>)`,
+        );
+      }
+      for (const [, file, anchor] of plans) {
+        const anchors = context.anchors(file!);
+        if (anchors === undefined) problems.push(`${entry.id}: the plan ${file} does not exist`);
+        else if (!anchors.includes(anchor!))
+          problems.push(`${entry.id}: ${file} has no heading with the anchor #${anchor}`);
+      }
     }
   }
 
