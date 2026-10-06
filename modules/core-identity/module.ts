@@ -22,6 +22,7 @@ import { createMailBudget } from './service/mail-budget.ts';
 import { createMailLinks } from './service/mail-links.ts';
 import { IDENTITY_TEMPLATES } from './service/mail-templates.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
+import { createOidcLinkService, type OidcLinkService } from './service/oidc-link.ts';
 import { createOidcService, type OidcService } from './service/oidc.ts';
 import {
   clientSecretFrom,
@@ -56,6 +57,7 @@ export interface IdentityInternals extends IdentityService {
   cleanup: CleanupService;
   loginStates: LoginStateService;
   oidc: OidcService;
+  oidcLink: OidcLinkService;
   profile: ProfileService;
   recovery: RecoveryService;
   roles: RoleService;
@@ -264,6 +266,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           provider: z.string(),
           via: z.enum(['email', 'profile']),
         }),
+        // A first sign-in at a provider found an account that holds the address; its holder was mailed a link (ADR 0026). Nothing was linked.
+        'identity.authMethod.linkRequested@1': userEvent.extend({ provider: z.string() }),
         'identity.password.resetRequested@1': userEvent,
         'identity.password.reset@1': userEvent,
         'identity.password.changed@1': userEvent,
@@ -363,6 +367,15 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       });
       currentBootstrap = bootstrap;
       const loginStates = createLoginStateService(ctx);
+      const oidcLink = createOidcLinkService(ctx, {
+        authz,
+        users,
+        sessions,
+        settings,
+        mail,
+        budget,
+        links,
+      });
       const oidc = createOidcService(ctx, {
         authz,
         users,
@@ -375,6 +388,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           now: options.oidcHttp?.now,
         }),
         clientSecret,
+        linking: oidcLink,
         exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
       });
       const recovery = createRecoveryService(ctx, {
@@ -402,6 +416,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         recovery,
         loginStates,
         oidc,
+        oidcLink,
         users,
         sessions,
         sessionAdmin: createSessionAdminService(ctx, { sessions, users, authz }),
@@ -430,6 +445,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         approval,
         bootstrap,
         oidc,
+        oidcLink,
         profile,
         recovery,
         roles,
@@ -441,6 +457,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         approval,
         bootstrap,
         oidc,
+        oidcLink,
         profile,
         recovery,
         roles,

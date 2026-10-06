@@ -55,9 +55,11 @@ async function start(loginThrottle: Partial<typeof throttleSettings> = {}) {
       ...options,
     });
   /** What the caller learns from a failed login: the class, the status, the text and the wait. */
-  const outcome = (promise: Promise<unknown>) =>
+  const outcome = (
+    promise: Promise<unknown>,
+  ): Promise<{ kind: string; status?: number; message?: string; retryAfter?: number }> =>
     promise.then(
-      () => ({ kind: 'ok' as const }),
+      () => ({ kind: 'ok' }),
       (error: unknown) => ({
         kind: (error as Error).constructor.name,
         status: (error as { status?: number }).status,

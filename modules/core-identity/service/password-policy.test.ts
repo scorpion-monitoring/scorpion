@@ -116,7 +116,7 @@ describe('a breached password', () => {
   });
 
   it('is refused by `scorpion create-admin`, which names the field and not the password', async () => {
-    const { identity: id } = await start();
+    const { identity: id, kernel } = await start();
     const out: string[] = [];
     const code = await createAdminCommand(() => id.bootstrap).run(
       ['--username', 'root', '--email', 'root@example.org'],
@@ -125,6 +125,7 @@ describe('a breached password', () => {
         err: (text) => out.push(text),
         readSecret: () => Promise.resolve(LEAKED),
       },
+      kernel as never, // the command only uses the bootstrap service it was given
     );
     expect(code).toBe(1);
     expect(out.join('\n')).toMatch(/password/);

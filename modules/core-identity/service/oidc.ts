@@ -4,8 +4,10 @@ import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
 import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import { ids, type ModuleContext } from '@scorpion/kernel';
+import type { ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
+import { addIdentityIn } from './identity-link.ts';
+import type { OidcLinkService } from './oidc-link.ts';
 import type { User, UserService } from '../public.ts';
 import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
 import {
@@ -39,7 +41,13 @@ export interface StartedLogin {
 export type CompletedLogin =
   | { kind: 'login'; sessionId: string; expiresAt: Date }
   | { kind: 'linked' }
-  | { kind: 'reauthenticated' };
+  | { kind: 'reauthenticated' }
+  /**
+   * The provider asserted a verified address that an account holds. Nothing was linked and nobody was
+   * signed in; the holder of the account was mailed a link to confirm (ADR 0026). The same whether or
+   * not a mail could be sent.
+   */
+  | { kind: 'check-mail' };
 
 export interface CompleteInput {
   providerId: string;
@@ -56,6 +64,8 @@ export interface CompleteInput {
 export interface OidcService {
   /** Where the browser goes after the callback: the application root under `BASE_PATH`. Fixed, so there is no open redirect. */
   readonly landing: string;
+  /** Where it goes when a link mail was sent instead of a sign-in: the sign-in page with a notice. Fixed as well. */
+  readonly checkMailLanding: string;
   /** Starts a login for anyone. 404 for a provider that is not configured, 502 when it cannot be reached. */
   start(providerId: string): Promise<StartedLogin>;
   /** Starts the flow that adds a provider to the signed-in caller's account. Session only. */
@@ -80,6 +90,8 @@ export interface OidcDeps {
   states: LoginStateService;
   providers: ProviderClient;
   clientSecret: ClientSecretLookup;
+  /** What a first sign-in with an address that an account holds does instead of linking (ADR 0026). */
+  linking: Pick<OidcLinkService, 'request'>;
   exchangeTimeoutMs?: number;
 }
 
@@ -178,34 +190,8 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     return created;
   }
 
-  async function addIdentity(
-    found: User,
-    provider: string,
-    subject: string,
-    via: 'email' | 'profile',
-  ) {
-    await ctx.db.tx(async (tx) => {
-      const [sameSubject] = await tx
-        .select({ id: authMethod.id })
-        .from(authMethod)
-        .where(and(eq(authMethod.provider, provider), eq(authMethod.subject, subject)))
-        .limit(1);
-      const [sameProvider] = await tx
-        .select({ id: authMethod.id })
-        .from(authMethod)
-        .where(and(eq(authMethod.userId, found.id), eq(authMethod.provider, provider)))
-        .limit(1);
-      if (sameSubject || sameProvider) {
-        throw new Conflict('This sign-in is already linked to an account.');
-      }
-      await tx.insert(authMethod).values({ id: ids.uuidv7(), userId: found.id, provider, subject });
-      await ctx.events.emit('identity.authMethod.linked@1', {
-        userId: found.id,
-        username: found.username,
-        provider,
-        via,
-      });
-    });
+  async function addIdentity(found: User, provider: string, subject: string, via: 'profile') {
+    await ctx.db.tx((tx) => addIdentityIn(ctx, tx, found, provider, subject, via));
   }
 
   async function provision(provider: OidcProvider, claims: IdentityClaims): Promise<User> {
@@ -272,18 +258,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       const sameEmail =
         claims.emailVerified && claims.email ? await users.findByEmail(claims.email) : undefined;
       if (sameEmail) {
-        // Both sides must have proved the address. A password account whose owner has not
-        // confirmed it is never taken over: they sign in as before and link from their profile.
-        if (!sameEmail.emailVerified) {
-          throw new Conflict(
-            'An account with this email address already exists. Sign in the usual way, then link this provider from your profile.',
-          );
-        }
-        if (sameEmail.deletedAt !== null || sameEmail.status === 'rejected') {
-          throw new Unauthorized(GENERIC_REFUSAL);
-        }
-        await addIdentity(sameEmail, provider.id, claims.subject, 'email');
-        account = sameEmail;
+        // A provider's word for an address is not enough to enter the account that holds it (ASVS
+        // 6.8.1): nothing is linked and nobody is signed in. The holder is mailed a link and confirms
+        // it signed in. Every case ends the same way, so the browser learns nothing about the account.
+        await deps.linking.request(provider, claims.subject, sameEmail);
+        return { kind: 'check-mail' };
       } else {
         account = await provision(provider, claims);
       }
@@ -348,6 +327,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
   return {
     landing: ctx.config.BASE_PATH === '/' ? '/' : `${ctx.config.BASE_PATH}/`,
+    checkMailLanding: `${ctx.config.BASE_PATH === '/' ? '' : ctx.config.BASE_PATH}/login?notice=check-mail`,
 
     start: (providerId) => begin(providerId),
 
