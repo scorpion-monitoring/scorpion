@@ -68,7 +68,7 @@ describe('resolve', () => {
     expect(await id.sessions.resolve(make())).toBeUndefined();
   });
 
-  it('refuses an expired session [ASVS-7.3.1] [ASVS-7.4.1]', async () => {
+  it('refuses an expired session [ASVS-7.4.1]', async () => {
     const { kernel, identity: id } = await identity.start();
     const user = await makeUser(kernel.pool);
     const created = await id.sessions.create(user.id);
@@ -87,7 +87,7 @@ describe('resolve', () => {
     expect(await id.sessions.resolve(sessionId)).toBeUndefined();
   });
 
-  it('slides the expiry forward, but not on every request [ASVS-7.3.1]', async () => {
+  it('slides the expiry forward, but not on every request', async () => {
     const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 0 });
     const user = await makeUser(kernel.pool);
     const created = await id.sessions.create(user.id);

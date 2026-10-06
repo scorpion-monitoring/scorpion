@@ -42,11 +42,8 @@ requirements:
       - code: modules/core-identity/service/accounts.ts
     note: 'Password login and OIDC login each make a new server-generated id and end the session the browser presented.'
   - id: v5.0.0-7.3.1
-    status: pass
-    evidence:
-      - test: ASVS-7.3.1
-      - doc: docs/adr/0007-session-cookie-and-csrf.md
-    note: 'Inactivity timeout of 7 days from last use, enforced in sessions.resolve. The value is a documented decision (ADR-0007), but the risk analysis behind it is not written down (see 7.1.1); a reviewer may insist on that.'
+    status: fail
+    note: 'Not met yet. The 7-day inactivity timeout is enforced (sessions.resolve) and is a documented decision (ADR-0007), but the requirement asks for re-authentication according to a risk analysis, and none is written (see 7.1.1). Becomes a pass once 7.1.1 documents the analysis. Tracked in #9007.'
   - id: v5.0.0-7.3.2
     status: fail
     note: 'Not met (code gap). Every use after 60 s sets expiresAt = now + 7 days and createdAt is never consulted, so a session that is used often never expires. Own issue #9101.'
