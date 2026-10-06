@@ -89,7 +89,7 @@ authentication request and lives 10 minutes (`RESET_TTL_MS`). The mail and the m
 
 The **verification link** (24 hours) confirms that an address belongs to an account that already exists. Opening it
 authenticates nobody: it creates no session, grants nothing, and can only mark the address as verified, which is what
-the owner of the mailbox would do. 6.5.5 limits the lifetime of requests, codes and tokens that *authenticate*; the
+the owner of the mailbox would do. 6.5.5 limits the lifetime of requests, codes and tokens that _authenticate_; the
 earlier assessment of 6.5.1 to 6.5.4 counted mail links as out-of-band because they are single use and claimed by one
 update, which is a property of any mail token and does not make the verification link an authentication request. If the
 maintainer rejects this reading, the verification link also drops to 10 minutes and the mail says "request a new link";
@@ -116,7 +116,7 @@ provider's to choose), then answers the browser with the same neutral redirect w
   same body, and takes about the same time, because the work is a token insert and a queued mail.
 - **The confirmation** is `POST /account/oidc-link/confirm` with the token, by a **signed-in** session of that account
   and after `requireRecentAuth` (ADR-0025). Only then is the identity linked (`identity.authMethod.linked@1`, `via:
-  email`). The token is claimed by one conditional update that also requires the caller's user id, so a token used
+email`). The token is claimed by one conditional update that also requires the caller's user id, so a token used
   from another account's session is refused without being spent, and a token used twice links once. A claim that finds
   the identity already linked elsewhere is a `409`, and the provider must still be configured.
 - **What is not changed**: linking from the profile while signed in (it needs the recent authentication of ADR-0025), and

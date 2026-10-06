@@ -57,6 +57,13 @@
       "when": 1791293141562,
       "tag": "0007_flaky_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791297141073,
+      "tag": "0008_credentials_throttle_and_link_token",
+      "breakpoints": true
     }
   ]
 }

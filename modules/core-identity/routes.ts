@@ -702,7 +702,9 @@ export function registerIdentityRoutes(
   }) satisfies RouteHandler<typeof registerRoute, AppEnv>);
 
   r.internal(loginRoute, (async (c) => {
-    const result = await accounts.login(c.req.valid('json'), readSessionCookie(c));
+    const result = await accounts.login(c.req.valid('json'), readSessionCookie(c), {
+      clientIp: c.get('clientIp'),
+    });
     writeSessionCookie(c, result.sessionId, result.expiresAt);
     c.header('cache-control', 'no-store');
     return c.json({ user: view(result.user), csrfToken: result.csrfToken }, 200);

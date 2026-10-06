@@ -20,6 +20,8 @@ import type { IdentityMail } from './identity-mail.ts';
 import type { MailBudget } from './mail-budget.ts';
 import type { MailLinks } from './mail-links.ts';
 import { hashPassword, verifyPassword } from './password.ts';
+import type { PasswordPolicy } from './password-policy.ts';
+import type { LoginThrottle } from './login-throttle.ts';
 import { requireSession, requireUser } from './require-user.ts';
 import { ADMIN_ROLE, grantDefaultRole } from './roles.ts';
 import { csrfTokenFor } from './session-id.ts';
@@ -33,6 +35,13 @@ export interface LoginResult {
   sessionId: string;
   expiresAt: Date;
   csrfToken: string;
+}
+
+export interface LoginOptions {
+  /** The client's address, as the pipeline resolved it; it is one of the two throttle keys. */
+  clientIp?: string;
+  /** For tests: the time the throttle counts from. */
+  now?: Date;
 }
 
 export interface AccountService {
@@ -53,8 +62,12 @@ export interface AccountService {
    * Checks the password and starts a session. An unknown user and a wrong password answer the same
    * way and cost the same; a pending account is told to wait, a rejected or deleted one is not
    * told anything. `previousSessionId` (the caller's current session, if any) is ended.
+   *
+   * Failed attempts are throttled per account (ADR 0026): over the limit the answer is a 429 with
+   * `Retry-After`, before the password is looked at and the same for a name that does not exist. A
+   * success forgets the counters.
    */
-  login(input: unknown, previousSessionId?: string): Promise<LoginResult>;
+  login(input: unknown, previousSessionId?: string, options?: LoginOptions): Promise<LoginResult>;
   /** Ends the caller's own session. */
   logout(actor: Actor, sessionId: string | undefined): Promise<void>;
   /**
@@ -114,9 +127,12 @@ export function createAccountService(
     budget: MailBudget;
     links: MailLinks;
     authz: AuthzService;
+    passwords: PasswordPolicy;
+    throttle: LoginThrottle;
   },
 ): AccountService {
-  const { users, sessions, settings, recovery, mail, budget, links, authz } = deps;
+  const { users, sessions, settings, recovery, mail, budget, links, authz, passwords, throttle } =
+    deps;
 
   // A hash to check when there is nobody to check against, so that "no such user" takes as long as
   // "wrong password". Made with the same parameters as the real ones, once, on first use.
@@ -196,6 +212,10 @@ export function createAccountService(
       if (!parsed.success) throw invalid(parsed.error);
       const { username, email, password, locale } = parsed.data;
 
+      // Before anything is spent or looked up, and the same for a new and a taken address: a password
+      // that breaks the rules is a 422 on both paths.
+      await passwords.check(password, { username, email });
+
       // Spent on both paths, before anything tells them apart: exhausting it says nothing.
       const mayMailOwner = await budget.spend(email);
 
@@ -269,12 +289,16 @@ export function createAccountService(
       }
     },
 
-    async login(input, previousSessionId) {
+    async login(input, previousSessionId, options = {}) {
       const { localAccounts } = await settings.get();
       if (!localAccounts) throw new Forbidden('Signing in with a password is turned off.');
       const parsed = loginInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       const { username, password } = parsed.data;
+      const { clientIp, now = new Date() } = options;
+
+      // A blocked key answers 429 before anything else, the same for every name (ADR 0026).
+      await throttle.assertOpen(username, clientIp, now);
 
       const found = await users.findByUsername(username);
       const [method] = found
@@ -287,12 +311,14 @@ export function createAccountService(
       const storedHash = method?.passwordHash ?? undefined;
 
       const passwordOk = await verifyPassword(storedHash ?? (await decoy()), password);
-      if (found === undefined || storedHash === undefined || !passwordOk) {
+      // Every refusal that looks like a wrong name or password is counted, so a name that does not
+      // exist, a wrong password and a rejected account are slowed alike.
+      const refuse = async (): Promise<never> => {
+        await throttle.recordFailure(username, clientIp, now);
         throw new Unauthorized('The username or password is wrong.');
-      }
-      if (found.deletedAt !== null || found.status === 'rejected') {
-        throw new Unauthorized('The username or password is wrong.');
-      }
+      };
+      if (found === undefined || storedHash === undefined || !passwordOk) return refuse();
+      if (found.deletedAt !== null || found.status === 'rejected') return refuse();
       if (found.status === 'pending') {
         throw new Forbidden('Your account is waiting for approval.');
       }
@@ -303,6 +329,7 @@ export function createAccountService(
           .update(authMethod)
           .set({ lastLoginAt: sql`now()` })
           .where(eq(authMethod.id, method!.id));
+        await throttle.reset(tx, username, clientIp);
         return created;
       });
       // A new login replaces the session the browser held, so an old id cannot be carried over.
@@ -365,7 +392,10 @@ export function createAccountService(
       if (!method?.passwordHash) {
         throw new Conflict('This account has no password. Sign in again at your provider.');
       }
+      // Guessing the password through a stolen session is throttled like guessing it at login.
+      await throttle.assertOpen(caller.username, undefined);
       if (!(await verifyPassword(method.passwordHash, parsed.data.password))) {
+        await throttle.recordFailure(caller.username, undefined);
         throw new Invalid('The password is wrong.', [
           { path: 'password', message: 'is not your current password' },
         ]);
@@ -374,6 +404,7 @@ export function createAccountService(
         if (!(await sessions.markAuthenticated(caller.userId, caller.sessionId!, tx))) {
           throw new Unauthorized('The session is not valid. Sign in again.');
         }
+        await throttle.reset(tx, caller.username, undefined);
         await ctx.events.emit('identity.session.reauthenticated@1', {
           userId: caller.userId,
           username: caller.username,

@@ -1,4 +1,5 @@
-// Tokens that travel by mail (ADR 0012): a password reset and the confirmation of an address.
+// Tokens that travel by mail (ADR 0012, ADR 0026): a password reset, the confirmation of an address
+// and the confirmation of linking a sign-in provider.
 // 256 random bits, kept only as a SHA-256 hash (the secret has full entropy, so a slow hash adds
 // nothing), single use, short-lived. A new token for the same user and purpose ends the older one.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -6,15 +7,20 @@ import { and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { ids, type DbTx } from '@scorpion/kernel';
 import { mailToken, type MailTokenPurpose } from '../db/schema.ts';
 
-export const RESET_TTL_MS = 60 * 60 * 1000;
+/** A reset link authenticates, so it is an out-of-band request with the 10 minutes of ASVS 6.5.5 (ADR 0026). */
+export const RESET_TTL_MS = 10 * 60 * 1000;
+/** A verification link only confirms an address and authenticates nobody: 24 hours (ADR 0026, section 3). */
 export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+/** Linking a provider adds a way to sign in, so it is as short as the reset link. */
+export const OIDC_LINK_TTL_MS = 10 * 60 * 1000;
 
-/** `srt_` (reset) or `sev_` (verification) and 43 base64url characters. Not an access token. */
+/** `srt_` (reset), `sev_` (verification) or `sol_` (link) and 43 base64url characters. Not an access token. */
 const MARK: Record<MailTokenPurpose, string> = {
   'password-reset': 'srt_',
   'email-verification': 'sev_',
+  'oidc-link': 'sol_',
 };
-const SHAPE = /^(srt|sev)_[A-Za-z0-9_-]{43}$/;
+const SHAPE = /^(srt|sev|sol)_[A-Za-z0-9_-]{43}$/;
 
 export const hashMailToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
@@ -31,6 +37,9 @@ export interface ClaimedToken {
   id: string;
   userId: string;
   email: string | null;
+  /** `oidc-link` only. */
+  provider: string | null;
+  subject: string | null;
 }
 
 type Reader = Pick<DbTx, 'select'>;
@@ -45,6 +54,8 @@ export async function issueMailToken(
     userId: string;
     purpose: MailTokenPurpose;
     email?: string;
+    /** `oidc-link`: the identity to link. */
+    identity?: { provider: string; subject: string };
     ttlMs: number;
     now: Date;
   },
@@ -62,6 +73,8 @@ export async function issueMailToken(
     purpose,
     secretHash: hashMailToken(token),
     email: purpose === 'email-verification' ? (options.email ?? null) : null,
+    provider: purpose === 'oidc-link' ? (options.identity?.provider ?? null) : null,
+    subject: purpose === 'oidc-link' ? (options.identity?.subject ?? null) : null,
     createdAt: now,
     expiresAt: new Date(now.getTime() + options.ttlMs),
   });
@@ -82,6 +95,8 @@ export async function peekMailToken(
       id: mailToken.id,
       userId: mailToken.userId,
       email: mailToken.email,
+      provider: mailToken.provider,
+      subject: mailToken.subject,
       secretHash: mailToken.secretHash,
     })
     .from(mailToken)
@@ -96,7 +111,13 @@ export async function peekMailToken(
     .limit(1);
   // The index found it by hash; the comparison is repeated in constant time anyway.
   if (!row || !equal(row.secretHash, hash)) return undefined;
-  return { id: row.id, userId: row.userId, email: row.email };
+  return {
+    id: row.id,
+    userId: row.userId,
+    email: row.email,
+    provider: row.provider,
+    subject: row.subject,
+  };
 }
 
 /**
@@ -109,6 +130,8 @@ export async function claimMailToken(
   token: string,
   purpose: MailTokenPurpose,
   now: Date,
+  /** Only a token of this user: another user's token is left unused and answers like an unknown one. */
+  userId?: string,
 ): Promise<ClaimedToken | undefined> {
   if (!isMailTokenShape(token, purpose)) return undefined;
   const [row] = await tx
@@ -120,9 +143,16 @@ export async function claimMailToken(
         eq(mailToken.purpose, purpose),
         isNull(mailToken.usedAt),
         gt(mailToken.expiresAt, now),
+        userId === undefined ? undefined : eq(mailToken.userId, userId),
       ),
     )
-    .returning({ id: mailToken.id, userId: mailToken.userId, email: mailToken.email });
+    .returning({
+      id: mailToken.id,
+      userId: mailToken.userId,
+      email: mailToken.email,
+      provider: mailToken.provider,
+      subject: mailToken.subject,
+    });
   return row;
 }
 

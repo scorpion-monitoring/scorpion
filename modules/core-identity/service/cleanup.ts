@@ -2,12 +2,12 @@
 // were soft-deleted long enough ago. It is a job, not a service anyone calls: no route, no actor,
 // nothing to authorise. One run is one transaction, so a failure (a subscriber's rule, a database
 // error) leaves everything as it was and the next run does it again.
-import { and, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import { and, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { BlobService } from '@scorpion/core-blob/public';
 import type { NotificationsService } from '@scorpion/core-notifications/public';
 import type { ModuleContext } from '@scorpion/kernel';
-import { firstRunToken, loginState, session, token, user } from '../db/schema.ts';
+import { firstRunToken, loginState, loginThrottle, session, token, user } from '../db/schema.ts';
 import { avatarReference } from './avatar-reference.ts';
 import { deleteSpentMailTokens } from './mail-tokens.ts';
 import { daysToMs, type IdentitySettings } from './settings.ts';
@@ -18,6 +18,7 @@ export interface CleanupResult {
   mailTokens: number;
   accessTokens: number;
   firstRunTokens: number;
+  loginThrottles: number;
   purgedUsers: number;
 }
 
@@ -38,7 +39,7 @@ export function createCleanupService(
   return {
     async run(now = new Date()) {
       // Read first, outside the transaction: the retention numbers are settings (README, "Settings").
-      const { retention } = await deps.settings.get();
+      const { retention, loginThrottle: throttle } = await deps.settings.get();
       return ctx.db.tx(async (tx) => {
         const sessions = await tx
           .delete(session)
@@ -65,6 +66,18 @@ export function createCleanupService(
           .delete(firstRunToken)
           .where(lt(firstRunToken.expiresAt, now))
           .returning({ id: firstRunToken.id });
+
+        // Counters of failed logins that are forgotten by now and not blocking anybody.
+        const forgetBefore = new Date(now.getTime() - throttle.forgetAfterSeconds * 1000);
+        const loginThrottles = await tx
+          .delete(loginThrottle)
+          .where(
+            and(
+              lt(loginThrottle.lastFailureAt, forgetBefore),
+              or(isNull(loginThrottle.blockedUntil), lt(loginThrottle.blockedUntil, now)),
+            ),
+          )
+          .returning({ key: loginThrottle.keyHash });
 
         // The purge: accounts soft-deleted (rejected) before the cutoff, oldest first.
         const cutoff = new Date(now.getTime() - daysToMs(retention.purgeAfterDays));
@@ -105,6 +118,7 @@ export function createCleanupService(
           mailTokens,
           accessTokens: accessTokens.length,
           firstRunTokens: firstRunTokens.length,
+          loginThrottles: loginThrottles.length,
           purgedUsers: due.length,
         };
       });

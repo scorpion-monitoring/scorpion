@@ -1,4 +1,9 @@
 import { z } from '@scorpion/contracts';
+import {
+  createPwnedPasswords,
+  createStubPwnedPasswords,
+  type PwnedPasswords,
+} from '@scorpion/integrations';
 import { defineModule, type ModuleContext } from '@scorpion/kernel';
 import { createAuthenticator } from './authenticator.ts';
 import type { IdentityService } from './public.ts';
@@ -11,6 +16,8 @@ import { createCleanupService, type CleanupService } from './service/cleanup.ts'
 import { createProfileService, type ProfileService } from './service/profile.ts';
 import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
 import { createIdentityMail } from './service/identity-mail.ts';
+import { createLoginThrottle } from './service/login-throttle.ts';
+import { createPasswordPolicy } from './service/password-policy.ts';
 import { createMailBudget } from './service/mail-budget.ts';
 import { createMailLinks } from './service/mail-links.ts';
 import { IDENTITY_TEMPLATES } from './service/mail-templates.ts';
@@ -72,6 +79,12 @@ export interface IdentityModuleOptions {
   announce?: (text: string) => void;
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
+  /**
+   * The breach service behind the password check. The default is the Have I Been Pwned range API;
+   * under `NODE_ENV=test` it is a stub that knows no password and never calls out, so no test
+   * reaches the network.
+   */
+  pwned?: PwnedPasswords;
   /**
    * Where an OIDC client secret comes from. The default is the secrets store of core.settings
    * (`service/oidc-secret.ts`); there is no environment fallback.
@@ -315,6 +328,18 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         settings: ctx.deps['core.settings'],
       });
       const links = createMailLinks(ctx.config);
+      const settingsService = ctx.deps['core.settings'];
+      const policy = createPasswordPolicy(ctx, {
+        settings,
+        names: async () => {
+          const branding = await settingsService.getBranding();
+          return { instanceName: branding.instanceName, productName: branding.productName };
+        },
+        pwned:
+          options.pwned ??
+          (process.env.NODE_ENV === 'test' ? createStubPwnedPasswords() : createPwnedPasswords()),
+      });
+      const throttle = createLoginThrottle(ctx, { settings });
       const budget = createMailBudget(ctx, settings);
       const blob = ctx.deps['core.blob'];
       currentSettings = settings;
@@ -334,6 +359,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         authz,
         announce: options.announce ?? (process.env.NODE_ENV === 'test' ? toNowhere : toConsole),
         ttlMs: options.firstRunTtlMs,
+        policy,
       });
       currentBootstrap = bootstrap;
       const loginStates = createLoginStateService(ctx);
@@ -358,6 +384,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         budget,
         links,
         authz,
+        policy,
+        throttle,
       });
       const cleanup = createCleanupService(ctx, {
         authz,
@@ -389,6 +417,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           budget,
           links,
           authz,
+          passwords: policy,
+          throttle,
         }),
         approval: createApprovalService(ctx, { sessions, authz, mail, links }),
       };

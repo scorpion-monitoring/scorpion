@@ -170,5 +170,7 @@ export interface AppEnv {
     requestId: string;
     /** Who is calling: set by the authentication step, `anonymous` without credentials. */
     actor: Actor;
+    /** The client's address as the pipeline resolves it (trusted proxies); `undefined` without a socket. */
+    clientIp: string | undefined;
   };
 }

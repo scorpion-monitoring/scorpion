@@ -52,7 +52,12 @@ export function errorMapper(log: Logger): ErrorHandler<AppEnv> {
   return (error, c) => {
     const requestId = c.get('requestId') ?? randomUUID();
     if (error instanceof DomainError) {
-      return problemResponse(problemFor(error, requestId));
+      return problemResponse(
+        problemFor(error, requestId),
+        error.retryAfterSeconds === undefined
+          ? undefined
+          : { 'retry-after': String(error.retryAfterSeconds) },
+      );
     }
     if (error instanceof HTTPException && error.status >= 400 && error.status < 500) {
       if (error.status === 400 && /malformed json/i.test(error.message)) {

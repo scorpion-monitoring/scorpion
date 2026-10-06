@@ -40,7 +40,8 @@ export interface PwnedPasswordsOptions {
   cacheMax?: number;
 }
 
-const sha1 = (value: string) => createHash('sha1').update(value, 'utf8').digest('hex').toUpperCase();
+const sha1 = (value: string) =>
+  createHash('sha1').update(value, 'utf8').digest('hex').toUpperCase();
 
 /** The suffixes with a count above zero; padding lines (`…:0`) are fake entries and are dropped. */
 function parseRange(body: string): Set<string> {
@@ -112,13 +113,13 @@ export function createStubPwnedPasswords(
   const asked: string[] = [];
   return {
     asked,
-    async check(password) {
+    check(password) {
       asked.push(password);
       if (options.unavailable) {
         failures += 1;
-        return 'unavailable';
+        return Promise.resolve('unavailable');
       }
-      return breached.has(password) ? 'breached' : 'clean';
+      return Promise.resolve(breached.has(password) ? 'breached' : 'clean');
     },
   };
 }

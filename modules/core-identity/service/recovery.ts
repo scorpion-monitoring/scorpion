@@ -35,6 +35,8 @@ import type { MailLinks } from './mail-links.ts';
 import { TooManyRequests } from './errors.ts';
 import { BadRequest } from './oidc-errors.ts';
 import { hashPassword, verifyPassword } from './password.ts';
+import type { PasswordPolicy } from './password-policy.ts';
+import type { LoginThrottle } from './login-throttle.ts';
 import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
 import { budgetLimit, type IdentitySettings } from './settings.ts';
@@ -117,9 +119,11 @@ export function createRecoveryService(
     budget: MailBudget;
     links: MailLinks;
     authz: AuthzService;
+    policy: PasswordPolicy;
+    throttle: LoginThrottle;
   },
 ): RecoveryService {
-  const { sessions, settings, mail, budget, links, authz } = deps;
+  const { sessions, settings, mail, budget, links, authz, policy, throttle } = deps;
   const limiter = createRateLimiter(ctx.db);
   const mayMail = (address: string) => budget.spend(address);
 
@@ -220,9 +224,16 @@ export function createRecoveryService(
       const { token, password } = parsed.data;
 
       // A bad link is refused before the expensive hash is made.
-      if (!(await peekMailToken(ctx.db, token, 'password-reset', now))) {
-        throw new BadRequest(LINK_PROBLEM);
-      }
+      const peeked = await peekMailToken(ctx.db, token, 'password-reset', now);
+      if (!peeked) throw new BadRequest(LINK_PROBLEM);
+      // The rules of a new password, with the names of the account the link belongs to. A refused
+      // password is a 422 and leaves the link usable: nothing is claimed yet.
+      const [owner] = await ctx.db
+        .select({ username: user.username, email: user.email })
+        .from(user)
+        .where(eq(user.id, peeked.userId))
+        .limit(1);
+      await policy.check(password, owner, 'password');
       const passwordHash = await hashPassword(password);
 
       const userId = await ctx.db.tx(async (tx) => {
@@ -271,11 +282,20 @@ export function createRecoveryService(
         .limit(1);
       const currentHash = method?.passwordHash;
       if (!currentHash) throw new Conflict('This account has no password to change.');
+      // Guessing the current password through a stolen session is throttled like guessing it at login.
+      await throttle.assertOpen(username, undefined);
       if (!(await verifyPassword(currentHash, currentPassword))) {
+        await throttle.recordFailure(username, undefined);
         throw new Invalid('The request is not valid.', [
           { path: 'currentPassword', message: 'is not your current password' },
         ]);
       }
+      const [owner] = await ctx.db
+        .select({ email: user.email })
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
+      await policy.check(newPassword, { username, email: owner?.email }, 'newPassword');
       const passwordHash = await hashPassword(newPassword);
 
       await ctx.db.tx(async (tx) => {
@@ -293,6 +313,7 @@ export function createRecoveryService(
           .returning({ id: authMethod.id });
         if (changed.length === 0) throw new Conflict('The password changed in the meantime.');
         await endMailTokens(tx, userId, 'password-reset');
+        await throttle.reset(tx, username, undefined);
         await sessions.revokeAll(userId, tx);
         await ctx.events.emit('identity.password.changed@1', { userId, username });
       });

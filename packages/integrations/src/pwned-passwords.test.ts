@@ -13,12 +13,12 @@ const HASH = sha1(PASSWORD);
 /** A server that answers a range with the given suffixes, padding included, and records the requests. */
 function rangeServer(suffixes: string[], status = 200) {
   const requests: { url: string; headers: Record<string, string> }[] = [];
-  const fake = (async (input: string | URL | Request, init?: RequestInit) => {
-    requests.push({ url: String(input), headers: init?.headers as Record<string, string> });
+  const fake = ((input: string, init?: RequestInit) => {
+    requests.push({ url: input, headers: init?.headers as Record<string, string> });
     const padding = `${'0'.repeat(35)}:0\n${'1'.repeat(35)}:0`;
     const body = [...suffixes.map((suffix) => `${suffix}:7`), padding].join('\r\n');
-    return new Response(status === 200 ? body : 'nope', { status });
-  }) as typeof fetch;
+    return Promise.resolve(new Response(status === 200 ? body : 'nope', { status }));
+  }) as unknown as typeof fetch;
   return { fake, requests };
 }
 
@@ -37,7 +37,8 @@ describe('pwned-passwords adapter', () => {
 
   it('does not count a padding entry as a hit even when it matches the suffix', async () => {
     const server = {
-      fake: (async () => new Response(`${HASH.slice(5)}:0\r\n`)) as unknown as typeof fetch,
+      fake: (() =>
+        Promise.resolve(new Response(`${HASH.slice(5)}:0\r\n`))) as unknown as typeof fetch,
     };
     expect(await createPwnedPasswords({ fetch: server.fake }).check(PASSWORD)).toBe('clean');
   });
@@ -97,10 +98,10 @@ describe('pwned-passwords adapter', () => {
 
   it('says unavailable when the network fails, and does not cache the failure', async () => {
     let calls = 0;
-    const flaky = (async () => {
+    const flaky = (() => {
       calls += 1;
-      if (calls === 1) throw new TypeError('fetch failed');
-      return new Response('');
+      if (calls === 1) return Promise.reject(new TypeError('fetch failed'));
+      return Promise.resolve(new Response(''));
     }) as unknown as typeof fetch;
     const pwned = createPwnedPasswords({ fetch: flaky });
     expect(await pwned.check(PASSWORD)).toBe('unavailable');

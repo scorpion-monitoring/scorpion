@@ -2,6 +2,7 @@
 // together with the real core.authz it depends on: permissions are decided by the real authoriser,
 // from roles in the database, never by a stand-in.
 import type { UserActor } from '@scorpion/contracts';
+import type { PwnedPasswords } from '@scorpion/integrations';
 import authzModule from '@scorpion/core-authz/module';
 import authzPackage from '@scorpion/core-authz/package.json' with { type: 'json' };
 import type { AuthzService } from '@scorpion/core-authz/public';
@@ -43,6 +44,8 @@ export interface StartOptions {
   /** Where the first-run token is shown; the default shows nothing under test. */
   announce?: (text: string) => void;
   firstRunTtlMs?: number;
+  /** The breach service of the password check (default: a stub that knows no password). */
+  pwned?: PwnedPasswords;
   /**
    * Stored settings of core.notifications, as an administrator would have saved them. The default is
    * none: mail is queued and, with no worker running, stays queued, so a test reads it with
@@ -118,6 +121,7 @@ export function useIdentity(): IdentityHarness {
         tokenCacheTtlMs: options?.tokenCacheTtlMs,
         announce: options?.announce,
         firstRunTtlMs: options?.firstRunTtlMs,
+        pwned: options?.pwned,
         clientSecret: options?.clientSecret,
         oidcHttp: options?.oidcHttp,
       });
