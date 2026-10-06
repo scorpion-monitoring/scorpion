@@ -11,6 +11,7 @@ This file summarises how work gets into `main`.
 - If a requirement in `docs/FEATURES.md` looks wrong or conflicts with the architecture, stop
   and ask. Record the answer in an ADR (`docs/adr/`).
 - Add an ADR for every decision that changes the architecture.
+- Write issues, pull requests, commit messages, code comments and documentation in English.
 
 ## Branches
 
@@ -33,8 +34,15 @@ This file summarises how work gets into `main`.
 - Keep feature branches short-lived: rebase on `dev` before opening the pull request. Merge with
   a merge commit, not a squash, so the small commits described below stay intact.
 - Delete a branch once it is merged. Release and hotfix history lives on in the tags.
-- On GitHub, protect `main` and `dev`: require a pull request and the CI checks, and forbid
-  force pushes and deletion.
+- Dependabot opens its pull requests from `dependabot/<ecosystem>/...` branches into `dev`
+  (`.github/dependabot.yml`). The branch policy allows that and nothing else from those branches.
+- **Branch protection** for `main` and `dev` (a repository setting that the maintainer applies; see
+  [docs/m4a-sprint-plan.md](docs/m4a-sprint-plan.md) §4, item 11): changes arrive through pull requests
+  only, with the required checks **Lint, type check, test**, **Dependency audit** and **CodeQL**
+  passing; no force pushes, no deletion, and administrators are included, so nobody can bypass the
+  rules. Required approvals stay at 0 while there is one maintainer. The release flow already goes
+  through pull requests (`release/*` into `main`, then the merge-back into `dev`), so it needs no
+  bypass. Do not rename a required job without changing the setting in the same step.
 - Public API v1 changes must be additive. A breaking change goes to v2 and needs an ADR.
 
 ## Commits
@@ -65,10 +73,46 @@ edit it by hand.
   `docs/**`, `**/*.md` (except `CHANGELOG.md`) or `.github/ISSUE_TEMPLATE/**`. One other file, for
   example a workflow or a script, brings the requirement back. Tests, CI and refactoring still
   need `pnpm changeset --empty`.
+- **Dependabot exemption:** a pull request that Dependabot opened (branch `dependabot/*`, author
+  `dependabot[bot]`) needs no changeset when it changes only `package.json` files, `pnpm-lock.yaml`,
+  `docker/Dockerfile` or `.github/workflows/*.yml`. Anything else in a bot pull request needs one.
 - `pnpm changeset:check` runs the same check as CI.
 
 The internal `@scorpion/*` packages are not versioned separately. The root package
 `scorpion` carries the one product version, which the image tags use.
+
+## Dependency audit
+
+CI runs `pnpm audit:check` (the `Dependency audit` job). It reads the lockfile, runs
+`pnpm audit --audit-level high --prod` and fails on a `high` or `critical` advisory in a production
+dependency. `moderate` and `low` advisories are listed and never block. An advisory can appear
+overnight and fail a pull request that touched nothing: update the dependency, or, if no fixed
+version exists, add an entry to `.github/audit-allowlist.json`:
+
+```json
+{
+  "entries": [
+    {
+      "id": "GHSA-xxxx-xxxx-xxxx",
+      "package": "name",
+      "reason": "Why the advisory does not apply or cannot be fixed yet (at least 20 characters).",
+      "expires": "2026-12-31"
+    }
+  ]
+}
+```
+
+Every entry needs a reason and an expiry date. An expired entry fails the check, so the decision is
+looked at again; an entry that matches no advisory prints a warning and should be removed.
+
+## Pinned dependencies
+
+Every action in `.github/workflows/` is pinned by its full commit SHA with the release in a trailing
+comment, and every `FROM` in `docker/Dockerfile` by digest. `scripts/pinned-dependencies.test.ts`
+fails on an unpinned `uses:` or `FROM`, on `curl | sh`, and on `npx` without an exact version. Dependabot
+moves tag and SHA (or digest) together. To pin by hand, resolve the SHA from the upstream release
+(`gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, and dereference an annotated tag) or the digest from
+the registry (`docker buildx imagetools inspect <image>:<tag>`). Never copy one from memory.
 
 ## Releases
 

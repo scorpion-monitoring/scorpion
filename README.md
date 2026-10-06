@@ -1,5 +1,8 @@
 # Scorpion
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/scorpion-monitoring/scorpion/badge)](https://scorecard.dev/viewer/?uri=github.com/scorpion-monitoring/scorpion)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15237/badge)](https://www.bestpractices.dev/projects/15237)
+
 Scorpion is a service registry and KPI tracker for research infrastructures (de.NBI, NFDI).
 This repository is the rebuild as a **modular monolith**: one server, one PostgreSQL database,
 many modules. A deployment **profile** selects the modules at build time.
@@ -110,6 +113,12 @@ tools/           eslint-plugin (module boundary rule), lint-fixtures, migrate-le
 docs/            FEATURES.md, architecture.md, implementation.md, adr/, backlog.md
 docker/          Dockerfile
 ```
+
+## Feedback and contributing
+
+- **Get it:** clone the repository (released versions are tagged `v<x.y.z>`) and build a profile image with `pnpm build --profile <name>`; see "Quick start" and "Running it" above. There is no public image registry yet.
+- **Report a bug or ask for a feature:** open an issue at <https://github.com/scorpion-monitoring/scorpion/issues>, in English. Please say the version or commit and the profile. Do not report security problems there: see [SECURITY.md](SECURITY.md).
+- **Contribute:** read [CONTRIBUTING.md](CONTRIBUTING.md) for the branch policy, commit format and definition of done, then open a pull request into `dev`.
 
 ## Changelog
 
