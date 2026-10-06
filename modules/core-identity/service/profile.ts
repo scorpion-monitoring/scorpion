@@ -21,6 +21,7 @@ import { pendingVerificationEmail } from './mail-tokens.ts';
 import type { RecoveryService } from './recovery.ts';
 import { budgetLimit, type IdentitySettings } from './settings.ts';
 import { requireSession } from './require-user.ts';
+import type { SessionService } from './sessions.ts';
 
 export interface Profile {
   username: string;
@@ -42,7 +43,8 @@ export interface ProfileService {
   /**
    * Changes the caller's own display name, bio and (through a confirmation mail) address. 422 for
    * input that breaks the rules or changes nothing, 429 when the caller asks for too many address
-   * changes. Returns the profile as it is afterwards.
+   * changes, 401 `reauthentication-required` when a new address is asked for without a recent
+   * authentication (ASVS 7.5.1). Returns the profile as it is afterwards.
    */
   update(actor: Actor, input: unknown, now?: Date): Promise<Profile>;
   /**
@@ -75,6 +77,7 @@ export function createProfileService(
     authz: AuthzService;
     blob: Pick<BlobService, 'put' | 'describe' | 'setReference'>;
     settings: IdentitySettings;
+    sessions: Pick<SessionService, 'requireRecentAuth'>;
   },
 ): ProfileService {
   const { authz, blob, settings } = deps;
@@ -143,6 +146,8 @@ export function createProfileService(
       const asksForNewAddress =
         change.email !== undefined && change.email.toLowerCase() !== before.email?.toLowerCase();
       if (asksForNewAddress) {
+        // Before anything is spent or written: the address is how the account is recovered.
+        await deps.sessions.requireRecentAuth(actor, undefined, now);
         // A signed-in caller may be told no: this limit is theirs, not an address's.
         const { mailBudgets } = await settings.get();
         const budget = await limiter.consume(

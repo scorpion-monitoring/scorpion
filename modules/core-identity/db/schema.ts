@@ -99,7 +99,12 @@ export const session = pgTable(
     secretHash: text('secret_hash').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     lastSeenAt: timestamptz('last_seen_at').notNull().defaultNow(),
+    /** The end of inactivity: slides with use, never beyond `absoluteExpiresAt`. */
     expiresAt: timestamptz('expires_at').notNull(),
+    /** The end however often the session is used (ADR 0025). Set from `createdAt` when the session is created. */
+    absoluteExpiresAt: timestamptz('absolute_expires_at').notNull(),
+    /** When the person last proved who they are in this session: the login, or a later re-authentication (ADR 0025). */
+    authenticatedAt: timestamptz('authenticated_at').notNull().defaultNow(),
     /** Set by logout and "log out everywhere"; a revoked session never authenticates. */
     revokedAt: timestamptz('revoked_at'),
   },
@@ -131,14 +136,30 @@ export const loginState = pgTable(
      * that started the login.
      */
     bindingHash: text('binding_hash').notNull(),
-    /** Set when a signed-in user started the flow to add this provider to their account. */
+    /** What the flow is for (ADR 0025): a `login`, adding a provider (`link`), or a re-authentication (`reauth`). */
+    purpose: text().notNull().default('login'),
+    /** The signed-in user who started a `link` or `reauth` flow. */
     linkUserId: uuid('link_user_id').references(() => user.id, { onDelete: 'cascade' }),
+    /** The session a `reauth` flow is for. */
+    reauthSessionId: uuid('reauth_session_id').references(() => session.id, {
+      onDelete: 'cascade',
+    }),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     expiresAt: timestamptz('expires_at').notNull(),
   },
   (table) => [
     uniqueIndex('identity_login_state_hash_uidx').on(table.stateHash),
     index('identity_login_state_expires_idx').on(table.expiresAt),
+    check(
+      'identity_login_state_purpose_known',
+      sql`${table.purpose} in ('login', 'link', 'reauth')`,
+    ),
+    check(
+      'identity_login_state_purpose_fields',
+      sql`(${table.purpose} = 'login' and ${table.linkUserId} is null and ${table.reauthSessionId} is null)
+        or (${table.purpose} = 'link' and ${table.linkUserId} is not null and ${table.reauthSessionId} is null)
+        or (${table.purpose} = 'reauth' and ${table.linkUserId} is not null and ${table.reauthSessionId} is not null)`,
+    ),
   ],
 );
 

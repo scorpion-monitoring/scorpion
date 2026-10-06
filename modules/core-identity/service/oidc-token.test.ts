@@ -208,3 +208,41 @@ describe('verifyIdToken', () => {
     expect(error).toBeInstanceOf(InvalidIdToken);
   });
 });
+
+describe('verifyIdToken: auth_time of a re-authentication (ADR 0025)', () => {
+  const notBefore = new Date(NOW.getTime() - 60_000); // the request, less the skew
+  const reauth = { ...expected, authTimeNotBefore: notBefore };
+  const withAuthTime = (authTime: unknown) => sign({ ...baseClaims(), auth_time: authTime });
+
+  it('returns auth_time and does not require it for an ordinary login', async () => {
+    expect((await verifyIdToken(await withAuthTime(now - 3600), keys, expected)).authTime).toBe(
+      now - 3600,
+    );
+    expect(
+      (await verifyIdToken(await sign(baseClaims()), keys, expected)).authTime,
+    ).toBeUndefined();
+  });
+
+  it.each([
+    ['at the moment of the request', now - 60, true],
+    ['after the request', now, true],
+    ['one second before the earliest accepted time', now - 61, false],
+    ['an hour before', now - 3600, false],
+  ])('an auth_time %s', async (_name, authTime, accepted) => {
+    const outcome = verifyIdToken(await withAuthTime(authTime), keys, reauth);
+    if (accepted) await expect(outcome).resolves.toMatchObject({ authTime });
+    else await expect(outcome).rejects.toMatchObject({ reason: 'auth-time-stale' });
+  });
+
+  it.each([
+    ['none', async () => sign(baseClaims())],
+    ['a string', () => withAuthTime(String(now))],
+    ['null', () => withAuthTime(null)],
+    ['an object', () => withAuthTime({ at: now })],
+  ])('refuses %s as auth_time when a re-authentication was asked for', async (_name, make) => {
+    await expect(verifyIdToken(await make(), keys, reauth)).rejects.toMatchObject({
+      reason: 'auth-time-missing',
+    });
+    await expect(verifyIdToken(await make(), keys, reauth)).rejects.toBeInstanceOf(InvalidIdToken);
+  });
+});

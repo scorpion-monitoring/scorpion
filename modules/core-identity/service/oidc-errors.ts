@@ -30,6 +30,8 @@ export type IdTokenFailure =
   | 'iat'
   | 'claims'
   | 'nonce'
+  | 'auth-time-missing'
+  | 'auth-time-stale'
   | 'missing';
 
 /** 401: the id_token failed a check. The reason is for the log; the caller is told only that it failed. */

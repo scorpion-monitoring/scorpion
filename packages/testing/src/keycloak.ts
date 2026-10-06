@@ -96,6 +96,12 @@ export interface StartedKeycloak {
    * and returns where Keycloak sends the browser back (the callback URL with `code` and `state`).
    */
   authorize(authorizationUrl: string, user: KeycloakUser): Promise<URL>;
+  /**
+   * One browser that keeps its cookies between requests, so Keycloak's single sign-on session
+   * survives from one `authorize` to the next. Without `prompt=login` or `max_age` Keycloak then
+   * answers at once, without showing the form; `formsShown` counts the times it did show it.
+   */
+  browser(): { authorize: StartedKeycloak['authorize']; readonly formsShown: number };
   stop(): Promise<void>;
 }
 
@@ -111,6 +117,38 @@ class Jar {
   header() {
     return [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
   }
+}
+
+/**
+ * Opens the authorisation URL in the browser that holds `jar`. With a single sign-on session
+ * Keycloak may answer with the redirect straight away; otherwise it shows the login form, which is
+ * submitted here.
+ */
+async function login(jar: Jar, authorizationUrl: string, user: KeycloakUser) {
+  const page = await fetch(authorizationUrl, {
+    redirect: 'manual',
+    headers: { cookie: jar.header() },
+  });
+  jar.keep(page);
+  const direct = page.headers.get('location');
+  if (page.status === 302 && direct && new URL(direct).searchParams.has('code')) {
+    return { back: new URL(direct), formShown: false };
+  }
+  const html = await page.text();
+  const action = /<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"/.exec(html)?.[1];
+  if (!action) throw new Error(`no login form (status ${page.status})`);
+  const submitted = await fetch(action.replaceAll('&amp;', '&'), {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: jar.header() },
+    body: new URLSearchParams({ username: user.username, password: user.password }),
+  });
+  jar.keep(submitted);
+  const location = submitted.headers.get('location');
+  if (submitted.status !== 302 || !location) {
+    throw new Error(`login was not accepted (status ${submitted.status})`);
+  }
+  return { back: new URL(location), formShown: true };
 }
 
 export async function startKeycloak(options: { redirectUri: string }): Promise<StartedKeycloak> {
@@ -141,24 +179,21 @@ export async function startKeycloak(options: { redirectUri: string }): Promise<S
     issuer,
     clientId: KEYCLOAK_CLIENT_ID,
     clientSecret: KEYCLOAK_CLIENT_SECRET,
-    async authorize(authorizationUrl, user) {
+    authorize: (authorizationUrl, user) =>
+      login(new Jar(), authorizationUrl, user).then((r) => r.back),
+    browser() {
       const jar = new Jar();
-      const page = await fetch(authorizationUrl, { redirect: 'manual' });
-      jar.keep(page);
-      const html = await page.text();
-      const action = /<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"/.exec(html)?.[1];
-      if (!action) throw new Error(`no login form (status ${page.status})`);
-      const submitted = await fetch(action.replaceAll('&amp;', '&'), {
-        method: 'POST',
-        redirect: 'manual',
-        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: jar.header() },
-        body: new URLSearchParams({ username: user.username, password: user.password }),
-      });
-      const location = submitted.headers.get('location');
-      if (submitted.status !== 302 || !location) {
-        throw new Error(`login was not accepted (status ${submitted.status})`);
-      }
-      return new URL(location);
+      let formsShown = 0;
+      return {
+        async authorize(authorizationUrl, user) {
+          const done = await login(jar, authorizationUrl, user);
+          if (done.formShown) formsShown++;
+          return done.back;
+        },
+        get formsShown() {
+          return formsShown;
+        },
+      };
     },
     stop: async () => {
       await started.stop();

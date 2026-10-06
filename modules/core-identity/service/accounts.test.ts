@@ -22,7 +22,7 @@ const settingsOf = (
 ): IdentitySettings => ({
   get: () => Promise.resolve(settingsSchema.parse(values)),
 });
-const actorOf = (user: { id: string; username: string }): Actor => ({
+const actorOf = (user: { id: string; username: string }): UserActor => ({
   kind: 'user',
   userId: user.id,
   username: user.username,
@@ -371,7 +371,8 @@ describe('logout and logoutAll (defect 4)', () => {
     const user = await withPassword(kernel, { username: 'alice' });
     const one = await id.accounts.login({ username: 'alice', password: PASSWORD });
     const two = await id.accounts.login({ username: 'alice', password: PASSWORD });
-    expect(await id.accounts.logoutAll(actorOf(user))).toBe(2);
+    const current = (await id.sessions.resolve(one.sessionId))!.sessionId;
+    expect(await id.accounts.logoutAll({ ...actorOf(user), sessionId: current })).toBe(2);
     expect(await id.sessions.resolve(one.sessionId)).toBeUndefined();
     expect(await id.sessions.resolve(two.sessionId)).toBeUndefined();
   });
@@ -387,7 +388,8 @@ describe('logout and logoutAll (defect 4)', () => {
     const alice = await withPassword(kernel, { username: 'alice' });
     const bob = await withPassword(kernel, { username: 'bobby' });
     const bobs = await id.accounts.login({ username: 'bobby', password: PASSWORD });
-    await id.accounts.logoutAll(actorOf(alice));
+    const mine = await id.sessions.create(alice.id);
+    await id.accounts.logoutAll({ ...actorOf(alice), sessionId: mine.sessionId });
     expect(await id.sessions.resolve(bobs.sessionId)).toMatchObject({ userId: bob.id });
   });
 });
@@ -408,7 +410,7 @@ describe('me', () => {
     const user = await withPassword(kernel, { username: 'alice' });
     expect((await id.accounts.me(actorOf(user), undefined)).csrfToken).toBeNull();
     const viaToken: Actor = {
-      ...(actorOf(user) as UserActor),
+      ...actorOf(user),
       via: 'token',
       scopes: ['core.identity.me.read'],
     };

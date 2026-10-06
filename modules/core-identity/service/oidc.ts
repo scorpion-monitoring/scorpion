@@ -17,7 +17,7 @@ import {
 import { BadRequest, InvalidIdToken, ProviderUnavailable } from './oidc-errors.ts';
 import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
-import { verifyIdToken, type IdentityClaims } from './oidc-token.ts';
+import { CLOCK_SKEW_SECONDS, verifyIdToken, type IdentityClaims } from './oidc-token.ts';
 import { requireSession } from './require-user.ts';
 import { grantDefaultRole } from './roles.ts';
 import type { SessionService } from './sessions.ts';
@@ -37,7 +37,9 @@ export interface StartedLogin {
 }
 
 export type CompletedLogin =
-  { kind: 'login'; sessionId: string; expiresAt: Date } | { kind: 'linked' };
+  | { kind: 'login'; sessionId: string; expiresAt: Date }
+  | { kind: 'linked' }
+  | { kind: 'reauthenticated' };
 
 export interface CompleteInput {
   providerId: string;
@@ -58,7 +60,13 @@ export interface OidcService {
   start(providerId: string): Promise<StartedLogin>;
   /** Starts the flow that adds a provider to the signed-in caller's account. Session only. */
   startLink(actor: Actor, providerId: string): Promise<StartedLogin>;
-  /** Completes the login (or the link) that this browser started. */
+  /**
+   * Starts the re-authentication of the caller's current session at a provider they have signed in
+   * with (`prompt=login`, `max_age=0`; ADR 0025). Session only. 404 when the account has no sign-in
+   * at that provider.
+   */
+  startReauthentication(actor: Actor, providerId: string): Promise<StartedLogin>;
+  /** Completes the login, the link or the re-authentication that this browser started. */
   complete(input: CompleteInput): Promise<CompletedLogin>;
 }
 
@@ -117,10 +125,13 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     ctx.log.warn({ provider: providerId, reason, ...extra }, 'oidc login refused');
   }
 
-  async function begin(providerId: string, linkUserId?: string): Promise<StartedLogin> {
+  async function begin(
+    providerId: string,
+    signedIn?: { userId: string; reauthSessionId?: string },
+  ): Promise<StartedLogin> {
     const provider = await providerOrThrow(providerId);
     const discovery = await providers.discovery(provider);
-    const fresh = await states.create(provider.id, linkUserId);
+    const fresh = await states.create(provider.id, signedIn?.userId, signedIn?.reauthSessionId);
     const url = (await clientFor(provider, false)).createAuthorizationURLWithPKCE(
       discovery.authorizationEndpoint,
       fresh.state,
@@ -129,6 +140,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       provider.scopes,
     );
     url.searchParams.set('nonce', fresh.nonce);
+    if (signedIn?.reauthSessionId !== undefined) {
+      // Ask the provider for a login now, not for its single sign-on session (OIDC Core 3.1.2.1).
+      url.searchParams.set('prompt', 'login');
+      url.searchParams.set('max_age', '0');
+    }
     return {
       authorizationUrl: url.toString(),
       cookie: { value: fresh.verifier, maxAgeSeconds: 600 },
@@ -286,6 +302,50 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     await addIdentity(found, provider.id, claims.subject, 'profile');
   }
 
+  /**
+   * The callback of a re-authentication. The id_token has passed every check, `auth_time` included.
+   * It must be the caller's own sign-in at this provider (the same `sub`), and the session the
+   * flow was started for must still be live and theirs.
+   */
+  async function reauthenticate(
+    provider: OidcProvider,
+    claims: IdentityClaims,
+    userId: string,
+    sessionId: string,
+  ): Promise<CompletedLogin> {
+    const [own] = await ctx.db
+      .select({ id: authMethod.id })
+      .from(authMethod)
+      .where(
+        and(
+          eq(authMethod.userId, userId),
+          eq(authMethod.provider, provider.id),
+          eq(authMethod.subject, claims.subject),
+        ),
+      )
+      .limit(1);
+    if (!own) {
+      refuse(provider.id, 'reauth-other-subject');
+      throw new Unauthorized(GENERIC_REFUSAL);
+    }
+    const found = await users.findById(userId);
+    if (!found || found.deletedAt !== null || found.status !== 'active') {
+      throw new Unauthorized(GENERIC_REFUSAL);
+    }
+    await ctx.db.tx(async (tx) => {
+      if (!(await sessions.markAuthenticated(userId, sessionId, tx))) {
+        refuse(provider.id, 'reauth-session-gone');
+        throw new Unauthorized(GENERIC_REFUSAL);
+      }
+      await ctx.events.emit('identity.session.reauthenticated@1', {
+        userId,
+        username: found.username,
+        method: 'oidc',
+      });
+    });
+    return { kind: 'reauthenticated' };
+  }
+
   return {
     landing: ctx.config.BASE_PATH === '/' ? '/' : `${ctx.config.BASE_PATH}/`,
 
@@ -294,7 +354,23 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     async startLink(actor, providerId) {
       const caller = requireSession(actor, 'Linking a sign-in provider');
       await authz.require(actor, 'core.identity.auth-method.link');
-      return begin(providerId, caller.userId);
+      // Adding a way to sign in to the account needs a recent authentication (ASVS 7.5.1).
+      await sessions.requireRecentAuth(actor);
+      return begin(providerId, { userId: caller.userId });
+    },
+
+    async startReauthentication(actor, providerId) {
+      const caller = requireSession(actor, 'Re-authenticating');
+      await authz.require(actor, 'core.identity.session.manage');
+      if (caller.sessionId === undefined) throw new Unauthorized();
+      const provider = await providerOrThrow(providerId);
+      const [own] = await ctx.db
+        .select({ id: authMethod.id })
+        .from(authMethod)
+        .where(and(eq(authMethod.userId, caller.userId), eq(authMethod.provider, provider.id)))
+        .limit(1);
+      if (!own) throw new NotFound('There is no such sign-in provider.');
+      return begin(providerId, { userId: caller.userId, reauthSessionId: caller.sessionId });
     },
 
     async complete(input) {
@@ -356,6 +432,10 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         clientId: provider.clientId,
         nonceHash: stored.nonceHash,
         now: new Date(),
+        // A re-authentication must have happened at the provider after it was asked for.
+        ...(stored.purpose === 'reauth'
+          ? { authTimeNotBefore: new Date(stored.createdAt.getTime() - CLOCK_SKEW_SECONDS * 1000) }
+          : {}),
       };
       let claims: IdentityClaims;
       try {
@@ -379,8 +459,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         throw error;
       }
 
-      if (stored.linkUserId !== null) {
-        await link(provider, claims, stored.linkUserId);
+      if (stored.purpose === 'reauth') {
+        return reauthenticate(provider, claims, stored.linkUserId!, stored.reauthSessionId!);
+      }
+      if (stored.purpose === 'link') {
+        await link(provider, claims, stored.linkUserId!);
         return { kind: 'linked' };
       }
       return login(provider, claims, input.previousSessionId);

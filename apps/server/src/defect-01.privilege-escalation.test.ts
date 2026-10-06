@@ -47,6 +47,35 @@ const SAMPLES: Record<
     sample: () => ({ method: 'POST', path: '/auth/logout-all' }),
   },
   'GET /auth/me': { kind: 'self', sample: () => ({ method: 'GET', path: '/auth/me' }) },
+  // M4b sprint 1: the caller's own sessions and re-authentication; and the administrators' termination.
+  'GET /account/sessions': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/account/sessions' }),
+  },
+  'DELETE /account/sessions/{id}': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'DELETE', path: `/account/sessions/${id}` }),
+  },
+  'POST /account/reauthenticate': {
+    kind: 'self',
+    sample: () => ({
+      method: 'POST',
+      path: '/account/reauthenticate',
+      body: { password: PASSWORD },
+    }),
+  },
+  'POST /account/reauthenticate/oidc/{provider}': {
+    kind: 'self',
+    sample: () => ({ method: 'POST', path: '/account/reauthenticate/oidc/nowhere' }),
+  },
+  'POST /users/{id}/sessions/revoke': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/sessions/revoke` }),
+  },
+  'POST /system/sessions/revoke-all': {
+    kind: 'admin',
+    sample: () => ({ method: 'POST', path: '/system/sessions/revoke-all' }),
+  },
   'GET /users/pending': {
     kind: 'admin',
     sample: () => ({ method: 'GET', path: '/users/pending' }),
@@ -387,6 +416,7 @@ describe('defect 1: the route table', () => {
       'core.authz.role.assign',
       'core.authz.role.manage',
       'core.identity.token.manage-any',
+      'core.identity.session.manage-any',
       'core.settings.read',
       'core.settings.write',
       'core.settings.secret.write',
@@ -590,6 +620,10 @@ describe('defect 1: tokens of other people, and tokens of the caller', () => {
         body: { currentPassword: PASSWORD, newPassword: 'another long passphrase' },
       },
       { method: 'POST', path: '/account/email/verification' },
+      { method: 'GET', path: '/account/sessions' },
+      { method: 'DELETE', path: `/account/sessions/${id}` },
+      { method: 'POST', path: '/account/reauthenticate', body: { password: PASSWORD } },
+      { method: 'POST', path: '/account/reauthenticate/oidc/nowhere' },
     ];
     for (const attempt of attempts) {
       const reply = await s.call(attempt.method, attempt.path, {

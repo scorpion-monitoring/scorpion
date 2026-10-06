@@ -25,7 +25,7 @@ export type Problem = z.infer<typeof problemSchema>;
 
 export function problemFor(error: DomainError, requestId?: string): Problem {
   return {
-    type: 'about:blank',
+    type: error.type ?? 'about:blank',
     title: error.title,
     status: error.status,
     detail: error.message,

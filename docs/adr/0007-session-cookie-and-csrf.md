@@ -80,3 +80,9 @@ cannot read an HttpOnly cookie.
   only if that fails too.
 - Sessions that other processes may accept for 5 seconds after a revocation are the price of one lookup
   per request not being one query per request. Set the TTL to 0 (tests do) for strict behaviour.
+
+## Update (M4b sprint 1)
+
+[ADR-0025](0025-absolute-session-lifetime-and-recent-authentication.md) amends the cookie's expiry: it still slides, but never
+beyond an absolute end (`absolute_expires_at`, 30 days by default; the 7 days are the inactivity period, also a setting).
+The actor of a session request carries the id of the session row, and sensitive changes need a recent authentication.

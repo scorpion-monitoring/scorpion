@@ -5,7 +5,7 @@ import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { makeMember } from '../test/harness.ts';
 import { tokenFrom } from '../test/mail.ts';
-import { count, flow, fresh, rows, sessionActor, settingsWith, start } from '../test/oidc.ts';
+import { count, flow, fresh, rows, sessionActorFor, settingsWith, start } from '../test/oidc.ts';
 
 describe('the first login (provisioning)', () => {
   it('creates a pending user and its identity, emits registered@1, and starts no session [ASVS-7.6.2]', async () => {
@@ -282,7 +282,7 @@ describe('linking from the profile', () => {
     const input = await flow(
       id,
       fresh({ subject: 'profile-sub', email: 'other@example.org' }),
-      sessionActor(user),
+      await sessionActorFor(id, user),
     );
     expect(await id.oidc.complete(input)).toEqual({ kind: 'linked' });
     expect(
@@ -291,7 +291,8 @@ describe('linking from the profile', () => {
         "select user_id, subject from identity_auth_method where provider = 'stub'",
       ),
     ).toEqual([{ user_id: user.id, subject: 'profile-sub' }]);
-    expect(await count(kernel, 'identity_session')).toBe(0);
+    // The caller's own session is the only one: linking starts none.
+    expect(await count(kernel, 'identity_session')).toBe(1);
     expect(await rows(kernel, 'select name, payload from kernel_outbox')).toEqual([
       {
         name: 'identity.authMethod.linked@1',
@@ -303,7 +304,9 @@ describe('linking from the profile', () => {
   it('can then be used to sign in', async () => {
     const { kernel, identity: id } = await start();
     const user = await makeMember(kernel.pool);
-    await id.oidc.complete(await flow(id, fresh({ subject: 'profile-sub' }), sessionActor(user)));
+    await id.oidc.complete(
+      await flow(id, fresh({ subject: 'profile-sub' }), await sessionActorFor(id, user)),
+    );
     const done = await id.oidc.complete(await flow(id, fresh({ subject: 'profile-sub' })));
     const resolved = await id.sessions.resolve((done as { sessionId: string }).sessionId);
     expect(resolved?.userId).toBe(user.id);
@@ -335,7 +338,9 @@ describe('linking from the profile', () => {
     await makeAuthMethod(kernel.pool, owner, { provider: 'stub', subject: 'shared-sub' });
     const thief = await makeMember(kernel.pool);
     await expect(
-      id.oidc.complete(await flow(id, fresh({ subject: 'shared-sub' }), sessionActor(thief))),
+      id.oidc.complete(
+        await flow(id, fresh({ subject: 'shared-sub' }), await sessionActorFor(id, thief)),
+      ),
     ).rejects.toBeInstanceOf(Conflict);
     expect(
       await rows(kernel, "select user_id from identity_auth_method where provider = 'stub'"),
@@ -347,14 +352,16 @@ describe('linking from the profile', () => {
     const user = await makeMember(kernel.pool);
     await makeAuthMethod(kernel.pool, user, { provider: 'stub', subject: 'first' });
     await expect(
-      id.oidc.complete(await flow(id, fresh({ subject: 'second' }), sessionActor(user))),
+      id.oidc.complete(
+        await flow(id, fresh({ subject: 'second' }), await sessionActorFor(id, user)),
+      ),
     ).rejects.toBeInstanceOf(Conflict);
   });
 
   it('links nothing for a user who was deleted after starting', async () => {
     const { kernel, identity: id } = await start();
     const user = await makeMember(kernel.pool);
-    const input = await flow(id, fresh(), sessionActor(user));
+    const input = await flow(id, fresh(), await sessionActorFor(id, user));
     await kernel.pool.query('update identity_user set deleted_at = now() where id = $1', [user.id]);
     await expect(id.oidc.complete(input)).rejects.toBeInstanceOf(Unauthorized);
     expect(await count(kernel, 'identity_auth_method')).toBe(0);

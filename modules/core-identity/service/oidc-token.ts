@@ -17,6 +17,12 @@ export interface IdTokenExpectation {
   /** SHA-256 (base64url) of the nonce this login sent. */
   nonceHash: string;
   now: Date;
+  /**
+   * Set for a re-authentication (ADR 0025): the login must have happened at the provider no
+   * earlier than this (the time the request was made, less the clock skew). The id_token must then
+   * carry `auth_time`, and it must not be older.
+   */
+  authTimeNotBefore?: Date;
 }
 
 export interface IdentityClaims {
@@ -25,6 +31,8 @@ export interface IdentityClaims {
   /** True only when the provider sent the boolean `true`. */
   emailVerified: boolean;
   preferredUsername: string | undefined;
+  /** When the person authenticated at the provider (seconds since the epoch), if the id_token says. */
+  authTime: number | undefined;
 }
 
 const text = (value: unknown, max: number): string | undefined =>
@@ -104,10 +112,23 @@ export async function verifyIdToken(
   if (subject === undefined) throw new InvalidIdToken('claims');
 
   const claims = payload as Record<string, unknown>;
+  const authTime =
+    typeof claims.auth_time === 'number' && Number.isFinite(claims.auth_time)
+      ? claims.auth_time
+      : undefined;
+  if (expected.authTimeNotBefore !== undefined) {
+    // With `max_age` in the request the provider must send `auth_time` (OIDC Core 3.1.3.7). A
+    // provider that ignored `prompt=login` answers from its own session and sends an old one.
+    if (authTime === undefined) throw new InvalidIdToken('auth-time-missing');
+    if (authTime < expected.authTimeNotBefore.getTime() / 1000) {
+      throw new InvalidIdToken('auth-time-stale');
+    }
+  }
   return {
     subject,
     email: text(claims.email, 254),
     emailVerified: claims.email_verified === true,
     preferredUsername: text(claims.preferred_username, 200),
+    authTime,
   };
 }

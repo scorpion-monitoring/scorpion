@@ -28,6 +28,7 @@ import {
   manualPolicy,
 } from './service/approval-policy.ts';
 import { createRoleService, type RoleService } from './service/roles.ts';
+import { createSessionAdminService, type SessionAdminService } from './service/session-admin.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import {
   settingsSchema,
@@ -51,6 +52,7 @@ export interface IdentityInternals extends IdentityService {
   profile: ProfileService;
   recovery: RecoveryService;
   roles: RoleService;
+  sessionAdmin: SessionAdminService;
   sessions: SessionService;
   tokens: TokenService;
 }
@@ -170,7 +172,12 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     tablePrefix: 'identity_',
 
     permissions: {
-      'core.identity.session.manage': { description: 'End your own sessions' },
+      'core.identity.session.manage': {
+        description: 'List and end your own sessions, and confirm your identity again',
+      },
+      'core.identity.session.manage-any': {
+        description: 'End the sessions of any user, or of everybody, not only your own',
+      },
       'core.identity.me.read': { description: 'Read your own account' },
       'core.identity.user.list-pending': { description: 'List accounts waiting for approval' },
       'core.identity.user.approve': { description: 'Approve a pending account' },
@@ -247,6 +254,19 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.password.resetRequested@1': userEvent,
         'identity.password.reset@1': userEvent,
         'identity.password.changed@1': userEvent,
+        // The caller proved who they are again in their session; `method` is how (never a credential).
+        'identity.session.reauthenticated@1': userEvent.extend({
+          method: z.enum(['password', 'oidc']),
+        }),
+        // An administrator ended the sessions of one user (`count` were open) or of everybody.
+        'identity.sessions.revoked@1': userEvent.extend({
+          revokedBy: z.string(),
+          count: z.number().int().min(0),
+        }),
+        'identity.sessions.revokedAll@1': z.strictObject({
+          revokedBy: z.string(),
+          count: z.number().int().min(0),
+        }),
         'identity.email.verified@1': userEvent,
         // Which fields changed, never their values. `email` means a change was asked for.
         // After the retention period (ADR 0013): subscribers delete or anonymise what refers to the user.
@@ -301,7 +321,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       currentSecret = clientSecret;
       const users = createUserService(ctx);
       currentUsers = users;
-      const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
+      const sessions = createSessionService(
+        ctx,
+        { settings },
+        { cacheTtlMs: options.sessionCacheTtlMs },
+      );
       const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
       current = sessions;
       currentTokens = tokens;
@@ -345,13 +369,16 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery, mail, authz, blob, settings }),
+        profile: createProfileService(ctx, { recovery, mail, authz, blob, settings, sessions }),
         roles: createRoleService({ authz, users }),
         recovery,
         loginStates,
         oidc,
         users,
         sessions,
+        sessionAdmin: createSessionAdminService(ctx, { sessions, users, authz }),
+        requireRecentAuth: (actor, maxAgeSeconds) =>
+          sessions.requireRecentAuth(actor, maxAgeSeconds),
         tokens,
         accounts: createAccountService(ctx, {
           users,
@@ -368,8 +395,17 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens } =
-        r.service<IdentityInternals>();
+      const {
+        accounts,
+        approval,
+        bootstrap,
+        oidc,
+        profile,
+        recovery,
+        roles,
+        sessionAdmin,
+        tokens,
+      } = r.service<IdentityInternals>();
       registerIdentityRoutes(r, {
         accounts,
         approval,
@@ -378,6 +414,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         profile,
         recovery,
         roles,
+        sessionAdmin,
         tokens,
       });
     },

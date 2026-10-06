@@ -165,4 +165,62 @@ describe('against Keycloak', { timeout: 60_000 }, () => {
     );
     expect(created.rows).toHaveLength(1);
   });
+
+  it('re-authenticates for real: prompt=login and max_age=0 make Keycloak ask for the password again, and auth_time is checked (ADR 0025)', async () => {
+    const sso = keycloak.browser(); // one browser, so Keycloak's single sign-on session survives
+    const { kernel, call, get, logText } = await startApp();
+    const web2 = browser<KeycloakUser>({ call }, sso, PROVIDER_ID);
+
+    // The first login makes the pending account; once approved, the second gives a session. Keycloak
+    // shows its login form for the first and answers the second from the single sign-on session.
+    await web2.login(alice);
+    const [{ id }] = (await kernel.pool.query<{ id: string }>('select id from identity_user'))
+      .rows as [{ id: string }];
+    await kernel.pool.query("update identity_user set status = 'active'");
+    await makeRoleAssignment(kernel.pool, { id }, 'user');
+    const login = await web2.login(alice);
+    expect(login.reply.status).toBe(302);
+    expect(sso.formsShown).toBe(1);
+    const cookie = login.reply.cookie!;
+    const csrf = ((await get('/auth/me', { cookie })).body as { csrfToken: string }).csrfToken;
+    const session = { cookie, csrf };
+    const stale = () =>
+      kernel.pool.query(
+        "update identity_session set authenticated_at = now() - interval '2 hours'",
+      );
+    const changeEmail = () =>
+      call('PATCH', '/account/profile', { ...session, body: { email: 'new@example.org' } });
+
+    // 1. Without a recent authentication the change is refused ...
+    await stale();
+    expect((await changeEmail()).status).toBe(401);
+    // ... and a real re-authentication, in which Keycloak shows its form again, allows it.
+    const started = await web2.start('reauthenticate', session);
+    const asked = new URL(started.authorizationUrl).searchParams;
+    expect([asked.get('prompt'), asked.get('max_age')]).toEqual(['login', '0']);
+    const back = await web2.provider(started, alice);
+    expect(sso.formsShown).toBe(2);
+    const done = await web2.callback(back, started, { session: session.cookie });
+    expect(done.status).toBe(302);
+    expect(done.setCookie).toBeUndefined();
+    expect((await changeEmail()).status).toBe(200);
+
+    // 2. A provider that ignores the request (here: the request loses its prompt and max_age, so
+    // Keycloak answers from its single sign-on session) sends the old auth_time. The state says the
+    // request was made later than that login, so the id_token is refused.
+    await stale();
+    const ignoring = await web2.start('reauthenticate', session);
+    const url = new URL(ignoring.authorizationUrl);
+    url.searchParams.delete('prompt');
+    url.searchParams.delete('max_age');
+    const answered = await web2.provider({ ...ignoring, authorizationUrl: url.toString() }, alice);
+    expect(sso.formsShown).toBe(2); // no form: the single sign-on session answered
+    await kernel.pool.query(
+      "update identity_login_state set created_at = now() + interval '10 minutes'",
+    );
+    const refused = await web2.callback(answered, ignoring, { session: session.cookie });
+    expect(refused.status).toBe(401);
+    expect(logText()).toContain('"reason":"auth-time-stale"');
+    expect((await changeEmail()).status).toBe(401);
+  });
 });

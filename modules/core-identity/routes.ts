@@ -26,6 +26,8 @@ import type { OidcService } from './service/oidc.ts';
 import type { ProfileService } from './service/profile.ts';
 import type { RecoveryService } from './service/recovery.ts';
 import type { RoleService } from './service/roles.ts';
+import type { SessionAdminService } from './service/session-admin.ts';
+import type { SessionSummary } from './service/sessions.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
 import {
   approveInput,
@@ -35,6 +37,7 @@ import {
   loginInput,
   oidcCallbackQuery,
   oidcProviderParam,
+  reauthenticateInput,
   redeemFirstRunInput,
   registerInput,
   resetConfirmInput,
@@ -53,6 +56,7 @@ export interface IdentityRoutesServices {
   profile: ProfileService;
   recovery: RecoveryService;
   roles: RoleService;
+  sessionAdmin: SessionAdminService;
   tokens: TokenService;
 }
 
@@ -416,6 +420,117 @@ export const removeAvatarRoute = createRoute({
   },
 });
 
+const REAUTH_401 = {
+  description:
+    'Not signed in. On a route that needs a recent authentication the problem type is `reauthentication-required`: confirm the password (`POST /account/reauthenticate`) or sign in again at the provider (`POST /account/reauthenticate/oidc/{provider}`), then repeat the request.',
+};
+
+const sessionSchema = z.object({
+  id: z.string(),
+  createdAt: z.iso.datetime(),
+  lastSeenAt: z.iso.datetime(),
+  /** The session of this request. */
+  current: z.boolean(),
+});
+
+export const listSessionsRoute = createRoute({
+  method: 'get',
+  path: '/account/sessions',
+  permission: 'core.identity.session.manage',
+  request: { query: paginationQuery() },
+  responses: {
+    200: ok(
+      "The caller's own sessions that are not over, newest first. Times and a marker for this session only: nothing about a device or an address is stored.",
+      listEnvelope(sessionSchema),
+    ),
+    403: { description: 'The caller uses an access token, not a session.' },
+  },
+});
+
+export const endSessionRoute = createRoute({
+  method: 'delete',
+  path: '/account/sessions/{id}',
+  permission: 'core.identity.session.manage',
+  audit: true,
+  request: { params: idParam },
+  responses: {
+    204: {
+      description:
+        'The session is over. When it was the session of this request, its cookie is cleared.',
+    },
+    401: REAUTH_401,
+    403: { description: 'The caller uses an access token, not a session.' },
+    404: {
+      description:
+        "No such session of the caller. Another user's session id answers exactly like an unknown one.",
+    },
+  },
+});
+
+export const reauthenticateRoute = createRoute({
+  method: 'post',
+  path: '/account/reauthenticate',
+  permission: 'core.identity.session.manage',
+  rateLimit: 'strict', // checks the password
+  audit: true,
+  request: { body: json(reauthenticateInput) },
+  responses: {
+    204: { description: 'The session counts as freshly authenticated.' },
+    401: REAUTH_401,
+    403: { description: 'The caller uses an access token, not a session.' },
+    409: { description: 'The account has no password: re-authenticate at the provider.' },
+    422: { description: 'The password is wrong.' },
+  },
+});
+
+export const reauthenticateOidcRoute = createRoute({
+  method: 'post',
+  path: '/account/reauthenticate/oidc/{provider}',
+  permission: 'core.identity.session.manage',
+  rateLimit: 'strict',
+  audit: true,
+  request: { params: oidcProviderParam },
+  responses: {
+    200: ok(
+      "Send the browser to `authorizationUrl` (it asks for a login now, `prompt=login`, `max_age=0`). The login cookie is set. The provider's callback finishes it and sets the session's authentication time; it sends no new session cookie.",
+      startedSchema,
+    ),
+    403: { description: 'The caller uses an access token, not a session.' },
+    404: { description: 'No such provider, or the account has no sign-in at it.' },
+    502: { description: 'The provider could not be reached.' },
+  },
+});
+
+const revokedSchema = z.object({ revoked: z.int().min(0) });
+
+export const revokeUserSessionsRoute = createRoute({
+  method: 'post',
+  path: '/users/{id}/sessions/revoke',
+  permission: 'core.identity.session.manage-any',
+  audit: true,
+  request: { params: idParam },
+  responses: {
+    200: ok(
+      'Every open session of the user is over. `revoked` is how many were open.',
+      revokedSchema,
+    ),
+    404: { description: 'No such user.' },
+  },
+});
+
+export const revokeAllSessionsRoute = createRoute({
+  method: 'post',
+  path: '/system/sessions/revoke-all',
+  permission: 'core.identity.session.manage-any',
+  audit: true,
+  responses: {
+    200: ok(
+      "Every open session of every user is over, **except the caller's own**, so the administrator who does it is not locked out. `revoked` is how many were open.",
+      revokedSchema,
+    ),
+  },
+});
+
 const roleSchema = z.object({
   key: z.string(),
   label: z.string(),
@@ -543,6 +658,13 @@ const createdTokenView = (created: CreatedToken) => ({
   token: created.token,
 });
 
+const sessionView = (item: SessionSummary) => ({
+  id: item.id,
+  createdAt: item.createdAt.toISOString(),
+  lastSeenAt: item.lastSeenAt.toISOString(),
+  current: item.current,
+});
+
 const view = (user: {
   id: string;
   username: string;
@@ -559,7 +681,17 @@ const view = (user: {
 
 export function registerIdentityRoutes(
   r: RouteRegistrar,
-  { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens }: IdentityRoutesServices,
+  {
+    accounts,
+    approval,
+    bootstrap,
+    oidc,
+    profile,
+    recovery,
+    roles,
+    sessionAdmin,
+    tokens,
+  }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
     // The same answer whether the account was created or the address was taken: nothing of the
@@ -587,6 +719,41 @@ export function registerIdentityRoutes(
     clearSessionCookie(c);
     return c.json({ revoked }, 200);
   }) satisfies RouteHandler<typeof logoutAllRoute, AppEnv>);
+
+  r.internal(listSessionsRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const { sessions, total } = await accounts.listSessions(c.get('actor'), query);
+    c.header('cache-control', 'no-store');
+    return c.json(paginate(query, total, sessions.map(sessionView)), 200);
+  }) satisfies RouteHandler<typeof listSessionsRoute, AppEnv>);
+
+  r.internal(endSessionRoute, (async (c) => {
+    const { current } = await accounts.endSession(c.get('actor'), c.req.valid('param').id);
+    if (current) clearSessionCookie(c);
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof endSessionRoute, AppEnv>);
+
+  r.internal(reauthenticateRoute, (async (c) => {
+    await accounts.reauthenticate(c.get('actor'), c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.body(null, 204);
+  }) satisfies RouteHandler<typeof reauthenticateRoute, AppEnv>);
+
+  r.internal(reauthenticateOidcRoute, (async (c) => {
+    const started = await oidc.startReauthentication(c.get('actor'), c.req.valid('param').provider);
+    writeLoginCookie(c, started.cookie.value, started.cookie.maxAgeSeconds);
+    c.header('cache-control', 'no-store');
+    return c.json({ authorizationUrl: started.authorizationUrl }, 200);
+  }) satisfies RouteHandler<typeof reauthenticateOidcRoute, AppEnv>);
+
+  r.internal(revokeUserSessionsRoute, (async (c) => {
+    const revoked = await sessionAdmin.revokeUser(c.get('actor'), c.req.valid('param').id);
+    return c.json({ revoked }, 200);
+  }) satisfies RouteHandler<typeof revokeUserSessionsRoute, AppEnv>);
+
+  r.internal(revokeAllSessionsRoute, (async (c) => {
+    return c.json({ revoked: await sessionAdmin.revokeEverything(c.get('actor')) }, 200);
+  }) satisfies RouteHandler<typeof revokeAllSessionsRoute, AppEnv>);
 
   r.internal(meRoute, (async (c) => {
     const { user, roles, csrfToken } = await accounts.me(c.get('actor'), readSessionCookie(c));
@@ -675,6 +842,7 @@ export function registerIdentityRoutes(
       verifier,
       previousSessionId: readSessionCookie(c),
     });
+    // A re-authentication changes the session in the database; the browser keeps its cookie.
     if (done.kind === 'login') writeSessionCookie(c, done.sessionId, done.expiresAt);
     // Always the application root: no caller-supplied target, so no open redirect.
     return c.redirect(oidc.landing, 302);

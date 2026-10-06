@@ -77,6 +77,12 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   'identity.password.resetRequested@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.reset@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.changed@1': log(true, userBy('userId'), subjectOf('user', 'userId')),
+  'identity.session.reauthenticated@1': log(false, userBy('userId'), subjectOf('user', 'userId')),
+  'identity.sessions.revoked@1': log(true, userBy('revokedBy'), subjectOf('user', 'userId')),
+  'identity.sessions.revokedAll@1': log(true, userBy('revokedBy'), () => ({
+    type: 'sessions',
+    id: null,
+  })),
   'identity.email.verified@1': log(false, anonymous, subjectOf('user', 'userId')),
   'identity.user.purged@1': log(true, system, subjectOf('user', 'userId')),
   'identity.profile.updated@1': log(false, userBy('userId'), subjectOf('user', 'userId')),

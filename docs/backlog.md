@@ -134,7 +134,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   - **Revoke access tokens on a reset (optional).** A reset or a change ends sessions only (ADR-0012). A "revoke my tokens too" switch on the reset page, or a security-event setting, would cover the case of a token minted from a hijacked session.
   - **Reset marks the address confirmed?** Opening a reset link proves control of the mailbox, but the reset does not mark the address verified (kept separate on purpose). Revisit if the UI wants a one-step recovery for unverified accounts.
   - **Self-service account deletion and data export (GDPR).** FEATURES lists account deletion as missing; the purge job already deletes soft-deleted accounts, so deletion needs the route, the confirmation (password or mail link) and the event.
-  - **Admin user management (M3/M5).** List, deactivate, change email, force a reset, revoke sessions. Not in M2.
+  - **Admin user management (M3/M5).** List, deactivate, change email, force a reset. Not in M2. Revoking the sessions of one user or of everybody is done (M4b sprint 1, routes only; the screen is M5).
   - **2FA (TOTP, WebAuthn).** Not in M2.
   - **Public `GET /auth/oidc/providers`** for the login page (id and display name), with the UI in M5 (sprint 4 follow-up 1, still open).
   - ~~**Outbox retention** now also matters for the purge: events keep the usernames of purged accounts.~~ Done in M4 sprint 4: delivered events are deleted after `outboxRetentionDays`; a test proves the username of a purged account leaves the outbox. A `dead` delivery keeps its event (and the name) until somebody requeues it, see "Audit follow-ups".
@@ -205,3 +205,18 @@ What the ASVS assessment and the tool left for later. The open requirements them
 - **A single authorization matrix.** The rules for V8.1.1 are spread over the core.authz README, ADR-0005, ADR-0014 and the route tables of the module READMEs. One page that lists them together would help the second pass.
 - **`pnpm test --filter` overwrites `reports/vitest-junit.xml`.** The report holds only the projects that ran, so `pnpm security:asvs` after a filtered run can report a tag as having no passed test. Run the full `pnpm test` first.
 - **`ASVS impact` as a required check.** It becomes one after it is on `main` (CONTRIBUTING.md, "Releases"): add it to the ruleset once the release that carries it is out.
+
+## Sessions follow-ups (M4b sprint 1)
+
+What the session work left for later ([ADR-0025](adr/0025-absolute-session-lifetime-and-recent-authentication.md), [docs/security/sessions.md](security/sessions.md)).
+
+- **Lifetimes in hours.** `sessions.inactivityDays` and `absoluteDays` are whole days, at least 1. A high-risk deployment that wants 12 hours or 1 hour of inactivity needs `inactivityMinutes` and `absoluteMinutes` (or ISO durations) and a validation range.
+- **Back-channel and RP-initiated logout.** Ending a session at the provider does not end the Scorpion session, and the reverse (sessions.md, 7.1.3). Needs a public back-channel endpoint, a table from the provider's `sid` to our sessions, a signature check of the logout token, and a provider setting for the end-session endpoint.
+- **A session list with device names.** Times and the current marker only today (Decision 6). A label or a coarse location needs a privacy text (M5), a retention rule, and a way to keep it out of logs.
+- **A limit on concurrent sessions,** if misuse shows up (Decision 6): a setting, the oldest session ended at the limit, and a message in the UI.
+- **Cross-process session invalidation.** Another process accepts an ended session for at most 5 seconds. A `LISTEN/NOTIFY` message from `revoke*` that empties the other caches would make it immediate.
+- **Re-authentication on admin termination, and a stricter window per action.** `sessions.recentAuthSeconds` is one window for every action; the administrators' routes do not ask for a recent authentication. A per-action `maxAgeSeconds` is already an argument of `requireRecentAuth`.
+- **AAL2 behaviour.** A deployment whose provider enforces MFA may want its local session to follow the provider's `acr` and the NIST periods for AAL2; `acr` and `amr` are not read (sessions.md).
+- **A notice mail when sessions are ended by an administrator, and when a new session starts** from an unfamiliar browser. The audit trail has the first; neither mails.
+- **A disable-account feature** must call `revokeAll` in the same transaction and get a test (ASVS 7.4.2).
+- **The re-authentication screen** (M5): the page that shows `reauthentication-required`, asks for the password or sends the person to the provider, and returns to the change. The OIDC callback redirects to the application root today, with no return path.

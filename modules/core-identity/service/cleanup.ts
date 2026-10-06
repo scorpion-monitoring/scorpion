@@ -43,7 +43,13 @@ export function createCleanupService(
         const sessions = await tx
           .delete(session)
           // A revoked session is as dead as an expired one: the lookup is by hash and finds nothing.
-          .where(or(lt(session.expiresAt, now), isNotNull(session.revokedAt)))
+          .where(
+            or(
+              lt(session.expiresAt, now),
+              lt(session.absoluteExpiresAt, now),
+              isNotNull(session.revokedAt),
+            ),
+          )
           .returning({ id: session.id });
         const loginStates = await tx
           .delete(loginState)
