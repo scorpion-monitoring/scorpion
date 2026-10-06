@@ -1,0 +1,92 @@
+asvs_version: 5.0.0
+level: 2
+chapter: V7
+assessment_type: null
+assessed_commit: null
+assessed_on: null
+assessor: null
+second_pass: null
+reviewer: null
+requirements:
+  - id: v5.0.0-7.1.1
+    status: fail
+    note: 'Not met. The 7-day sliding inactivity rule is in modules/core-identity/README.md and ADR-0007, but no absolute maximum lifetime exists or is documented, and there is no justification against NIST SP 800-63B. Tracked in #9007.'
+  - id: v5.0.0-7.1.2
+    status: fail
+    note: 'Not met. Nothing documents how many concurrent sessions an account may have or what happens at the limit; the code has no limit. Tracked in #9007.'
+  - id: v5.0.0-7.1.3
+    status: fail
+    note: 'Not met. OIDC sign-in creates an independent local session and the identity provider is not consulted afterwards; no document says how session lifetimes and termination are coordinated. Tracked in #9007.'
+  - id: v5.0.0-7.2.1
+    status: pass
+    evidence:
+      - test: ASVS-7.2.1
+      - code: modules/core-identity/service/sessions.ts
+    note: 'Every request is checked against identity_session by the SHA-256 of the cookie value; nothing is verified in the browser. A 5 s per-process cache is the documented staleness bound (ADR-0007).'
+  - id: v5.0.0-7.2.2
+    status: pass
+    evidence:
+      - test: ASVS-7.2.2
+      - code: modules/core-identity/service/session-id.ts
+    note: 'A new random reference token is made for every login; no static API secret serves as a session.'
+  - id: v5.0.0-7.2.3
+    status: pass
+    evidence:
+      - test: ASVS-7.2.3
+      - code: modules/core-identity/service/session-id.ts
+    note: 'randomBytes(32) from node:crypto (CSPRNG), 256 bits, unique index on the hash. The test shows length and uniqueness; the CSPRNG claim rests on the code.'
+  - id: v5.0.0-7.2.4
+    status: pass
+    evidence:
+      - test: ASVS-7.2.4
+      - code: modules/core-identity/service/accounts.ts
+    note: 'Password login and OIDC login each make a new server-generated id and end the session the browser presented.'
+  - id: v5.0.0-7.3.1
+    status: pass
+    evidence:
+      - test: ASVS-7.3.1
+      - doc: docs/adr/0007-session-cookie-and-csrf.md
+    note: 'Inactivity timeout of 7 days from last use, enforced in sessions.resolve. The value is a documented decision (ADR-0007), but the risk analysis behind it is not written down (see 7.1.1); a reviewer may insist on that.'
+  - id: v5.0.0-7.3.2
+    status: fail
+    note: 'Not met (code gap). Every use after 60 s sets expiresAt = now + 7 days and createdAt is never consulted, so a session that is used often never expires. Own issue #9101.'
+  - id: v5.0.0-7.4.1
+    status: pass
+    evidence:
+      - test: ASVS-7.4.1
+      - code: modules/core-identity/service/sessions.ts
+    note: 'Logout, log out everywhere and expiry delete or stop the row; other server processes may accept a revoked session for at most the 5 s cache TTL (ADR-0007).'
+  - id: v5.0.0-7.4.2
+    status: pass
+    evidence:
+      - test: ASVS-7.4.2
+      - code: modules/core-identity/service/sessions.ts
+      - code: modules/core-identity/service/approval.ts
+    note: 'sessions.resolve refuses a session whose user is not active or is deleted, on every uncached lookup; rejecting a user revokes all their sessions. The rows of a deleted user stay and the 5 s cache is not dropped. No disable-account feature exists yet (backlog); when it does it must call revokeAll and get its own test. A reviewer may judge "refused" weaker than "terminated".'
+  - id: v5.0.0-7.4.3
+    status: pass
+    evidence:
+      - test: ASVS-7.4.3
+      - code: modules/core-identity/service/recovery.ts
+    note: 'A password change or reset ends every session; stricter than an option. There is no MFA to change. Linking an OIDC identity does not end other sessions.'
+  - id: v5.0.0-7.4.4
+    status: fail
+    note: 'Not met yet. The logout API exists (POST /auth/logout) but apps/web has no authenticated page and no logout control until M5. Re-assess with a Playwright test when the UI lands. Tracked in #9007.'
+  - id: v5.0.0-7.4.5
+    status: fail
+    note: "Not met (code gap). No route lets an administrator end the sessions of one user or of all users; POST /auth/logout-all ends only the caller's own (defect-01 test proves it). Listed in docs/backlog.md. Own issue #9102."
+  - id: v5.0.0-7.5.1
+    status: fail
+    note: 'Not met (code gap). A password change asks for the current password, but changing the email address (PATCH /account/profile) or linking an OIDC identity needs only the session. Own issue #9103.'
+  - id: v5.0.0-7.5.2
+    status: fail
+    note: 'Not met (code gap). Users can end all their sessions (POST /auth/logout-all, no re-authentication) but cannot list them or end one; identity_session stores no device data. Own issue #9104.'
+  - id: v5.0.0-7.6.1
+    status: fail
+    note: 'Not met. The OIDC session is independent of the provider after login (no maximum IdP authentication age, no back-channel logout) and nothing documents this; it also has no absolute lifetime (7.3.2). Tracked in #9007.'
+  - id: v5.0.0-7.6.2
+    status: pass
+    evidence:
+      - test: ASVS-7.6.2
+      - code: modules/core-identity/service/oidc.ts
+    note: 'A session starts only from a credentials POST or from an OIDC callback bound to a login that this browser started with an explicit POST; registration, reset and verification start none.'

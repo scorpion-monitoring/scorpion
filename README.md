@@ -1,7 +1,14 @@
 # Scorpion
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/scorpion-monitoring/scorpion/badge)](https://scorecard.dev/viewer/?uri=github.com/scorpion-monitoring/scorpion)
+<!-- security-badges:start -->
+
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15237/badge)](https://www.bestpractices.dev/projects/15237)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/scorpion-monitoring/scorpion/badge)](https://scorecard.dev/viewer/?uri=github.com/scorpion-monitoring/scorpion)
+[![ASVS 5.0 L2 V6 Authentication](https://img.shields.io/badge/ASVS_5.0_L2_V6_Authentication-in_progress-yellow)](docs/security/asvs/v6-authentication.md)
+[![ASVS 5.0 L2 V7 Session Management](https://img.shields.io/badge/ASVS_5.0_L2_V7_Session_Management-in_progress-yellow)](docs/security/asvs/v7-session-management.md)
+[![ASVS 5.0 L2 V8 Authorization](https://img.shields.io/badge/ASVS_5.0_L2_V8_Authorization-in_progress-yellow)](docs/security/asvs/v8-authorization.md)
+[![ASVS 5.0 L2 V10 OIDC client](https://img.shields.io/badge/ASVS_5.0_L2_V10_OIDC_client-in_progress-yellow)](docs/security/asvs/v10-oauth-oidc.md)
+<!-- security-badges:end -->
 
 Scorpion is a service registry and KPI tracker for research infrastructures (de.NBI, NFDI).
 This repository is the rebuild as a **modular monolith**: one server, one PostgreSQL database,
