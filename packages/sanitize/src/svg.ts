@@ -56,6 +56,56 @@ export class InvalidSvg extends Error {
   }
 }
 
+const startsAt = (text: string, at: number, prefix: string) =>
+  text.slice(at, at + prefix.length).toLowerCase() === prefix;
+
+const endOf = (text: string, closer: string, from: number) => {
+  const at = text.indexOf(closer, from);
+  return at === -1 ? -1 : at + closer.length;
+};
+
+/**
+ * Where the XML declaration, doctype or comment that starts at `at` ends: `at` when none starts
+ * there, -1 when it is never closed. A doctype ends at the first `>` outside its `[...]` subset.
+ */
+function declarationEnd(text: string, at: number): number {
+  if (startsAt(text, at, '<?xml')) return endOf(text, '?>', at + 5);
+  if (startsAt(text, at, '<!--')) return endOf(text, '-->', at + 4);
+  if (!startsAt(text, at, '<!doctype')) return at;
+  for (let i = at + 9; i < text.length; i++) {
+    if (text[i] === '>') return i + 1;
+    if (text[i] === '[') {
+      i = text.indexOf(']', i + 1);
+      if (i === -1) return -1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The text without XML declarations, doctypes and comments, in one pass that never reads a
+ * character twice. Regular expressions for the same job backtrack on an unclosed `<?xml`,
+ * `<!DOCTYPE` or `<!--` and took minutes for a small upload (CodeQL js/polynomial-redos). An unclosed
+ * one ends the scan: the rest stays as it is, and DOMPurify reads it as text or a comment.
+ */
+function stripDeclarations(text: string): string {
+  let out = '';
+  let kept = 0;
+  let at = text.indexOf('<');
+  while (at !== -1) {
+    const end = declarationEnd(text, at);
+    if (end === -1) break;
+    if (end === at) {
+      at = text.indexOf('<', at + 1);
+    } else {
+      out += text.slice(kept, at);
+      kept = end;
+      at = text.indexOf('<', end);
+    }
+  }
+  return out + text.slice(kept);
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const XLINK_NS = 'http://www.w3.org/1999/xlink';
 
@@ -66,12 +116,7 @@ const XLINK_NS = 'http://www.w3.org/1999/xlink';
 export function sanitizeSvg(source: string): string {
   // The prolog, doctype and comments are dropped: a doctype can declare entities, and the output is
   // a fresh document.
-  const body = source
-    .replace(/^\uFEFF/, '')
-    .replace(/<\?xml[\s\S]*?\?>/gi, '')
-    .replace(/<!DOCTYPE[\s\S]*?(\[[\s\S]*?\])?\s*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .trim();
+  const body = stripDeclarations(source.replace(/^\uFEFF/, '')).trim();
   if (!/^<svg[\s>/]/i.test(body)) throw new InvalidSvg('The file is not an SVG document.');
   const clean = svg()
     .sanitize(body, {

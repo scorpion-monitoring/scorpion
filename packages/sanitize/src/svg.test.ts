@@ -81,6 +81,35 @@ describe('sanitizeSvg', () => {
     expect(out).not.toContain('passwd');
   });
 
+  it('drops declarations in any case, a doctype with two subsets and comments between elements', () => {
+    const out = sanitizeSvg(
+      '﻿<?XML version="1.0"?>\n<!-- a > b --><!doctype svg [<!ENTITY a "x">] [<!ENTITY b "y">]>' +
+        wrap('<!-- note --><rect width="1" height="1"/>'),
+    );
+    expect(out).toMatch(/^<svg\b/);
+    expect(out).not.toMatch(/ENTITY|note|XML/);
+    expect(out).toContain('<rect');
+  });
+
+  it('refuses a file whose prolog is never closed', () => {
+    expect(() => sanitizeSvg(`<?xml version="1.0"${wrap('')}`)).toThrow(InvalidSvg);
+    expect(() => sanitizeSvg(`<!-- ${wrap('')}`)).toThrow(InvalidSvg);
+  });
+
+  // An unclosed `<?xml`, `<!DOCTYPE` or `<!--` repeated made the regular expressions that stripped
+  // them backtrack: 64 KiB of `<!DOCTYPE[` took over two minutes. The scan is linear.
+  it.each([
+    ['<?xml', '<?xml'],
+    ['<!DOCTYPE[', '<!DOCTYPE['],
+    ['<!DOCTYPE', '<!DOCTYPE '],
+    ['<!--', '<!--'],
+  ])('handles 1 MiB of unclosed %s in linear time', (_name, unit) => {
+    const input = wrap('').concat(unit.repeat(Math.ceil((1024 * 1024) / unit.length)));
+    const started = performance.now();
+    sanitizeSvg(input);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
   it.each([
     ['HTML', '<html><body><script>alert(1)</script></body></html>'],
     ['text', 'hello'],
