@@ -63,10 +63,12 @@ username, lower-cased, whether it exists or not) together with the **network** (
 alone. Both keys are stored as SHA-256 hashes, so a mistyped password never ends up there and the table holds no
 usernames.
 
-After `freeAttempts` failures the key is blocked for `baseDelaySeconds · 2^(n − freeAttempts)` seconds, never more than
-`maxDelaySeconds` (defaults: 5 free attempts and 15 seconds per account and network; 20 free attempts and the same
-delays per account alone; a ceiling of 15 minutes; counters forgotten after an hour without a failure). All of it
-is the setting `loginThrottle`.
+After `freeAttempts` failures the key is blocked: failure number `f` beyond the free ones blocks it for
+`baseDelaySeconds · 2^(f − freeAttempts − 1)` seconds, never more than `maxDelaySeconds`. The defaults are 5 free attempts
+for an account on one network and 20 for the account alone, a first delay of 15 seconds that doubles (15, 30, 60, 120,
+240, 480) up to a ceiling of 15 minutes, and counters that are forgotten after an hour without a failure. All of it is
+the setting `loginThrottle`. The password checks of a signed-in session (re-authentication, change of password) count on
+the account alone, because guessing the current password through a stolen session is the same attack.
 
 While a key is blocked, a login answers **429 with `Retry-After`** before the password is looked at and without counting,
 so waiting is the only thing that works and a blocked key cannot be extended by hammering it. The answer, its body and its

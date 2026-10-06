@@ -220,3 +220,18 @@ What the session work left for later ([ADR-0025](adr/0025-absolute-session-lifet
 - **A notice mail when sessions are ended by an administrator, and when a new session starts** from an unfamiliar browser. The audit trail has the first; neither mails.
 - **A disable-account feature** must call `revokeAll` in the same transaction and get a test (ASVS 7.4.2).
 - **The re-authentication screen** (M5): the page that shows `reauthentication-required`, asks for the password or sends the person to the provider, and returns to the change. The OIDC callback redirects to the application root today, with no return path.
+
+## Credentials follow-ups (M4b sprint 2)
+
+What the credential work left for later ([ADR-0026](adr/0026-credential-rules-throttling-and-mail-confirmed-linking.md), [docs/security/authentication.md](security/authentication.md)).
+
+- **TOTP, WebAuthn and recovery codes** (6.3.3 passes on a documented rationale today). Needs a dependency, a secret per person in the encrypted store, recovery codes (6.5.x applies), screens, and a rule for what an OIDC-only account does. An operator who needs a second factor requires it at the OIDC provider.
+- **A notice mail on repeated failed logins** (6.3.5 and 6.3.7 are Level 3), and on a new link or a changed password. The throttle blocks; it does not tell the owner.
+- **An offline floor of the 3000 most common passwords** (a file in the repository with its licence and SHA-256 recorded), checked when the breach service does not answer, so the fail-open window is not empty (6.2.4). Together with a self-hosted mirror of the range API for an installation that may not call the public one.
+- **Alternatives to a hard lockout.** The throttle has no lockout on purpose. If a deployment sees distributed guessing that the ceiling does not stop: a CAPTCHA or proof-of-work after the free attempts (a dependency and a third party), a longer ceiling per account, or a requirement of a second factor for a blocked account. An administrator action to clear the counters of one account is also missing.
+- **An admin view of the throttle:** which accounts are blocked and for how long, and settings screens for `loginThrottle` and `passwordBreachCheck` (the schema validates them; no screen exists until M5 and later).
+- **Check the password at login.** The password is in hand at a successful login: checking it against the breach set then (and asking for a change) would catch a password that was breached after it was set. Today the rules apply when a password is set.
+- **The page that confirms a provider link (M5)** should name the provider before the person confirms, which needs a read route for the token (`POST /account/oidc-link/confirm` names it only in its answer). The callback redirects to `/login?notice=check-mail` and the mail links to `/link-sign-in#token=…`; both pages are M5's.
+- **A notice to the account holder when a provider is linked,** and a list of the linked providers with a way to unlink one, are not there.
+- **The breach counter is per process,** not per server: `scorpion_password_breach_check_failures_total` reads a counter in `packages/integrations`. A kernel metrics API for modules would let each server own its counters.
+- **Verification link of 10 minutes** if the maintainer rejects the reading of ADR-0026 section 3: change `VERIFICATION_TTL_MS`, the mail text and the README.

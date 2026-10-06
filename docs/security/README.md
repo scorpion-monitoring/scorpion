@@ -26,7 +26,7 @@ The four chapters are **in progress**. The entries are filled in from what the c
 (`assessor`, `assessed_commit`, `assessed_on`, `second_pass`, `assessment_type`) are empty until the maintainer makes the first pass at Gate 1, so
 the badges cannot turn green before then. Open `fail` entries link to the sprint plan section that fixes them: [M4b](../m4b-sprint-plan.md) for the gaps in identity, authorization and the pipeline, and the [M5 plan](../m5-sprint-plan.md) for the three that need a browser (password fields, paste and password managers, a logout control on every page).
 
-Policies the assessments point to: [sessions.md](sessions.md) (lifetimes, concurrent sessions, the provider's session, recent authentication).
+Policies the assessments point to: [sessions.md](sessions.md) (lifetimes, concurrent sessions, the provider's session, recent authentication) and [authentication.md](authentication.md) (every pathway with its controls and strength, the password rules and the words they refuse, the throttle and the lockout stance, why there is no second factor of our own).
 
 ## Method
 
@@ -78,7 +78,7 @@ bestpractices.dev are the maintainer's. Where a criterion is answered with a lin
 The [Scorecard](https://scorecard.dev/viewer/?uri=github.com/scorpion-monitoring/scorpion) workflow runs on pushes to `dev`
 (the default branch), weekly, and when branch protection changes. Targets: at least 6.5 at Gate 1, 7.0 at Gate 4.
 
-Score **7.3** on 2026-10-06 (commit `7485d40`, API `api.scorecard.dev`). Checks below 10:
+Score **7.3** on 2026-10-06 (commit `70a64e8`, API `api.scorecard.dev`). Checks below 10:
 
 | Check              | Score | Why                                                                                             |
 | ------------------ | ----- | ----------------------------------------------------------------------------------------------- |
