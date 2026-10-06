@@ -133,6 +133,11 @@ Each milestone ends with a release. Before `v1.0.0` (M18), a milestone is a `min
 A hotfix follows the same steps, but starts from `main` as `hotfix/<x.y.z>`: commit the fix
 with its changeset, then run `pnpm changeset version`.
 
+A pull request runs the workflows of its base branch. Before a new job becomes a required check
+for `main`, the job has to be on `main`, through a release or a hotfix; otherwise every pull
+request into `main` waits for a check that never starts. A hotfix that a required check blocks
+for that reason carries the job with it, as `v0.5.1` did for **Dependency audit** and **CodeQL**.
+
 ## Before you push
 
 ```bash

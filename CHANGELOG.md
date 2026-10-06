@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- 3518e64: Security: an uploaded SVG file (for example an avatar) with many unclosed `<?xml`, `<!DOCTYPE` or `<!--` openings could block the server for minutes, and a very long log message could slow logging down. Both now take time proportional to the input size. Update if your instance lets users register and upload images.
+- 0873658: Security: `source-map-js` is updated to 1.2.2 (GHSA-68fv-2mgg-jv7q, high), a dependency of the HTML sanitiser that a crafted source map could stall. No action needed beyond updating.
+
 ## 0.5.0
 
 ### Minor Changes
