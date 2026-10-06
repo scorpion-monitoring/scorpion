@@ -189,3 +189,19 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Base images outside the Dockerfile.** `postgres:16.15-alpine` (CI service, `docker-compose.dev.yml`) and `axllent/mailpit` are pinned by tag only, and Dependabot's `docker` ecosystem reads Dockerfiles, not these files. Scorecard does not count them. Pin by digest and add a `docker-compose` entry to `.github/dependabot.yml` if the score asks for it.
 - **Dependabot runtime bumps without a changeset.** A Dependabot pull request that changes only dependency files needs no changeset (`scripts/changeset-check.ts`), so a security bump of a production dependency does not reach `CHANGELOG.md` by itself. Write a changeset by hand at release time for those, or revisit the exemption.
 - **`cli.test.ts` picks a random port.** `freePort()` in `apps/server/src/cli.test.ts` returns a random number from 20000 to 40000 without checking it. It collided once with a port in use (`EADDRINUSE`, `exits 1 and says why when the database cannot be reached`) in a full local run and passed on the re-run. Bind port 0 and read the port back, or retry.
+
+## Security assurance follow-ups (M4a sprint 2)
+
+What the ASVS assessment and the tool left for later. The open requirements themselves are `fail` entries in `docs/security/asvs/v*.yaml` with an issue each; this list is what no entry covers.
+
+- **Other ASVS chapters, Best Practices silver and gold.** Only V6, V7, V8 and V10 are claimed. Further chapters, and silver and gold (they need a second maintainer and two-person review), go here until there is one. Scorecard targets above 6.5 likewise.
+- **Signed images, SLSA provenance and an SBOM** for the Signed-Releases check: M18 and Gate 4 (cosign on the profile images, provenance attached to the GitHub release).
+- **Fuzzing** (`fast-check`) for the pure calculation library and the parsers: M10 and M11. Check the current Scorecard detection rules first.
+- **Dependency review action** on pull requests and licence checks of dependencies.
+- **Peer or external review** of the assessments: a second maintainer or an outside reviewer sets `assessment_type` to `peer` or `external` and fills `reviewer`.
+- **Tests that would turn code pointers into tagged tests.** V6.2.8 (a password is verified exactly as received: surrounding spaces, case) and V6.3.2 (a fresh install has no user) pass on a code pointer only. The test OIDC providers (`apps/server/src/testing/oidc-flow.ts`, `modules/core-identity/test/oidc.ts`) do not check `code_verifier` against the S256 challenge, so V10.2.1 rests on the challenge being sent and the state being checked; make the stub verify it and add a test that a wrong verifier is refused. Nothing asserts that a configured `offline_access` scope leaves no refresh token stored.
+- **RFC 9207 `iss` authorization-response parameter.** Not validated; mix-up protection (V10.2.2) rests on the per-provider callback, the state tied to the provider and the id_token `iss`. Validating `iss` when the provider sends it would be extra hardening.
+- **Dedicated tests for table-driven evidence.** V10.5.3 and V10.5.4 (issuer and audience) and V6.2.1, V6.2.5 and V6.2.9 (password rules) are tagged on `it.each` titles, so the tag covers every case of the table. A test per requirement would make the evidence sharper.
+- **A single authorization matrix.** The rules for V8.1.1 are spread over the core.authz README, ADR-0005, ADR-0014 and the route tables of the module READMEs. One page that lists them together would help the second pass.
+- **`pnpm test --filter` overwrites `reports/vitest-junit.xml`.** The report holds only the projects that ran, so `pnpm security:asvs` after a filtered run can report a tag as having no passed test. Run the full `pnpm test` first.
+- **`ASVS impact` as a required check.** It becomes one after it is on `main` (CONTRIBUTING.md, "Releases"): add it to the ruleset once the release that carries it is out.
