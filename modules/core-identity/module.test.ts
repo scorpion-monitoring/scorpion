@@ -46,6 +46,7 @@ describe('the module', () => {
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
       'identity.admin.created@1',
+      'identity.authMethod.linkRequested@1',
       'identity.authMethod.linked@1',
       'identity.email.verified@1',
       'identity.password.changed@1',

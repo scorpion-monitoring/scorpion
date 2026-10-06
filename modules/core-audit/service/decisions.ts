@@ -73,6 +73,9 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   'identity.user.approved@1': log(true, userBy('approvedBy'), subjectOf('user', 'userId')),
   'identity.user.rejected@1': log(true, userBy('rejectedBy'), subjectOf('user', 'userId')),
   'identity.authMethod.linked@1': log(true, userBy('userId'), subjectOf('user', 'userId')),
+  // A provider asserted the address of this account at a first sign-in; its holder was mailed a link (ADR 0026).
+  // The person is not signed in: the account is the subject, not the actor.
+  'identity.authMethod.linkRequested@1': log(true, anonymous, subjectOf('user', 'userId')),
   // Asked by somebody who is not signed in: the account is the subject, not the actor.
   'identity.password.resetRequested@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.reset@1': log(true, anonymous, subjectOf('user', 'userId')),
