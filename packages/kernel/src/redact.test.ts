@@ -76,6 +76,23 @@ describe('log redaction', () => {
     });
   });
 
+  it('masks a URL password behind a long or digit-led scheme prefix', () => {
+    expect(maskSecrets(`x${'a'.repeat(40)}${URL}`)).not.toContain(PASSWORD);
+    expect(maskSecrets(`1${URL}`)).not.toContain(PASSWORD);
+  });
+
+  // An unbounded scheme pattern rescanned every run of letters from each position: 64 KiB of `a`
+  // took 2.5 seconds, and a log line can carry user input of that size.
+  it.each([
+    ['letters', 'a'.repeat(1024 * 1024)],
+    ['scheme characters', 'a.b+c-'.repeat((1024 * 1024) / 6)],
+    ['unfinished credentials', 'a://b:'.repeat((1024 * 1024) / 6)],
+  ])('masks 1 MiB of %s in linear time', (_name, input) => {
+    const started = performance.now();
+    maskSecrets(input);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
   it('survives circular objects and deep nesting', () => {
     const loop: Record<string, unknown> = { url: URL };
     loop.self = loop;
