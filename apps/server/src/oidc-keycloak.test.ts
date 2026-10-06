@@ -166,6 +166,87 @@ describe('against Keycloak', { timeout: 60_000 }, () => {
     expect(created.rows).toHaveLength(1);
   });
 
+  it('links a provider only after the account holder confirms by mail: nothing links and nobody signs in at the first sign-in [ASVS-6.8.1]', async () => {
+    const { kernel, web, signedIn, post, get, mail, count } = await startApp();
+    // Scorpion has an account that holds the address Keycloak verified for alice.
+    const owner = await signedIn('owner', { email: alice.email });
+
+    // 1. Keycloak asserts the address. Nothing is linked and nobody is signed in: a notice page, and
+    // a mail to the account's own address that names Keycloak.
+    const first = await web.login(alice);
+    expect(first.reply.status).toBe(302);
+    expect(first.reply.res.headers.get('location')).toBe('/login?notice=check-mail');
+    expect(first.reply.setCookie).toBeUndefined();
+    expect(await count('identity_auth_method')).toBe(1); // the owner's password only
+    expect(await count('identity_session')).toBe(1); // the owner's own
+    const [sent] = await mail.of('identity.oidc-link');
+    expect(sent!.to).toBe(alice.email);
+    expect(sent!.text).toContain('Keycloak');
+
+    // 2. Asking again does not sign in either, and the new link replaces the old one.
+    const second = await web.login(alice);
+    expect(second.reply.status).toBe(302);
+    expect(second.reply.cookie).toBeUndefined();
+    const mails = await mail.of('identity.oidc-link');
+    expect(mails).toHaveLength(2);
+    const token = decodeURIComponent(/#token=([A-Za-z0-9_%-]+)/.exec(mails[1]!.text ?? '')![1]!);
+
+    // 3. Nobody else can use the link: no session at all, or another account's.
+    expect((await post('/account/oidc-link/confirm', { body: { token } })).status).toBe(401);
+    const other = await signedIn('other', { email: 'other@example.org' });
+    expect(
+      (
+        await post('/account/oidc-link/confirm', {
+          body: { token },
+          cookie: other.cookie,
+          csrf: other.csrf,
+        })
+      ).status,
+    ).toBe(400);
+    expect(await count('identity_auth_method')).toBe(2); // the two password accounts
+
+    // 4. The account holder, signed in, confirms. Only now is Keycloak linked.
+    const confirmed = await post('/account/oidc-link/confirm', {
+      body: { token },
+      cookie: owner.cookie,
+      csrf: owner.csrf,
+    });
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body).toEqual({ provider: PROVIDER_ID, name: 'Keycloak' });
+    expect(
+      (
+        await kernel.pool.query(
+          "select user_id from identity_auth_method where provider = 'keycloak'",
+        )
+      ).rows,
+    ).toEqual([{ user_id: owner.user.id }]);
+    // Once only.
+    expect(
+      (
+        await post('/account/oidc-link/confirm', {
+          body: { token },
+          cookie: owner.cookie,
+          csrf: owner.csrf,
+        })
+      ).status,
+    ).toBe(400);
+
+    // 5. Now alice's Keycloak sign-in is the owner's.
+    const login = await web.login(alice);
+    expect(login.reply.status).toBe(302);
+    expect(login.reply.res.headers.get('location')).toBe('/');
+    expect((await get('/auth/me', { cookie: login.reply.cookie })).body).toMatchObject({
+      user: { id: owner.user.id },
+    });
+  });
+
+  it('sends no link mail for an address Keycloak did not verify', async () => {
+    const { kernel, web, mail } = await startApp();
+    await makeUser(kernel.pool, { email: mallory.email, emailVerified: true });
+    await web.login(mallory);
+    expect(await mail.of('identity.oidc-link')).toEqual([]);
+  });
+
   it('re-authenticates for real: prompt=login and max_age=0 make Keycloak ask for the password again, and auth_time is checked (ADR 0025)', async () => {
     const sso = keycloak.browser(); // one browser, so Keycloak's single sign-on session survives
     const { kernel, call, get, logText } = await startApp();
