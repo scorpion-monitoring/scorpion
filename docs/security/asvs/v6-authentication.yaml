@@ -13,8 +13,7 @@ requirements:
     evidence:
       - doc: docs/security/authentication.md
       - code: modules/core-identity/service/login-throttle.ts
-      - test: ASVS-6.3.1
-    note: 'docs/security/authentication.md documents how password guessing and credential stuffing are defended and configured: the per-address strict bucket (setting rateLimits.strict of core.settings), the per-account throttle with exponential delay and a ceiling (setting loginThrottle of core.identity), the stance on lockout (none, with the reason: a lockout lets anyone lock a person out) and the risk that remains. The behaviour is proved by the tests tagged 6.3.1.'
+    note: 'docs/security/authentication.md documents how password guessing and credential stuffing are defended and configured: the per-address strict bucket (setting rateLimits.strict of core.settings), the per-account throttle with exponential delay and a ceiling (setting loginThrottle of core.identity), the stance on lockout (none, with the reason: a lockout lets anyone lock a person out) and the risk that remains. The behaviour is proved by the tests cited for 6.3.1.'
   - id: v5.0.0-6.1.2
     status: pass
     evidence:
