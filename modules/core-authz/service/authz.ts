@@ -444,3 +444,5 @@ export function createAuthzService(
     },
   };
 }
+
+// asvs-impact test: a comment-only change in a security-scoped path. Never merged.
