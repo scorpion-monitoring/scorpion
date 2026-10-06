@@ -57,6 +57,7 @@ export { WORKSPACE_MODULES, type ModuleId } from './workspace-modules.ts';
 export { loadConfig, mountPath, type Config } from './config.ts';
 export {
   activeTransaction,
+  closePool,
   createDb,
   createPool,
   openDatabase,
