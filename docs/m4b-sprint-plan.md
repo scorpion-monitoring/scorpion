@@ -24,7 +24,7 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
    authenticated page). They stay `fail` until M5 ships the screens and a Playwright test (M5 sprints 2 and 3).
 4. Add the lines in §10 to `implementation.md` (an M4b entry, the overview row, the M5 release number). The M5 plan already carries the three browser requirements in its hand-off
    table (6.2.6, 6.2.7, 7.4.4) and the release number `0.7.0`; its sprints consume the M4b routes.
-5. ADRs: sprint 1 takes ADR-0025, so the M5 plan now reserves ADR-0026 (the shell) and ADR-0027 (the inbox stream); sprint 2 takes the next free number if it needs one (written ADR-00xx below), written as the first commit of the sprint that needs them, and amends ADR-0007 and ADR-0011.
+5. ADRs: sprint 1 takes ADR-0025, so the M5 plan reserved ADR-0026 (the shell) and ADR-0027 (the inbox stream); sprint 2 takes ADR-0026 (credential rules, throttling and mail-confirmed linking), written as the first commit of the sprint, so the M5 plan now reserves ADR-0027 (the shell) and ADR-0028 (the inbox stream). It amends ADR-0010, ADR-0011 and ADR-0012.
 
 ## 1. The gaps and where they are closed
 
@@ -135,7 +135,7 @@ Definition of done: `pnpm check`, the tests of `core-identity` and `apps/server`
    account as today. Linking from the profile page while signed in stays, behind the re-authentication of item 2. There is no `trustEmailForLinking` setting. Tests: a provider that
    asserts a victim's address links nothing and signs nobody in; the confirmation links exactly once, expires after 10 minutes, and is refused for another account's session; the Keycloak
    test covers the whole flow. The `email_verified` claim is still required before any mail is sent. A changeset tells operators that sign-in no longer links by itself.
-6. **MFA position** (6.3.3; Decision 8). ADR-00xx: why Scorpion has no own second factor in this milestone, the mitigating controls (Argon2id, strict and per-account throttling, the
+6. **MFA position** (6.3.3; Decision 8). ADR-0026: why Scorpion has no own second factor in this milestone, the mitigating controls (Argon2id, strict and per-account throttling, the
    blocklist, short reset links, session list and termination, and the recommendation that operators enable MFA at the OIDC provider), and what would bring it back. 6.3.3 moves to `pass` only on the strength of this documented rationale, as the requirement itself allows, and the entry says so.
 7. **Authentication document** `docs/security/authentication.md` (6.1.1, 6.1.3, 6.3.4, and the list of 6.1.2): every pathway (password, OIDC, PAT, first-run token, mail tokens, the
    `create-admin` command) with the controls and the authentication strength each one enforces, the rate-limit and throttle settings, the lockout stance, and the fallback assumption
