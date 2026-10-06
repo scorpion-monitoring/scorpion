@@ -86,6 +86,18 @@ describe('rule 6: the generated files', () => {
     expect(run(options(root)).problems).toEqual([]);
   });
 
+  it('escapes a backslash before a pipe, so that "\\|" in a note cannot close its table cell', () => {
+    const root = makeRepo();
+    writeAssessment(
+      root,
+      'V7',
+      baseAssessment('V7', [{ id: 'v5.0.0-7.1.1', status: 'n/a', reason: 'a \\| b' }]),
+    );
+    run(options(root, { write: true }));
+    const report = readFileSync(join(root, 'docs/security/asvs/v7-session-management.md'), 'utf8');
+    expect(report).toContain('a \\\\\\| b');
+  });
+
   it('puts the real requirement text, escaped, and "not yet assessed by a person" into the report', () => {
     const report = readFileSync(
       join(makeRepo(), 'docs/security/asvs/v6-authentication.md'),

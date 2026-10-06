@@ -18,7 +18,9 @@ import {
 } from './assessment.ts';
 import { assessed, type Chapter } from './source.ts';
 
-const cell = (text: string): string => text.replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim();
+/** One Markdown table cell: backslashes first, then the pipe, so that a `\|` in the input cannot close the cell. */
+const cell = (text: string): string =>
+  text.replace(/\s+/g, ' ').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').trim();
 
 function evidenceLinks(entry: Entry): string {
   const items = (entry.evidence ?? []).map((item) => {
