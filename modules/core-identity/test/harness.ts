@@ -206,12 +206,17 @@ export function useIdentity(): IdentityHarness {
           for (const role of roles.length > 0 ? roles : ['user']) {
             await makeRoleAssignment(kernel.pool, user, role);
           }
+          // A real session, so that "this session" and its recent authentication exist (ADR 0025).
+          const created = await (
+            kernel.services.get('core.identity') as IdentityInternals
+          ).sessions.create(user.id);
           return {
             kind: 'user',
             userId: user.id,
             username: user.username,
             roles: [],
             via: 'session',
+            sessionId: created.sessionId,
           };
         },
       };

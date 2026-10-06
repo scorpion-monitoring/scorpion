@@ -12,10 +12,23 @@ const identity = useIdentity();
 type Pool = { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }> };
 const rows = async (kernel: { pool: Pool }, sql: string, values?: unknown[]) =>
   (await kernel.pool.query(sql, values)).rows as Record<string, unknown>[];
+/** The session row of each user a test made one for, so that "this session" exists (ADR 0025). */
+const sessionIds = new Map<string, string>();
+const withSession = async (
+  id: { sessions: { create(userId: string): Promise<{ sessionId: string }> } },
+  user: { id: string },
+) => void sessionIds.set(user.id, (await id.sessions.create(user.id)).sessionId);
 const actorOf = (
   user: { id: string; username: string },
   via: 'session' | 'token' = 'session',
-): Actor => ({ kind: 'user', userId: user.id, username: user.username, roles: [], via });
+): Actor => ({
+  kind: 'user',
+  userId: user.id,
+  username: user.username,
+  roles: [],
+  via,
+  ...(via === 'session' && sessionIds.has(user.id) ? { sessionId: sessionIds.get(user.id) } : {}),
+});
 
 async function start() {
   const started = await identity.start();
@@ -25,6 +38,7 @@ async function start() {
     emailVerified: true,
   });
   await makeAuthMethod(started.kernel.pool, alice);
+  await withSession(started.identity, alice);
   return { ...started, alice, profile: started.identity.profile };
 }
 
@@ -223,6 +237,7 @@ describe('update: the address', () => {
   it('works for an account that has no address yet', async () => {
     const { kernel, identity: id, mail, profile } = await start();
     const carol = await makeMember(kernel.pool, { username: 'carol', email: null });
+    await withSession(id, carol);
     await profile.update(actorOf(carol), { email: 'carol@example.org' });
     await id.recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) });
     expect(await profile.get(actorOf(carol))).toMatchObject({

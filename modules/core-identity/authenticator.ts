@@ -12,7 +12,7 @@ import type { Authenticator } from '@scorpion/kernel';
 import type { Context } from 'hono';
 import { CSRF_HEADER, isSafeMethod, readSessionCookie, writeSessionCookie } from './cookie.ts';
 import { csrfTokenMatches } from './service/session-id.ts';
-import { SESSION_LIFETIME_MS, type SessionService } from './service/sessions.ts';
+import type { SessionService } from './service/sessions.ts';
 import type { TokenAuthenticator } from './service/tokens.ts';
 
 /**
@@ -63,8 +63,8 @@ export function createAuthenticator(deps: {
       throw new Unauthorized('The CSRF token is missing or wrong.');
     }
 
-    // The expiry slides, so the cookie's must too.
-    if (resolved.renewed) writeSessionCookie(c, id, new Date(Date.now() + SESSION_LIFETIME_MS));
+    // The expiry slides (never past the absolute end), so the cookie's must too.
+    if (resolved.renewed && resolved.expiresAt) writeSessionCookie(c, id, resolved.expiresAt);
 
     return {
       kind: 'user',
@@ -72,6 +72,7 @@ export function createAuthenticator(deps: {
       username: resolved.username,
       roles: [], // roles are data owned by core.authz (M3)
       via: 'session',
+      sessionId: resolved.sessionId,
     };
   };
 }

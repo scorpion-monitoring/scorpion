@@ -371,7 +371,8 @@ describe('logout and logoutAll (defect 4)', () => {
     const user = await withPassword(kernel, { username: 'alice' });
     const one = await id.accounts.login({ username: 'alice', password: PASSWORD });
     const two = await id.accounts.login({ username: 'alice', password: PASSWORD });
-    expect(await id.accounts.logoutAll(actorOf(user))).toBe(2);
+    const current = (await id.sessions.resolve(one.sessionId))!.sessionId;
+    expect(await id.accounts.logoutAll({ ...actorOf(user), sessionId: current })).toBe(2);
     expect(await id.sessions.resolve(one.sessionId)).toBeUndefined();
     expect(await id.sessions.resolve(two.sessionId)).toBeUndefined();
   });
@@ -387,7 +388,8 @@ describe('logout and logoutAll (defect 4)', () => {
     const alice = await withPassword(kernel, { username: 'alice' });
     const bob = await withPassword(kernel, { username: 'bobby' });
     const bobs = await id.accounts.login({ username: 'bobby', password: PASSWORD });
-    await id.accounts.logoutAll(actorOf(alice));
+    const mine = await id.sessions.create(alice.id);
+    await id.accounts.logoutAll({ ...actorOf(alice), sessionId: mine.sessionId });
     expect(await id.sessions.resolve(bobs.sessionId)).toMatchObject({ userId: bob.id });
   });
 });

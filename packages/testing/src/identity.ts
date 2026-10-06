@@ -88,6 +88,10 @@ export const hashSecret = (secret: string) => createHash('sha256').update(secret
 export interface MakeSession {
   /** Default: one week from now. */
   expiresAt?: Date;
+  /** Default: 30 days from now. */
+  absoluteExpiresAt?: Date;
+  /** Default: now. */
+  authenticatedAt?: Date;
   revoked?: boolean;
 }
 
@@ -106,6 +110,9 @@ export async function makeSession(
       user_id: user.id,
       secret_hash: hashSecret(secret),
       expires_at: overrides.expiresAt ?? new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      absolute_expires_at:
+        overrides.absoluteExpiresAt ?? new Date(Date.now() + 30 * 24 * 3600 * 1000),
+      authenticated_at: overrides.authenticatedAt ?? new Date(),
       revoked_at: overrides.revoked ? new Date() : null,
     },
   );

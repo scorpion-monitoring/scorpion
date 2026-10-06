@@ -8,7 +8,7 @@ import type { TokenAuthenticator, VerifiedToken } from './service/tokens.ts';
 import { csrfTokenFor, newSessionId } from './service/session-id.ts';
 
 const unauthorized = { error: expect.any(Unauthorized) as unknown };
-const alice = { userId: 'u1', username: 'alice', renewed: false };
+const alice = { userId: 'u1', username: 'alice', sessionId: 's1', renewed: false };
 
 /** Runs the authenticator on a request to a throw-away Hono app, as the pipeline would. */
 async function authenticate(
@@ -59,7 +59,14 @@ describe('the session authenticator', () => {
     const id = newSessionId();
     const { outcome, resolve } = await authenticate(() => Promise.resolve(alice), { cookie: id });
     expect(outcome).toEqual({
-      actor: { kind: 'user', userId: 'u1', username: 'alice', roles: [], via: 'session' },
+      actor: {
+        kind: 'user',
+        userId: 'u1',
+        username: 'alice',
+        roles: [],
+        via: 'session',
+        sessionId: 's1',
+      },
     });
     expect(resolve).toHaveBeenCalledWith(id);
   });
@@ -111,9 +118,13 @@ describe('the session authenticator', () => {
     const id = newSessionId();
     const plain = await authenticate(() => Promise.resolve(alice), { cookie: id });
     expect(plain.response.headers.get('set-cookie')).toBeNull();
-    const renewed = await authenticate(() => Promise.resolve({ ...alice, renewed: true }), {
-      cookie: id,
-    });
+    const renewed = await authenticate(
+      () =>
+        Promise.resolve({ ...alice, renewed: true, expiresAt: new Date(Date.now() + 7 * 864e5) }),
+      {
+        cookie: id,
+      },
+    );
     const cookie = renewed.response.headers.get('set-cookie')!;
     expect(cookie).toContain(`__Host-session=${id}`);
     expect(cookie).toMatch(/HttpOnly/i);

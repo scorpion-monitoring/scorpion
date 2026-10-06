@@ -32,16 +32,33 @@ export interface NewLoginState {
   verifier: string;
 }
 
+/** What a login in progress is for (ADR 0025): read from the stored row, never from the browser. */
+export type LoginPurpose = 'login' | 'link' | 'reauth';
+
 export interface ConsumedLoginState {
   providerId: string;
   nonceHash: string;
   bindingHash: string;
+  purpose: LoginPurpose;
+  /** The signed-in user who started a `link` or `reauth` flow. */
   linkUserId: string | null;
+  /** The session a `reauth` flow is for. */
+  reauthSessionId: string | null;
+  /** When the flow started: the moment an `auth_time` must not precede (less the clock skew). */
+  createdAt: Date;
 }
 
 export interface LoginStateService {
-  /** Stores a new state for a provider and returns the secrets to hand out (never stored as such). */
-  create(providerId: string, linkUserId?: string): Promise<NewLoginState>;
+  /**
+   * Stores a new state for a provider and returns the secrets to hand out (never stored as such).
+   * With `linkUserId` the purpose is `link`; with `linkUserId` and `reauthSessionId` it is `reauth`.
+   */
+  create(
+    providerId: string,
+    linkUserId?: string,
+    reauthSessionId?: string,
+    now?: Date,
+  ): Promise<NewLoginState>;
   /**
    * Deletes and returns the unexpired state with this value, in one statement, so two parallel
    * callbacks cannot both get it. `undefined` for an unknown, expired or already used one.
@@ -55,7 +72,7 @@ export function createLoginStateService(
 ): LoginStateService {
   const ttl = options.ttlMs ?? LOGIN_STATE_TTL_MS;
   return {
-    async create(providerId, linkUserId) {
+    async create(providerId, linkUserId, reauthSessionId, now = new Date()) {
       const fresh: NewLoginState = {
         state: generateState(),
         nonce: generateState(),
@@ -67,8 +84,11 @@ export function createLoginStateService(
         stateHash: sha256(fresh.state),
         nonceHash: sha256(fresh.nonce),
         bindingHash: challengeOf(fresh.verifier),
+        purpose: reauthSessionId ? 'reauth' : linkUserId ? 'link' : 'login',
         linkUserId: linkUserId ?? null,
-        expiresAt: new Date(Date.now() + ttl),
+        reauthSessionId: reauthSessionId ?? null,
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + ttl),
       });
       return fresh;
     },
@@ -81,9 +101,12 @@ export function createLoginStateService(
           providerId: loginState.providerId,
           nonceHash: loginState.nonceHash,
           bindingHash: loginState.bindingHash,
+          purpose: loginState.purpose,
           linkUserId: loginState.linkUserId,
+          reauthSessionId: loginState.reauthSessionId,
+          createdAt: loginState.createdAt,
         });
-      return row;
+      return row as ConsumedLoginState | undefined;
     },
   };
 }

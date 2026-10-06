@@ -35,8 +35,8 @@ async function start(options: Parameters<typeof identity.start>[0] = {}) {
 }
 const insertLoginState = (kernel: { pool: Pool }, expiresAt: Date, linkUserId?: string) =>
   kernel.pool.query(
-    `insert into identity_login_state (id, provider_id, state_hash, nonce_hash, binding_hash, link_user_id, expires_at)
-     values ($1, 'stub', $2, 'n', 'b', $3, $4)`,
+    `insert into identity_login_state (id, provider_id, state_hash, nonce_hash, binding_hash, purpose, link_user_id, expires_at)
+     values ($1, 'stub', $2, 'n', 'b', case when $3::uuid is null then 'login' else 'link' end, $3, $4)`,
     [randomUUID(), randomUUID(), linkUserId ?? null, expiresAt],
   );
 const insertFirstRun = (kernel: { pool: Pool }, expiresAt: Date) =>

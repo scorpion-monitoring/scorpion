@@ -39,13 +39,23 @@ export const rows = async (kernel: Kernel, sql: string, values: unknown[] = []) 
 export const count = async (kernel: Kernel, table: string) =>
   Number((await rows(kernel, `select count(*) from ${table}`))[0]!.count);
 
-export const sessionActor = (u: { id: string; username: string }): Actor => ({
+export const sessionActor = (u: { id: string; username: string }, sessionId?: string): Actor => ({
   kind: 'user',
   userId: u.id,
   username: u.username,
   roles: [],
   via: 'session',
+  sessionId,
 });
+
+/** A session actor with a real session row: it has "this session" and a recent authentication (ADR 0025). */
+export async function sessionActorFor(
+  id: IdentityInternals,
+  u: { id: string; username: string },
+  now?: Date,
+): Promise<Actor> {
+  return sessionActor(u, (await id.sessions.create(u.id, undefined, now)).sessionId);
+}
 
 /** Starts a login (or, with an actor, a link) and plays the browser at the provider. */
 export async function flow(

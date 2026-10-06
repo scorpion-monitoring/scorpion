@@ -175,6 +175,11 @@ export const changePasswordInput = z.strictObject({
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordInput>;
 
+/** `POST /account/reauthenticate`: the current password, checked and not validated against the rules. */
+export const reauthenticateInput = z.strictObject({
+  password: z.string().min(1).max(PASSWORD_MAX),
+});
+
 export const DISPLAY_NAME_MAX = 100;
 export const BIO_MAX = 2000;
 

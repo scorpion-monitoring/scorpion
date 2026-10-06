@@ -43,6 +43,17 @@ export const DEFAULT_RETENTION = {
   purgeBatch: 500,
 } as const;
 
+/**
+ * The lifetime of a session and the window of a recent authentication (ADR 0025,
+ * `docs/security/sessions.md`). A session ends after `inactivityDays` without use, and at the latest
+ * `absoluteDays` after it began, however often it is used.
+ */
+export const DEFAULT_SESSIONS = {
+  inactivityDays: 7,
+  absoluteDays: 30,
+  recentAuthSeconds: 300,
+} as const;
+
 /** Mails that one address, and one signed-in user, may cause: a burst, then a steady rate per hour. */
 export const DEFAULT_MAIL_BUDGETS = {
   perAddress: { burst: 3, perHour: 3 },
@@ -82,6 +93,29 @@ export const settingsSchema = z.strictObject({
       perAddress: { ...DEFAULT_MAIL_BUDGETS.perAddress },
       perUser: { ...DEFAULT_MAIL_BUDGETS.perUser },
     }),
+  /**
+   * `inactivityDays`: a session ends this long after its last use. `absoluteDays`: it ends this long
+   * after it began whatever the use (at least `inactivityDays`). `recentAuthSeconds`: how recently
+   * the person must have signed in or confirmed their identity for an email change, linking a
+   * provider, ending a session or "log out everywhere". A session keeps the end it was created
+   * with; a changed value applies to new sessions.
+   */
+  sessions: z
+    .strictObject({
+      inactivityDays: z.number().int().min(1).max(365).default(DEFAULT_SESSIONS.inactivityDays),
+      absoluteDays: z.number().int().min(1).max(365).default(DEFAULT_SESSIONS.absoluteDays),
+      recentAuthSeconds: z
+        .number()
+        .int()
+        .min(30)
+        .max(3600)
+        .default(DEFAULT_SESSIONS.recentAuthSeconds),
+    })
+    .refine(
+      (value) => value.absoluteDays >= value.inactivityDays,
+      'absoluteDays must not be less than inactivityDays',
+    )
+    .default({ ...DEFAULT_SESSIONS }),
   /** The id of the `auth.approvalPolicy` entry that decides the status of a new account. */
   approvalPolicy: z.string().min(1).default('manual'),
   /**

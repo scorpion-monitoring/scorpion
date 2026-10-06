@@ -54,6 +54,7 @@ describe('resolve', () => {
     expect(await id.sessions.resolve(sessionId)).toEqual({
       userId: user.id,
       username: 'alice',
+      sessionId: expect.any(String) as unknown,
       renewed: false,
     });
   });
@@ -192,8 +193,8 @@ describe('the cache', () => {
     expect(await id.sessions.resolve(ghost)).toBeUndefined();
     // A session with this very id appearing later is found at once (no negative cache).
     await kernel.pool.query(
-      `insert into identity_session (id, user_id, secret_hash, expires_at)
-       values (gen_random_uuid(), $1, $2, now() + interval '1 day')`,
+      `insert into identity_session (id, user_id, secret_hash, expires_at, absolute_expires_at)
+       values (gen_random_uuid(), $1, $2, now() + interval '1 day', now() + interval '2 days')`,
       [user.id, hashSessionId(ghost)],
     );
     expect(await id.sessions.resolve(ghost)).toBeDefined();

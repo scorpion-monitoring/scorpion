@@ -19,6 +19,8 @@ export interface UserActor {
   scopes?: readonly string[];
   /** The id of the personal access token (never the token itself) when `via` is `token`; for the audit trail. */
   tokenId?: string;
+  /** The id of the session row (never the cookie value) when `via` is `session`: "this session", and its recent authentication. */
+  sessionId?: string;
 }
 
 export type Actor = AnonymousActor | UserActor;

@@ -54,7 +54,10 @@ describe('consume', () => {
       providerId: 'corp',
       nonceHash: sha256(fresh.nonce),
       bindingHash: challengeOf(fresh.verifier),
+      purpose: 'login',
       linkUserId: null,
+      reauthSessionId: null,
+      createdAt: expect.any(Date) as unknown,
     });
     expect(await id.loginStates.consume(fresh.state)).toBeUndefined();
     expect((await kernel.pool.query('select 1 from identity_login_state')).rows).toEqual([]);
