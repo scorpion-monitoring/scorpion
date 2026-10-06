@@ -46,6 +46,62 @@ describe('create', () => {
   });
 });
 
+describe('purpose', () => {
+  it('is login without a user, link with one, and reauth with a user and a session', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const user = await makeUser(kernel.pool);
+    const session = await id.sessions.create(user.id);
+    await id.loginStates.create('corp');
+    await id.loginStates.create('corp', user.id);
+    await id.loginStates.create('corp', user.id, session.sessionId);
+    expect(
+      (
+        await kernel.pool.query(
+          'select purpose, link_user_id is not null as has_user, reauth_session_id is not null as has_session from identity_login_state order by purpose',
+        )
+      ).rows,
+    ).toEqual([
+      { purpose: 'link', has_user: true, has_session: false },
+      { purpose: 'login', has_user: false, has_session: false },
+      { purpose: 'reauth', has_user: true, has_session: true },
+    ]);
+  });
+
+  it('is handed back by consume, with the session and the moment the flow began', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const user = await makeUser(kernel.pool);
+    const session = await id.sessions.create(user.id);
+    const began = new Date('2026-10-06T09:00:00Z');
+    const fresh = await id.loginStates.create('corp', user.id, session.sessionId, began);
+    // Consumed within its life, so the clock of the database decides: keep the row alive.
+    await kernel.pool.query(
+      "update identity_login_state set expires_at = now() + interval '5 minutes'",
+    );
+    expect(await id.loginStates.consume(fresh.state)).toMatchObject({
+      purpose: 'reauth',
+      linkUserId: user.id,
+      reauthSessionId: session.sessionId,
+      createdAt: began,
+    });
+  });
+
+  it('cannot be stored in a combination the callback would misread (a constraint)', async () => {
+    const { kernel } = await identity.start();
+    const insert = (purpose: string, withUser: boolean) =>
+      kernel.pool.query(
+        `insert into identity_login_state (id, provider_id, state_hash, nonce_hash, binding_hash, purpose, link_user_id, expires_at)
+         values (gen_random_uuid(), 'idp', gen_random_uuid()::text, 'n', 'b', $1,
+                 ${withUser ? '(select id from identity_user limit 1)' : 'null'}, now() + interval '5 minutes')`,
+        [purpose],
+      );
+    await makeUser(kernel.pool);
+    await expect(insert('reauth', true)).rejects.toThrow(/purpose_fields/); // no session
+    await expect(insert('link', false)).rejects.toThrow(/purpose_fields/); // no user
+    await expect(insert('login', true)).rejects.toThrow(/purpose_fields/); // a user, but a plain login
+    await expect(insert('sudo', false)).rejects.toThrow(/purpose_(known|fields)/);
+  });
+});
+
 describe('consume', () => {
   it('returns what the callback needs and deletes the row, so a second try finds nothing', async () => {
     const { kernel, identity: id } = await identity.start();

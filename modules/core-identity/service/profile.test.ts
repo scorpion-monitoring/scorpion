@@ -1,6 +1,13 @@
 // The profile on real Postgres: reading and editing one's own, the address change that waits for
 // its confirmation, and what a refusal or a rollback leaves behind.
-import { ANONYMOUS, Forbidden, Invalid, Unauthorized, type Actor } from '@scorpion/contracts';
+import {
+  ANONYMOUS,
+  Forbidden,
+  Invalid,
+  ReauthenticationRequired,
+  Unauthorized,
+  type Actor,
+} from '@scorpion/contracts';
 import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { makeMember, useIdentity } from '../test/harness.ts';
@@ -243,6 +250,46 @@ describe('update: the address', () => {
     expect(await profile.get(actorOf(carol))).toMatchObject({
       email: 'carol@example.org',
       emailVerified: true,
+    });
+  });
+
+  it('changing the email address needs a recent authentication, and writes and spends nothing without it [ASVS-7.5.1]', async () => {
+    const { kernel, identity: id, mail, profile, alice } = await start();
+    // A session that began, and was last authenticated, two hours ago.
+    const old = await id.sessions.create(alice.id, undefined, new Date(Date.now() - 2 * 3600_000));
+    const stale: Actor = { ...actorOf(alice), sessionId: old.sessionId };
+
+    const error = await profile
+      .update(stale, { email: 'new@example.org' })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ReauthenticationRequired);
+    expect(error).toMatchObject({ status: 401, type: 'reauthentication-required' });
+    expect(await mail.all()).toEqual([]);
+    expect(await rows(kernel, 'select 1 from identity_mail_token')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from kernel_outbox')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from kernel_rate_bucket')).toEqual([]); // no budget spent either
+    expect(await profile.get(stale)).toMatchObject({
+      email: 'alice@example.org',
+      pendingEmail: null,
+    });
+
+    // After the person has confirmed who they are, the same request works.
+    await id.sessions.markAuthenticated(alice.id, old.sessionId);
+    expect(await profile.update(stale, { email: 'new@example.org' })).toMatchObject({
+      pendingEmail: 'new@example.org',
+    });
+  });
+
+  it('does not ask for a recent authentication to change a name or a bio, or to ask for the address the account already has', async () => {
+    const { identity: id, profile, alice } = await start();
+    const old = await id.sessions.create(alice.id, undefined, new Date(Date.now() - 2 * 3600_000));
+    const stale: Actor = { ...actorOf(alice), sessionId: old.sessionId };
+    await expect(
+      profile.update(stale, { displayName: 'Alice', bio: 'About' }),
+    ).resolves.toMatchObject({ displayName: 'Alice' });
+    await expect(profile.update(stale, { email: 'ALICE@example.org' })).resolves.toMatchObject({
+      pendingEmail: null,
     });
   });
 

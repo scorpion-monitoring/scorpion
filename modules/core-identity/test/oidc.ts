@@ -84,3 +84,25 @@ export const fresh = (over: Partial<StubLogin> = {}): Partial<StubLogin> => ({
   preferredUsername: `person${n}`,
   ...over,
 });
+
+/**
+ * Starts the re-authentication of the actor's session at the stub provider and plays the browser
+ * there. `login.authTime` is the provider's single sign-on time, used when the provider ignores
+ * `prompt=login` (`idp.faults.ignorePrompt`).
+ */
+export async function reauthFlow(
+  id: IdentityInternals,
+  actor: Actor,
+  login: Partial<StubLogin> = {},
+): Promise<CompleteInput> {
+  const started = await id.oidc.startReauthentication(actor, 'stub');
+  const back = await idp.authorize(started.authorizationUrl, login);
+  return {
+    providerId: 'stub',
+    state: back.searchParams.get('state')!,
+    code: back.searchParams.get('code')!,
+    error: undefined,
+    verifier: started.cookie.value,
+    previousSessionId: undefined,
+  };
+}
