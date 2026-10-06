@@ -551,6 +551,12 @@ importers:
         specifier: workspace:*
         version: link:../packages/kernel
 
+  tools/asvs-report:
+    devDependencies:
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+
   tools/eslint-plugin:
     dependencies:
       '@scorpion/kernel':
