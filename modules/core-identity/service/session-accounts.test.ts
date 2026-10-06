@@ -49,11 +49,11 @@ async function start() {
   };
   const authenticatedAt = async (sessionId: string) =>
     (
-      await started.kernel.pool.query(
+      await started.kernel.pool.query<{ authenticated_at: Date }>(
         'select authenticated_at from identity_session where id = $1',
         [sessionId],
       )
-    ).rows[0]!.authenticated_at as Date;
+    ).rows[0]!.authenticated_at;
   return { ...started, alice, sessionOf, authenticatedAt, accounts: started.identity.accounts };
 }
 

@@ -22,7 +22,7 @@ const settingsOf = (
 ): IdentitySettings => ({
   get: () => Promise.resolve(settingsSchema.parse(values)),
 });
-const actorOf = (user: { id: string; username: string }): Actor => ({
+const actorOf = (user: { id: string; username: string }): UserActor => ({
   kind: 'user',
   userId: user.id,
   username: user.username,
@@ -410,7 +410,7 @@ describe('me', () => {
     const user = await withPassword(kernel, { username: 'alice' });
     expect((await id.accounts.me(actorOf(user), undefined)).csrfToken).toBeNull();
     const viaToken: Actor = {
-      ...(actorOf(user) as UserActor),
+      ...actorOf(user),
       via: 'token',
       scopes: ['core.identity.me.read'],
     };

@@ -7,6 +7,7 @@ import {
   ReauthenticationRequired,
   Unauthorized,
   type Actor,
+  type UserActor,
 } from '@scorpion/contracts';
 import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
@@ -28,7 +29,7 @@ const withSession = async (
 const actorOf = (
   user: { id: string; username: string },
   via: 'session' | 'token' = 'session',
-): Actor => ({
+): UserActor => ({
   kind: 'user',
   userId: user.id,
   username: user.username,

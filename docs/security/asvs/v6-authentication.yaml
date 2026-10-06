@@ -164,5 +164,9 @@ requirements:
     status: n/a
     reason: 'Scorpion supports OpenID Connect only (ADR-0011) and accepts no SAML assertion, so there is no SAML replay to prevent.'
   - id: v5.0.0-6.8.4
-    status: n/a
-    reason: 'Scorpion never expects a particular authentication strength, method or recentness from the identity provider (no step-up; sensitive actions ask for the password again) and reads no acr, amr or auth_time claim. This becomes a fail if step-up from the provider is added.'
+    status: pass
+    evidence:
+      - test: ASVS-6.8.4
+      - code: modules/core-identity/service/oidc-token.ts
+      - doc: docs/security/sessions.md
+    note: "Scorpion expects recentness from the provider for one thing: a re-authentication (prompt=login, max_age=0) that stands in for a password it does not have. It verifies it with auth_time: the claim must be present and must not be older than the moment the request was made (less 60 s of clock skew), and sub must be the caller's own; a provider that ignores the request is refused. It expects no particular strength or method and reads no acr or amr: the documented fallback is that every provider login counts as a single factor login (docs/security/sessions.md)."

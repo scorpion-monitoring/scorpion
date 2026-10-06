@@ -241,6 +241,15 @@ describe('the two ends of a session', () => {
     },
   );
 
+  it('a session that is not used for the inactivity period is over, however far from its absolute end [ASVS-7.3.1]', async () => {
+    const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 0 });
+    const user = await makeUser(kernel.pool);
+    const created = await id.sessions.create(user.id, undefined, T0);
+    expect(await id.sessions.resolve(created.id, at(T0, 7 * DAY - 60_000))).toBeDefined();
+    // Used a minute short of 7 days, it slides; left alone for the 7 days after that, it is over.
+    expect(await id.sessions.resolve(created.id, at(T0, 14 * DAY + 60_000))).toBeUndefined();
+  });
+
   it('stores the absolute end, and the authentication time, when the session is created', async () => {
     const { kernel, identity: id } = await identity.start();
     const user = await makeUser(kernel.pool);

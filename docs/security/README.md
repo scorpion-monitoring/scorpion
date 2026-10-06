@@ -76,7 +76,7 @@ bestpractices.dev are the maintainer's. Where a criterion is answered with a lin
 The [Scorecard](https://scorecard.dev/viewer/?uri=github.com/scorpion-monitoring/scorpion) workflow runs on pushes to `dev`
 (the default branch), weekly, and when branch protection changes. Targets: at least 6.5 at Gate 1, 7.0 at Gate 4.
 
-Score **7.3** on 2026-10-06 (commit `61c1782`, API `api.scorecard.dev`). Checks below 10:
+Score **7.3** on 2026-10-06 (commit `7485d40`, API `api.scorecard.dev`). Checks below 10:
 
 | Check              | Score | Why                                                                                             |
 | ------------------ | ----- | ----------------------------------------------------------------------------------------------- |

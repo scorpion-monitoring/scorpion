@@ -9,14 +9,22 @@ second_pass: null
 reviewer: null
 requirements:
   - id: v5.0.0-7.1.1
-    status: fail
-    note: 'Not met. The 7-day sliding inactivity rule is in modules/core-identity/README.md and ADR-0007, but no absolute maximum lifetime exists or is documented, and there is no justification against NIST SP 800-63B. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - doc: docs/security/sessions.md
+      - code: modules/core-identity/service/settings.ts
+    note: 'docs/security/sessions.md documents the inactivity timeout (7 days) and the absolute maximum (30 days), both settings of core.identity, with the risk analysis behind them, how they combine with the other controls (recent authentication, the session list, administrator termination) and each deviation from NIST SP 800-63B (AAL1 met; no AAL2 or AAL3 periods, and why). Existing sessions kept the ends they were created with; the document says so.'
   - id: v5.0.0-7.1.2
-    status: fail
-    note: 'Not met. Nothing documents how many concurrent sessions an account may have or what happens at the limit; the code has no limit. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - doc: docs/security/sessions.md
+    note: 'docs/security/sessions.md defines the number of concurrent sessions as unlimited, the behaviour at a limit as none (no session is ever ended to make room), and why; the control is the session list and its termination (7.5.2). A reviewer may judge that a documented decision to have no limit is thin; the requirement asks for the number and the behaviour to be defined, and both are.'
   - id: v5.0.0-7.1.3
-    status: fail
-    note: 'Not met. OIDC sign-in creates an independent local session and the identity provider is not consulted afterwards; no document says how session lifetimes and termination are coordinated. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - doc: docs/security/sessions.md
+      - doc: docs/adr/0025-absolute-session-lifetime-and-recent-authentication.md
+    note: 'docs/security/sessions.md lists the systems that create or manage sessions (Scorpion as the relying party and each configured OIDC provider) and how lifetimes and termination are coordinated: independent after the login, the absolute limit, administrator termination and recent authentication through prompt=login, max_age=0 and a checked auth_time. It also says what is not coordinated (no back-channel logout, no RP-initiated logout).'
   - id: v5.0.0-7.2.1
     status: pass
     evidence:
@@ -42,11 +50,19 @@ requirements:
       - code: modules/core-identity/service/accounts.ts
     note: 'Password login and OIDC login each make a new server-generated id and end the session the browser presented.'
   - id: v5.0.0-7.3.1
-    status: fail
-    note: 'Not met yet. The 7-day inactivity timeout is enforced (sessions.resolve) and is a documented decision (ADR-0007), but the requirement asks for re-authentication according to a risk analysis, and none is written (see 7.1.1). Becomes a pass once 7.1.1 documents the analysis. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - test: ASVS-7.3.1
+      - doc: docs/security/sessions.md
+      - code: modules/core-identity/service/sessions.ts
+    note: 'The inactivity timeout is enforced in sessions.resolve (a session unused for inactivityDays is refused) and is a setting; sessions.md records the risk analysis it rests on. The test shows the 7-day default; the choice of 7 days rests on the document.'
   - id: v5.0.0-7.3.2
-    status: fail
-    note: 'Not met (code gap). Every use after 60 s sets expiresAt = now + 7 days and createdAt is never consulted, so a session that is used often never expires. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - test: ASVS-7.3.2
+      - code: modules/core-identity/service/sessions.ts
+      - doc: docs/security/sessions.md
+    note: 'identity_session.absolute_expires_at is fixed at creation (created_at + sessions.absoluteDays, default 30) and sessions.resolve refuses a session past it and never slides expires_at beyond it. The test uses a session that is used every day for 29 days and is refused a minute past the limit. Sessions that existed before migration 0007 got created_at + 30 days (tested).'
   - id: v5.0.0-7.4.1
     status: pass
     evidence:
@@ -59,7 +75,8 @@ requirements:
       - test: ASVS-7.4.2
       - code: modules/core-identity/service/sessions.ts
       - code: modules/core-identity/service/approval.ts
-    note: 'sessions.resolve refuses a session whose user is not active or is deleted, on every uncached lookup; rejecting a user revokes all their sessions. The rows of a deleted user stay and the 5 s cache is not dropped. No disable-account feature exists yet (backlog); when it does it must call revokeAll and get its own test. A reviewer may judge "refused" weaker than "terminated".'
+      - doc: docs/security/sessions.md
+    note: "sessions.resolve refuses a session whose user is not active or is deleted, on every uncached lookup. Rejecting a user revokes all their sessions in the same transaction, and every path that ends sessions (logout, log out everywhere, ending one from the list, the administrators' termination, rejecting an account) empties this process's cache entries at once; the cache is not left to run out. Across server processes a session may still be accepted for at most the 5 s cache TTL (docs/security/sessions.md, ADR-0007); there is no cross-process invalidation. No disable-account feature exists yet (backlog); when it does it must call revokeAll and get its own test."
   - id: v5.0.0-7.4.3
     status: pass
     evidence:
@@ -70,17 +87,34 @@ requirements:
     status: fail
     note: 'Not met yet. The logout API exists (POST /auth/logout) but apps/web has no authenticated page and no logout control until M5. Re-assess with a Playwright test when the UI lands. Fix planned in docs/m5-sprint-plan.md#4-sprint-1-shell-foundation.'
   - id: v5.0.0-7.4.5
-    status: fail
-    note: "Not met (code gap). No route lets an administrator end the sessions of one user or of all users; POST /auth/logout-all ends only the caller's own (defect-01 test proves it). Listed in docs/backlog.md. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication."
+    status: pass
+    evidence:
+      - test: ASVS-7.4.5
+      - code: modules/core-identity/service/session-admin.ts
+    note: "POST /users/{id}/sessions/revoke ends every session of one user and POST /system/sessions/revoke-all ends every session of every user except the caller's own; both need core.identity.session.manage-any (Admin only), run in one transaction with an event that core.audit records as critical, and empty this process's cache at once (another process follows within the 5 s cache TTL). Denied for a plain User, a user without roles, anonymous and a token that lacks the permission."
   - id: v5.0.0-7.5.1
-    status: fail
-    note: 'Not met (code gap). A password change asks for the current password, but changing the email address (PATCH /account/profile) or linking an OIDC identity needs only the session. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - test: ASVS-7.5.1
+      - code: modules/core-identity/service/sessions.ts
+      - code: modules/core-identity/service/profile.ts
+      - code: modules/core-identity/service/oidc.ts
+      - doc: docs/security/sessions.md
+    note: 'Changing the email address (PATCH /account/profile with a new email) and starting to link an OIDC identity ask for a recent authentication (default 5 minutes) in the service and answer 401 reauthentication-required without one; a password change already asks for the current password. The authentication is the password, or a fresh login at the provider with prompt=login, max_age=0 and a checked auth_time. The setting recentAuthSeconds is the window; a reviewer may judge a 5-minute window weaker than a prompt on every change. Recovery and MFA configuration do not exist as editable attributes yet; a new one must call requireRecentAuth.'
   - id: v5.0.0-7.5.2
-    status: fail
-    note: 'Not met (code gap). Users can end all their sessions (POST /auth/logout-all, no re-authentication) but cannot list them or end one; identity_session stores no device data. Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - test: ASVS-7.5.2
+      - code: modules/core-identity/service/accounts.ts
+      - code: modules/core-identity/service/sessions.ts
+    note: "GET /account/sessions lists the caller's own live sessions (id, created, last seen, current; no secret and no device data, which is not stored); DELETE /account/sessions/{id} ends one after a recent authentication, scoped to the caller in the update itself, so another user's id answers like an unknown one; POST /auth/logout-all ends all of them, also after a recent authentication. The second factor of the requirement does not exist: there is no MFA, so the authentication is the single factor the account has (the password, or the provider)."
   - id: v5.0.0-7.6.1
-    status: fail
-    note: 'Not met. The OIDC session is independent of the provider after login (no maximum IdP authentication age, no back-channel logout) and nothing documents this; it also has no absolute lifetime (7.3.2). Fix planned in docs/m4b-sprint-plan.md#4-sprint-1-sessions-and-re-authentication.'
+    status: pass
+    evidence:
+      - test: ASVS-7.6.1
+      - doc: docs/security/sessions.md
+      - code: modules/core-identity/service/oidc.ts
+    note: "docs/security/sessions.md documents how the lifetime and termination of a Scorpion session relate to the provider's: independent after the login, bounded by the absolute lifetime, re-authentication at the provider on demand (prompt=login, max_age=0, auth_time validated). The test shows the behaviour the document describes: an account without a password signs in at the provider again, with prompt=login and max_age=0, and only then may it change its email address; a stale auth_time is refused (6.8.4). Not met in the stronger sense: there is no maximum time between IdP authentication events for an ordinary session, and no back-channel logout; the document says so. A reviewer may judge that insufficient."
   - id: v5.0.0-7.6.2
     status: pass
     evidence:

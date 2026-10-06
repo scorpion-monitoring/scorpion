@@ -32,7 +32,7 @@ async function signedInAtProvider() {
 }
 
 describe('POST /account/reauthenticate/oidc/{provider}', () => {
-  it('an OIDC-only account changes its email address after signing in again at the provider', async () => {
+  it('an OIDC-only account changes its email address after signing in again at the provider [ASVS-7.6.1]', async () => {
     const s = await signedInAtProvider();
     await s.stale();
     const change = () =>

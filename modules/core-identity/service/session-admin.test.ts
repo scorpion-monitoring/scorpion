@@ -37,7 +37,7 @@ async function start() {
 }
 
 describe('revokeUser', () => {
-  it('ends every open session of that user at once (cache included), counts them, and spares everybody else', async () => {
+  it('ends every open session of that user at once (cache included), counts them, and spares everybody else [ASVS-7.4.5]', async () => {
     const { admin, alice, bob, open, actorOf, admins, identity: id, outbox } = await start();
     const a1 = await open(alice);
     const a2 = await open(alice);
@@ -105,7 +105,7 @@ describe('revokeUser', () => {
 });
 
 describe('revokeEverything', () => {
-  it('ends every open session of every user except the caller’s own, and records the count', async () => {
+  it('ends every open session of every user except the caller’s own, and records the count [ASVS-7.4.5]', async () => {
     const { admin, alice, bob, open, actorOf, admins, identity: id, outbox } = await start();
     const mine = await open(admin);
     const otherOfMine = await open(admin);

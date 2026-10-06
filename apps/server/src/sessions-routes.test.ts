@@ -138,9 +138,11 @@ describe('DELETE /account/sessions/{id}', () => {
 
     expect([foreign.status, unknown.status]).toEqual([404, 404]);
     expect(isProblem(foreign) && isProblem(unknown)).toBe(true);
-    const { requestId: _a, ...a } = foreign.body as Record<string, unknown>;
-    const { requestId: _b, ...b } = unknown.body as Record<string, unknown>;
-    expect(a).toEqual(b);
+    const withoutRequestId = (reply: Reply) => ({
+      ...(reply.body as Record<string, unknown>),
+      requestId: undefined,
+    });
+    expect(withoutRequestId(foreign)).toEqual(withoutRequestId(unknown));
     expect((await s.get('/auth/me', { cookie: bob.cookie })).status).toBe(200);
   });
 
@@ -325,7 +327,7 @@ describe('POST /account/reauthenticate', () => {
 });
 
 describe('POST /users/{id}/sessions/revoke', () => {
-  it('ends every session of that user at once, nobody else’s, and is audited with the count', async () => {
+  it('ends every session of that user at once, nobody else’s, and is audited with the count [ASVS-7.4.5]', async () => {
     const s = await start();
     const admin = await s.signedIn('root', { roles: ['admin'] });
     const victim = await s.signedIn('victim');
@@ -403,7 +405,7 @@ describe('POST /users/{id}/sessions/revoke', () => {
 });
 
 describe('POST /system/sessions/revoke-all', () => {
-  it('ends every session of every user except the administrator’s own, and records the count', async () => {
+  it('ends every session of every user except the administrator’s own, and records the count [ASVS-7.4.5]', async () => {
     const s = await start();
     const admin = await s.signedIn('root', { roles: ['admin'] });
     const adminPhone = await secondSession(s, 'root');
