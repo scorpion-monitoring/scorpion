@@ -96,7 +96,7 @@ describe('a known identity', () => {
     return { ...ctx, user };
   }
 
-  it('signs in an active user, once per user, and stamps the login time', async () => {
+  it('signs in an active user, once per user, and stamps the login time [ASVS-10.5.2]', async () => {
     const { kernel, identity: id, user } = await known('active');
     const first = await id.oidc.complete(await flow(id, fresh({ subject: 'known-sub' })));
     const second = await id.oidc.complete(await flow(id, fresh({ subject: 'known-sub' })));
@@ -113,7 +113,7 @@ describe('a known identity', () => {
     expect(resolved?.userId).toBe(user.id);
   });
 
-  it('ends the session the browser held when a new one begins', async () => {
+  it('ends the session the browser held when a new one begins [ASVS-7.2.4]', async () => {
     const { identity: id, user } = await known('active');
     const old = await id.sessions.create(user.id);
     const input = {
@@ -205,7 +205,7 @@ describe('the login state', () => {
     expect(await count(kernel, 'identity_user')).toBe(0);
   });
 
-  it('is a 400 for a state that belongs to another provider', async () => {
+  it('is a 400 for a state that belongs to another provider [ASVS-10.2.2]', async () => {
     const two = settingsWith({ oidcProviders: [idp.provider('stub'), idp.provider('second')] });
     const { identity: id } = await start({ settings: two });
     const input = await flow(id, fresh());
@@ -219,7 +219,7 @@ describe('the login state', () => {
     ).rejects.toBeInstanceOf(NotFound);
   });
 
-  it('binds the callback to the browser that started it: no cookie, another cookie, or a malformed one is a 400 and uses the state up', async () => {
+  it('binds the callback to the browser that started it: no cookie, another cookie, or a malformed one is a 400 and uses the state up [ASVS-7.6.2] [ASVS-10.1.2]', async () => {
     const { kernel, identity: id } = await start();
     for (const verifier of [undefined, '', 'short', 'A'.repeat(43)]) {
       const input = await flow(id, fresh());
@@ -248,7 +248,7 @@ describe('the login state', () => {
 });
 
 describe('the provider misbehaving', () => {
-  it('a wrong nonce fails with 401, creates no user and no session', async () => {
+  it('a wrong nonce fails with 401, creates no user and no session [ASVS-10.5.1]', async () => {
     const { kernel, identity: id } = await start();
     idp.faults = { nonce: 'tampered-nonce' };
     try {

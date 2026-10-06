@@ -3,7 +3,13 @@
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLogger, createPool, runMigrations, type MigrationTarget } from '@scorpion/kernel';
+import {
+  closePool,
+  createLogger,
+  createPool,
+  runMigrations,
+  type MigrationTarget,
+} from '@scorpion/kernel';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { useSettings } from './test/harness.ts';
 
@@ -12,7 +18,7 @@ const folder = join(import.meta.dirname, 'migrations');
 const scratch: string[] = [];
 const pools: ReturnType<typeof createPool>[] = [];
 afterEach(async () => {
-  await Promise.all(pools.splice(0).map((pool) => pool.end()));
+  await Promise.all(pools.splice(0).map((pool) => closePool(pool)));
 });
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });

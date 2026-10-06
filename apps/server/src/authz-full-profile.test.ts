@@ -95,7 +95,7 @@ describe('profile full with core.authz', () => {
     expect(await reply.json()).toMatchObject({ status: 403, title: 'Forbidden' });
   });
 
-  it('denies a user without roles on every non-public route, and anonymous gets 401', async () => {
+  it('denies a user without roles on every non-public route, and anonymous gets 401 [ASVS-8.3.1]', async () => {
     const { kernel, signedIn } = await boot();
     const { actor } = await signedIn('noroles');
     const guarded = kernel.routes.filter((entry) => !entry.route.public);

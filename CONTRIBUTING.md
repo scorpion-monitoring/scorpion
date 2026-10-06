@@ -45,6 +45,21 @@ This file summarises how work gets into `main`.
   bypass. Do not rename a required job without changing the setting in the same step.
 - Public API v1 changes must be additive. A breaking change goes to v2 and needs an ADR.
 
+## Security assurance
+
+The README badges for ASVS 5.0 (chapters V6, V7, V8 and V10), OpenSSF Best Practices and OpenSSF Scorecard are claims that CI keeps true; see
+[docs/security/README.md](docs/security/README.md).
+
+- `pnpm security:asvs` runs in the **Lint, type check, test** job after the tests. It checks the assessment files in `docs/security/asvs/` against the
+  pinned ASVS source and the test reports, and fails if a generated report or the README badge block was edited by hand. Regenerate them with
+  `pnpm security:asvs --write`; never edit them.
+- The **ASVS impact** check fails a pull request that changes a security-scoped path (`modules/core-identity/**`, `modules/core-authz/**`,
+  `apps/server/src/pipeline/**`, `packages/contracts/src/route.ts`, `docs/security/**`) without changing the matching chapter file. If the change
+  cannot affect an assessment, add the label `asvs-no-impact` and a line `ASVS impact: none because <reason>` to the description. The check is not
+  a required check yet; it becomes one after it is on `main`.
+- Tag a test that proves a requirement with `[ASVS-<chapter>.<section>.<requirement>]` in its title. The fields `assessor`, `assessed_commit`, `assessed_on`,
+  `second_pass`, `reviewer` and `assessment_type` belong to the maintainer.
+
 ## Commits
 
 - Small, reviewable commits.

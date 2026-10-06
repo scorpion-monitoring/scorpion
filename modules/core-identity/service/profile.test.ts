@@ -92,7 +92,7 @@ describe('update: name and bio', () => {
     ).toHaveLength(1);
   });
 
-  it('changes only the caller’s own row', async () => {
+  it('changes only the caller’s own row [ASVS-8.2.2]', async () => {
     const { kernel, profile, alice } = await start();
     const bobby = await makeMember(kernel.pool, { username: 'bobby', email: 'bobby@example.org' });
     await profile.update(actorOf(alice), { displayName: 'Alice', bio: 'Mine' });

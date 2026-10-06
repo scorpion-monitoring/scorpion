@@ -75,7 +75,7 @@ describe('defect 5: a bad id_token never logs anyone in', () => {
     ['an unknown person', false],
     ['a known active user', true],
   ])('for %s', (_who, known) => {
-    it.each(faults)('refuses %s with 401', async (_name, fault) => {
+    it.each(faults)('refuses %s with 401 [ASVS-6.8.2]', async (_name, fault) => {
       const ctx = await startApp(known);
       idp.faults = fault;
       try {
@@ -92,7 +92,7 @@ describe('defect 5: a bad id_token never logs anyone in', () => {
 });
 
 describe('defect 5: a bad state never logs anyone in', () => {
-  it('refuses a replayed state with 400', async () => {
+  it('refuses a replayed state with 400 [ASVS-10.2.1]', async () => {
     const ctx = await startApp(true);
     const started = await ctx.web.start();
     const back = await ctx.web.provider(started, login);
@@ -134,7 +134,7 @@ describe('defect 5: a bad state never logs anyone in', () => {
     await expectNothingCreated(ctx, reply);
   });
 
-  it('refuses a state from another browser with 400 (login CSRF)', async () => {
+  it('refuses a state from another browser with 400 (login CSRF) [ASVS-7.6.2] [ASVS-10.1.2] [ASVS-10.2.1]', async () => {
     const ctx = await startApp();
     const attacker = await ctx.web.start();
     const back = await ctx.web.provider(attacker, login);
@@ -143,7 +143,7 @@ describe('defect 5: a bad state never logs anyone in', () => {
     await expectNothingCreated(ctx, reply);
   });
 
-  it('refuses a state tied to another provider with 400', async () => {
+  it('refuses a state tied to another provider with 400 [ASVS-10.2.2]', async () => {
     const two = oidcSettings(idp, {
       oidcProviders: [idp.provider(PROVIDER), idp.provider('second')],
     });
@@ -160,7 +160,7 @@ describe('defect 5: a bad state never logs anyone in', () => {
 });
 
 describe('defect 5: the flow itself is sound', () => {
-  it('sends PKCE S256, a state and a nonce, and the provider sees the verifier only at the token endpoint', async () => {
+  it('sends PKCE S256, a state and a nonce, and the provider sees the verifier only at the token endpoint [ASVS-10.2.1]', async () => {
     const ctx = await startApp();
     const started = await ctx.web.start();
     await ctx.web.provider(started, login);

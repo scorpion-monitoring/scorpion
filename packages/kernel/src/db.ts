@@ -32,12 +32,43 @@ export interface DatabaseHandle {
   close(): Promise<void>;
 }
 
-/** One shared pool for the whole process. pg-boss gets the same connection settings. */
+// The connections each pool from `createPool` has open, so `closePool` can wait for them.
+const openClients = new WeakMap<pg.Pool, Set<pg.PoolClient>>();
+
+/**
+ * One shared pool for the whole process. pg-boss gets the same connection settings.
+ *
+ * An idle connection that the server ends (a restart, `pg_terminate_backend`, a stopped test
+ * container) makes the pool emit `error`; without a listener Node throws it as an uncaught
+ * exception. The pool has already dropped that connection, so `onError` only reports it.
+ */
 export function createPool(
   config: Pick<Config, 'DATABASE_URL'>,
-  options: { max?: number } = {},
+  options: { max?: number; onError?: (error: Error) => void } = {},
 ): pg.Pool {
-  return new pg.Pool({ connectionString: config.DATABASE_URL, max: options.max ?? 10 });
+  const pool = new pg.Pool({ connectionString: config.DATABASE_URL, max: options.max ?? 10 });
+  const onError = options.onError ?? (() => {});
+  pool.on('error', (error) => onError(error));
+  const clients = new Set<pg.PoolClient>();
+  openClients.set(pool, clients);
+  pool.on('connect', (client) => {
+    clients.add(client);
+    client.once('end', () => clients.delete(client));
+  });
+  return pool;
+}
+
+/**
+ * Ends the pool and waits until every connection is closed. `pool.end()` alone resolves once the
+ * pool has let go of its connections, before they are closed; a server that stops in that gap
+ * ends them with an error (57P01).
+ */
+export async function closePool(pool: pg.Pool): Promise<void> {
+  const closing = [...(openClients.get(pool) ?? [])].map(
+    (client) => new Promise<void>((resolve) => client.once('end', () => resolve())),
+  );
+  await pool.end();
+  await Promise.all(closing);
 }
 
 export function createDb(pool: pg.Pool): Db {
@@ -52,5 +83,5 @@ export function createDb(pool: pg.Pool): Db {
 
 export function openDatabase(config: Pick<Config, 'DATABASE_URL'>): DatabaseHandle {
   const pool = createPool(config);
-  return { pool, db: createDb(pool), close: () => pool.end() };
+  return { pool, db: createDb(pool), close: () => closePool(pool) };
 }

@@ -14,7 +14,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { createLogger, createPool, runMigrations, type MigrationTarget } from '@scorpion/kernel';
+import {
+  closePool,
+  createLogger,
+  createPool,
+  runMigrations,
+  type MigrationTarget,
+} from '@scorpion/kernel';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { useIdentity } from './test/harness.ts';
 
@@ -28,7 +34,7 @@ const authzFolder = join(repo, 'modules', 'core-authz', 'migrations');
 const scratch: string[] = [];
 const pools: Pool[] = [];
 afterEach(async () => {
-  await Promise.all(pools.splice(0).map((pool) => pool.end()));
+  await Promise.all(pools.splice(0).map((pool) => closePool(pool)));
 });
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });

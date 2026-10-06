@@ -235,7 +235,7 @@ describe('GET /auth/oidc/{provider}/callback', () => {
 });
 
 describe('nothing secret is logged or answered', () => {
-  it('keeps the code, state, nonce, verifier, id_token, session id and client secret out of the log and every body', async () => {
+  it('keeps the code, state, nonce, verifier, id_token, session id and client secret out of the log and every body [ASVS-10.1.1]', async () => {
     const { kernel, web, logText } = await startApp();
     const user = await makeUser(kernel.pool);
     await makeAuthMethod(kernel.pool, user, { provider: PROVIDER, subject: 'known-sub' });

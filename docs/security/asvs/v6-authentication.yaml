@@ -1,0 +1,168 @@
+asvs_version: 5.0.0
+level: 2
+chapter: V6
+assessment_type: null
+assessed_commit: null
+assessed_on: null
+assessor: null
+second_pass: null
+reviewer: null
+requirements:
+  - id: v5.0.0-6.1.1
+    status: fail
+    note: 'Not met. Rate limiting is described (architecture.md, ADR-0008, route notes) but no document says how login brute force and credential stuffing are defended, how the controls are configured (the rateLimits setting) and how malicious lockout is avoided. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.1.2
+    status: fail
+    note: 'Not met. No list of context-specific words is documented and none is checked (see 6.2.11). Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.1.3
+    status: fail
+    note: 'Not met. The pathways exist (password, OIDC, PAT, first-run token, mail tokens, the create-admin command) but no document lists them together with the controls and strength each must enforce. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.2.1
+    status: pass
+    evidence:
+      - test: ASVS-6.2.1
+      - code: modules/core-identity/validation.ts
+    note: 'PASSWORD_MIN is 8, enforced by the shared password schema (register, reset, change, first-run, create-admin). 8 meets the requirement; 15 is only recommended. The tagged cases are the table-driven password cases in validation.test.ts (8 accepted, 7 refused).'
+  - id: v5.0.0-6.2.2
+    status: pass
+    evidence:
+      - test: ASVS-6.2.2
+      - code: modules/core-identity/service/recovery.ts
+    note: 'POST /account/password changes the password of the signed-in user.'
+  - id: v5.0.0-6.2.3
+    status: pass
+    evidence:
+      - test: ASVS-6.2.3
+      - code: modules/core-identity/validation.ts
+    note: 'The change schema requires both the current and the new password, and a wrong current password changes nothing.'
+  - id: v5.0.0-6.2.4
+    status: fail
+    note: 'Not met (code gap). Only length limits are checked; there is no list of common passwords. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.2.5
+    status: pass
+    evidence:
+      - test: ASVS-6.2.5
+      - code: modules/core-identity/validation.ts
+    note: 'The password schema is z.string().min(8).max(255) with no composition rule; the table-driven cases accept spaces, symbols and non-ASCII.'
+  - id: v5.0.0-6.2.6
+    status: fail
+    note: 'Not demonstrable yet. apps/web has only a placeholder page and no password field exists; re-assess when the M5 login and registration screens land. Fix planned in docs/m5-sprint-plan.md#5-sprint-2-i18n-sign-in-register-profile.'
+  - id: v5.0.0-6.2.7
+    status: fail
+    note: 'Not demonstrable yet, for the same reason as 6.2.6: no form exists that could allow or block pasting and password managers. Fix planned in docs/m5-sprint-plan.md#5-sprint-2-i18n-sign-in-register-profile.'
+  - id: v5.0.0-6.2.8
+    status: pass
+    evidence:
+      - code: modules/core-identity/service/password.ts
+      - code: modules/core-identity/validation.ts
+    note: 'The password schemas apply no trim, truncation or case change, and the string goes unchanged to the Argon2 verify. No test pins this (surrounding spaces, case); a test is a backlog item.'
+  - id: v5.0.0-6.2.9
+    status: pass
+    evidence:
+      - test: ASVS-6.2.9
+      - code: modules/core-identity/validation.ts
+    note: 'PASSWORD_MAX is 255; the table-driven cases accept 255 characters.'
+  - id: v5.0.0-6.2.10
+    status: pass
+    evidence:
+      - code: modules/core-identity/db/schema.ts
+    note: 'Absence evidence: the schema has no password age or expiry column and no job rotates passwords.'
+  - id: v5.0.0-6.2.11
+    status: fail
+    note: 'Not met. There is no list of context-specific words, so nothing is checked (see 6.1.2). Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.2.12
+    status: fail
+    note: 'Not met (code gap). No breached-password check exists. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.3.1
+    status: fail
+    note: 'Not met (code gap). Failed guesses meet a strict per-IP rate-limit bucket (tested), passwords use Argon2id and errors are uniform, but there is no per-account control, so distributed credential stuffing is not slowed (docs/backlog.md admits this), and the "security documentation" the requirement points to is missing (6.1.1). Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.3.2
+    status: pass
+    evidence:
+      - code: modules/core-identity/service/bootstrap.ts
+      - doc: docs/adr/0010-first-run-token-and-bootstrap-admin.md
+    note: 'No migration creates an account. The first administrator is created by the create-admin command or by a one-time first-run token, with a name the operator chooses (ADR-0010). No test asserts that a fresh install has zero users.'
+  - id: v5.0.0-6.3.3
+    status: fail
+    note: 'Not met (code gap). Local login is a password alone; there is no multi-factor option and no written rationale with mitigating controls. An OIDC provider may enforce MFA, but nothing requires it. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.3.4
+    status: fail
+    note: 'Not met. Enforcement is fairly uniform (all authentication routes are strictly rate limited, deny by default, PATs cannot reach session-only routes) but the pathways are not documented together, so "no undocumented pathways" cannot be shown (6.1.3). Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.4.1
+    status: pass
+    evidence:
+      - test: ASVS-6.4.1
+      - code: modules/core-identity/service/mail-tokens.ts
+    note: 'Scorpion makes no initial passwords. Activation links (email verification, first run) are 256-bit CSPRNG tokens, single use, and never become a password. The verification link lives 24 h; a reviewer may call that not short, but single use satisfies the "or after they are initially used" alternative.'
+  - id: v5.0.0-6.4.2
+    status: pass
+    evidence:
+      - code: modules/core-identity/db/schema.ts
+    note: 'Absence evidence: the schema has no hint or question column and no route offers either.'
+  - id: v5.0.0-6.4.3
+    status: pass
+    evidence:
+      - test: ASVS-6.4.3
+      - code: modules/core-identity/service/recovery.ts
+    note: 'Reset uses a single-use hashed 256-bit token, the same answer for a known and an unknown address, a mail budget, and ends every session. No MFA exists, so none is bypassed (see 6.3.3); this weakens as a claim once MFA is added. PATs survive a reset (backlog).'
+  - id: v5.0.0-6.4.4
+    status: n/a
+    reason: 'The requirement applies when a multi-factor authentication factor is lost; Scorpion has no MFA factor that a user could enrol or lose. The absence of MFA itself is recorded at 6.3.3.'
+  - id: v5.0.0-6.5.1
+    status: pass
+    evidence:
+      - test: ASVS-6.5.1
+      - code: modules/core-identity/service/mail-tokens.ts
+    note: 'Scorpion has no TOTP or lookup secrets. The reset, verification and first-run links are treated as out-of-band tokens and are claimed by one conditional UPDATE, so they work once. (If mail links are not counted as out-of-band authentication, 6.5.1 to 6.5.5 and 6.6.2 to 6.6.3 would be n/a instead; 6.5.5 would then not fail.)'
+  - id: v5.0.0-6.5.2
+    status: pass
+    evidence:
+      - test: ASVS-6.5.2
+      - code: modules/core-identity/service/mail-tokens.ts
+    note: 'The tokens carry 256 bits, so a standard hash (SHA-256) is allowed; only the hash is stored.'
+  - id: v5.0.0-6.5.3
+    status: pass
+    evidence:
+      - test: ASVS-6.5.3
+      - code: modules/core-identity/service/mail-tokens.ts
+    note: 'randomBytes(32) from node:crypto.'
+  - id: v5.0.0-6.5.4
+    status: pass
+    evidence:
+      - test: ASVS-6.5.4
+      - code: modules/core-identity/service/mail-tokens.ts
+    note: '256 bits, far above 20.'
+  - id: v5.0.0-6.5.5
+    status: fail
+    note: 'Not met (code gap), if mail links count as out-of-band tokens (see 6.5.1). The reset link lives 60 minutes (RESET_TTL_MS in mail-tokens.ts), above the 10 minute maximum; the verification link 24 h. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking.'
+  - id: v5.0.0-6.6.1
+    status: n/a
+    reason: 'Scorpion sends no one-time password by phone or SMS and holds no phone number for authentication, so the conditions on offering PSTN OTPs cannot be violated.'
+  - id: v5.0.0-6.6.2
+    status: pass
+    evidence:
+      - test: ASVS-6.6.2
+      - code: modules/core-identity/service/mail-tokens.ts
+    note: 'A token is tied to its user and purpose and a new request deletes the older ones. It is not bound to a browser: a link may be opened on another device by design (ADR-0012).'
+  - id: v5.0.0-6.6.3
+    status: pass
+    evidence:
+      - test: ASVS-6.6.3
+      - code: modules/core-identity/service/mail-tokens.ts
+      - code: apps/server/src/pipeline/rate-limit.ts
+    note: 'The link carries 256 bits (above the 64 bits the requirement suggests) and the confirm routes use the strict rate-limit bucket.'
+  - id: v5.0.0-6.8.1
+    status: fail
+    note: "Not met (code gap). Identities are keyed by (provider, subject), the standard mitigation (unique index; tested). But a first sign-in links to an existing account with the same verified email address, so a provider that asserts someone else's address as verified can take over that account; the README says to list only providers that verify addresses. The planned fix links only after the existing account's own mailbox confirms it. Fix planned in docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking."
+  - id: v5.0.0-6.8.2
+    status: pass
+    evidence:
+      - test: ASVS-6.8.2
+      - code: modules/core-identity/service/oidc-token.ts
+    note: 'The id_token is verified with jose against the provider keys, allowing RS256, PS256 and ES256 only; the tagged cases include another key, alg none and HS256 keyed with the public key (algorithm confusion).'
+  - id: v5.0.0-6.8.3
+    status: n/a
+    reason: 'Scorpion supports OpenID Connect only (ADR-0011) and accepts no SAML assertion, so there is no SAML replay to prevent.'
+  - id: v5.0.0-6.8.4
+    status: n/a
+    reason: 'Scorpion never expects a particular authentication strength, method or recentness from the identity provider (no step-up; sensitive actions ask for the password again) and reads no acr, amr or auth_time claim. This becomes a fail if step-up from the provider is added.'

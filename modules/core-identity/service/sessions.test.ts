@@ -15,7 +15,7 @@ async function rows(kernel: { pool: { query: (sql: string) => Promise<{ rows: un
 }
 
 describe('create', () => {
-  it('stores only the SHA-256 of the id and a 7-day expiry', async () => {
+  it('stores only the SHA-256 of the id and a 7-day expiry [ASVS-7.2.3]', async () => {
     const { kernel, identity: id } = await identity.start();
     const user = await makeUser(kernel.pool);
     const now = new Date('2026-10-02T10:00:00Z');
@@ -68,7 +68,7 @@ describe('resolve', () => {
     expect(await id.sessions.resolve(make())).toBeUndefined();
   });
 
-  it('refuses an expired session', async () => {
+  it('refuses an expired session [ASVS-7.4.1]', async () => {
     const { kernel, identity: id } = await identity.start();
     const user = await makeUser(kernel.pool);
     const created = await id.sessions.create(user.id);
@@ -80,7 +80,7 @@ describe('resolve', () => {
     ['pending', { status: 'pending' as const }],
     ['rejected', { status: 'rejected' as const }],
     ['soft-deleted', { deleted: true }],
-  ])('refuses a session whose user is %s', async (_name, overrides) => {
+  ])('refuses a session whose user is %s [ASVS-7.4.2]', async (_name, overrides) => {
     const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 0 });
     const user = await makeUser(kernel.pool, overrides);
     const { id: sessionId } = await id.sessions.create(user.id);
@@ -118,7 +118,7 @@ describe('resolve', () => {
 });
 
 describe('revoking (defect 4)', () => {
-  it('revoke ends one session at once in this process, even with a long cache', async () => {
+  it('revoke ends one session at once in this process, even with a long cache [ASVS-7.4.1]', async () => {
     const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 60_000 });
     const user = await makeUser(kernel.pool);
     const one = await id.sessions.create(user.id);
@@ -170,7 +170,7 @@ describe('the cache', () => {
     expect(await id.sessions.resolve(created.id)).toBeUndefined(); // the database is asked again
   });
 
-  it('is the staleness bound across processes: B accepts a session A revoked for at most the TTL', async () => {
+  it('is the staleness bound across processes: B accepts a session A revoked for at most the TTL [ASVS-7.2.1]', async () => {
     const url = await identity.server().createDatabase();
     const a = await identity.start({ databaseUrl: url, sessionCacheTtlMs: 150 });
     const b = await identity.start({ databaseUrl: url, sessionCacheTtlMs: 150 });

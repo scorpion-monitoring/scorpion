@@ -160,7 +160,7 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 **Release:** M4a changes no runtime behaviour and carries empty changesets, so it has no release of its own. It ships inside `0.6.0` with M5 (an exception to rule 1 above; decision 1 of [m4a-sprint-plan.md](m4a-sprint-plan.md)).
 
-**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue assigned to M5 or to a fix before G1.
+**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue or to the plan section that schedules the fix; the M4b plan covers the gaps in `core.identity`, `core.authz` and the pipeline, and the M5 plan covers the three that need a browser.
 
 ### M5: `core.ui-shell` + web app skeleton (M)
 
@@ -423,8 +423,8 @@ requirements:
 Rules the tool enforces (`pnpm security:asvs`, which runs in CI on every pull request after the test jobs):
 
 1. Every L1 and L2 requirement of the chapter in the pinned source file appears exactly once. There are no unknown ids.
-2. `pass` needs at least one piece of evidence. A `test:` tag must match at least one test that **passed** in this CI run (the tool reads the Vitest and Playwright JUnit reports). `code:` and `doc:` paths must exist. A requirement that cannot be tested may pass on `code:` or `doc:` evidence only.
-3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue.
+2. `pass` needs at least one piece of evidence. A `test:` tag must match at least one test that **passed** in this CI run (the tool reads the Vitest and Playwright JUnit reports). `code:` and `doc:` paths must exist. A requirement that cannot be tested may pass on `code:` or `doc:` evidence only. The `test:` value is the tag of the requirement itself (`ASVS-6.2.1` for requirement 6.2.1), and a tag does not count while any test carrying it failed. In CI a missing or empty JUnit report is an error; locally the tool lists the tags it could not check and passes.
+3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue, or to the section of a sprint plan that schedules the fix (`docs/<plan>.md#<heading>`; the tool checks that the file and the heading exist). Two `n/a` entries of a chapter may not share the same reason text.
 4. `second_pass.on` is at least 7 days after `assessed_on`. For `assessment_type: peer` or `external`, a `reviewer` is set and differs from the assessor.
 5. The chapter status is **derived**, never stored:
 
@@ -474,8 +474,8 @@ Also turn on GitHub secret scanning with push protection, Dependabot alerts and 
 ### 8.4 Keeping the claim current
 
 - **Security-scoped paths:** `modules/core-identity/**`, `modules/core-authz/**`, `apps/server/src/pipeline/**`, `packages/contracts/src/route.ts` and `docs/security/**`. Each path is mapped to its ASVS chapters in `tools/asvs-report/scope.ts`. List them in `.github/CODEOWNERS` too, so a future second maintainer is requested automatically.
-- **Pull requests:** if a scoped path changes and the matching chapter YAML does not, the `asvs-impact` CI job fails unless the PR has the `asvs-no-impact` label and a reason (rule 10).
-- **Releases:** on `release/*` branches, any chapter whose scoped paths changed after its `assessed_commit` is derived as `stale`, and CI fails. Re-assess (or confirm and bump `assessed_commit` with a new second pass) before the release.
+- **Pull requests:** if a scoped path changes and the matching chapter YAML does not, the `asvs-impact` CI job fails unless the PR has the `asvs-no-impact` label and a reason (rule 10). `asvs-impact` is a workflow of its own (`.github/workflows/asvs-impact.yml`), so that adding a label or editing the description re-runs only it and not the test job. The chapter files themselves (`docs/security/asvs/v*.yaml` and the generated `.md`) are the update, not a scoped change; any other file under `docs/security/**` maps to all four chapters.
+- **Releases:** on `release/*` branches, any chapter whose scoped paths changed after its `assessed_commit` is derived as `stale`, and CI fails. Re-assess (or confirm and bump `assessed_commit` with a new second pass) before the release. `pnpm security:asvs --release` derives it; CI passes the flag on `release/*` and `hotfix/*` branches. A chapter without an `assessed_commit` is never `stale`.
 - **History:** each re-assessment adds a line to the history table in `docs/security/README.md`: date, commit, chapters, type, assessor, reviewer.
 - **Upgrade path:** when a second maintainer or an external reviewer checks a chapter, set `assessment_type` to `peer` or `external` and fill in `reviewer`. The badge then derives `peer-reviewed` or `externally verified`, with no other change.
 

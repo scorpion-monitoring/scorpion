@@ -41,7 +41,7 @@ its workflows; the second adds the tool and the assessment data.
 | The `asvs-impact` rule (rule 10) is documented but not enforced                                                                   | implementation.md §1, §8.4, §8.6 | 2      |
 | ASVS tool, pinned source, JUnit evidence, skeletons for V6, V7, V8, V10, generated reports and README badge block                 | implementation.md §8.2, §8.5     | 2      |
 | Retro-tagging of the M2/M3/M4 tests (including every `defect-NN.*`) and moving matching requirements to `pass` or `n/a`           | implementation.md M4a            | 2      |
-| An issue for every open `fail`, assigned to M5 or to a fix before G1                                                              | implementation.md M4a acceptance | 2      |
+| An issue for every open `fail`, saying in its text whether it belongs to M5 or is a fix before G1                                 | implementation.md M4a acceptance | 2      |
 | `docs/backlog.md`: "Origin check", Dependabot-style ideas, the signed-image work for M18 (cosign, SLSA)                           | ADR-0007, implementation.md §8.6 | 1, 2   |
 | The intermittent `57P01` teardown error in CI (seen on #48 and #50)                                                               | M4 sprint 4 review               | 1      |
 
@@ -184,10 +184,10 @@ Work items
    V6 (Argon2, reset, verification, rate limits, defects 3 and 13, ADR-0012, ADR-0013), V10 (PKCE, nonce, id_token validation, state:
    defect 5, ADR-0011). Add `[ASVS-x.y.z]` tags to existing test titles (including every `defect-NN.*` file). A tag edit must not
    change what a test asserts: the diff of those files is reviewed as renames only. Never weaken or delete a defect test.
-8. **Tracking issues for `fail`** (Decision 5): one tracking issue per chapter listing the open requirement ids, assigned to the M5
-   milestone or marked "fix before G1", linked from each `fail` note. A requirement that is a real gap in the code gets its own issue.
-   Create them with `gh issue create` after the maintainer agrees to the wording; the issue numbers go into the YAML in this pull
-   request, so create the issues before the last commit.
+8. **Links behind `fail`.** Decision 5 proposed one tracking issue per chapter and an issue for each real gap. On 2026-10-06 the maintainer decided that no issues are created: the
+   gaps are fixed in M4b ([m4b-sprint-plan.md](m4b-sprint-plan.md)), and a `fail` links the plan section that schedules the fix (the M5 plan for the three that need a browser). Rule 3 of
+   §8.2 accepts an issue or such a plan section, and the tool checks that the file and the heading exist. The issue text said whether the work belongs to M5 or is a fix before Gate 1; the
+   plan section now says it. No GitHub milestone and no label.
 9. **`docs/security/README.md`:** scope (the table of §8.1), V9 not applicable (opaque sessions and PATs), method, the assessment history
    table (empty until Gate 1), the Best Practices criteria-to-evidence map, the Scorecard score and checks below target from sprint 1,
    the single-maintainer note, and how to challenge an entry.
@@ -205,15 +205,15 @@ and no defect test lost an assertion.
 
 ## 6. Acceptance (from implementation.md) mapped to checks
 
-| Acceptance criterion                                                                    | Where it is proved                                                                               |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| CI runs `pnpm security:asvs` on every pull request                                      | `ci.yml` step; the pull request's own run                                                        |
-| A hand-edited badge fails it                                                            | `tools/asvs-report` unit test (README block differs from the generated one)                      |
-| README shows Scorecard, Best Practices (in progress) and four ASVS badges `in progress` | the generated README block, checked by the tool                                                  |
-| Every open `fail` links to an issue assigned to M5 or to a fix before G1                | tool rule 3 (issue link present); the issues exist (checked by hand, listed in the pull request) |
-| `SECURITY.md` published, private vulnerability reporting on                             | file in the repository; maintainer action 11.2, dated in `docs/security/README.md`               |
-| Actions pinned by SHA, base images by digest, minimal permissions                       | grep test in `scripts/`; Scorecard Pinned-Dependencies and Token-Permissions                     |
-| `asvs-impact` enforces rule 10                                                          | job tests in sprint 2 (scoped change without YAML, with label, with injection attempt)           |
+| Acceptance criterion                                                                    | Where it is proved                                                                     |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| CI runs `pnpm security:asvs` on every pull request                                      | `ci.yml` step; the pull request's own run                                              |
+| A hand-edited badge fails it                                                            | `tools/asvs-report` unit test (README block differs from the generated one)            |
+| README shows Scorecard, Best Practices (in progress) and four ASVS badges `in progress` | the generated README block, checked by the tool                                        |
+| Every open `fail` links to an issue that says whether it is M5 or a fix before G1       | tool rule 3 (issue or plan section link present, and the plan section exists); see M4b |
+| `SECURITY.md` published, private vulnerability reporting on                             | file in the repository; maintainer action 11.2, dated in `docs/security/README.md`     |
+| Actions pinned by SHA, base images by digest, minimal permissions                       | grep test in `scripts/`; Scorecard Pinned-Dependencies and Token-Permissions           |
+| `asvs-impact` enforces rule 10                                                          | job tests in sprint 2 (scoped change without YAML, with label, with injection attempt) |
 
 Additional gates this plan adds: no secret or token in a workflow file or an issue; the pinned ASVS source hash is verified on each run; no
 human field is filled by this milestone; no defect test is weakened.
@@ -273,7 +273,7 @@ All eight took the recommendation.
 - The `asvs-impact` job reads the label and the reason as data, with `pull-requests: read` on that job only.
 - Vitest and Playwright write JUnit reports that the ASVS tool reads; a `test:` evidence tag counts only if its test passed in the same run.
 - `stale` applies only to a chapter that has an `assessed_commit` (Decision 6).
-- A tracking issue per chapter satisfies "a `fail` links to an issue" for the skeleton state (Decision 5).
+- A tracking issue per chapter satisfies "a `fail` links to an issue" for the skeleton state (Decision 5). Superseded on 2026-10-06: no issues are created; a `fail` may link the section of a sprint plan that schedules the fix ([m4b-sprint-plan.md](m4b-sprint-plan.md), Decision 2).
 - The dependency audit and CodeQL are required checks on `main` and `dev`.
 - A grep test fails on an unpinned action or base image.
 

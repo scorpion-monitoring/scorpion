@@ -155,7 +155,7 @@ describe('verifyIdToken', () => {
     ],
   ];
 
-  it.each(cases)('refuses %s', async (_name, make, reason) => {
+  it.each(cases)('refuses %s [ASVS-10.5.3] [ASVS-10.5.4]', async (_name, make, reason) => {
     const error = await verifyIdToken(await make(), keys, expected).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(InvalidIdToken);
     expect((error as InvalidIdToken).reason).toBe(reason);

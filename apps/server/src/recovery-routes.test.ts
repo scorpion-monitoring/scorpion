@@ -19,7 +19,7 @@ async function start(options: Parameters<typeof app.start>[0] = {}) {
 }
 
 describe('requesting a reset', () => {
-  it('answers exactly the same for a known and an unknown address', async () => {
+  it('answers exactly the same for a known and an unknown address [ASVS-6.4.3]', async () => {
     const { post, signedIn, mail } = await start();
     await signedIn('alice', { email: 'alice@example.org' });
 
@@ -112,7 +112,7 @@ describe('confirming a reset', () => {
     expect(replies[0]!.res.headers.get('content-type')).toContain('application/problem+json');
   });
 
-  it('is 422 for a weak password or a missing token, and rate limited', async () => {
+  it('is 422 for a weak password or a missing token, and rate limited [ASVS-6.6.3]', async () => {
     const { post } = await start();
     for (const body of [
       { token: 'srt_x' },
@@ -140,7 +140,7 @@ describe('confirming a reset', () => {
 describe('changing the password', () => {
   const body = { currentPassword: PASSWORD, newPassword: NEW_PASSWORD };
 
-  it('ends every session, clears the cookie, and the old password is dead', async () => {
+  it('ends every session, clears the cookie, and the old password is dead [ASVS-6.2.2] [ASVS-7.4.3]', async () => {
     const { post, get, call, signedIn } = await start();
     const first = await signedIn('alice');
     const second = (await post('/auth/login', { body: { username: 'alice', password: PASSWORD } }))

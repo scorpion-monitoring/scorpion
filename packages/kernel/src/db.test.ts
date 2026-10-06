@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { startPostgres, type StartedPostgres } from '@scorpion/testing';
 import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { activeTransaction, createDb, type Db } from './db.ts';
+import { activeTransaction, closePool, createDb, createPool, type Db } from './db.ts';
 
 let server: StartedPostgres;
 let pool: pg.Pool;
@@ -142,5 +142,42 @@ describe('ctx.db.tx', () => {
         .catch(() => undefined),
     ]);
     expect(await rows()).toEqual([1]);
+  });
+});
+
+// The 57P01 teardown error in CI (backlog): the server ended a connection that the pool was still
+// closing, and the pool's `error` event had no listener.
+describe('the pool from createPool', () => {
+  it('reports an idle connection the server ends instead of throwing it', async () => {
+    const errors: Error[] = [];
+    const own = createPool(
+      { DATABASE_URL: await server.createDatabase() },
+      { onError: (error) => errors.push(error) },
+    );
+    const client = await own.connect();
+    const pid = (await client.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]!
+      .pid;
+    client.release();
+    await pool.query('select pg_terminate_backend($1)', [pid]);
+    await expect.poll(() => errors.length).toBe(1);
+    expect(errors[0]).toMatchObject({ code: '57P01' });
+    expect(own.totalCount).toBe(0);
+    await closePool(own);
+  });
+
+  it('closePool resolves only after every connection is closed', async () => {
+    const own = createPool({ DATABASE_URL: await server.createDatabase() });
+    const ended: boolean[] = [];
+    own.on('connect', (client) => {
+      const at = ended.push(false) - 1;
+      client.once('end', () => (ended[at] = true));
+    });
+    const clients = await Promise.all([own.connect(), own.connect(), own.connect()]);
+    const busy = clients.pop()!;
+    for (const client of clients) client.release();
+    const closing = closePool(own);
+    busy.release(); // a connection still in use is closed once it comes back
+    await closing;
+    expect(ended).toEqual([true, true, true]);
   });
 });

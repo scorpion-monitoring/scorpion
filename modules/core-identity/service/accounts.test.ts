@@ -332,7 +332,7 @@ describe('login', () => {
     await expect(id.accounts.login(body)).rejects.toBeInstanceOf(Invalid);
   });
 
-  it('ends the session the browser held before, so an old id cannot be carried over', async () => {
+  it('ends the session the browser held before, so an old id cannot be carried over [ASVS-7.2.4]', async () => {
     const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 60_000 });
     await withPassword(kernel, { username: 'alice' });
     const first = await id.accounts.login({ username: 'alice', password: PASSWORD });

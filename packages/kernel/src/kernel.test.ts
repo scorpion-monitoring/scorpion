@@ -1,4 +1,5 @@
 import { startPostgres, type StartedPostgres } from '@scorpion/testing';
+import { Writable } from 'node:stream';
 import { z } from 'zod';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -395,5 +396,39 @@ describe('module commands', () => {
     );
     expect(await kernel.runCommand('noop', [], io().io)).toBe(0);
     await expect(kernel.runCommand('nope', [], io().io)).rejects.toThrow(KernelStartupError);
+  });
+});
+
+describe('the database pool', () => {
+  it('logs a lost idle connection with its code only, never the client and its password', async () => {
+    const lines: string[] = [];
+    const kernel = createKernel({
+      profile: await fixtureProfile('ab'),
+      sources: fixtureSources,
+      modulePackages: FIXTURE_MODULE_PACKAGES,
+      config: loadConfig({ DATABASE_URL: await server.createDatabase() }),
+      log: createLogger({
+        level: 'warn',
+        destination: new Writable({
+          write(chunk: Buffer, _encoding, callback) {
+            lines.push(chunk.toString());
+            callback();
+          },
+        }),
+      }),
+    });
+    open.push(kernel);
+    const [idle, other] = await Promise.all([kernel.pool.connect(), kernel.pool.connect()]);
+    const pid = (await idle.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]!.pid;
+    idle.release();
+    await other.query('select pg_terminate_backend($1)', [pid]);
+    other.release();
+    await expect.poll(() => lines.length).toBe(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      code: '57P01',
+      msg: 'an idle database connection was lost',
+    });
+    expect(lines[0]).not.toContain('password');
+    expect(lines[0]).not.toContain('connectionParameters');
   });
 });

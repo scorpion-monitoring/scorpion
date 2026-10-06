@@ -195,7 +195,7 @@ describe('POST /auth/login', () => {
     expect(again.cookie).not.toBe(first.cookie);
   });
 
-  it('ends the session of the cookie it was called with, and starts a new one', async () => {
+  it('ends the session of the cookie it was called with, and starts a new one [ASVS-7.2.4]', async () => {
     const { signedIn, post, get } = await app.start({ sessionCacheTtlMs: 60_000 });
     const first = await signedIn('alice');
     const again = await post('/auth/login', {
