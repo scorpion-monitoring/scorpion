@@ -1,6 +1,6 @@
 # M4b Sprint Plan: Close the ASVS gaps in identity and authorization
 
-Status: proposed, 2026-10-06. Decisions 1 to 10 (§9) are open; each has a recommendation.
+Status: proposed, 2026-10-06. Decision 4 (re-authentication through the provider) and Decision 11 (linking by mail confirmation) were taken on 2026-10-06; Decisions 1 to 3 and 5 to 10 (§9) are open, each with a recommendation.
 Scope source: the `fail` entries of `docs/security/asvs/v6-authentication.yaml`, `v7-session-management.yaml` and `v8-authorization.yaml` after
 M4a sprint 2 ([m4a-sprint-plan.md](m4a-sprint-plan.md)), and [implementation.md](implementation.md) §8 and Gate 1. Closes no defect of FEATURES §5.
 Proposed release: `0.6.0` (Decision 1). M5 then releases as `0.7.0`.
@@ -42,7 +42,7 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
 | 6.1.2, 6.2.11 | No context-specific word list                                                                                   | A documented list built from settings (instance name, product name, host) and checked          | 2      |
 | 6.3.1, 6.1.1  | Only a per-IP strict bucket; no per-account control; the brute-force stance is not documented                   | Per-account throttle without hard lockout (Decision 5), documented                             | 2      |
 | 6.5.5         | Reset link lives 60 minutes, above the 10-minute maximum for out-of-band requests                               | 10 minutes for the reset link, interpretation of the verification link in the ADR (Decision 7) | 2      |
-| 6.8.1         | A first OIDC sign-in links to an account with the same verified email, so a provider can take over that account | Per-provider setting that allows linking by email, off by default                              | 2      |
+| 6.8.1         | A first OIDC sign-in links to an account with the same verified email, so a provider can take over that account | Link only after the account's own mailbox confirms it (Decision 11)                            | 2      |
 | 6.3.3         | Password alone; no MFA and no written rationale                                                                 | Documented rationale with mitigating controls, TOTP into the backlog (Decision 8)              | 2      |
 | 6.1.3, 6.3.4  | Authentication pathways are not documented together                                                             | One document listing every pathway with its controls and strength                              | 2      |
 | 8.1.2         | Field-level rules are not documented                                                                            | `docs/security/authorization.md` with the rules per object                                     | 3      |
@@ -67,13 +67,13 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
 
 ## 3. Sprint overview
 
-| Sprint | Branch                    | Theme                                                                                 | Fixes (requirement ids)                                                       |
-| ------ | ------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| 1      | `feature/m4b-sessions`    | Absolute lifetime, session list and end, admin termination, re-authentication, policy | 7.1.1, 7.1.2, 7.1.3, 7.3.1, 7.3.2, 7.4.5, 7.5.1, 7.5.2, 7.6.1 (and 6.8.4)     |
-| 2      | `feature/m4b-credentials` | Password blocklist, per-account throttle, reset lifetime, link trust, MFA rationale   | 6.1.1, 6.1.2, 6.1.3, 6.2.4, 6.2.11, 6.2.12, 6.3.1, 6.3.3, 6.3.4, 6.5.5, 6.8.1 |
-| 3      | `feature/m4b-authz-docs`  | Authorization rules and field-level audit, closing the assessment                     | 8.1.2, 8.2.3                                                                  |
+| Sprint | Branch                    | Theme                                                                                           | Fixes (requirement ids)                                                       |
+| ------ | ------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1      | `feature/m4b-sessions`    | Absolute lifetime, session list and end, admin termination, re-authentication, policy           | 7.1.1, 7.1.2, 7.1.3, 7.3.1, 7.3.2, 7.4.5, 7.5.1, 7.5.2, 7.6.1 (and 6.8.4)     |
+| 2      | `feature/m4b-credentials` | Password blocklist, per-account throttle, reset lifetime, mail-confirmed linking, MFA rationale | 6.1.1, 6.1.2, 6.1.3, 6.2.4, 6.2.11, 6.2.12, 6.3.1, 6.3.3, 6.3.4, 6.5.5, 6.8.1 |
+| 3      | `feature/m4b-authz-docs`  | Authorization rules and field-level audit, closing the assessment                               | 8.1.2, 8.2.3                                                                  |
 
-Order matters. Sprint 1 first, because re-authentication is used by sprint 2's link trust change and by M5's screens. Sprint 3 is small and closes the milestone.
+Order matters. Sprint 1 first, because re-authentication is used by sprint 2's linking change and by M5's screens. Sprint 3 is small and closes the milestone.
 
 ## 4. Sprint 1: sessions and re-authentication
 
@@ -120,18 +120,23 @@ Definition of done: `pnpm check`, the tests of `core-identity` and `apps/server`
    injected time and a rollback case.
 4. **Reset link lifetime** (6.5.5; Decision 7). `RESET_TTL_MS` becomes 10 minutes. The documented position on the verification link (24 h: it confirms an address, authenticates nobody) goes
    into the ADR; if the maintainer rejects that reading, the verification link also drops to 10 minutes and the mail text says "request a new link".
-5. **Linking by email** (6.8.1). A boolean per provider in the `oidcProviders` setting, `trustEmailForLinking`, default `false`. When it is false, a first sign-in whose email matches
-   an existing account does not link; it creates a pending account or refuses with the existing "sign in the usual way, then link this provider from your profile" message (sprint 1's
-   re-authentication protects that profile route). Settings schema, README and tests for both values; a changeset that tells operators the default changed.
+5. **Linking by mail confirmation** (6.8.1; Decision 11). A first sign-in through a provider whose verified email matches an existing account no longer links and no longer signs in. The
+   service creates a single-use mail token (purpose `oidc-link`, stored hashed like the other mail tokens of ADR-0012, 10 minutes, so it also meets 6.5.5) that remembers the provider and
+   the subject, and mails it to the **existing account's own address**. The browser gets the same neutral "check your mail" answer whether or not an account matched (ADR-0022, no
+   enumeration). The link opens a page that names the provider and asks the account holder to confirm while **signed in to that account**; only then is the identity linked. The mail says
+   "if you did not just try to sign in with <provider>, ignore this", because an attacker can trigger the mail by asserting someone's address at a provider they run; the signed-in
+   confirmation and the mail budget per address (already in `core.identity`) limit what a careless click can do. A sign-in with an address that matches no account creates the pending
+   account as today. Linking from the profile page while signed in stays, behind the re-authentication of item 2. There is no `trustEmailForLinking` setting. Tests: a provider that
+   asserts a victim's address links nothing and signs nobody in; the confirmation links exactly once, expires after 10 minutes, and is refused for another account's session; the Keycloak
+   test covers the whole flow. The `email_verified` claim is still required before any mail is sent. A changeset tells operators that sign-in no longer links by itself.
 6. **MFA position** (6.3.3; Decision 8). ADR-00xx: why Scorpion has no own second factor in this milestone, the mitigating controls (Argon2id, strict and per-account throttling, the
-   blocklist, short reset links, session list and termination, and the recommendation that operators enable MFA at the OIDC provider and set `trustEmailForLinking` false for providers
-   that do not), and what would bring it back. 6.3.3 moves to `pass` only on the strength of this documented rationale, as the requirement itself allows, and the entry says so.
+   blocklist, short reset links, session list and termination, and the recommendation that operators enable MFA at the OIDC provider), and what would bring it back. 6.3.3 moves to `pass` only on the strength of this documented rationale, as the requirement itself allows, and the entry says so.
 7. **Authentication document** `docs/security/authentication.md` (6.1.1, 6.1.3, 6.3.4, and the list of 6.1.2): every pathway (password, OIDC, PAT, first-run token, mail tokens, the
    `create-admin` command) with the controls and the authentication strength each one enforces, the rate-limit and throttle settings, the lockout stance, and the fallback assumption
    about the strength of a provider that sends no `acr` (single factor).
 8. **Assessment.** Move the entries above to `pass` with tagged tests or document pointers; tags on `it.each` titles only where a dedicated test is not practical, and then say so in the note.
 
-Definition of done as in sprint 1, plus: no password in any log, response or audit payload (existing tests stay), and the OIDC Keycloak test passes with `trustEmailForLinking` both ways.
+Definition of done as in sprint 1, plus: no password in any log, response or audit payload (existing tests stay), and the OIDC Keycloak test passes, including the mail-confirmed linking.
 
 ## 6. Sprint 3: authorization rules and closing the assessment
 
@@ -152,18 +157,18 @@ Definition of done: as before; the README badges still show `in progress`, becau
 
 ## 7. Acceptance mapped to checks
 
-| Acceptance criterion                                                                                   | Where it is proved                                                                    |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| A session cannot outlive the absolute lifetime however often it is used                                | `sessions.test.ts` table-driven with a clock; defect-04 stays green                   |
-| A user lists and ends their own sessions; cannot see or end another's                                  | integration test and the defect-01 style own-data test                                |
-| An administrator ends one user's or all sessions; a plain User cannot                                  | denied-permission test; the walker of defect 1 includes the new routes                |
-| Changing the email address, linking an identity or ending a session needs a recent authentication      | route tests for `401 reauthentication-required`, and the pass after re-authentication |
-| A common, breached or context-specific password is refused on register, reset and change               | table-driven tests per entry point                                                    |
-| Repeated failed logins for one account slow that account down without locking it, and enumerate nobody | integration test with injected time; same answer for an unknown name                  |
-| A reset link older than 10 minutes is refused                                                          | `recovery.test.ts` with an injected clock                                             |
-| A provider cannot take over an account by asserting its email unless `trustEmailForLinking` is set     | oidc service and Keycloak tests, both settings                                        |
-| No response schema holds a forbidden field                                                             | the new walker test                                                                   |
-| Every requirement M4b says it fixes is `pass` with evidence that runs                                  | `pnpm security:asvs` strict in CI; the pull requests' own runs                        |
+| Acceptance criterion                                                                                          | Where it is proved                                                                    |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| A session cannot outlive the absolute lifetime however often it is used                                       | `sessions.test.ts` table-driven with a clock; defect-04 stays green                   |
+| A user lists and ends their own sessions; cannot see or end another's                                         | integration test and the defect-01 style own-data test                                |
+| An administrator ends one user's or all sessions; a plain User cannot                                         | denied-permission test; the walker of defect 1 includes the new routes                |
+| Changing the email address, linking an identity or ending a session needs a recent authentication             | route tests for `401 reauthentication-required`, and the pass after re-authentication |
+| A common, breached or context-specific password is refused on register, reset and change                      | table-driven tests per entry point                                                    |
+| Repeated failed logins for one account slow that account down without locking it, and enumerate nobody        | integration test with injected time; same answer for an unknown name                  |
+| A reset link older than 10 minutes is refused                                                                 | `recovery.test.ts` with an injected clock                                             |
+| A provider cannot take over an account by asserting its email; linking needs the mailbox owner's confirmation | oidc service and Keycloak tests                                                       |
+| No response schema holds a forbidden field                                                                    | the new walker test                                                                   |
+| Every requirement M4b says it fixes is `pass` with evidence that runs                                         | `pnpm security:asvs` strict in CI; the pull requests' own runs                        |
 
 ## 8. Out of scope (goes to `docs/backlog.md` if not there)
 
@@ -182,8 +187,8 @@ Definition of done: as before; the README badges still show `in progress`, becau
 3. **Password blocklist source.** Recommended: an offline text file of a widely published list of common and breached passwords (licence checked and recorded), loaded once, no network call.
    The alternative is the Have I Been Pwned range API through `packages/integrations` (adapter with cache, timeout and stub): the set is larger and current, but every register, reset and
    change sends a hash prefix to a third party, and an outage must then decide between refusing and allowing.
-4. **Re-authentication.** Recommended: a recent-authentication window on the session (password for accounts that have one, a fresh OIDC login with `auth_time` for those that have not),
-   5 minutes by default. The alternative is the password in every sensitive request, which leaves OIDC-only accounts unable to change anything.
+4. **Re-authentication.** Taken 2026-10-06, as recommended: a recent-authentication window on the session (password for accounts that have one, a fresh OIDC login with `auth_time` for those that have not),
+   5 minutes by default. The alternative is the password in every sensitive request, which leaves OIDC-only accounts unable to change anything. A confirmation mail to the current address for OIDC-only accounts was considered and not taken: it is a good control against a stolen session, but ASVS 7.5.1 asks for full re-authentication, and a mail is not that by the letter.
 5. **Brute-force control.** Recommended: per-account exponential delay with a ceiling and no hard lockout, plus the existing per-IP bucket. A hard lockout is simple but lets anyone lock any
    account, which 6.1.1 names as a defect. The alternative is a CAPTCHA, which adds a dependency and a third party.
 6. **Concurrent sessions and what a session list shows.** Recommended: no limit, documented, with the list of 7.5.2 as the control; the list shows times and the current marker only (no
@@ -198,6 +203,10 @@ Definition of done: as before; the README badges still show `in progress`, becau
 10. **Default lifetimes.** Recommended: 7 days of inactivity and 30 days absolute, both settings. A shorter absolute lifetime (for example 12 hours) fits a high-risk service better but
     would sign every user out daily; the policy document records the choice and the deviation from NIST SP 800-63B.
 
+11. **How a first OIDC sign-in links to an existing account.** Taken 2026-10-06 (the maintainer's proposal, replacing the recommended per-provider `trustEmailForLinking` setting): a mail with a single-use
+    10-minute link goes to the existing account's own address, and the identity is linked only after the account holder confirms while signed in. It proves control of the mailbox instead of
+    trusting a provider's `email_verified`, and it reuses the mail-token machinery of ADR-0012.
+
 ## 10. Additions to `implementation.md` (to approve with this plan)
 
 - An M4b milestone entry after M4a: "Closing the ASVS gaps in `core.identity`, `core.authz` and the pipeline", size M, depends on M4a, closes no defect, with the goal and acceptance of §3 and §7.
@@ -207,12 +216,12 @@ Definition of done: as before; the README badges still show `in progress`, becau
 
 ## 11. Risks
 
-| Risk                                                                             | Impact                                          | Mitigation                                                                                                                               |
-| -------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| A fix is marked `pass` on a test that does not prove it                          | The claim is false again                        | The tool needs the tagged test to pass; the second pass at Gate 1 re-reads each entry; dedicated tests, not `it.each` tags, for new work |
-| Absolute lifetime logs out users who rely on a long-running session              | Complaints, support load                        | Both limits are settings; the changeset and README say what changes; no live data exists before M5                                       |
-| Re-authentication breaks the OIDC-only flow (provider ignores `prompt=login`)    | Account changes impossible for those users      | Check `auth_time` and refuse a stale one; test against Keycloak; document providers that ignore it                                       |
-| Per-account throttling is used to slow down a victim's own login                 | A denial of service by someone who knows a name | Exponential delay with a ceiling, keyed on account and network together with a higher account-only limit; no hard lockout                |
-| A shipped blocklist is large or carries a licence that does not fit              | Repository bloat or a licence problem           | Check the licence and size before choosing the file; record origin and SHA-256; Decision 3's alternative is the fallback                 |
-| The sprint grows into UI or MFA                                                  | M4b slips and M5 waits                          | §8 is the boundary; anything else goes to the backlog; sprint 3 is the buffer                                                            |
-| `trustEmailForLinking` default `false` surprises operators who relied on linking | Users get a second account                      | Changeset text, README, the "link from your profile" message; the setting can be turned on per provider                                  |
+| Risk                                                                          | Impact                                                   | Mitigation                                                                                                                                      |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A fix is marked `pass` on a test that does not prove it                       | The claim is false again                                 | The tool needs the tagged test to pass; the second pass at Gate 1 re-reads each entry; dedicated tests, not `it.each` tags, for new work        |
+| Absolute lifetime logs out users who rely on a long-running session           | Complaints, support load                                 | Both limits are settings; the changeset and README say what changes; no live data exists before M5                                              |
+| Re-authentication breaks the OIDC-only flow (provider ignores `prompt=login`) | Account changes impossible for those users               | Check `auth_time` and refuse a stale one; test against Keycloak; document providers that ignore it                                              |
+| Per-account throttling is used to slow down a victim's own login              | A denial of service by someone who knows a name          | Exponential delay with a ceiling, keyed on account and network together with a higher account-only limit; no hard lockout                       |
+| A shipped blocklist is large or carries a licence that does not fit           | Repository bloat or a licence problem                    | Check the licence and size before choosing the file; record origin and SHA-256; Decision 3's alternative is the fallback                        |
+| The sprint grows into UI or MFA                                               | M4b slips and M5 waits                                   | §8 is the boundary; anything else goes to the backlog; sprint 3 is the buffer                                                                   |
+| A victim clicks a link-confirmation mail that an attacker triggered           | An attacker's identity is linked to the victim's account | The mail names the provider and says to ignore it otherwise; the link needs the victim's signed-in session; 10 minutes; mail budget per address |
