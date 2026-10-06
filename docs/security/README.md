@@ -24,7 +24,7 @@ on every request (ADR-0007, ADR-0008). No JWT is used for a session. Other chapt
 
 The four chapters are **in progress**. The entries are filled in from what the code and tests of M2 to M4 show; the human fields
 (`assessor`, `assessed_commit`, `assessed_on`, `second_pass`, `assessment_type`) are empty until the maintainer makes the first pass at Gate 1, so
-the badges cannot turn green before then. Open `fail` entries link to an issue (one tracking issue per chapter, and one issue for each real gap in the code).
+the badges cannot turn green before then. Open `fail` entries link to the sprint plan section that fixes them: [M4b](../m4b-sprint-plan.md) for the gaps in identity, authorization and the pipeline, and the [M5 plan](../m5-sprint-plan.md) for the three that need a browser (password fields, paste and password managers, a logout control on every page).
 
 ## Method
 
@@ -33,7 +33,7 @@ the badges cannot turn green before then. Open `fail` entries link to an issue (
 2. **`pnpm security:asvs`** (also in CI, and in the pull request's own run) checks the rules of implementation.md §8.2: every Level 1 and 2 requirement
    once and nothing else; `pass` needs evidence (a `test:` tag must belong to a test that **passed in the same run**, read from the Vitest and Playwright
    JUnit reports in `reports/`; `code:` and `doc:` paths must exist); `n/a` needs a reason that is its own, not a copied sentence; `fail` needs a note that
-   links an issue; the dates and reviewer rules; the SHA-256 of the pinned source. It then derives each chapter's status and checks that the chapter
+   links an issue or the sprint plan section that schedules the fix; the dates and reviewer rules; the SHA-256 of the pinned source. It then derives each chapter's status and checks that the chapter
    reports (`docs/security/asvs/*.md`) and the badge block in the README are exactly what `pnpm security:asvs --write` generates. Run it locally after
    `pnpm test` and `CI=true pnpm test:e2e`; without the reports it lists the tags it could not check and passes, and in CI a missing report is an error.
 3. **`asvs-impact`** (a pull request check, [workflow](../../.github/workflows/asvs-impact.yml)): a pull request that changes a security-scoped path

@@ -160,7 +160,7 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 **Release:** M4a changes no runtime behaviour and carries empty changesets, so it has no release of its own. It ships inside `0.6.0` with M5 (an exception to rule 1 above; decision 1 of [m4a-sprint-plan.md](m4a-sprint-plan.md)).
 
-**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue, and the issue says whether the work belongs to M5 or is a fix before G1.
+**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue or to the plan section that schedules the fix; the M4b plan covers the gaps in `core.identity`, `core.authz` and the pipeline, and the M5 plan covers the three that need a browser.
 
 ### M5: `core.ui-shell` + web app skeleton (M)
 
@@ -424,7 +424,7 @@ Rules the tool enforces (`pnpm security:asvs`, which runs in CI on every pull re
 
 1. Every L1 and L2 requirement of the chapter in the pinned source file appears exactly once. There are no unknown ids.
 2. `pass` needs at least one piece of evidence. A `test:` tag must match at least one test that **passed** in this CI run (the tool reads the Vitest and Playwright JUnit reports). `code:` and `doc:` paths must exist. A requirement that cannot be tested may pass on `code:` or `doc:` evidence only. The `test:` value is the tag of the requirement itself (`ASVS-6.2.1` for requirement 6.2.1), and a tag does not count while any test carrying it failed. In CI a missing or empty JUnit report is an error; locally the tool lists the tags it could not check and passes.
-3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue. Two `n/a` entries of a chapter may not share the same reason text.
+3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue, or to the section of a sprint plan that schedules the fix (`docs/<plan>.md#<heading>`; the tool checks that the file and the heading exist). Two `n/a` entries of a chapter may not share the same reason text.
 4. `second_pass.on` is at least 7 days after `assessed_on`. For `assessment_type: peer` or `external`, a `reviewer` is set and differs from the assessor.
 5. The chapter status is **derived**, never stored:
 

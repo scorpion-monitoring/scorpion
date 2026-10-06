@@ -2,7 +2,7 @@
 
 Status: proposed, 2026-10-05. Decisions 1 to 9 (§10) were answered on 2026-10-05. Eight took the recommendation; Decision 9 chose server-sent events instead of polling.
 Scope source: [implementation.md](implementation.md) §3, M5. Closes defects 11 and 12 (FEATURES §5); it also adds the
-first Playwright journeys. Releases as `0.6.0`. Gate 1 follows.
+first Playwright journeys. Releases as `0.7.0` (M4b takes `0.6.0`, see [m4b-sprint-plan.md](m4b-sprint-plan.md)). Gate 1 follows.
 
 M5 is size M (about 3 weeks for one developer), but it is the first milestone with a browser in it. Until now every
 rule was proved against the API. From here on cookies, CSRF, `BASE_PATH`, sanitised Markdown and the permission-filtered
@@ -23,20 +23,23 @@ branch and one pull request into `dev`. M5 is released once, after sprint 4.
 
 ## 1. What M2 to M4 hand to M5
 
-| Hand-off                                                                                                                           | Where it was recorded                        | Sprint |
-| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------ |
-| `ui` in the manifest is "stored only; the shell uses it from M5"; the shell reads `ui.routes`, `ui.nav`, `ui.widget`, `ui.theme`   | `manifest.ts`, architecture                  | 1      |
-| Public `GET /auth/oidc/providers` (id, name) and a provider icon hash for the login page                                           | backlog (identity, sprint 4 follow-ups 1, 4) | 2      |
-| The "check your mail" page after register; tell a rejected person whom to contact                                                  | backlog (identity), M4 backlog               | 2      |
-| `GET /users/{id}/roles`, a list of another user's tokens, user management (deactivate, change email, force reset, revoke sessions) | backlog (identity, authz)                    | 3      |
-| A route for `setRolePermissions` (the event exists since M4, no HTTP route calls it)                                               | backlog (authz)                              | 3      |
-| Settings form: labels, grouping, secrets that are not set. Convention for `.describe()` and `.meta()` decided with the first form  | backlog (settings)                           | 3      |
-| Audit viewer, CSV export, system page (outbox, requeue), `GET /system/job-runs`, the audit volume of polling reads                 | M4 backlog, ADR-0021, ADR-0024               | 4      |
-| Inbox bell, preference form, delivery list, which identity mails earn an inbox item                                                | M4 backlog, ADR-0023                         | 4      |
-| Audit viewer shows "deleted account" for a purged user (events carry ids, not usernames); privacy text says ids stay in the trail  | M4 backlog                                   | 4      |
-| Defect 11 (one-segment `BASE_PATH`) and defect 12 (loaders return `Response(400)`) regression tests                                | FEATURES §5, implementation.md Gate 1        | 1      |
-| Legal pages rendered from sanitised Markdown (the renderer and `GET /legal/{page}` exist since M3)                                 | ADR-0018                                     | 1      |
-| New work in scoped paths updates the ASVS chapter files as it lands (login screens, CSRF in forms, cookies under `BASE_PATH`)      | implementation.md §8.4                       | 2 to 4 |
+| Hand-off                                                                                                                                               | Where it was recorded                           | Sprint |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | ------ |
+| `ui` in the manifest is "stored only; the shell uses it from M5"; the shell reads `ui.routes`, `ui.nav`, `ui.widget`, `ui.theme`                       | `manifest.ts`, architecture                     | 1      |
+| Public `GET /auth/oidc/providers` (id, name) and a provider icon hash for the login page                                                               | backlog (identity, sprint 4 follow-ups 1, 4)    | 2      |
+| The "check your mail" page after register; tell a rejected person whom to contact                                                                      | backlog (identity), M4 backlog                  | 2      |
+| `GET /users/{id}/roles`, a list of another user's tokens, user management (deactivate, change email, force reset, revoke sessions)                     | backlog (identity, authz)                       | 3      |
+| A route for `setRolePermissions` (the event exists since M4, no HTTP route calls it)                                                                   | backlog (authz)                                 | 3      |
+| Settings form: labels, grouping, secrets that are not set. Convention for `.describe()` and `.meta()` decided with the first form                      | backlog (settings)                              | 3      |
+| Audit viewer, CSV export, system page (outbox, requeue), `GET /system/job-runs`, the audit volume of polling reads                                     | M4 backlog, ADR-0021, ADR-0024                  | 4      |
+| Inbox bell, preference form, delivery list, which identity mails earn an inbox item                                                                    | M4 backlog, ADR-0023                            | 4      |
+| Audit viewer shows "deleted account" for a purged user (events carry ids, not usernames); privacy text says ids stay in the trail                      | M4 backlog                                      | 4      |
+| ASVS 6.2.6 and 6.2.7: password fields are `type=password`, and paste, browser password helpers and password managers work; a Playwright test proves it | `docs/security/asvs/v6-authentication.yaml`     | 2      |
+| ASVS 7.4.4: a logout control is reachable on every page that needs a sign-in; a Playwright test walks the navigation and finds it                      | `docs/security/asvs/v7-session-management.yaml` | 1      |
+| The M4b routes: session list and end, admin session end, recent-authentication prompt (`401 reauthentication-required`), mail-confirmed OIDC linking   | [m4b-sprint-plan.md](m4b-sprint-plan.md)        | 2, 3   |
+| Defect 11 (one-segment `BASE_PATH`) and defect 12 (loaders return `Response(400)`) regression tests                                                    | FEATURES §5, implementation.md Gate 1           | 1      |
+| Legal pages rendered from sanitised Markdown (the renderer and `GET /legal/{page}` exist since M3)                                                     | ADR-0018                                        | 1      |
+| New work in scoped paths updates the ASVS chapter files as it lands (login screens, CSRF in forms, cookies under `BASE_PATH`)                          | implementation.md §8.4                          | 2 to 4 |
 
 ## 2. Cross-sprint rules
 
@@ -227,7 +230,7 @@ be removed from the UI (the error is shown). The `ui-kit` components each have a
 ## 7. Sprint 4: operations screens, journeys, release
 
 **Branch:** `feature/m5-operations-release`. **Goal:** every route M4 built has a screen; the acceptance journeys pass in CI;
-`0.6.0` is released.
+`0.7.0` is released.
 
 Work items
 
@@ -261,12 +264,12 @@ Work items
    a setting and the audit viewer shows the entry with the right actor; a dead mail is requeued from the status screen.
 8. **ASVS:** update V6, V7, V8 and V10 for the new evidence; run `pnpm security:asvs`; every `fail` that remains links an issue
    assigned to a fix before Gate 1.
-9. **Release 0.6.0** as in CONTRIBUTING.md: release branch from `dev`, `pnpm changeset version`, PR into `main`, annotated tag,
-   merge-back on a `feature/…` branch, the profile images `scorpion:0.6.0-<profile>`. The release now has a UI, so the images are
+9. **Release 0.7.0** as in CONTRIBUTING.md: release branch from `dev`, `pnpm changeset version`, PR into `main`, annotated tag,
+   merge-back on a `feature/…` branch, the profile images `scorpion:0.7.0-<profile>`. The release now has a UI, so the images are
    built and smoke tested (unlike 0.5.0).
 
 Definition of done: the four acceptance journeys pass in CI under both base paths; no serious axe violation on any screen;
-`pnpm check`, the full `pnpm test` and `pnpm test:e2e` are green on `dev` after the merge; `0.6.0` is tagged.
+`pnpm check`, the full `pnpm test` and `pnpm test:e2e` are green on `dev` after the merge; `0.7.0` is tagged.
 
 ## 8. Acceptance (from implementation.md) mapped to tests
 

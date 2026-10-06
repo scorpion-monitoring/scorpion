@@ -17,7 +17,7 @@ requirements:
     note: 'The rules for function-level and resource-scoped access (permissions, roles, resource policies, deny by default) are documented in the core.authz README ("How a decision is made", "Built-in protections") and the two ADRs. They are spread over several documents; there is no single matrix.'
   - id: v5.0.0-8.1.2
     status: fail
-    note: 'Not met. No document defines field-level read and write rules; there are only code comments in modules/core-identity/validation.ts. Tracked in #9008.'
+    note: 'Not met. No document defines field-level read and write rules; there are only code comments in modules/core-identity/validation.ts. Fix planned in docs/m4b-sprint-plan.md#6-sprint-3-authorization-rules-and-closing-the-assessment.'
   - id: v5.0.0-8.2.1
     status: pass
     evidence:
@@ -33,7 +33,7 @@ requirements:
     note: 'Covers the data that exists today (own tokens, sessions, inbox items, profile). The resource-policy mechanism is tested with a fixture module; the real provider and service policies arrive in M7. This is sampling per service, not a systematic IDOR sweep.'
   - id: v5.0.0-8.2.3
     status: fail
-    note: 'Not met. Write side: strict input schemas refuse status, roles and unknown fields on the profile, and role changes go through their own permissioned route. There is no field-level permission model and the response side (fields shown to each reader) was not audited. Tracked in #9008.'
+    note: 'Not met. Write side: strict input schemas refuse status, roles and unknown fields on the profile, and role changes go through their own permissioned route. There is no field-level permission model and the response side (fields shown to each reader) was not audited. Fix planned in docs/m4b-sprint-plan.md#6-sprint-3-authorization-rules-and-closing-the-assessment.'
   - id: v5.0.0-8.3.1
     status: pass
     evidence:

@@ -1,9 +1,9 @@
 # M4b Sprint Plan: Close the ASVS gaps in identity and authorization
 
-Status: proposed, 2026-10-06. Decision 4 (re-authentication through the provider) and Decision 11 (linking by mail confirmation) were taken on 2026-10-06; Decisions 1 to 3 and 5 to 10 (§9) are open, each with a recommendation.
+Status: proposed, 2026-10-06. Decisions 1 to 11 (§9) were taken on 2026-10-06. Nine took the recommendation; Decision 3 chose the Have I Been Pwned range API instead of an offline list, and Decision 11 replaced a per-provider setting with mail confirmation.
 Scope source: the `fail` entries of `docs/security/asvs/v6-authentication.yaml`, `v7-session-management.yaml` and `v8-authorization.yaml` after
 M4a sprint 2 ([m4a-sprint-plan.md](m4a-sprint-plan.md)), and [implementation.md](implementation.md) §8 and Gate 1. Closes no defect of FEATURES §5.
-Proposed release: `0.6.0` (Decision 1). M5 then releases as `0.7.0`.
+Release: `0.6.0` (Decision 1). M5 then releases as `0.7.0`.
 
 M4a made the claims checkable and found what is not true yet. Gate 1 needs every ASVS chapter with **no `fail` entry**, and the first
 pass by the maintainer is only worth making once the gaps are closed. M4b fixes the gaps that are about code and documentation of
@@ -15,14 +15,15 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
 
 ## 0. Before sprint 1
 
-1. M4a sprint 2 is merged. The four chapter files exist, and every `fail` entry links to an issue.
-2. **How the `fail` notes are linked while M4b is open (Decision 2).** The tool needs a `#<number>` in each `fail` note. Recommended: the three
-   chapter tracking issues of M4a, each checklist item pointing at the section of this plan that fixes it, instead of ten separate gap issues. M4b
-   closes the checklist; each sprint's pull request updates the YAML and ticks it off.
+1. M4a sprint 2 is merged. The four chapter files exist, and every `fail` entry links to a plan section: this plan for the M4b requirements, the M5 plan for the three browser ones.
+2. **How the `fail` notes are linked while M4b is open (Decision 2).** No tracking issues and no gap issues are created: this plan is the tracking. Rule 3 of
+   implementation.md §8.2 changes (in the M4a pull request, together with `tools/asvs-report` and the docs): a `fail` note links either an issue or the section of a sprint plan
+   that schedules the fix (`docs/m4b-sprint-plan.md#5-sprint-2-credentials-throttling-and-linking`). The tool checks that the plan file and the heading exist, so a link cannot
+   rot silently. Each sprint's pull request moves its requirements from `fail` to `pass`.
 3. The 3 requirements that need a browser are **not** M4b: 6.2.6 and 6.2.7 (password fields, paste, password managers) and 7.4.4 (logout on every
    authenticated page). They stay `fail` until M5 ships the screens and a Playwright test (M5 sprints 2 and 3).
-4. Add the lines in §10 to `implementation.md` (an M4b entry, the overview row, the M5 release number). Add the M4b sections to the M5 plan hand-off table (§1 of
-   [m5-sprint-plan.md](m5-sprint-plan.md)) for the routes M5 now consumes.
+4. Add the lines in §10 to `implementation.md` (an M4b entry, the overview row, the M5 release number). The M5 plan already carries the three browser requirements in its hand-off
+   table (6.2.6, 6.2.7, 7.4.4) and the release number `0.7.0`; its sprints consume the M4b routes.
 5. ADRs: the M5 plan reserves ADR-0025 for the shell. M4b takes the next free numbers at the time (written ADR-00xx below), written as the first commit of the sprint that needs them, and amends ADR-0007 and ADR-0011.
 
 ## 1. The gaps and where they are closed
@@ -62,7 +63,7 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
   `pnpm db:generate`; the module README is updated with every new permission, route, setting key and event (CLAUDE.md "Working style").
 - Every service method has an integration test against real Postgres including a denied-permission case, and a rollback case for multi-row writes.
   Nobody may change their own role or approve their own request: the tests that prove it stay.
-- No new runtime dependency without a reason in the pull request description (Decision 3 may need none).
+- No new runtime dependency without a reason in the pull request description (Decision 3 uses Node's `fetch`).
 - Secrets and tokens never go to logs or responses. The new documents live in `docs/security/` and are scoped, so the `asvs-impact` workflow applies to them too.
 
 ## 3. Sprint overview
@@ -107,10 +108,15 @@ Definition of done: `pnpm check`, the tests of `core-identity` and `apps/server`
 
 **Goal:** the password rules, the brute-force controls and the account-linking rule match the ASVS, and the authentication pathways are written down once.
 
-1. **Password blocklist** (6.2.4, 6.2.12; Decision 3). A text file of common and breached passwords (at least the top 3000 that match the length rule, preferably a larger
-   public set) under `modules/core-identity/data/`, loaded at start-up into a `Set`, and checked in the shared `password` validation used by register, reset, change and first-run. The
-   compared form is exactly the password as received (6.2.8). A refusal is `422` with a message that does not echo the list. The file's origin, licence and SHA-256 are recorded next to
-   it, like the ASVS source; it is data, not a binary. A table-driven test per entry point.
+1. **Password breach check** (6.2.4, 6.2.12; Decision 3). An adapter `pwned-passwords` in `packages/integrations` (the pattern of the SPDX, DOI and OpenAlex adapters: cache, timeout,
+   stub) calls the Have I Been Pwned range API. Only the first 5 hex characters of the SHA-1 of the password leave the server (k-anonymity), with `Add-Padding: true`, over TLS, with a short
+   timeout and an in-memory cache of ranges; the password itself is never sent or logged. The check runs in the service that sets a password (register, reset, change, first-run, the
+   `create-admin` command), on the password exactly as received (6.2.8). A password that appears in the set is refused with `422` and a message that does not say how often. The
+   most common passwords (the top 3000 that 6.2.4 asks about) are in that set. **When the service does not answer** the check fails open: the password is accepted, a warning is logged and
+   `scorpion_password_breach_check_failures_total` counts it, because refusing every registration and reset during a third-party outage would be a denial of service. A setting
+   `passwordBreachCheck` (`on` by default, `off` for an installation that may not call out) is read through the settings port; the assessment says `pass` for the default configuration
+   only. The privacy text (M5) names the third party. No new runtime dependency (Node's `fetch`). Tests use the stub adapter: a hit, a miss, a timeout (accepted and counted), the
+   `off` setting, and one test per entry point.
 2. **Context words** (6.1.2, 6.2.11). The words are derived from settings (instance name, product name, public host, the user's own username and email local part) plus a short
    documented list for the project (Scorpion, de.NBI, NFDI, IPK). They are refused as the password or as a whole word inside it, case-insensitively. The documented list is part of
    `docs/security/authentication.md`.
@@ -149,7 +155,7 @@ Definition of done as in sprint 1, plus: no password in any log, response or aud
    registry that fails when a response schema contains a forbidden property name (`secretHash`, `passwordHash`, `clientSecret`, `secret`, `token` on anything but the one-time creation response) —
    the same style as the deny-by-default walker of defect 1. 8.2.3 moves to `pass` only if the audit finds nothing left; otherwise it stays `fail` with the findings.
 3. **Close the assessment.** Re-read every `pass` and `n/a` of the three files against the final code, fix notes that are no longer true, run `pnpm security:asvs --write`, and list the entries that are
-   still `fail` (6.2.6, 6.2.7, 7.4.4 and whatever the audit found) with their M5 owner. The tracking issues are updated and closed where empty.
+   still `fail` (6.2.6, 6.2.7, 7.4.4 and whatever the audit found) with their M5 owner (the links to the M5 plan stay; the M4b links are gone).
 4. **Docs.** Module README of `core.identity` (new routes, permission, settings, events), `docs/backlog.md` (TOTP, notice mail on failed logins, a session list with device names, hard
    lockout alternatives, an admin UI for all of it), M5 plan hand-off table.
 
@@ -163,7 +169,7 @@ Definition of done: as before; the README badges still show `in progress`, becau
 | A user lists and ends their own sessions; cannot see or end another's                                         | integration test and the defect-01 style own-data test                                |
 | An administrator ends one user's or all sessions; a plain User cannot                                         | denied-permission test; the walker of defect 1 includes the new routes                |
 | Changing the email address, linking an identity or ending a session needs a recent authentication             | route tests for `401 reauthentication-required`, and the pass after re-authentication |
-| A common, breached or context-specific password is refused on register, reset and change                      | table-driven tests per entry point                                                    |
+| A breached or context-specific password is refused on register, reset, change, first-run and create-admin     | stub-adapter tests and table-driven tests per entry point                             |
 | Repeated failed logins for one account slow that account down without locking it, and enumerate nobody        | integration test with injected time; same answer for an unknown name                  |
 | A reset link older than 10 minutes is refused                                                                 | `recovery.test.ts` with an injected clock                                             |
 | A provider cannot take over an account by asserting its email; linking needs the mailbox owner's confirmation | oidc service and Keycloak tests                                                       |
@@ -178,29 +184,27 @@ Definition of done: as before; the README badges still show `in progress`, becau
 - Filling the human fields, the second pass and `self-assessed`: Gate 1.
 - Other ASVS chapters, Best Practices silver and gold, signed images (M18).
 
-## 9. Decisions (open)
+## 9. Decisions taken (2026-10-06)
 
-1. **Release.** Recommended: M4b releases as `0.6.0` (it changes runtime behaviour, so "every milestone ends with a release" applies), M4a ships inside it, and M5 becomes `0.7.0`.
+1. **Release.** Taken, as recommended: M4b releases as `0.6.0` (it changes runtime behaviour, so "every milestone ends with a release" applies), M4a ships inside it, and M5 becomes `0.7.0`.
    This changes the release number named in the M5 plan. The alternative keeps `0.6.0` for M5 and ships M4b inside it, which mixes a security change set with a UI milestone.
-2. **Where the `fail` notes point while M4b is open.** Recommended: the three tracking issues only, with a checklist item per requirement that names the M4b section. Ten gap issues would
-   each be closed within two weeks and would publish the gaps one by one. The alternative is one issue per gap, as M4a sprint 2 §5 item 8 proposed.
-3. **Password blocklist source.** Recommended: an offline text file of a widely published list of common and breached passwords (licence checked and recorded), loaded once, no network call.
-   The alternative is the Have I Been Pwned range API through `packages/integrations` (adapter with cache, timeout and stub): the set is larger and current, but every register, reset and
-   change sends a hash prefix to a third party, and an outage must then decide between refusing and allowing.
+2. **Where the `fail` notes point while M4b is open.** Taken: no issues. A `fail` links the plan section that fixes it, and the tool accepts that (§0 item 2). The alternatives were three tracking issues, one umbrella issue, or ten gap issues.
+3. **Password check source.** Taken, against the recommendation: the Have I Been Pwned range API, not an offline list. The set is larger and current; the cost is a third party that sees a 5-character hash prefix of every new password, and a policy for an
+   outage (fail open, §5 item 1). The recommended alternative was an offline text file in the repository with its licence and SHA-256 recorded.
 4. **Re-authentication.** Taken 2026-10-06, as recommended: a recent-authentication window on the session (password for accounts that have one, a fresh OIDC login with `auth_time` for those that have not),
    5 minutes by default. The alternative is the password in every sensitive request, which leaves OIDC-only accounts unable to change anything. A confirmation mail to the current address for OIDC-only accounts was considered and not taken: it is a good control against a stolen session, but ASVS 7.5.1 asks for full re-authentication, and a mail is not that by the letter.
-5. **Brute-force control.** Recommended: per-account exponential delay with a ceiling and no hard lockout, plus the existing per-IP bucket. A hard lockout is simple but lets anyone lock any
+5. **Brute-force control.** Taken, as recommended: per-account exponential delay with a ceiling and no hard lockout, plus the existing per-IP bucket. A hard lockout is simple but lets anyone lock any
    account, which 6.1.1 names as a defect. The alternative is a CAPTCHA, which adds a dependency and a third party.
-6. **Concurrent sessions and what a session list shows.** Recommended: no limit, documented, with the list of 7.5.2 as the control; the list shows times and the current marker only (no
+6. **Concurrent sessions and what a session list shows.** Taken, as recommended: no limit, documented, with the list of 7.5.2 as the control; the list shows times and the current marker only (no
    user agent or address stored). The alternative caps sessions (for example 10, the oldest ended), which needs a UI message, and storing a device label needs a privacy text from M5.
-7. **Lifetime of the verification link.** Recommended: only the reset link counts as an out-of-band authentication request and gets 10 minutes; the 24-hour verification link confirms an
+7. **Lifetime of the verification link.** Taken, as recommended: only the reset link counts as an out-of-band authentication request and gets 10 minutes; the 24-hour verification link confirms an
    address and authenticates nobody, and the ADR says so. This is a reading of 6.5.5; the earlier assessment treated mail links as out-of-band for 6.5.1 to 6.5.4, so the ADR must
    explain the difference. The alternative is 10 minutes for both.
-8. **Multi-factor authentication (6.3.3).** Recommended: a documented rationale with mitigating controls (the requirement allows it), MFA left to the OIDC provider, TOTP in the backlog. The alternative is
+8. **Multi-factor authentication (6.3.3).** Taken, as recommended: a documented rationale with mitigating controls (the requirement allows it), MFA left to the OIDC provider, TOTP in the backlog. The alternative is
    TOTP in M4b: it adds a dependency, secret storage in the secrets store, recovery codes (6.5.x applies) and screens, and moves the milestone from M to L.
-9. **8.2.3 outcome.** Recommended: documentation plus the response-schema audit and walker test; claim `pass` only if the audit finds nothing. The alternative is a field-level permission
+9. **8.2.3 outcome.** Taken, as recommended: documentation plus the response-schema audit and walker test; claim `pass` only if the audit finds nothing. The alternative is a field-level permission
    engine, which is not justified by the objects that exist today.
-10. **Default lifetimes.** Recommended: 7 days of inactivity and 30 days absolute, both settings. A shorter absolute lifetime (for example 12 hours) fits a high-risk service better but
+10. **Default lifetimes.** Taken, as recommended: 7 days of inactivity and 30 days absolute, both settings. A shorter absolute lifetime (for example 12 hours) fits a high-risk service better but
     would sign every user out daily; the policy document records the choice and the deviation from NIST SP 800-63B.
 
 11. **How a first OIDC sign-in links to an existing account.** Taken 2026-10-06 (the maintainer's proposal, replacing the recommended per-provider `trustEmailForLinking` setting): a mail with a single-use
@@ -216,12 +220,12 @@ Definition of done: as before; the README badges still show `in progress`, becau
 
 ## 11. Risks
 
-| Risk                                                                          | Impact                                                   | Mitigation                                                                                                                                      |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| A fix is marked `pass` on a test that does not prove it                       | The claim is false again                                 | The tool needs the tagged test to pass; the second pass at Gate 1 re-reads each entry; dedicated tests, not `it.each` tags, for new work        |
-| Absolute lifetime logs out users who rely on a long-running session           | Complaints, support load                                 | Both limits are settings; the changeset and README say what changes; no live data exists before M5                                              |
-| Re-authentication breaks the OIDC-only flow (provider ignores `prompt=login`) | Account changes impossible for those users               | Check `auth_time` and refuse a stale one; test against Keycloak; document providers that ignore it                                              |
-| Per-account throttling is used to slow down a victim's own login              | A denial of service by someone who knows a name          | Exponential delay with a ceiling, keyed on account and network together with a higher account-only limit; no hard lockout                       |
-| A shipped blocklist is large or carries a licence that does not fit           | Repository bloat or a licence problem                    | Check the licence and size before choosing the file; record origin and SHA-256; Decision 3's alternative is the fallback                        |
-| The sprint grows into UI or MFA                                               | M4b slips and M5 waits                                   | §8 is the boundary; anything else goes to the backlog; sprint 3 is the buffer                                                                   |
-| A victim clicks a link-confirmation mail that an attacker triggered           | An attacker's identity is linked to the victim's account | The mail names the provider and says to ignore it otherwise; the link needs the victim's signed-in session; 10 minutes; mail budget per address |
+| Risk                                                                          | Impact                                                                             | Mitigation                                                                                                                                                |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A fix is marked `pass` on a test that does not prove it                       | The claim is false again                                                           | The tool needs the tagged test to pass; the second pass at Gate 1 re-reads each entry; dedicated tests, not `it.each` tags, for new work                  |
+| Absolute lifetime logs out users who rely on a long-running session           | Complaints, support load                                                           | Both limits are settings; the changeset and README say what changes; no live data exists before M5                                                        |
+| Re-authentication breaks the OIDC-only flow (provider ignores `prompt=login`) | Account changes impossible for those users                                         | Check `auth_time` and refuse a stale one; test against Keycloak; document providers that ignore it                                                        |
+| Per-account throttling is used to slow down a victim's own login              | A denial of service by someone who knows a name                                    | Exponential delay with a ceiling, keyed on account and network together with a higher account-only limit; no hard lockout                                 |
+| The breach check is unavailable or unwanted                                   | A breached password is accepted during an outage; a third party sees hash prefixes | Fail open with a warning and a metric; the `off` setting; only a 5-character hash prefix leaves the server; an offline top-3000 floor goes to the backlog |
+| The sprint grows into UI or MFA                                               | M4b slips and M5 waits                                                             | §8 is the boundary; anything else goes to the backlog; sprint 3 is the buffer                                                                             |
+| A victim clicks a link-confirmation mail that an attacker triggered           | An attacker's identity is linked to the victim's account                           | The mail names the provider and says to ignore it otherwise; the link needs the victim's signed-in session; 10 minutes; mail budget per address           |
