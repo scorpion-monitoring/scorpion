@@ -1,4 +1,5 @@
-import { collectDefaultMetrics, Gauge, Histogram, Registry } from 'prom-client';
+import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from 'prom-client';
+import { pwnedPasswordFailures } from '@scorpion/integrations';
 import { outboxStats, type Db, type JobRunReport, type Logger } from '@scorpion/kernel';
 import type { RequestInfo } from './pipeline/logging.ts';
 
@@ -36,6 +37,18 @@ export function createMetrics(): Metrics {
     labelNames: ['job', 'status'] as const,
     buckets: [0.1, 0.5, 1, 5, 15, 30, 60, 300, 900, 3600],
     registers: [registry],
+  });
+
+  // The count lives in the adapter (a module cannot reach this registry); a scrape copies it. It is
+  // per process, not per server, which only matters to tests that start several servers.
+  new Counter({
+    name: 'scorpion_password_breach_check_failures_total',
+    help: 'Password checks that found the breach service unavailable; the password was accepted.',
+    registers: [registry],
+    collect() {
+      this.reset();
+      this.inc(pwnedPasswordFailures());
+    },
   });
 
   // The outbox gauges are read from the database when Prometheus scrapes. One query serves all

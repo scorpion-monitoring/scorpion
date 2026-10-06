@@ -86,6 +86,9 @@ importers:
       '@scorpion/core-settings':
         specifier: workspace:*
         version: link:../../modules/core-settings
+      '@scorpion/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
@@ -258,6 +261,9 @@ importers:
       '@scorpion/core-settings':
         specifier: workspace:*
         version: link:../core-settings
+      '@scorpion/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
