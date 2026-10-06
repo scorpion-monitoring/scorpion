@@ -1,6 +1,6 @@
 {
   "name": "scorpion",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "license": "ISC",
   "private": true,
   "type": "module",
