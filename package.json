@@ -23,6 +23,7 @@
     "db:generate": "node scripts/db-generate.ts",
     "scorpion": "node apps/server/src/cli.ts",
     "changeset:check": "node scripts/changeset-check.ts",
+    "audit:check": "node scripts/audit-check.ts",
     "modules:sync": "node scripts/sync-workspace-modules.ts",
     "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check"
   },
