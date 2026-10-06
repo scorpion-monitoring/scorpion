@@ -138,7 +138,7 @@ describe('the seed', () => {
 });
 
 describe('require and can', () => {
-  it('answers 401 for anonymous, 403 for a user without roles, and lets a holder through', async () => {
+  it('answers 401 for anonymous, 403 for a user without roles, and lets a holder through [ASVS-8.2.1]', async () => {
     const { authz, kernel } = await start();
     const nobody = actorFor(randomUUID());
     const reader = await userWith(kernel.pool, { permissions: [READ] });

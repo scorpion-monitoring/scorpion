@@ -8,7 +8,7 @@ const identity = useIdentity();
 const sha256 = (value: string) => createHash('sha256').update(value).digest('base64url');
 
 describe('create', () => {
-  it('hands out three different random values and stores only hashes of them', async () => {
+  it('hands out three different random values and stores only hashes of them [ASVS-10.1.2]', async () => {
     const { kernel, identity: id } = await identity.start();
     const fresh = await id.loginStates.create('corp');
     expect(new Set([fresh.state, fresh.nonce, fresh.verifier]).size).toBe(3);

@@ -196,7 +196,7 @@ describe('revoke', () => {
     ).toHaveLength(1);
   });
 
-  it('answers the same for someone else’s token as for an unknown id, and leaves the token alone', async () => {
+  it('answers the same for someone else’s token as for an unknown id, and leaves the token alone [ASVS-8.2.2]', async () => {
     const { kernel, tokens, actor } = await start();
     const other = await holder(kernel.pool);
     const theirs = await tokens.create(actorOf(other), { name: 'theirs' });

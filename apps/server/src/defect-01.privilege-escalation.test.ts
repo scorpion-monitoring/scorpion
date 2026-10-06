@@ -288,7 +288,7 @@ const register = async (s: Started, username: string) => {
 const problem = (reply: Reply) => reply.res.headers.get('content-type') ?? '';
 
 describe('defect 1: the route table', () => {
-  it('has a decision in the matrix for every non-public route, and for nothing else (the walker)', async () => {
+  it('has a decision in the matrix for every non-public route, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
     const { kernel } = await start();
     const live = kernel.routes
       .filter((entry) => !entry.route.public)
@@ -308,7 +308,7 @@ describe('defect 1: the route table', () => {
     expect(Object.keys(SAMPLES).filter((key) => !live.includes(key))).toEqual([]);
   });
 
-  it('answers 401 to anonymous and 403 to a user without roles on every non-public route', async () => {
+  it('answers 401 to anonymous and 403 to a user without roles on every non-public route [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
     const s = await start();
     const roleless = await s.signedIn('norole', { roles: [] });
     for (const [key, { sample }] of Object.entries(SAMPLES)) {
@@ -520,7 +520,7 @@ describe('defect 1: nobody grants themselves a role, or approves themselves', ()
 });
 
 describe('defect 1: tokens of other people, and tokens of the caller', () => {
-  it('keeps a plain User from revoking or rotating the token of another user', async () => {
+  it('keeps a plain User from revoking or rotating the token of another user [ASVS-8.2.2]', async () => {
     const s = await start();
     const alice = await s.signedIn('alice');
     const bob = await s.signedIn('bobby');
@@ -555,7 +555,7 @@ describe('defect 1: tokens of other people, and tokens of the caller', () => {
     expect((await s.get('/auth/me', { headers: bearer(token) })).status).toBe(401);
   });
 
-  it('keeps one user from ending the sessions of another', async () => {
+  it('keeps one user from ending the sessions of another [ASVS-8.2.2]', async () => {
     const s = await start();
     const alice = await s.signedIn('alice');
     const bob = await s.signedIn('bobby');

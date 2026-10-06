@@ -102,7 +102,7 @@ describe('against Keycloak', { timeout: 60_000 }, () => {
     expect(await count('identity_user')).toBe(1);
   });
 
-  it('refuses a tampered nonce with 401 and creates no session and no user', async () => {
+  it('refuses a tampered nonce with 401 and creates no session and no user [ASVS-10.5.1]', async () => {
     const { web, count, logText } = await startApp();
     const started = await web.start();
     const url = new URL(started.authorizationUrl);
@@ -117,7 +117,7 @@ describe('against Keycloak', { timeout: 60_000 }, () => {
     expect(await count('identity_user')).toBe(0);
   });
 
-  it('refuses an id_token meant for another audience with 401', async () => {
+  it('refuses an id_token meant for another audience with 401 [ASVS-10.5.4]', async () => {
     const { web, count } = await startApp({
       settings: settings(KEYCLOAK_WRONG_AUDIENCE_CLIENT_ID),
     });

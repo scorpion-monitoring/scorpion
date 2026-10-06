@@ -36,7 +36,7 @@ describe('route registration', () => {
     expect(kernel.routes.every((r) => typeof r.handler === 'function')).toBe(true);
   });
 
-  it('fails a route without permission or public: true, naming the module and the route', async () => {
+  it('fails a route without permission or public: true, naming the module and the route [ASVS-8.2.1]', async () => {
     const kernel = await kernels.fixture('no-permission');
     const problems = await problemsOf(kernel.start());
     expect(problems).toEqual([

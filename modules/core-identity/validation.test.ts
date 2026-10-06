@@ -51,7 +51,7 @@ describe('password', () => {
     ['too short', 'a'.repeat(7), false],
     ['too long', 'a'.repeat(256), false],
     ['empty', '', false],
-  ])('%s', (_name, value, valid) => {
+  ])('%s [ASVS-6.2.1] [ASVS-6.2.5] [ASVS-6.2.9]', (_name, value, valid) => {
     expect(ok(password, value)).toBe(valid);
   });
 });

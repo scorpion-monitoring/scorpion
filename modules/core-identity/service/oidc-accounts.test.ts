@@ -8,7 +8,7 @@ import { tokenFrom } from '../test/mail.ts';
 import { count, flow, fresh, rows, sessionActor, settingsWith, start } from '../test/oidc.ts';
 
 describe('the first login (provisioning)', () => {
-  it('creates a pending user and its identity, emits registered@1, and starts no session', async () => {
+  it('creates a pending user and its identity, emits registered@1, and starts no session [ASVS-7.6.2]', async () => {
     const { kernel, identity: id } = await start();
     const input = await flow(
       id,
@@ -329,7 +329,7 @@ describe('linking from the profile', () => {
     expect(await count(kernel, 'identity_login_state')).toBe(0);
   });
 
-  it('is a 409 when the identity belongs to another user', async () => {
+  it('is a 409 when the identity belongs to another user [ASVS-10.5.2]', async () => {
     const { kernel, identity: id } = await start();
     const owner = await makeMember(kernel.pool);
     await makeAuthMethod(kernel.pool, owner, { provider: 'stub', subject: 'shared-sub' });

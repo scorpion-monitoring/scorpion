@@ -103,7 +103,7 @@ describe('discovery', () => {
     ['a 500', json({}, 500)],
     ['a 404', json({}, 404)],
     ['a document over the size limit', () => new Response('x'.repeat(2 * 1024 * 1024))],
-  ])('is a ProviderUnavailable for %s', async (_name, route) => {
+  ])('is a ProviderUnavailable for %s [ASVS-10.2.2] [ASVS-10.5.3]', async (_name, route) => {
     const { fetch } = stub({ [DISCOVERY]: route });
     const client = createProviderClient({ fetch });
     await expect(client.discovery(provider)).rejects.toBeInstanceOf(ProviderUnavailable);
