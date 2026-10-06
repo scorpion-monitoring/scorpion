@@ -24,7 +24,7 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
    authenticated page). They stay `fail` until M5 ships the screens and a Playwright test (M5 sprints 2 and 3).
 4. Add the lines in §10 to `implementation.md` (an M4b entry, the overview row, the M5 release number). The M5 plan already carries the three browser requirements in its hand-off
    table (6.2.6, 6.2.7, 7.4.4) and the release number `0.7.0`; its sprints consume the M4b routes.
-5. ADRs: the M5 plan reserves ADR-0025 for the shell. M4b takes the next free numbers at the time (written ADR-00xx below), written as the first commit of the sprint that needs them, and amends ADR-0007 and ADR-0011.
+5. ADRs: sprint 1 takes ADR-0025, so the M5 plan now reserves ADR-0026 (the shell) and ADR-0027 (the inbox stream); sprint 2 takes the next free number if it needs one (written ADR-00xx below), written as the first commit of the sprint that needs them, and amends ADR-0007 and ADR-0011.
 
 ## 1. The gaps and where they are closed
 
