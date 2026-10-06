@@ -26,6 +26,8 @@ The four chapters are **in progress**. The entries are filled in from what the c
 (`assessor`, `assessed_commit`, `assessed_on`, `second_pass`, `assessment_type`) are empty until the maintainer makes the first pass at Gate 1, so
 the badges cannot turn green before then. Open `fail` entries link to the sprint plan section that fixes them: [M4b](../m4b-sprint-plan.md) for the gaps in identity, authorization and the pipeline, and the [M5 plan](../m5-sprint-plan.md) for the three that need a browser (password fields, paste and password managers, a logout control on every page).
 
+Policies the assessments point to: [sessions.md](sessions.md) (lifetimes, concurrent sessions, the provider's session, recent authentication).
+
 ## Method
 
 1. **Evidence is mechanical where possible.** A test that proves a requirement carries the tag `[ASVS-<chapter>.<section>.<requirement>]` in its title,
