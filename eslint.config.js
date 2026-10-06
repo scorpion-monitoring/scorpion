@@ -6,7 +6,6 @@ import svelte from 'eslint-plugin-svelte';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import svelteConfig from './apps/web/svelte.config.js';
 
 export default defineConfig(
   globalIgnores([
@@ -43,7 +42,7 @@ export default defineConfig(
     files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
     languageOptions: {
       globals: { ...globals.browser },
-      parserOptions: { parser: tseslint.parser, svelteConfig },
+      parserOptions: { parser: tseslint.parser },
     },
   },
   {
