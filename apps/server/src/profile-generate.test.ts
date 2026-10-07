@@ -17,6 +17,11 @@ beforeEach(() => {
     join(root, 'apps/server/package.json'),
     JSON.stringify({ name: '@scorpion/server', dependencies: { hono: '^4' } }, null, 2),
   );
+  mkdirSync(join(root, 'apps/web'), { recursive: true });
+  writeFileSync(
+    join(root, 'apps/web/package.json'),
+    JSON.stringify({ name: '@scorpion/web', devDependencies: { vite: '^8' } }, null, 2),
+  );
   mkdirSync(join(root, 'modules'));
   for (const dir of ['fixture-a', 'fixture-b', 'fixture-opt']) {
     mkdirSync(join(root, 'modules', dir));
@@ -36,6 +41,8 @@ const profileFile = (name: string, modules: string[]) =>
     `export default { name: '${name}', modules: ${JSON.stringify(modules)} };\n`,
   );
 const read = (file: string) => readFileSync(join(root, file), 'utf8');
+const webDevDeps = () =>
+  (JSON.parse(read('apps/web/package.json')) as { devDependencies: object }).devDependencies;
 const serverDeps = () =>
   (JSON.parse(read('apps/server/package.json')) as { dependencies: object }).dependencies;
 
@@ -68,7 +75,8 @@ describe('generateProfile', () => {
 
   it('is idempotent and, with check, reports a file that is out of date without writing', async () => {
     profileFile('ab', ['fixture.a', 'fixture.b']);
-    expect((await generateProfile({ profileName: 'ab', root })).changed).toHaveLength(2);
+    // The server's profile file and package.json, and the web app's table of pages and package.json.
+    expect((await generateProfile({ profileName: 'ab', root })).changed).toHaveLength(4);
     expect((await generateProfile({ profileName: 'ab', root })).changed).toEqual([]);
 
     profileFile('b', ['fixture.b']);
@@ -77,6 +85,7 @@ describe('generateProfile', () => {
     expect(checked.changed).toEqual([
       'apps/server/src/generated/profile.ts',
       'apps/server/package.json',
+      'apps/web/src/generated/ui.ts',
     ]);
     expect(read('apps/server/src/generated/profile.ts')).toBe(before);
   });
@@ -114,5 +123,73 @@ describe('generateProfile', () => {
       moduleRoots: ['modules'],
     });
     expect(result.packageNames).toEqual(['@scorpion/fixture-b']);
+  });
+
+  describe('the web app', () => {
+    /** A shell and a module with pages, as packages: only their package.json matters to the generator. */
+    const addUiModules = () => {
+      for (const [dir, name, ui] of [
+        ['core-ui-shell', '@scorpion/core-ui-shell', true],
+        ['pages', '@scorpion/pages', true],
+        ['plain', '@scorpion/plain', false],
+      ] as const) {
+        mkdirSync(join(root, 'modules', dir));
+        writeFileSync(
+          join(root, 'modules', dir, 'package.json'),
+          JSON.stringify({
+            name,
+            exports: { './module': './module.ts', ...(ui ? { './ui': './ui/index.ts' } : {}) },
+            dependencies:
+              dir === 'core-ui-shell' ? {} : { '@scorpion/core-ui-shell': 'workspace:*' },
+          }),
+        );
+      }
+    };
+
+    it('has no pages and no web build for a profile without core.ui-shell', async () => {
+      profileFile('ab', ['fixture.a', 'fixture.b']);
+      await generateProfile({ profileName: 'ab', root });
+      const ui = read('apps/web/src/generated/ui.ts');
+      expect(ui).toContain('export const hasShell = false;');
+      expect(ui).toContain('export const uiModules: UiModule[] = [];');
+      expect(ui).not.toContain('import * as');
+      expect(webDevDeps()).toEqual({ vite: '^8' });
+    });
+
+    it('imports the ui entry of each module of a profile with the shell that has one, and depends on exactly those', async () => {
+      addUiModules();
+      profileFile('web', ['core.ui-shell', 'pages', 'plain']);
+      await generateProfile({ profileName: 'web', root });
+      const ui = read('apps/web/src/generated/ui.ts');
+      expect(ui).toContain('export const hasShell = true;');
+      expect(ui).toContain("import * as ui0 from '@scorpion/core-ui-shell/ui';");
+      expect(ui).toContain("import * as ui1 from '@scorpion/pages/ui';");
+      expect(ui).not.toContain('plain');
+      expect(ui).toContain('messages: ui1.messages');
+      expect(webDevDeps()).toEqual({
+        '@scorpion/core-ui-shell': 'workspace:*',
+        '@scorpion/pages': 'workspace:*',
+        vite: '^8',
+      });
+    });
+
+    it('drops the modules of an earlier profile, and the pages with them, when the profile changes', async () => {
+      addUiModules();
+      profileFile('web', ['core.ui-shell', 'pages']);
+      await generateProfile({ profileName: 'web', root });
+      profileFile('ab', ['fixture.a', 'fixture.b']);
+      await generateProfile({ profileName: 'ab', root });
+      expect(read('apps/web/src/generated/ui.ts')).toContain('hasShell = false');
+      expect(webDevDeps()).toEqual({ vite: '^8' });
+    });
+
+    it('reports the web files as out of date with check, without writing them', async () => {
+      addUiModules();
+      profileFile('web', ['core.ui-shell']);
+      const result = await generateProfile({ profileName: 'web', root, check: true });
+      expect(result.changed).toContain('apps/web/src/generated/ui.ts');
+      expect(result.changed).toContain('apps/web/package.json');
+      expect(webDevDeps()).toEqual({ vite: '^8' });
+    });
   });
 });

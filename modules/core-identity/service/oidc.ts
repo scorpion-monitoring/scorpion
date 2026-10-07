@@ -2,7 +2,7 @@
 // signed-in account. Everything that changes data goes through here.
 import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
-import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
+import { Conflict, Forbidden, NotFound, Unauthorized, url, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
@@ -110,8 +110,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
   const exchangeTimeoutMs = deps.exchangeTimeoutMs ?? TOKEN_EXCHANGE_TIMEOUT_MS;
 
   const redirectUri = (providerId: string): string => {
-    const base = ctx.config.BASE_PATH === '/' ? '' : ctx.config.BASE_PATH;
-    return `${ctx.config.ORIGIN}${base}${INTERNAL_PREFIX}/auth/oidc/${providerId}/callback`;
+    return `${ctx.config.ORIGIN}${url(ctx.config.BASE_PATH, `${INTERNAL_PREFIX}/auth/oidc/${providerId}/callback`)}`;
   };
 
   async function providerOrThrow(id: string): Promise<OidcProvider> {
@@ -326,8 +325,8 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
   }
 
   return {
-    landing: ctx.config.BASE_PATH === '/' ? '/' : `${ctx.config.BASE_PATH}/`,
-    checkMailLanding: `${ctx.config.BASE_PATH === '/' ? '' : ctx.config.BASE_PATH}/login?notice=check-mail`,
+    landing: url(ctx.config.BASE_PATH, '/'),
+    checkMailLanding: url(ctx.config.BASE_PATH, '/login?notice=check-mail'),
 
     start: (providerId) => begin(providerId),
 

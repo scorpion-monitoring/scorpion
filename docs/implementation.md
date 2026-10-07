@@ -180,12 +180,19 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - SvelteKit app with the layout, header, drawer, collapsible section sidebars and footer from FEATURES §3.19.
 - The shell's catch-all route `/[...path]` resolves module-registered `ui.routes`, checks their permissions, runs `load` and renders the component. There are no module filesystem routes.
 - Navigation filtered by permission. Public routes (legal pages, `/docs`, onboarding) declared explicitly.
-- Generated typed API client (`hono/client`) in `packages/contracts`; one `url()` helper for all links and fetches that respects `BASE_PATH` (defect 11).
+- Generated typed API client in `packages/contracts` (`openapi-fetch` over the generated OpenAPI document, not `hono/client`; ADR-0027); one `url()` helper for all links and fetches that respects `BASE_PATH` (defect 11).
 - Loaders throw errors instead of returning `Response(400)` (defect 12).
 - Themes: light/dark from `prefers-color-scheme` plus a manual toggle; branding and logos from settings.
 - `ui-kit`: `SchemaForm` (JSON Schema → form, including arrays of objects), `DataTable` (pagination, sorting), `Wizard`, `Facets`, a chart adapter (ECharts).
 - Screens: login (local + OIDC buttons), register, pending approval, profile (avatar, details, identities, tokens), admin → users, roles, settings (generated forms), logs, job runs, notification status.
 - Legal pages rendered from sanitised Markdown and public.
+- `core.ui-shell` is a module with the `ui.routes`, `ui.nav`, `ui.widget` and `ui.theme` registries and `GET /ui/navigation`; navigation is filtered on the server. The SvelteKit server is the public origin and proxies `/api` to the API process; the image runs both when the profile has the shell (ADR-0027).
+- New routes the screens need: `GET /auth/oidc/providers`, user management (`GET /users`, `/users/{id}`, `/users/{id}/roles`, `/users/{id}/tokens`, deactivate; revoking sessions exists since M4b), `PUT /roles/{key}/permissions`, `GET /system/job-runs`, `GET /ui/navigation`.
+- `GET /inbox/stream` (server-sent events, unread count only) in `core.notifications`, with ADR-0028.
+- More screens: inbox bell, notification preferences, audit viewer, system page and job runs.
+- Acceptance additions: no secret in a browser trace or log; CSP and security headers; axe checks on every screen; lint rules that make the typed client, `url()`, `SafeHtml` and thrown loader errors mandatory.
+- The web app is in the profile images from sprint 1 and the CI image jobs smoke test it; the release builds no image (nothing is deployed yet).
+- M5 closes ASVS 6.2.6, 6.2.7 and 7.4.4 with tagged Playwright tests; after it no `fail` entry remains in V6, V7, V8 and V10.
 
 **Acceptance:** Playwright journeys work under `BASE_PATH=/` and `BASE_PATH=/a/b`: register → pending → admin approves → user signs in → creates a PAT. A User never sees the Administration navigation.
 

@@ -20,5 +20,6 @@ export default defineProfile({
     'core.notifications',
     'core.identity',
     'core.audit',
+    'core.ui-shell',
   ],
 });

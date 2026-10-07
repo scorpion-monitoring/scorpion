@@ -1,0 +1,34 @@
+// The two halves of the shell's pages must agree: `routes.ts` says who may open a path (the server),
+// `index.ts` says what is shown there (the web app). A module that adds pages gets the same test.
+import { describe, expect, it } from 'vitest';
+import { SHELL_NAV, SHELL_ROUTES } from './routes.ts';
+import routes, { messages } from './index.ts';
+
+describe('the pages of the shell', () => {
+  it('are the same paths in the server half and the browser half', () => {
+    expect(routes.map((route) => route.path).sort()).toEqual(
+      SHELL_ROUTES.map((route) => route.path).sort(),
+    );
+  });
+
+  it('are all public, each with its reason', () => {
+    for (const route of SHELL_ROUTES) {
+      expect(route.public, route.path).toBe(true);
+      expect(route.publicReason?.length, route.path).toBeGreaterThan(10);
+    }
+  });
+
+  it('have a link only to a page of the module, and a text for every label and section', () => {
+    const paths = new Set(SHELL_ROUTES.map((route) => route.path));
+    for (const entry of SHELL_NAV) {
+      expect(paths.has(entry.path), entry.id).toBe(true);
+      expect(messages.en?.[entry.label], entry.label).toBeTruthy();
+      expect(messages.en?.[`nav.section.${entry.section}`], entry.section).toBeTruthy();
+    }
+  });
+
+  it('load their data in `load`, which a page with data must have', () => {
+    const withLoad = routes.filter((route) => route.load).map((route) => route.path);
+    expect(withLoad.sort()).toEqual(['/docs', '/legal/:page']);
+  });
+});

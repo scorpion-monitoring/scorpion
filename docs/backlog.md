@@ -113,6 +113,24 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Drizzle's `execute` returns timestamps as text.** `claimDue` converts `created_at` itself; any other raw `db.execute` that selects a
   timestamp must do the same.
 
+## Web shell follow-ups (M5 sprint 1)
+
+- **`/metrics` moved** to the API port (default 3001) for profiles with `core.ui-shell`, because the web server does not proxy it. If an
+  operator wants one port, add an authenticated `/metrics` proxy (a token in a setting) rather than proxying it open.
+- **The typed client is generated for the `full` profile.** A profile that lacks a module has client functions for routes it does not serve (404).
+  A per-profile client is possible (`openapi:generate` already knows the profile) if a screen ever needs to know.
+- **No per-page SSR options.** Every page of a module goes through one catch-all route, so a page cannot set `ssr = false` or `csr = false`.
+  Add an optional `render: { ssr?: boolean }` to `UiRoute` if a page needs it (a chart page that cannot render on the server).
+- **The proxy has no timeout of its own** (an event stream must outlive any). If a slow API call should give up, add `API_TIMEOUT_MS` for
+  non-stream requests. Sprint 4 (inbox stream) decides.
+- **`openapi-typescript` declares a peer of TypeScript 5**; the repository uses 6. It works; move to a release that lists 6 when there is one.
+- **Dev dependencies of the web app are heavy for the image build:** `@scorpion/testing` (Testcontainers) and Playwright come in through the
+  e2e tests. Moving `e2e/` to its own package would shorten step 4 of `docker/Dockerfile`.
+- **The icon set is a dozen drawn paths** (`Icon.svelte`). A module that needs another name gets a dot. Add icons as screens need them, or take a set when more than about thirty are used.
+- **`GET /ui/navigation` is asked on every page request** (twice with `/auth/me`). They are cheap, but a short per-session cache in the web process would halve the calls if profiling asks for it.
+- **The legal page shows the API's title as its heading;** a text that starts with `#` has two. Documented in the module README; a later change could drop a leading `h1` of the text on the server.
+- **German and the catalogue checks** (every key in `de`, no literal text in a `.svelte` text node) are sprint 2.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.

@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=../../.env --watch src/cli.ts start",
+    "dev": "node --env-file-if-exists=../../.env --watch src/dev.ts",
     "start": "node src/cli.ts start",
     "test": "vitest run --passWithNoTests"
   },
@@ -19,6 +19,7 @@
     "@scorpion/core-identity": "workspace:*",
     "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-settings": "workspace:*",
+    "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "hono": "^4.13.12",

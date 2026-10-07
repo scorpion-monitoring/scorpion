@@ -1,2 +1,155 @@
 @import 'tailwindcss';
-@plugin 'daisyui';
+
+/* Tailwind scans the app by itself; the pages of the modules and the shared components live elsewhere. */
+@source '../../../modules';
+@source '../../../packages/ui-kit/src';
+
+/* The two themes the shell ships. `scorpionlight` is the default; `scorpiondark` is used when the
+   system prefers dark, and both can be chosen by hand (data-theme on <html>). */
+@plugin 'daisyui' {
+  themes:
+    scorpionlight --default,
+    scorpiondark --prefersdark;
+}
+
+@plugin 'daisyui/theme' {
+  name: 'scorpionlight';
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f3f4f6;
+  --color-base-300: #d1d5db;
+  --color-base-content: #1f2937;
+  --color-primary: #9a3412;
+  --color-primary-content: #ffffff;
+  --color-secondary: #1e3a5f;
+  --color-secondary-content: #ffffff;
+  --color-accent: #0f766e;
+  --color-accent-content: #ffffff;
+  --color-neutral: #1f2937;
+  --color-neutral-content: #f9fafb;
+  --color-info: #075985;
+  --color-info-content: #ffffff;
+  --color-success: #166534;
+  --color-success-content: #ffffff;
+  --color-warning: #92400e;
+  --color-warning-content: #ffffff;
+  --color-error: #b91c1c;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+  name: 'scorpiondark';
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: #111827;
+  --color-base-200: #0b1220;
+  --color-base-300: #374151;
+  --color-base-content: #e5e7eb;
+  --color-primary: #fb923c;
+  --color-primary-content: #1c1917;
+  --color-secondary: #93c5fd;
+  --color-secondary-content: #0b1220;
+  --color-accent: #5eead4;
+  --color-accent-content: #0b1220;
+  --color-neutral: #374151;
+  --color-neutral-content: #f3f4f6;
+  --color-info: #7dd3fc;
+  --color-info-content: #0b1220;
+  --color-success: #86efac;
+  --color-success-content: #0b1220;
+  --color-warning: #fcd34d;
+  --color-warning-content: #1c1917;
+  --color-error: #fca5a5;
+  --color-error-content: #1c1917;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* The logo that fits the theme: the light one on light themes, the dark one on dark themes. */
+.logo-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .logo-light {
+    display: none;
+  }
+  :root:not([data-theme]) .logo-dark {
+    display: inline;
+  }
+}
+:root[data-theme='scorpionlight'] .logo-light {
+  display: inline;
+}
+:root[data-theme='scorpionlight'] .logo-dark {
+  display: none;
+}
+:root[data-theme='scorpiondark'] .logo-light {
+  display: none;
+}
+:root[data-theme='scorpiondark'] .logo-dark {
+  display: inline;
+}
+
+/* The formatted text of a legal page (sanitised on the server). */
+.prose-text {
+  max-width: 70ch;
+  line-height: 1.7;
+}
+.prose-text h1,
+.prose-text h2,
+.prose-text h3 {
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.prose-text h1 {
+  font-size: 1.75rem;
+}
+.prose-text h2 {
+  font-size: 1.4rem;
+}
+.prose-text h3 {
+  font-size: 1.15rem;
+}
+.prose-text p,
+.prose-text ul,
+.prose-text ol {
+  margin-bottom: 1em;
+}
+.prose-text ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+.prose-text ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+.prose-text a {
+  text-decoration: underline;
+}
+
+/* Someone who asked their system for less motion gets none: no transition, no animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

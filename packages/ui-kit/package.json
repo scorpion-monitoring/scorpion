@@ -9,5 +9,11 @@
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@scorpion/contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
   }
 }

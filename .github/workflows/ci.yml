@@ -81,6 +81,7 @@ jobs:
           name: test-reports
           path: |
             apps/web/playwright-report/
+            apps/web/test-results/
             reports/
           retention-days: 7
 
@@ -125,10 +126,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `web: true`: the profile has core.ui-shell, so its image also runs the web server (ADR-0027).
           - profile: full
+            web: true
           - profile: denbi-registry
           - profile: nfdi-onboarding
           - profile: kpi-tracker
+            web: true
           # The real profiles are still empty, so a fixture profile proves the mechanism: an image
           # holds exactly the modules of its profile (fixture.a and fixture.b, not fixture.opt).
           - profile: fixture-ab
@@ -201,8 +205,12 @@ jobs:
           fi
 
       # The image applies its migrations when it starts. /healthz says the process is alive;
-      # /readyz says the database answers and every migration is applied.
+      # /readyz says the database answers and every migration is applied. A profile with the shell runs
+      # a web server on 3000 in front of the API on 3001: the web server passes /healthz and /readyz on,
+      # serves the start page, and does not pass /metrics (that stays on the API's port).
       - name: Smoke test /healthz, /readyz and /metrics
+        env:
+          WEB: ${{ matrix.web }}
         run: |
           docker run -d --rm --network host --name scorpion-smoke \
             -e DATABASE_URL=postgres://scorpion:scorpion@127.0.0.1:5432/scorpion \
@@ -210,7 +218,14 @@ jobs:
             "$IMAGE"
           for _ in $(seq 1 60); do
             if curl -fsS localhost:3000/healthz && curl -fsS localhost:3000/readyz; then
-              curl -fsS localhost:3000/metrics | grep -q '^scorpion_outbox_lag_seconds'
+              if [ "$WEB" = "true" ]; then
+                curl -fsS localhost:3000/ | grep -q '<title>'
+                curl -fsS localhost:3000/api/internal/ui/navigation | grep -q '"routes"'
+                curl -fsS localhost:3001/metrics | grep -q '^scorpion_outbox_lag_seconds'
+                test "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000/metrics)" = 404
+              else
+                curl -fsS localhost:3000/metrics | grep -q '^scorpion_outbox_lag_seconds'
+              fi
               docker stop --timeout 20 scorpion-smoke
               exit 0
             fi

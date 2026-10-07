@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["*.ts", "package.json", "service", "test", "ui"],
+  "references": [
+    {
+      "path": "../../packages/kernel"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/testing"
+    },
+    {
+      "path": "../core-authz"
+    },
+    {
+      "path": "../core-settings"
+    }
+  ]
+}

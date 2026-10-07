@@ -84,6 +84,7 @@ describe('profile full with core.authz', () => {
       'core.notifications',
       'core.identity',
       'core.audit',
+      'core.ui-shell',
     ]);
   });
 

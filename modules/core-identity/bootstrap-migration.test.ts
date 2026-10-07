@@ -301,6 +301,8 @@ describe('after the migration nothing knows the column, and no module touches an
 });
 
 function migrationFiles(dir: string): string[] {
+  // A module without tables has no migrations folder (core.ui-shell).
+  if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((file) => file.endsWith('.sql'))
     .map((file) => join(dir, file));

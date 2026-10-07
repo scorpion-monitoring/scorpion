@@ -5,7 +5,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./url": "./src/url.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"
@@ -13,6 +15,7 @@
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
     "hono": "^4.13.12",
+    "openapi-fetch": "^0.17.0",
     "zod": "^4.6.5"
   }
 }

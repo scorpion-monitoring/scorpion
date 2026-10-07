@@ -7,7 +7,9 @@
 //   3. Postgres and Mailpit start (docker compose). A profile with core.notifications gets its mail
 //      settings pointed at that Mailpit (`scorpion seed-dev-mail`, development only, never over
 //      settings that are already stored).
-//   4. The server and the web app run. The server applies pending migrations when it starts.
+//   4. The server and the web app run, as in an image (ADR-0027): the web app is the public origin on PORT
+//      and proxies `/api`, `/healthz` and `/readyz` to the API, which listens on API_PORT (default PORT + 1)
+//      and applies pending migrations when it starts.
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -64,13 +66,33 @@ else if (!seed.stderr.includes('Unknown command')) {
   console.warn('Could not point the mail settings at Mailpit; set them in the settings instead.');
 }
 
+// The web app is what you open; the API sits behind it, on its own port, as in an image.
+const env = readFileSync(envFile, 'utf8');
+const fromEnvFile = (name: string) => new RegExp(`^${name}=(\\S+)`, 'm').exec(env)?.[1];
+const port = process.env.PORT ?? fromEnvFile('PORT') ?? '3000';
+const apiPort = process.env.API_PORT ?? String(Number(port) + 1);
 const dev = spawn(
   'pnpm',
   ['--parallel', '--filter', '@scorpion/server', '--filter', '@scorpion/web', 'dev'],
   {
     cwd: root,
     stdio: 'inherit',
-    env: { ...process.env, PROFILE: profile },
+    env: {
+      ...process.env,
+      PROFILE: profile,
+      PORT: port,
+      // The server reads PORT as the port to listen on; the web app reads it as its own.
+      API_PORT: apiPort,
+      API_ORIGIN: `http://127.0.0.1:${apiPort}`,
+      // The API's only peer is the web app on the loopback address (as in an image): it must trust it, or
+      // the rate limit sees one address for everybody.
+      TRUSTED_PROXIES: [
+        process.env.TRUSTED_PROXIES ?? fromEnvFile('TRUSTED_PROXIES'),
+        '127.0.0.1,::1',
+      ]
+        .filter(Boolean)
+        .join(','),
+    },
   },
 );
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => dev.kill(signal));
