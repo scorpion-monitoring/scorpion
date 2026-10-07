@@ -83,7 +83,7 @@ requirements:
     evidence:
       - test: ASVS-10.5.1
       - code: modules/core-identity/service/oidc-token.ts
-    note: 'The id_token must carry the nonce of this login (compared as a hash, per login, single use); a wrong or missing nonce is a 401 with no user and no session. The Keycloak test runs against a real provider.'
+    note: 'M5 sprint 3: an account deactivated by an administrator is refused after a valid provider login too (oidc.ts assertMaySignIn, same answer as a rejected one). The id_token must carry the nonce of this login (compared as a hash, per login, single use); a wrong or missing nonce is a 401 with no user and no session. The Keycloak test runs against a real provider.'
   - id: v5.0.0-10.5.2
     status: pass
     evidence:

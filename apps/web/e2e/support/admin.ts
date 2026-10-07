@@ -1,12 +1,13 @@
 // What the administration journeys need: accounts with names that cannot clash between a first try and a
 // retry, an administrator's API session in a context of its own (so it does not sign the browser's page in),
 // and a few calls the journeys use to set up a state or to put it back.
+import { randomBytes } from 'node:crypto';
 import type { APIRequestContext } from '@playwright/test';
 import { admin, expect, person, type Credentials } from './fixtures.ts';
 
 /** A name no other test used: a prefix and six random characters, lower-case as a username must be. */
 export function unique(prefix: string): string {
-  return `${prefix}${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}${randomBytes(4).toString('hex')}`;
 }
 
 /** Credentials for a fresh account; the password is the shared test one. */

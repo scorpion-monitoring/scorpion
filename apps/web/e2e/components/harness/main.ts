@@ -8,7 +8,9 @@ const scenes = import.meta.glob<{ default: unknown }>('./scenes/*.svelte');
 
 const params = new URLSearchParams(window.location.search);
 const name = params.get('scene') ?? '';
-const load = scenes[`./scenes/${name}.svelte`];
+const key = `./scenes/${name}.svelte`;
+// Only a scene that exists: the name comes from the address.
+const load = Object.hasOwn(scenes, key) ? scenes[key] : undefined;
 const theme = params.get('theme');
 if (theme === 'light' || theme === 'dark')
   document.documentElement.dataset.theme = `scorpion${theme}`;

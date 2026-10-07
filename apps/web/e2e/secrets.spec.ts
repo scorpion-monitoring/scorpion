@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { admin, expect, person, signIn, test } from './support/fixtures.ts';
@@ -204,8 +205,8 @@ test('a secret stored on the settings page is only in the request that sends it'
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) visited.push(frame.url());
   });
-  const name = `e2e.trace.${Math.random().toString(36).slice(2, 8)}`;
-  const value = `a-secret-value-${Math.random().toString(36).slice(2, 12)}`;
+  const name = `e2e.trace.${randomBytes(4).toString('hex')}`;
+  const value = `a-secret-value-${randomBytes(8).toString('hex')}`;
 
   await page.goto(at('/login'));
   await page.getByLabel('Username').fill(admin.username);
