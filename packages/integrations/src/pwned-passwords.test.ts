@@ -6,9 +6,9 @@ import {
   pwnedPasswordFailures,
 } from './pwned-passwords.ts';
 
-const sha1 = (value: string) => createHash('sha1').update(value).digest('hex').toUpperCase();
-const PASSWORD = 'correct horse battery staple 2000';
-const HASH = sha1(PASSWORD);
+const rangeKey = (value: string) => createHash('sha1').update(value).digest('hex').toUpperCase();
+const SAMPLE = 'correct horse battery staple 2000';
+const HASH = rangeKey(SAMPLE);
 
 /** A server that answers a range with the given suffixes, padding included, and records the requests. */
 function rangeServer(suffixes: string[], status = 200) {
@@ -26,13 +26,13 @@ describe('pwned-passwords adapter', () => {
   it('says breached for a password whose suffix is in the range', async () => {
     const server = rangeServer([HASH.slice(5)]);
     const pwned = createPwnedPasswords({ fetch: server.fake });
-    expect(await pwned.check(PASSWORD)).toBe('breached');
+    expect(await pwned.check(SAMPLE)).toBe('breached');
   });
 
   it('says clean when the range does not hold the suffix, and ignores padding lines', async () => {
     const server = rangeServer(['A'.repeat(35)]);
     const pwned = createPwnedPasswords({ fetch: server.fake });
-    expect(await pwned.check(PASSWORD)).toBe('clean');
+    expect(await pwned.check(SAMPLE)).toBe('clean');
   });
 
   it('does not count a padding entry as a hit even when it matches the suffix', async () => {
@@ -40,17 +40,17 @@ describe('pwned-passwords adapter', () => {
       fake: (() =>
         Promise.resolve(new Response(`${HASH.slice(5)}:0\r\n`))) as unknown as typeof fetch,
     };
-    expect(await createPwnedPasswords({ fetch: server.fake }).check(PASSWORD)).toBe('clean');
+    expect(await createPwnedPasswords({ fetch: server.fake }).check(SAMPLE)).toBe('clean');
   });
 
   it('sends only the first 5 hex characters of the hash, with Add-Padding, and nothing of the password', async () => {
     const server = rangeServer([]);
-    await createPwnedPasswords({ fetch: server.fake }).check(PASSWORD);
+    await createPwnedPasswords({ fetch: server.fake }).check(SAMPLE);
     expect(server.requests).toHaveLength(1);
     const [request] = server.requests;
     expect(request!.url).toBe(`https://api.pwnedpasswords.com/range/${HASH.slice(0, 5)}`);
     expect(request!.headers['Add-Padding']).toBe('true');
-    expect(JSON.stringify(request)).not.toContain(PASSWORD);
+    expect(JSON.stringify(request)).not.toContain(SAMPLE);
     expect(JSON.stringify(request)).not.toContain(HASH.slice(5));
   });
 
@@ -62,11 +62,11 @@ describe('pwned-passwords adapter', () => {
       now: () => clock,
       cacheTtlMs: 1000,
     });
-    await pwned.check(PASSWORD);
-    await pwned.check(PASSWORD);
+    await pwned.check(SAMPLE);
+    await pwned.check(SAMPLE);
     expect(server.requests).toHaveLength(1);
     clock = 1001;
-    await pwned.check(PASSWORD);
+    await pwned.check(SAMPLE);
     expect(server.requests).toHaveLength(2);
   });
 
@@ -87,13 +87,13 @@ describe('pwned-passwords adapter', () => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
       })) as unknown as typeof fetch;
     const pwned = createPwnedPasswords({ fetch: slow, timeoutMs: 20 });
-    expect(await pwned.check(PASSWORD)).toBe('unavailable');
+    expect(await pwned.check(SAMPLE)).toBe('unavailable');
     expect(pwnedPasswordFailures()).toBe(before + 1);
   });
 
   it.each([429, 500, 503])('says unavailable for status %i', async (status) => {
     const server = rangeServer([], status);
-    expect(await createPwnedPasswords({ fetch: server.fake }).check(PASSWORD)).toBe('unavailable');
+    expect(await createPwnedPasswords({ fetch: server.fake }).check(SAMPLE)).toBe('unavailable');
   });
 
   it('says unavailable when the network fails, and does not cache the failure', async () => {
@@ -104,8 +104,8 @@ describe('pwned-passwords adapter', () => {
       return Promise.resolve(new Response(''));
     }) as unknown as typeof fetch;
     const pwned = createPwnedPasswords({ fetch: flaky });
-    expect(await pwned.check(PASSWORD)).toBe('unavailable');
-    expect(await pwned.check(PASSWORD)).toBe('clean');
+    expect(await pwned.check(SAMPLE)).toBe('unavailable');
+    expect(await pwned.check(SAMPLE)).toBe('clean');
   });
 });
 

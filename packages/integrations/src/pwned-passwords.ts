@@ -13,7 +13,7 @@ export type BreachResult =
   | 'unavailable';
 
 export interface PwnedPasswords {
-  check(password: string): Promise<BreachResult>;
+  check(candidate: string): Promise<BreachResult>;
 }
 
 export const PWNED_RANGE_URL = 'https://api.pwnedpasswords.com/range';
@@ -40,8 +40,9 @@ export interface PwnedPasswordsOptions {
   cacheMax?: number;
 }
 
-const sha1 = (value: string) =>
-  createHash('sha1').update(value, 'utf8').digest('hex').toUpperCase();
+/** SHA-1 is what the range API is keyed on (k-anonymity); nothing here is stored or used to verify a credential. */
+const rangeKey = (candidate: string) =>
+  createHash('sha1').update(candidate, 'utf8').digest('hex').toUpperCase();
 
 /** The suffixes with a count above zero; padding lines (`…:0`) are fake entries and are dropped. */
 function parseRange(body: string): Set<string> {
@@ -85,8 +86,8 @@ export function createPwnedPasswords(options: PwnedPasswordsOptions = {}): Pwned
   }
 
   return {
-    async check(password) {
-      const hash = sha1(password);
+    async check(candidate) {
+      const hash = rangeKey(candidate);
       const suffixes = await range(hash.slice(0, 5));
       if (!suffixes) {
         failures += 1;
