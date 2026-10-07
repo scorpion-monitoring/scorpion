@@ -195,3 +195,21 @@ describe('response schemas never name a secret', () => {
     ).toEqual([]);
   });
 });
+
+describe('event payloads never name a secret', () => {
+  // Events go to the outbox and to subscribers. The schemas are strict (decisions.test.ts in
+  // core.audit), so what a schema does not declare cannot ride along; here no declared field is a secret.
+  it('holds for every event the loaded modules declare', async () => {
+    const { kernel } = await app.start();
+    const events = [...kernel.composition.events.values()];
+    expect(events.length).toBeGreaterThan(20);
+    const violations = events.flatMap((event) =>
+      propertyNames(event.schema)
+        .filter((at) =>
+          (FORBIDDEN as readonly string[]).includes(at.slice(at.lastIndexOf('.') + 1)),
+        )
+        .map((at) => `${event.name}: ${at}`),
+    );
+    expect(violations).toEqual([]);
+  });
+});
