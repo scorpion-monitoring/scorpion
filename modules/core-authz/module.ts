@@ -1,6 +1,7 @@
 import { z } from '@scorpion/contracts';
 import { defineModule, type AuthorizationRequest } from '@scorpion/kernel';
 import type { AuthzService } from './public.ts';
+import { registerAuthzRoutes } from './routes.ts';
 import { createAuthzService, type AuthzInternals } from './service/authz.ts';
 import {
   DEFAULT_ROLE_REGISTRY,
@@ -85,6 +86,8 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
       await service.seed();
       return service;
     },
+
+    routes: (r) => registerAuthzRoutes(r, r.service<AuthzInternals & AuthzService>()),
   });
 }
 

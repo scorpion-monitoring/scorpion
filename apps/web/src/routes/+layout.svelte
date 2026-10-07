@@ -1,16 +1,18 @@
 <script lang="ts">
   import '../app.css';
-  import { goto, invalidateAll, replaceState } from '$app/navigation';
+  import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
   import { isLocalPath, url } from '@scorpion/contracts';
   import {
     createReauthController,
+    createToaster,
     createTranslator,
     mergeBundles,
     ReauthDialog,
     setShell,
     takeReturn,
+    Toasts,
     uiKitMessages,
     type Intent,
   } from '@scorpion/ui-kit';
@@ -68,6 +70,30 @@
     navigate: (address) => window.location.assign(address),
   });
 
+  const toaster = createToaster();
+
+  // Pages that hold unsaved work register a guard; leaving (a link, a reload, a closed tab) asks first.
+  // Not state: it is read only when the person leaves, never to draw anything.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const guards = new Set<() => boolean>();
+  const unsaved = () => [...guards].some((isDirty) => isDirty());
+  beforeNavigate((navigation) => {
+    if (navigation.willUnload) {
+      if (unsaved()) navigation.cancel(); // the browser shows its own prompt
+      return;
+    }
+    if (unsaved() && !window.confirm(t('kit.wizard.leave'))) navigation.cancel();
+  });
+  onMount(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!unsaved()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  });
+
   // What the person asked for before they left for the provider: kept here until the page asks for it.
   let returnedIntent: Intent | undefined;
 
@@ -84,6 +110,11 @@
     goto: (address, options) => goto(address, { replaceState: options?.replace }),
     replaceUrl: (address) => void replaceState(address, {}),
     withReauth: (action, intent) => reauth.run(action, intent),
+    toaster,
+    guardLeave: (isDirty) => {
+      guards.add(isDirty);
+      return () => void guards.delete(isDirty);
+    },
     takeIntent: (id) => {
       if (returnedIntent?.id !== id) return undefined;
       const { payload } = returnedIntent;
@@ -184,3 +215,4 @@
 </div>
 
 <ReauthDialog controller={reauth} />
+<Toasts {toaster} />

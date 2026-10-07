@@ -1,6 +1,6 @@
 import { ApiError } from '@scorpion/contracts/client';
 import { describe, expect, it } from 'vitest';
-import { failureOf, firstError } from './forms.ts';
+import { failureMessage, failureOf, firstError } from './forms.ts';
 
 const problem = (status: number, extra: object = {}) => ({
   type: 'about:blank',
@@ -57,5 +57,33 @@ describe('failureOf', () => {
       general: [],
       retryAfterSeconds: undefined,
     });
+  });
+});
+
+describe('failureMessage', () => {
+  const t = (key: string) => `[${key}]`;
+  const failure = (status: number) => ({ status, retryAfterSeconds: undefined });
+
+  it.each([
+    [0, '[kit.error.network]'],
+    [401, '[kit.error.signedOut]'],
+    [403, '[kit.error.forbidden]'],
+    [404, '[kit.error.notFound]'],
+    [409, '[kit.error.conflict]'],
+    [422, '[kit.error.invalid]'],
+    [429, '[kit.error.throttled]'],
+    [500, '[kit.error.generic]'],
+    [502, '[kit.error.generic]'],
+  ])('says %i as %s', (status, expected) => {
+    expect(failureMessage(failure(status), t)).toBe(expected);
+  });
+
+  it('prefers what the action knows about a status, and only for that status', () => {
+    expect(failureMessage(failure(409), t, { 409: 'The last Admin stays.' })).toBe(
+      'The last Admin stays.',
+    );
+    expect(failureMessage(failure(403), t, { 409: 'The last Admin stays.' })).toBe(
+      '[kit.error.forbidden]',
+    );
   });
 });

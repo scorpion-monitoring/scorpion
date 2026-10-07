@@ -55,3 +55,36 @@ export function failureOf(error: unknown): FormFailure {
 /** The first message of a field, or `undefined`. */
 export const firstError = (failure: FormFailure | undefined, field: string): string | undefined =>
   failure?.fields[field]?.[0];
+
+/**
+ * The words for a failure that is not about one field, in the person's language: what to tell them when a
+ * button did not work. The server's own text is English and aimed at developers, so a screen says it through
+ * the catalogue; `known` gives a more exact message for a status this action can expect (a 409 that means
+ * "the last Admin", for example). `t` is the translator of the shell.
+ */
+export function failureMessage(
+  failure: Pick<FormFailure, 'status' | 'retryAfterSeconds'>,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  known: Readonly<Partial<Record<number, string>>> = {},
+): string {
+  const specific = known[failure.status];
+  if (specific !== undefined) return specific;
+  switch (failure.status) {
+    case 0:
+      return t('kit.error.network');
+    case 401:
+      return t('kit.error.signedOut');
+    case 403:
+      return t('kit.error.forbidden');
+    case 404:
+      return t('kit.error.notFound');
+    case 409:
+      return t('kit.error.conflict');
+    case 422:
+      return t('kit.error.invalid');
+    case 429:
+      return t('kit.error.throttled');
+    default:
+      return t('kit.error.generic');
+  }
+}

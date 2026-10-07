@@ -1,8 +1,10 @@
 import type { UiMessages } from '@scorpion/contracts';
+import { mergeBundles } from '@scorpion/ui-kit/i18n';
+import { adminMessages } from './admin/messages.ts';
 
 // The texts of the sign-in, registration, recovery and profile pages. Keys are prefixed with the page.
 // A text that depends on a number has one key per plural form (`login.throttled.one`, `.other`).
-export const messages: UiMessages = {
+const accountMessages: UiMessages = {
   en: {
     'nav.section.account': 'Account',
     'nav.profile': 'Profile',
@@ -488,3 +490,6 @@ export const messages: UiMessages = {
       'Die Sitzung konnte nicht beendet werden. Bitte versuchen Sie es erneut.',
   },
 };
+
+/** Every text of the pages of this module: the account pages and the administration of users. */
+export const messages: UiMessages = mergeBundles([accountMessages, adminMessages]);

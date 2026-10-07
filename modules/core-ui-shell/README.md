@@ -4,8 +4,8 @@ The shell of the web app: the registries through which modules put pages, links,
 route that tells the browser what the caller may see. It owns no table. The web app (`apps/web`) draws the layout and one catch-all
 route `/[...path]`; this module is the part the server knows about ([ADR-0027](../../docs/adr/0027-web-shell-catch-all-proxy-and-typed-client.md)).
 
-Status: M5 sprint 2. Its own pages are the start page, the legal pages and the API documentation; the screens of the other `core.*`
-modules come with those modules (sprint 2: the sign-in, registration, recovery and profile pages of `core.identity`; sprints 3 and 4: the rest).
+Status: M5 sprint 3. Its own pages are the start page, the legal pages, the API documentation and the administration of roles and settings; the screens of the other `core.*`
+modules come with those modules (the sign-in, registration, recovery and profile pages and the administration of users are `core.identity`'s; the audit and notification screens arrive in sprint 4).
 
 ## Manifest
 
@@ -96,3 +96,23 @@ the order of their first entry, entries by `order` and then `id`.
 
 Public pages are declared in `ui/routes.ts` (and, for another module, in its own `ui/routes.ts`) with a reason each, and listed in `PUBLIC_PAGES` of `public.ts`; `apps/server/src/ui-routes.test.ts` fails for a public page of any module that
 is not on the list of declared public pages.
+
+### The administration of roles and settings (M5 sprint 3)
+
+These pages need a permission, so none of them is in `PUBLIC_PAGES`, and a plain User gets a 403 on each path and finds none in the navigation. They live here, in the shell's
+`ui/admin/`, and not in `core.authz` and `core.settings`: the shell depends on both, and a module that depends on the shell, even as an optional peer, would close a cycle in the
+module graph (`packages/kernel/src/graph.ts` counts optional edges). The navigation entries `Roles` and `Settings` are the shell's for the same reason; `Users` and `Pending approvals`
+are contributed by `core.identity`.
+
+| Path                           | Permission                       | What                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin/roles`                 | `core.authz.role.read`           | Each role (a tab) with its permissions grouped by module. Every role but Admin can be edited (`PUT /roles/{key}/permissions`, `core.authz.role.manage`, checked again by the route); edits are kept across tabs and leaving with edits not saved asks first                                       |
+| `/admin/settings`              | `core.settings.read`             | A card for every module that has settings, and for branding, secrets and vocabularies                                                                                                                                                                                                             |
+| `/admin/settings/:module`      | `core.settings.read`             | The settings of one module as a `SchemaForm` from the module's own schema (`GET /settings/{module}/schema`), saved with the version that was read; a 409 offers to load the current values, a 422 shows the server's messages on the fields. `core.settings` leaves its branding to the next page |
+| `/admin/settings/branding`     | `core.settings.read`             | The branding of `core.settings`: names, contact, imprint address, **logos with an upload** (`POST /files`, `core.blob.manage`, the file is re-encoded by the server and only its hash is saved), and the legal texts (Markdown)                                                                   |
+| `/admin/settings/secrets`      | `core.settings.read`             | The names and times of the stored secrets, and a form to set or replace one and a button to delete one. **A value is never shown and never sent back**; the box is emptied the moment it is sent. The names of the secrets a module needs are not listed (backlog)                                |
+| `/admin/settings/vocabularies` | `core.settings.vocabulary.write` | Terms of a vocabulary: add, relabel in each language, reorder, deactivate and activate, remove (a declared or used term is deactivated, and the screen says so). Reading terms is self-service, so this page needs the write permission, or it would open to everyone                             |
+
+The order of the paths matters only in that a fixed word beats `:module` (`/admin/settings/secrets` is never the settings of a module called `secrets`). The permission of a settings
+form comes from the schemas: a module labels its fields with `.meta({ title, description, group, widget })` (see the `ui-kit` README). A schema with a field `.meta({ widget: 'logo' })`
+gets the upload control.

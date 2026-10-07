@@ -163,6 +163,7 @@ export function createAccountService(
     if (
       holder.deletedAt !== null ||
       holder.status === 'rejected' ||
+      holder.status === 'deactivated' ||
       !holder.email ||
       !mayMailOwner
     ) {
@@ -321,7 +322,13 @@ export function createAccountService(
         throw new Unauthorized('The username or password is wrong.');
       };
       if (found === undefined || storedHash === undefined || !passwordOk) return refuse();
-      if (found.deletedAt !== null || found.status === 'rejected') return refuse();
+      if (
+        found.deletedAt !== null ||
+        found.status === 'rejected' ||
+        found.status === 'deactivated'
+      ) {
+        return refuse();
+      }
       if (found.status === 'pending') {
         throw new Forbidden('Your account is waiting for approval.', ACCOUNT_PENDING);
       }

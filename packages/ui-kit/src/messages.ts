@@ -1,8 +1,9 @@
-// The texts of the shared components (the re-authentication dialog). The layout merges them with the
-// shell's and the modules'.
-import type { MessageBundles } from './i18n.ts';
+// The texts of the shared components: the re-authentication dialog here, the rest in `messages-components.ts`.
+// The layout merges them with the shell's and the modules'.
+import { mergeBundles, type MessageBundles } from './i18n.ts';
+import { componentMessages } from './messages-components.ts';
 
-export const uiKitMessages: MessageBundles = {
+const reauthMessages: MessageBundles = {
   en: {
     'reauth.title': 'Confirm your identity',
     'reauth.password.lead': 'This change needs a recent sign-in. Enter your password to continue.',
@@ -40,3 +41,6 @@ export const uiKitMessages: MessageBundles = {
     'reauth.provider.none': 'Es ist kein Anmeldeanbieter verfügbar.',
   },
 };
+
+/** Every text of the shared components. */
+export const uiKitMessages: MessageBundles = mergeBundles([reauthMessages, componentMessages]);

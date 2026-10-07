@@ -55,6 +55,10 @@ profile `ctx.settings` yields the schema's defaults.
   nothing writes nothing and emits nothing.
 - **A save replaces the whole stored object.** The admin form reads the effective values (defaults applied) and sends
   them back; what is sent is what is stored.
+- **Describing a field for the admin form (M5 sprint 3).** `GET /settings/{module}/schema` is `z.toJSONSchema(schema, { io: 'input' })`, and the form (`SchemaForm`, see the
+  `ui-kit` README) reads only Zod's `.meta({ title, description, group, order, widget })` from it: `title` is the label (the key in words when there is none), `description` the hint,
+  `group` a fieldset, `order` moves a field, and `widget: 'logo'` draws the upload control (the logos and the provider icon). A schema needs nothing else to get a form. Never put a
+  secret in a setting: a `writeOnly` field exists for other forms and a setting's schema has none.
 - **Cache and the cross-process bound.** The stored JSON of each module is cached in process for **5 seconds**
   (`SETTINGS_CACHE_TTL_MS`). A write empties the entry in the process that made it, so that process sees it at once.
   **Another process learns of a change when its entry expires**, so with several server processes a changed setting

@@ -12,7 +12,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@scorpion/contracts": "workspace:*"
+    "@scorpion/contracts": "workspace:*",
+    "echarts": "^6.1.0"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

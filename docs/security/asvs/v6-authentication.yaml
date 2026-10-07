@@ -116,7 +116,7 @@ requirements:
     evidence:
       - code: modules/core-identity/service/bootstrap.ts
       - doc: docs/adr/0010-first-run-token-and-bootstrap-admin.md
-    note: 'No migration creates an account. The first administrator is created by the create-admin command or by a one-time first-run token, with a name the operator chooses (ADR-0010). No test asserts that a fresh install has zero users.'
+    note: 'M5 sprint 3 added the account status deactivated: login, OIDC sign-in, reset and verification links and the register notice treat it like a rejected account (accounts.ts, oidc.ts, oidc-link.ts, recovery.ts; the sign-in answer is the one for a wrong password, tested in admin-users-routes.test.ts). No migration creates an account. The first administrator is created by the create-admin command or by a one-time first-run token, with a name the operator chooses (ADR-0010). No test asserts that a fresh install has zero users.'
   - id: v5.0.0-6.3.3
     status: pass
     evidence:

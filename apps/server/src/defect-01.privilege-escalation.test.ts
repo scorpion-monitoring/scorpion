@@ -139,6 +139,32 @@ const SAMPLES: Record<
     sample: ({ id }) => ({ method: 'POST', path: `/tokens/${id}/rotate`, body: {} }),
   },
   'GET /roles': { kind: 'admin', sample: () => ({ method: 'GET', path: '/roles' }) },
+  // M5 sprint 3: the administrator's view of accounts, and the permissions of a role.
+  'GET /users': { kind: 'admin', sample: () => ({ method: 'GET', path: '/users' }) },
+  'GET /users/{id}': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/users/${id}` }),
+  },
+  'GET /users/{id}/roles': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/users/${id}/roles` }),
+  },
+  'GET /users/{id}/tokens': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/users/${id}/tokens` }),
+  },
+  'POST /users/{id}/deactivate': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/deactivate`, body: {} }),
+  },
+  'PUT /roles/{key}/permissions': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'PUT',
+      path: '/roles/user/permissions',
+      body: { permissions: ['core.identity.me.read'] },
+    }),
+  },
   'POST /users/{id}/roles': {
     kind: 'admin',
     sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/roles`, body: { role: 'admin' } }),
@@ -419,6 +445,8 @@ describe('defect 1: the route table', () => {
       'core.identity.user.approve',
       'core.identity.user.reject',
       'core.identity.user.list-pending',
+      'core.identity.user.read',
+      'core.identity.user.deactivate',
       'core.identity.role.read',
       'core.identity.role.assign',
       'core.authz.role.read',

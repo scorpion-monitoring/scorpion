@@ -44,6 +44,7 @@ describe('the audit decision for every declared event', () => {
       'authz.role.permissions.changed@1',
       'identity.user.approved@1',
       'identity.user.rejected@1',
+      'identity.user.deactivated@1',
       'identity.token.created@1',
       'identity.token.revoked@1',
       'identity.token.rotated@1',

@@ -79,6 +79,15 @@ export interface TokenService extends TokenAuthenticator {
     page: { page: number; pageSize: number },
   ): Promise<{ tokens: TokenInfo[]; total: number }>;
   /**
+   * The open tokens of another user, for the administrator's screen. Needs `core.identity.token.manage-any`
+   * and a session. Never a secret. 404 for an unknown user.
+   */
+  listFor(
+    actor: Actor,
+    userId: string,
+    page: { page: number; pageSize: number },
+  ): Promise<{ tokens: TokenInfo[]; total: number }>;
+  /**
    * Revokes one of the caller's tokens. 404 for an unknown id and for someone else's, with the same
    * answer, unless the caller holds `core.identity.token.manage-any`: then any token can be revoked.
    */
@@ -332,6 +341,24 @@ export function createTokenService(
         .limit(pageSize)
         .offset(page * pageSize);
       const [total] = await ctx.db.select({ value: count() }).from(token).where(mine);
+      return { tokens: rows.map(toInfo), total: total?.value ?? 0 };
+    },
+
+    async listFor(actor, userId, { page, pageSize }) {
+      requireSession(actor);
+      await authz.require(actor, 'core.identity.token.manage-any');
+      if (!UUID.test(userId)) throw new NotFound('There is no such user.');
+      const [owner] = await ctx.db.select({ id: user.id }).from(user).where(eq(user.id, userId));
+      if (!owner) throw new NotFound('There is no such user.');
+      const theirs = and(eq(token.userId, userId), isNull(token.revokedAt));
+      const rows = await ctx.db
+        .select(infoColumns)
+        .from(token)
+        .where(theirs)
+        .orderBy(asc(token.createdAt), asc(token.id))
+        .limit(pageSize)
+        .offset(page * pageSize);
+      const [total] = await ctx.db.select({ value: count() }).from(token).where(theirs);
       return { tokens: rows.map(toInfo), total: total?.value ?? 0 };
     },
 

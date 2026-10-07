@@ -173,3 +173,10 @@ describe('unwrap', () => {
     await expect(unwrap(api.GET('/auth/me'))).rejects.toThrow('fetch failed');
   });
 });
+
+describe('the client in a browser with a strict Content-Security-Policy', () => {
+  it('asks zod not to compile parsers with `new Function`, which the policy would block', async () => {
+    const { z } = await import('@hono/zod-openapi');
+    expect(z.config().jitless).toBe(true);
+  });
+});

@@ -64,6 +64,13 @@
       "when": 1791297141073,
       "tag": "0008_credentials_throttle_and_link_token",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791385358926,
+      "tag": "0009_user_deactivated",
+      "breakpoints": true
     }
   ]
 }

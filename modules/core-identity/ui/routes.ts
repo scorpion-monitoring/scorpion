@@ -48,6 +48,10 @@ export const IDENTITY_ROUTES: RouteEntry[] = [
       'The first administrator of a fresh install has no account yet; the page exists only while there is no administrator (it is a 404 afterwards) and the single-use token from the server console is the credential.',
   },
   { path: '/profile', permission: 'core.identity.profile.read' },
+  // Administration of users (M5 sprint 3). A page needs the permission of the routes it calls first.
+  { path: '/admin/users', permission: 'core.identity.user.read' },
+  { path: '/admin/users/pending', permission: 'core.identity.user.list-pending' },
+  { path: '/admin/users/:id', permission: 'core.identity.user.read' },
 ];
 
 export const IDENTITY_NAV: NavEntry[] = [
@@ -59,5 +63,25 @@ export const IDENTITY_NAV: NavEntry[] = [
     section: 'account',
     order: 10,
     permission: 'core.identity.profile.read',
+  },
+  // The administration section is contributed by the modules themselves, never listed in the shell. An entry
+  // shows only for a caller who holds its permission, so a plain User's navigation holds none of it.
+  {
+    id: 'admin.users',
+    label: 'nav.admin.users',
+    path: '/admin/users',
+    icon: 'users',
+    section: 'admin',
+    order: 10,
+    permission: 'core.identity.user.read',
+  },
+  {
+    id: 'admin.users.pending',
+    label: 'nav.admin.pending',
+    path: '/admin/users/pending',
+    icon: 'list',
+    section: 'admin',
+    order: 20,
+    permission: 'core.identity.user.list-pending',
   },
 ];

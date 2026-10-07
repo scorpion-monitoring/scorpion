@@ -1,0 +1,2 @@
+ALTER TABLE "identity_user" DROP CONSTRAINT "identity_user_status_known";--> statement-breakpoint
+ALTER TABLE "identity_user" ADD CONSTRAINT "identity_user_status_known" CHECK ("identity_user"."status" in ('pending', 'active', 'rejected', 'deactivated'));

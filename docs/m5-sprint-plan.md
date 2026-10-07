@@ -304,6 +304,23 @@ Definition of done: a plain User sees no Administration navigation and gets 403 
 Admin approves a user, changes that user's role, edits a role's permissions and a setting from the browser. The last Admin cannot
 be removed from the UI (the error is shown). The `ui-kit` components each have a unit test, a keyboard test and an axe check.
 
+### Corrections found in sprint 3
+
+Where the plan was silent or wrong, the code and the maintainer's answers won:
+
+- **Roles and Settings pages are the shell's, not `core.authz`'s and `core.settings`'s** (items 7, 8 and 10; maintainer's decision). `core.ui-shell` depends on both, and the kernel counts an optional peer as an edge of the module graph (`graph.ts`), so a contribution to the shell's registries from either module is a dependency cycle that stops the start. The pages and the navigation entries `Roles` and `Settings` live in `modules/core-ui-shell/ui/admin/`; `Users` and `Pending approvals` are `core.identity`'s. The `admin` section label is the shell's (a key cannot be defined by two modules). The plan's list of "modules contribute their own entries (identity, authz, settings, audit, notifications)" holds for identity, audit and notifications only; audit and notifications bring theirs with their screens in sprint 4.
+- **Change an e-mail address and force a reset for another person are not built** (item 6; maintainer's decision). No route acts on another user's address or password, the plan's route list has none, and both go to the backlog.
+- **The "last Admin" counts accounts that can sign in** (item 6; maintainer's decision). An account status `deactivated` was needed (migration `0009`, an addition to the check constraint); deactivating and removing the Admin role take one advisory lock, so two administrators cannot each remove the other. The rule is identity's (core.authz counts assignments and cannot see accounts, ADR-0014) and is checked after authz's own rule, inside the same transaction.
+- **New permissions** `core.identity.user.read` (list, one account, roles of a user) and `core.identity.user.deactivate`; `GET /users/{id}/tokens` uses the existing `core.identity.token.manage-any`, and revoking another person's token is the existing `DELETE /tokens/{id}`, which that permission already allowed (maintainer's decision on scopes).
+- **`core.authz` has a route now** (`PUT /roles/{key}/permissions`). `module.test.ts` said "registers no route of its own"; it now says "registers exactly one route and touches no system method", and the file test that no route names the system methods of ADR-0015 is unchanged.
+- **Secrets: "set / not set" is "set" only** (item 8). Showing a secret that is not set needs the registry of declared secrets (decision 6: only if the first form needs it). The page lists the stored names and lets an Admin set, replace and delete; the backlog keeps "declared secrets".
+- **The form errors are dotted paths, not JSON pointers** (item 1). The API names a field `sessions.absoluteDays` (and `values.` in front for a settings body); `SchemaForm` reads both forms, and drops the prefix it is told (`errorPrefix`).
+- **The settings convention is Zod's `.meta({ title, description, group, order, widget })`** as decision 6 says; the plan's item 1 wrote `x-group` and `x-order`, which are accepted too. The schemas of the five shipped modules got titles, descriptions and the `logo` widget for the logos and the provider icon.
+- **The component specs run on a harness page**, not on a demo page of a profile (item 3): a small Vite app in `apps/web/e2e/components/harness` mounts one scene of the shared components, is built and served by the Playwright set-up, carries the application's Content-Security-Policy in a meta tag and fails a test for any policy violation. `pnpm test:e2e` runs it as the project `components`. Nothing of it ships.
+- **Zod is set to `jitless` in the client.** The page's policy has no `unsafe-eval`, and zod tries `new Function` on first use; the harness showed the violation report.
+- **The vocabularies page needs `core.settings.vocabulary.write`**, not the read permission: reading terms is self-service (forms need them), so a page that needed only that would have opened to every User.
+- **Axe findings the components needed fixed**: inactive tabs and the head of a chart table used DaisyUI's 50 to 60 % text colour (contrast), and a dimmed table while loading failed too; the loading state is a status line above the table now.
+
 ## 7. Sprint 4: operations screens, journeys, release
 
 **Branch:** `feature/m5-operations-release`. **Goal:** every route M4 built has a screen; the acceptance journeys pass in CI;

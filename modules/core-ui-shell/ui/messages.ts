@@ -1,6 +1,8 @@
 import type { UiMessages } from '@scorpion/contracts';
+import { mergeBundles } from '@scorpion/ui-kit/i18n';
+import { adminMessages } from './admin/messages.ts';
 
-export const messages: UiMessages = {
+const shellMessages: UiMessages = {
   en: {
     'nav.home': 'Home',
     'nav.docs': 'API documentation',
@@ -42,3 +44,6 @@ export const messages: UiMessages = {
     'docs.public': 'Öffentlich',
   },
 };
+
+/** The shell's own texts and those of its administration pages. */
+export const messages: UiMessages = mergeBundles([shellMessages, adminMessages]);

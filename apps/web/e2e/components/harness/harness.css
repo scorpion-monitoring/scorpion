@@ -1,0 +1,4 @@
+@import '../../../src/app.css';
+
+/* The scenes use the classes of the components and a few of their own. */
+@source './';

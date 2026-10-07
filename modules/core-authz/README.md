@@ -14,16 +14,16 @@ no settings (ADR-0014).
 
 ## Manifest
 
-| Part           | Value                                                                                                      |
-| -------------- | ---------------------------------------------------------------------------------------------------------- |
-| id             | `core.authz`                                                                                               |
-| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                                   |
-| dependencies   | none (ADR-0014)                                                                                            |
-| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md))         |
-| jobs, CLI      | none                                                                                                       |
-| events         | emits `authz.role.assigned@1`, `authz.role.removed@1` and `authz.role.permissions.changed@1`, see "Events" |
-| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                                      |
-| public service | `ctx.deps['core.authz']`, see "Public API"                                                                 |
+| Part           | Value                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| id             | `core.authz`                                                                                                                                   |
+| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                                                                       |
+| dependencies   | none (ADR-0014)                                                                                                                                |
+| routes         | `PUT /roles/{key}/permissions` only; listing roles and giving one are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)) |
+| jobs, CLI      | none                                                                                                                                           |
+| events         | emits `authz.role.assigned@1`, `authz.role.removed@1` and `authz.role.permissions.changed@1`, see "Events"                                     |
+| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                                                                          |
+| public service | `ctx.deps['core.authz']`, see "Public API"                                                                                                     |
 
 ### Permissions
 
@@ -131,6 +131,16 @@ no secret). A repeat of a change (the role was held already, or not) emits nothi
 `authz.role.permissions.changed@1`, emitted by `setRolePermissions` in the transaction that replaces the set:
 `{ roleKey, added, removed, actorId }`, where `added` and `removed` are sorted permission strings (never user data) and
 `actorId` is the caller. Saving the set a role already has emits nothing. `core.audit` subscribes to all three (ADR-0021).
+
+## Routes
+
+One internal route (the administration screen of roles, M5):
+
+| Route                          | Permission               | Notes                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /roles/{key}/permissions` | `core.authz.role.manage` | `{ permissions: [...] }` (at most 1000 ids) replaces what the role holds and answers the role. 403 for Admin (it holds everything and cannot be edited), 404 unknown role, 422 for a permission no loaded module declares (nothing is stored). Audited with its body; the event `authz.role.permissions.changed@1` is emitted only when the set changed. Takes effect at once in this process |
+
+The system methods above are not reachable from it: a test (`module.test.ts`) registers the routes against a stand-in that fails when one is touched.
 
 ## Tables
 

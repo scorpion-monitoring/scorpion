@@ -37,6 +37,7 @@ import {
   manualPolicy,
 } from './service/approval-policy.ts';
 import { createRoleService, type RoleService } from './service/roles.ts';
+import { createUserAdminService, type UserAdminService } from './service/user-admin.ts';
 import { createSessionAdminService, type SessionAdminService } from './service/session-admin.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import {
@@ -66,6 +67,7 @@ export interface IdentityInternals extends IdentityService {
   sessionAdmin: SessionAdminService;
   sessions: SessionService;
   tokens: TokenService;
+  userAdmin: UserAdminService;
 }
 
 export interface IdentityModuleOptions {
@@ -184,7 +186,13 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         description: 'End the sessions of any user, or of everybody, not only your own',
       },
       'core.identity.me.read': { description: 'Read your own account' },
+      'core.identity.user.read': {
+        description: 'List accounts and read one account (not its secrets)',
+      },
       'core.identity.user.list-pending': { description: 'List accounts waiting for approval' },
+      'core.identity.user.deactivate': {
+        description: 'Deactivate an account: it cannot sign in and its sessions end',
+      },
       'core.identity.user.approve': { description: 'Approve a pending account' },
       'core.identity.user.reject': { description: 'Reject a pending account' },
       'core.identity.auth-method.link': {
@@ -252,6 +260,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         // `role` is the key of the role the account got with the approval.
         'identity.user.approved@1': userEvent.extend({ approvedBy: z.string(), role: z.string() }),
         'identity.user.rejected@1': userEvent.extend({ rejectedBy: z.string() }),
+        // An administrator closed an active account; `count` sessions were open and ended in the same transaction.
+        'identity.user.deactivated@1': userEvent.extend({
+          deactivatedBy: z.string(),
+          count: z.number().int().min(0),
+        }),
         'identity.authMethod.linked@1': userEvent.extend({
           provider: z.string(),
           via: z.enum(['email', 'profile']),
@@ -409,7 +422,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         bootstrap,
         cleanup,
         profile: createProfileService(ctx, { recovery, mail, authz, blob, settings, sessions }),
-        roles: createRoleService({ authz, users }),
+        roles: createRoleService(ctx, { authz, users }),
         recovery,
         loginStates,
         oidc,
@@ -433,6 +446,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           throttle,
         }),
         approval: createApprovalService(ctx, { sessions, authz, mail, links }),
+        userAdmin: createUserAdminService(ctx, { authz, sessions }),
       };
     },
 
@@ -448,6 +462,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         roles,
         sessionAdmin,
         tokens,
+        userAdmin,
       } = r.service<IdentityInternals>();
       registerIdentityRoutes(r, {
         accounts,
@@ -460,6 +475,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         roles,
         sessionAdmin,
         tokens,
+        userAdmin,
       });
     },
   });

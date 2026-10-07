@@ -22,21 +22,47 @@ export const settingsSchema = z.strictObject({
     .int()
     .min(1024)
     .max(MAX_UPLOAD_BYTES)
-    .default(DEFAULT_BLOB_SETTINGS.maxBytes),
+    .default(DEFAULT_BLOB_SETTINGS.maxBytes)
+    .meta({
+      title: 'Largest file (bytes)',
+      description: 'Before and after processing. It cannot be raised above 8 MB.',
+    }),
   /** A raster larger than this in either direction is scaled down to fit (never up). */
-  maxDimension: z.number().int().min(16).max(8192).default(DEFAULT_BLOB_SETTINGS.maxDimension),
+  maxDimension: z
+    .number()
+    .int()
+    .min(16)
+    .max(8192)
+    .default(DEFAULT_BLOB_SETTINGS.maxDimension)
+    .meta({
+      title: 'Largest image side (pixels)',
+      description: 'A larger image is scaled down to fit, never up.',
+    }),
   /**
    * The most pixels a raster may declare. The file is small and the image is not when someone builds
    * a decompression bomb, so the header is checked before anything is decoded.
    */
-  maxPixels: z.number().int().min(1_000).max(100_000_000).default(DEFAULT_BLOB_SETTINGS.maxPixels),
+  maxPixels: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(100_000_000)
+    .default(DEFAULT_BLOB_SETTINGS.maxPixels)
+    .meta({
+      title: 'Most pixels in an image',
+      description: 'The header is checked before anything is decoded, against decompression bombs.',
+    }),
   /** How long a file nothing refers to is kept before the cleanup job removes it. */
   unreferencedGraceHours: z
     .number()
     .int()
     .min(1)
     .max(24 * 30)
-    .default(DEFAULT_BLOB_SETTINGS.unreferencedGraceHours),
+    .default(DEFAULT_BLOB_SETTINGS.unreferencedGraceHours)
+    .meta({
+      title: 'Keep unused files for (hours)',
+      description: 'A file nothing refers to is removed by the cleanup after this long.',
+    }),
 });
 
 export type BlobSettings = z.output<typeof settingsSchema>;
