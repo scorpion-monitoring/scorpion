@@ -20,9 +20,6 @@ export type {
  */
 export const PUBLIC_PAGES: readonly string[] = ['/', '/docs', '/legal/:page'];
 
-/** The registries the shell declares. */
-export const UI_REGISTRIES = ['ui.routes', 'ui.nav', 'ui.widget', 'ui.theme'] as const;
-
 declare module '@scorpion/kernel' {
   interface ModuleServices {
     'core.ui-shell': import('./service/navigation.ts').NavigationService;

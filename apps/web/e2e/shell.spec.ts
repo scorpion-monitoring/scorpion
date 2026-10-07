@@ -51,6 +51,29 @@ test.describe('the shell', () => {
     expect(failed).toEqual([]);
   });
 
+  test('a section of the sidebar collapses and expands, and the sidebar folds to an icon rail', async ({
+    page,
+    at,
+  }) => {
+    await page.goto(at('/'));
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    const section = nav.getByRole('button', { name: 'Main' });
+    await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
+    await section.click();
+    await expect(section).toHaveAttribute('aria-expanded', 'false');
+    await expect(nav.getByRole('link', { name: 'Home' })).toBeHidden();
+    await section.click();
+    await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
+
+    // The rail keeps the links (named for assistive technology, with a tooltip) and remembers the choice.
+    await page.getByRole('button', { name: 'Collapse the sidebar' }).click();
+    await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('data-tip', 'Home');
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Expand the sidebar' })).toBeVisible();
+    await page.getByRole('button', { name: 'Expand the sidebar' }).click();
+    await expect(page.getByRole('button', { name: 'Collapse the sidebar' })).toBeVisible();
+  });
+
   test('an unknown path is the error page with 404 and a way home under the base path', async ({
     page,
     request,

@@ -1,11 +1,8 @@
 import { defineModule } from '@scorpion/kernel';
-import type { AuthzService } from '@scorpion/core-authz/public';
 import { REGISTRIES } from './registries.ts';
 import { registerShellRoutes } from './routes.ts';
 import { createNavigationService, type NavigationService } from './service/navigation.ts';
 import { SHELL_NAV, SHELL_ROUTES } from './ui/routes.ts';
-
-export type AuthzOnly = [AuthzService];
 
 export default defineModule<NavigationService, 'core.authz'>({
   id: 'core.ui-shell',

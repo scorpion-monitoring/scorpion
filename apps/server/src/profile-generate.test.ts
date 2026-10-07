@@ -75,7 +75,8 @@ describe('generateProfile', () => {
 
   it('is idempotent and, with check, reports a file that is out of date without writing', async () => {
     profileFile('ab', ['fixture.a', 'fixture.b']);
-    expect((await generateProfile({ profileName: 'ab', root })).changed).toHaveLength(2);
+    // The server's profile file and package.json, and the web app's table of pages and package.json.
+    expect((await generateProfile({ profileName: 'ab', root })).changed).toHaveLength(4);
     expect((await generateProfile({ profileName: 'ab', root })).changed).toEqual([]);
 
     profileFile('b', ['fixture.b']);
@@ -84,6 +85,7 @@ describe('generateProfile', () => {
     expect(checked.changed).toEqual([
       'apps/server/src/generated/profile.ts',
       'apps/server/package.json',
+      'apps/web/src/generated/ui.ts',
     ]);
     expect(read('apps/server/src/generated/profile.ts')).toBe(before);
   });

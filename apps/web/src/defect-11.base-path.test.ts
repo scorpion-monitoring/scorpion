@@ -107,7 +107,7 @@ describe(`BASE_PATH=${BASE}`, () => {
       const { handle } = await import('./hooks.server.ts');
       const event = {
         request: new Request(`http://localhost${BASE}/x`, {
-          headers: { 'x-forwarded-for': '203.0.113.9' },
+          headers: { 'x-forwarded-for': '203.0.113.9', cookie: '__Host-session=abc' },
         }),
         locals: {} as App.Locals,
       };

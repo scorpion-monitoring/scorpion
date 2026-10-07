@@ -1,7 +1,7 @@
 // The table of pages of this build: the browser halves that the modules of the profile export, found
 // through the generated file. Built once, when the app starts.
 import type { UiRoute } from '@scorpion/contracts';
-import { hasShell, uiModules } from '../generated/ui.ts';
+import { uiModules } from '../generated/ui.ts';
 
 export interface Page {
   package: string;
@@ -26,4 +26,3 @@ function buildTable(): ReadonlyMap<string, Page> {
 
 export const pages = buildTable();
 export const patterns: readonly string[] = [...pages.keys()];
-export { hasShell };

@@ -19,8 +19,8 @@ const server = http.createServer(
     next: handler,
   }),
 );
-// An event stream is idle between heartbeats; only the headers have a time limit.
-server.requestTimeout = 0;
+// A response may stream for as long as it likes (an event stream, sprint 4); the limits on how long a
+// client may take to send its request stay at Node's defaults.
 server.keepAliveTimeout = 65_000;
 server.listen(port, () => console.log(`web: listening on ${port}`));
 

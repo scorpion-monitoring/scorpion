@@ -5,6 +5,7 @@
 
   const { t, href, api, session } = getShell();
   let open = $state(false);
+  let root = $state<HTMLElement>();
   let busy = $state(false);
   let failed = $state(false);
   const who = $derived(session());
@@ -26,6 +27,11 @@
     }
   }
 
+  // A click anywhere else closes the menu (a click inside it is the menu's own business).
+  function outside(event: MouseEvent) {
+    if (open && root && !root.contains(event.target as Node)) open = false;
+  }
+
   function onkeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' && open) {
       open = false;
@@ -34,8 +40,10 @@
   }
 </script>
 
+<svelte:window onclick={outside} />
+
 {#if who}
-  <div class="relative" {onkeydown} role="presentation">
+  <div class="relative" bind:this={root} {onkeydown} role="presentation">
     <button
       type="button"
       class="btn btn-ghost btn-sm gap-2"

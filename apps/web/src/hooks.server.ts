@@ -20,7 +20,7 @@ const HEADERS: Readonly<Record<string, string>> = {
 export const handle: Handle = async ({ event, resolve }) => {
   const api = clientFor(event.request);
   event.locals.api = api;
-  event.locals.session = once(() => loadSession(api));
+  event.locals.session = once(() => loadSession(api, event.request.headers.get('cookie') ?? ''));
   event.locals.navigation = once(() => loadNavigation(api));
 
   const response = await resolve(event);

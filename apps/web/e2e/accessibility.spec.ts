@@ -18,6 +18,9 @@ async function violations(page: Page) {
     );
 }
 
+// A colour that is still fading in at the moment axe looks is not what a visitor sees: motion is off here.
+test.use({ reducedMotion: 'reduce' });
+
 test.describe('the pages of the shell have no serious accessibility violation', () => {
   for (const scheme of ['light', 'dark'] as const) {
     test(`signed out, ${scheme} theme`, async ({ page, at }) => {
@@ -91,6 +94,19 @@ test.describe('the keyboard', () => {
     await expect(trigger).toBeFocused();
   });
 
+  test('a click outside closes the account menu', async ({ page, at }) => {
+    await createUser(page.request, at, {
+      username: 'clicker',
+      password: 'a clicking user password 1',
+    });
+    await signIn(page.request, at, { username: 'clicker', password: 'a clicking user password 1' });
+    await page.goto(at('/'));
+    await page.getByRole('button', { name: 'Account menu' }).click();
+    await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
+    await page.getByRole('main').click();
+    await expect(page.getByRole('button', { name: 'Log out' })).toHaveCount(0);
+  });
+
   test('the menu button of a small screen opens the drawer, which has a way to close it', async ({
     page,
     at,
@@ -104,7 +120,13 @@ test.describe('the keyboard', () => {
     await expect(
       page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Home' }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Close the menu' }).first().click();
+    // The close button of the drawer closes it ...
+    await page.locator('#sidebar').getByRole('button', { name: 'Close the menu' }).click();
+    await expect(open).toHaveAttribute('aria-expanded', 'false');
+    // ... and so does a tap on the dark area next to it.
+    await open.click();
+    await expect(open).toHaveAttribute('aria-expanded', 'true');
+    await page.mouse.click(370, 400);
     await expect(open).toHaveAttribute('aria-expanded', 'false');
   });
 });

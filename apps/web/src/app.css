@@ -140,3 +140,16 @@
 .prose-text a {
   text-decoration: underline;
 }
+
+/* Someone who asked their system for less motion gets none: no transition, no animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

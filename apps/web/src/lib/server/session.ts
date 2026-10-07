@@ -26,7 +26,9 @@ export function clientFor(request: Request): ApiClient {
  * `core.identity` (the route is then unknown, 404). Any other failure is the API being down: it
  * throws, and the visitor gets the error page rather than a page that wrongly looks signed out.
  */
-export async function loadSession(api: ApiClient): Promise<Session | null> {
+export async function loadSession(api: ApiClient, cookie?: string | null): Promise<Session | null> {
+  // Without the session cookie nobody can be signed in: no call, and no 401 in the API's log per visit.
+  if (cookie !== undefined && !hasSessionCookie(cookie)) return null;
   try {
     return await unwrap(api.GET('/auth/me'));
   } catch (error) {
@@ -38,6 +40,13 @@ export async function loadSession(api: ApiClient): Promise<Session | null> {
 /** What the caller may see, from the one list that also decides the pages they may open. */
 export function loadNavigation(api: ApiClient): Promise<Navigation> {
   return unwrap(api.GET('/ui/navigation'));
+}
+
+const SESSION_COOKIE = '__Host-session';
+
+/** Whether a `Cookie` header carries the session cookie (its value is for the API to judge). */
+export function hasSessionCookie(cookie: string | null | undefined): boolean {
+  return (cookie ?? '').split(';').some((part) => part.trim().startsWith(`${SESSION_COOKIE}=`));
 }
 
 /** `() => Promise<T>` that runs `load` once and hands the same answer to every caller. */
