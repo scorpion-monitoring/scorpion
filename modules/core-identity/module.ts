@@ -6,6 +6,7 @@ import {
 } from '@scorpion/integrations';
 import { defineModule, type ModuleContext } from '@scorpion/kernel';
 import { createAuthenticator } from './authenticator.ts';
+import { USER_PERMISSIONS } from './permissions.ts';
 import type { IdentityService } from './public.ts';
 import { registerIdentityRoutes } from './routes.ts';
 import { createAccountService } from './service/accounts.ts';
@@ -46,6 +47,7 @@ import {
 import { createTokenService, type TokenService } from './service/tokens.ts';
 import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
+import { IDENTITY_NAV, IDENTITY_ROUTES } from './ui/routes.ts';
 import type { ApprovalService } from './service/approval.ts';
 
 export { settingsSchema, type IdentitySettings } from './service/settings.ts';
@@ -101,19 +103,7 @@ export interface IdentityModuleOptions {
   };
 }
 
-/** What the role `user` holds: every self-service permission of this module (README, "Roles"). */
-export const USER_PERMISSIONS = [
-  'core.identity.me.read',
-  'core.identity.session.manage',
-  'core.identity.profile.read',
-  'core.identity.profile.update',
-  'core.identity.avatar.update',
-  'core.identity.password.change',
-  'core.identity.email.verify',
-  'core.identity.auth-method.link',
-  'core.identity.token.read',
-  'core.identity.token.manage',
-];
+export { USER_PERMISSIONS } from './permissions.ts';
 
 const toConsole = (text: string) => void process.stderr.write(`${text}\n`);
 const toNowhere = () => undefined;
@@ -300,8 +290,15 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     },
 
     registries: { [APPROVAL_POLICY_REGISTRY]: approvalPolicyEntrySchema },
+    // The pages themselves (Svelte) are loaded by the web app only; the manifest just names the entry.
+    ui: () => import('./ui/index.ts'),
+
     contributes: {
       [APPROVAL_POLICY_REGISTRY]: [manualPolicy],
+      // The sign-in, registration, recovery and profile pages, and the link to the profile. Entries for
+      // a registry of core.ui-shell, which is an optional peer: a profile without it skips them.
+      'ui.routes': IDENTITY_ROUTES,
+      'ui.nav': IDENTITY_NAV,
       // The mails of this module. The rendering, the layout and the delivery are core.notifications'.
       'notify.template': IDENTITY_TEMPLATES,
       // How core.notifications finds the address of the administrator who asks for a test mail.

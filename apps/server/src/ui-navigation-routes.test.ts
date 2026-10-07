@@ -36,6 +36,22 @@ const pages = defineModule({
   },
 });
 
+// What core.ui-shell and core.identity open to anybody (their public pages), and what a signed-in user
+// holds on top. The fixture module's own pages are added by each test.
+const PUBLIC_PAGES = [
+  '/',
+  '/docs',
+  '/forgot-password',
+  '/legal/:page',
+  '/link-sign-in',
+  '/login',
+  '/register',
+  '/reset-password',
+  '/setup',
+  '/verify-email',
+];
+const sorted = (...paths: string[]) => paths.sort();
+
 interface Navigation {
   nav: { id: string; path: string }[];
   routes: string[];
@@ -60,17 +76,19 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     expect(reply.status).toBe(200);
     expect(reply.res.headers.get('cache-control')).toBe('no-store');
     const body = reply.body as Navigation;
-    expect(body.routes).toEqual(['/', '/docs', '/fixture/open', '/legal/:page']);
+    expect(body.routes).toEqual(sorted(...PUBLIC_PAGES, '/fixture/open'));
     expect(body.nav.map((entry) => entry.id)).toEqual(['home', 'docs', 'fixture.open']);
     expect(body.themes.map((theme) => theme.id)).toEqual(['scorpionlight', 'scorpiondark']);
-    expect(JSON.stringify(body)).not.toContain('admin');
+    expect(JSON.stringify(body)).not.toMatch(/admin/i);
   });
 
   it('shows a plain user no page or link behind a permission they lack', async () => {
     const app = await start();
     const { cookie } = await app.signedIn('plain');
     const body = (await app.get('/ui/navigation', { cookie })).body as Navigation;
-    expect(body.routes).toEqual(['/', '/docs', '/fixture/open', '/legal/:page']);
+    // A plain user also has the profile page and its link (core.identity.profile.read).
+    expect(body.routes).toEqual(sorted(...PUBLIC_PAGES, '/fixture/open', '/profile'));
+    expect(body.nav.map((entry) => entry.id)).toContain('account.profile');
     expect(body.nav.map((entry) => entry.id)).not.toContain('fixture.admin');
     expect(JSON.stringify(body)).not.toContain('/fixture/admin');
   });
@@ -94,17 +112,13 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     const app = await start();
     const { cookie } = await app.signedIn('boss', { roles: ['admin'] });
     const body = (await app.get('/ui/navigation', { cookie })).body as Navigation;
-    expect(body.routes).toEqual([
-      '/',
-      '/docs',
-      '/fixture/admin',
-      '/fixture/admin/:id',
-      '/fixture/open',
-      '/legal/:page',
-    ]);
+    expect(body.routes).toEqual(
+      sorted(...PUBLIC_PAGES, '/fixture/admin', '/fixture/admin/:id', '/fixture/open', '/profile'),
+    );
     expect(body.nav.map((entry) => entry.id)).toEqual([
       'home',
       'docs',
+      'account.profile',
       'fixture.admin',
       'fixture.open',
     ]);

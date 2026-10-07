@@ -1,7 +1,7 @@
 <script lang="ts">
   // The dialog of a change that needs a recent authentication (ADR-0025): the password first, and the
   // buttons of the providers when the answer says the account has no password. The layout mounts one.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Alert from './Alert.svelte';
   import { getShell } from './context.ts';
   import Dialog from './Dialog.svelte';
@@ -12,8 +12,7 @@
   let { controller }: { controller: ReauthController } = $props();
   const { t } = getShell();
 
-  // svelte-ignore state_referenced_locally -- the controller is one object for the life of the layout
-  let view = $state<ReauthState>(controller.state);
+  let view = $state<ReauthState>(untrack(() => controller.state));
   onMount(() => controller.subscribe((next) => (view = next)));
 
   let password = $state('');

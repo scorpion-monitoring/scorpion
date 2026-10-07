@@ -35,3 +35,4 @@ export { default as ReauthDialog } from './ReauthDialog.svelte';
 export { default as SubmitButton } from './SubmitButton.svelte';
 export { default as TextArea } from './TextArea.svelte';
 export { default as TextField } from './TextField.svelte';
+export { default as Time } from './Time.svelte';

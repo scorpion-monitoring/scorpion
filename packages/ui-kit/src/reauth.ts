@@ -201,7 +201,7 @@ export function takeReturn(
   localPath: (candidate: unknown) => string | null,
   now: number = Date.now(),
 ): Returned | undefined {
-  let raw: string | null = null;
+  let raw: string | null;
   try {
     raw = storage?.getItem(REAUTH_KEY) ?? null;
     storage?.removeItem(REAUTH_KEY);

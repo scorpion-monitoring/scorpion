@@ -40,16 +40,16 @@ export function safeQuery(search: string): string {
 }
 
 /** The page of `core.identity` that creates the first administrator. */
-export const FIRST_ADMIN_PAGE = '/first-admin';
+export const SETUP_PAGE = '/setup';
 
 export async function loadPage(table: PageTable, request: PageRequest): Promise<PageResult> {
   const { url, basePath } = request;
 
   // A fresh install has nobody who could sign in: the start page is the first-admin form and nothing
   // else is reachable until it has been used. Afterwards the form is a 404 (its own `load` says so).
-  if (table.pages.has(FIRST_ADMIN_PAGE) && (await request.needsFirstAdmin?.())) {
+  if (table.pages.has(SETUP_PAGE) && (await request.needsFirstAdmin?.())) {
     if (url.pathname !== '/') redirect(303, withBase(basePath, '/'));
-    return runPage(table.pages.get(FIRST_ADMIN_PAGE)!, FIRST_ADMIN_PAGE, {}, request);
+    return runPage(table.pages.get(SETUP_PAGE)!, SETUP_PAGE, {}, request);
   }
 
   const match = resolvePath(table.patterns, url.pathname);

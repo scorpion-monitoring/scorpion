@@ -77,7 +77,7 @@
     localPath,
     refresh: () => invalidateAll(),
     goto: (address, options) => goto(address, { replaceState: options?.replace }),
-    replaceUrl: (address) => replaceState(address, {}),
+    replaceUrl: (address) => void replaceState(address, {}),
     withReauth: (action, intent) => reauth.run(action, intent),
     takeIntent: (id) => {
       if (returnedIntent?.id !== id) return undefined;

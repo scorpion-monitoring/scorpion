@@ -18,7 +18,7 @@
     value?: string;
     errors?: readonly string[];
     hint?: string;
-    type?: 'text' | 'email' | 'password' | 'search' | 'url';
+    type?: 'text' | 'email' | 'password' | 'search' | 'url' | 'date';
     autocomplete: HTMLInputAttributes['autocomplete'];
   } & Omit<HTMLInputAttributes, 'value' | 'type' | 'autocomplete' | 'class' | 'id'> = $props();
 

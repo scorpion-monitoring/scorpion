@@ -208,8 +208,8 @@ describe('the returnTo of a sign-in redirect', () => {
 
 describe('a fresh install (no administrator yet)', () => {
   const first: [string, UiRoute] = [
-    '/first-admin',
-    { path: '/first-admin', component, load: () => ({ form: true }) },
+    '/setup',
+    { path: '/setup', component, load: () => ({ form: true }) },
   ];
   const fresh: PageTable = {
     patterns: [...table.patterns, first[0]],
@@ -222,10 +222,10 @@ describe('a fresh install (no administrator yet)', () => {
 
   it('shows the first-admin form on the start page and nothing else', async () => {
     const result = await loadPage(fresh, needs(true));
-    expect(result).toMatchObject({ pattern: '/first-admin', data: { form: true } });
+    expect(result).toMatchObject({ pattern: '/setup', data: { form: true } });
   });
 
-  it.each(['/admin/users', '/first-admin', '/login', '/no/such/page'])(
+  it.each(['/admin/users', '/setup', '/login', '/no/such/page'])(
     'turns %s away to the start page',
     async (path) => {
       const thrown = await loadPage(fresh, {

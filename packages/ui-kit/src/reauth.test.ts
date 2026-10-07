@@ -24,7 +24,9 @@ function setup(answer: (call: Call) => Response, stored: Record<string, string> 
     fetch: async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init);
       const body =
-        request.method === 'GET' ? undefined : await request.json().catch(() => undefined);
+        request.method === 'GET'
+          ? undefined
+          : ((await request.json().catch(() => undefined)) as unknown);
       const call = {
         method: request.method,
         path: new URL(request.url).pathname.replace('/api/internal', ''),
@@ -77,7 +79,7 @@ describe('isReauthRequired', () => {
 describe('run', () => {
   it('returns the result of an action that needs no confirmation, and opens nothing', async () => {
     const { controller } = setup(() => json({}));
-    expect(await controller.run(async () => 42)).toBe(42);
+    expect(await controller.run(() => Promise.resolve(42))).toBe(42);
     expect(controller.state.open).toBe(false);
   });
 
