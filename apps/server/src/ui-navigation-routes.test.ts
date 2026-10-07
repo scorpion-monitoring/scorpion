@@ -113,12 +113,32 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     const { cookie } = await app.signedIn('boss', { roles: ['admin'] });
     const body = (await app.get('/ui/navigation', { cookie })).body as Navigation;
     expect(body.routes).toEqual(
-      sorted(...PUBLIC_PAGES, '/fixture/admin', '/fixture/admin/:id', '/fixture/open', '/profile'),
+      sorted(
+        ...PUBLIC_PAGES,
+        '/fixture/admin',
+        '/fixture/admin/:id',
+        '/fixture/open',
+        '/profile',
+        // The administration of M5 sprint 3: users and pending approvals (core.identity), roles and settings (the shell).
+        '/admin/users',
+        '/admin/users/:id',
+        '/admin/users/pending',
+        '/admin/roles',
+        '/admin/settings',
+        '/admin/settings/:module',
+        '/admin/settings/branding',
+        '/admin/settings/secrets',
+        '/admin/settings/vocabularies',
+      ),
     );
     expect(body.nav.map((entry) => entry.id)).toEqual([
       'home',
       'docs',
       'account.profile',
+      'admin.users',
+      'admin.users.pending',
+      'admin.roles',
+      'admin.settings',
       'fixture.admin',
       'fixture.open',
     ]);

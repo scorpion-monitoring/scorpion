@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "dist"
+    "outDir": "dist",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
   "include": ["*.ts", "package.json", "service", "test", "ui"],
   "references": [
@@ -20,6 +21,9 @@
     },
     {
       "path": "../core-settings"
+    },
+    {
+      "path": "../../packages/ui-kit"
     }
   ]
 }

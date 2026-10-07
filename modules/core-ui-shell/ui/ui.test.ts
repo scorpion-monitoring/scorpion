@@ -11,11 +11,23 @@ describe('the pages of the shell', () => {
     );
   });
 
-  it('are all public, each with its reason', () => {
+  it('are public with a reason, or need a permission (the administration pages)', () => {
     for (const route of SHELL_ROUTES) {
-      expect(route.public, route.path).toBe(true);
-      expect(route.publicReason?.length, route.path).toBeGreaterThan(10);
+      if (route.public) {
+        expect(route.publicReason?.length, route.path).toBeGreaterThan(10);
+      } else {
+        expect(route.permission, route.path).toMatch(/^core\.(authz|settings)\./);
+        expect(route.path, route.path).toMatch(/^\/admin\//);
+      }
     }
+  });
+
+  it('keep every administration page behind a permission, so a plain User gets none of them', () => {
+    const admin = SHELL_ROUTES.filter((route) => route.path.startsWith('/admin'));
+    expect(admin.length).toBeGreaterThan(4);
+    expect(admin.every((route) => route.public !== true)).toBe(true);
+    // Reading the terms of a vocabulary is self-service, so a page that needs only that would open to everyone.
+    expect(admin.map((route) => route.permission)).not.toContain('core.settings.vocabulary.read');
   });
 
   it('have a link only to a page of the module, and a text for every label and section', () => {
@@ -29,6 +41,15 @@ describe('the pages of the shell', () => {
 
   it('load their data in `load`, which a page with data must have', () => {
     const withLoad = routes.filter((route) => route.load).map((route) => route.path);
-    expect(withLoad.sort()).toEqual(['/docs', '/legal/:page']);
+    expect(withLoad.sort()).toEqual([
+      '/admin/roles',
+      '/admin/settings',
+      '/admin/settings/:module',
+      '/admin/settings/branding',
+      '/admin/settings/secrets',
+      '/admin/settings/vocabularies',
+      '/docs',
+      '/legal/:page',
+    ]);
   });
 });

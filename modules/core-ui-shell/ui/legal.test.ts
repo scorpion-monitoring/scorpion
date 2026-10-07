@@ -9,7 +9,7 @@ function context(page: string, answer: Response): UiLoadContext {
       expect(path).toBe('/legal/{page}');
       expect(init.params.path.page).toBe(page);
       const body = answer.headers.get('content-type')?.includes('json')
-        ? await answer.clone().json()
+        ? ((await answer.clone().json()) as unknown)
         : undefined;
       return answer.ok ? { data: body, response: answer } : { error: body, response: answer };
     },
