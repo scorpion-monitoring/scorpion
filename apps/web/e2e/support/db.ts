@@ -1,5 +1,5 @@
 // What a journey needs of the stack's database: the mail the application queued (the links in it carry
-// the tokens of a reset, a verification or a link), and an old session. No relay is configured, so a
+// the tokens of a reset, a verification or a link), and an old session. No relay answers, so a
 // mail stays queued and its body is in the table, which is how a person would have read it.
 import { expect } from '@playwright/test';
 import { mailbox, type QueuedMail } from '@scorpion/testing';

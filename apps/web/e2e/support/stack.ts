@@ -110,6 +110,19 @@ export async function startStack(spec: StackSpec, database: StartedPostgres): Pr
         }),
       ],
     );
+    // The relay does not exist, so every delivery fails and is retried later with its body kept. With the
+    // default transport `none` the delivery job records a mail as sent and wipes the body of a sensitive
+    // one, and a journey that reads the link from the table would race that job.
+    await client.query(
+      `insert into settings_setting (module_id, value, version) values ('core.notifications', $1, 1)`,
+      [
+        JSON.stringify({
+          emailTransport: 'smtp',
+          smtp: { host: 'relay.invalid' },
+          maxAttempts: 20,
+        }),
+      ],
+    );
   } finally {
     await client.end();
   }
