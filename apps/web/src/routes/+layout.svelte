@@ -42,6 +42,11 @@
     csrfToken: () => data.session?.csrfToken ?? undefined,
   });
 
+  // The server wrote `lang` for the first page; a change of language by client navigation updates it.
+  $effect(() => {
+    document.documentElement.lang = data.locale;
+  });
+
   const localPath = (candidate: unknown) => (isLocalPath(basePath, candidate) ? candidate : null);
 
   // Session storage may be missing (a private window) or throw: the dialog then cannot resume a change

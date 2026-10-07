@@ -30,7 +30,10 @@
 </script>
 
 <Dialog open={view.open} title={t('reauth.title')} onclose={() => controller.cancel()}>
-  {#if view.step === 'password'}
+  <!-- Nothing is in the page while the dialog is closed: no second password field for a form to find. -->
+  {#if !view.open}
+    <!-- closed -->
+  {:else if view.step === 'password'}
     <form method="post" onsubmit={submit} class="flex flex-col gap-4">
       <p>{t('reauth.password.lead')}</p>
       {#if view.problem === 'wrong'}

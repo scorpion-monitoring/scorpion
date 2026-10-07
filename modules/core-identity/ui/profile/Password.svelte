@@ -10,7 +10,8 @@
   import { unwrap } from '@scorpion/contracts/client';
   import { LOCAL_ACCOUNTS_OFF } from '../../problem-types.ts';
 
-  const { t, href, api, refresh, goto } = getShell();
+  const { t, href, api, refresh, goto, session } = getShell();
+  const username = $derived(session()?.user.username ?? '');
 
   let current = $state('');
   let next = $state('');
@@ -45,6 +46,17 @@
 <section class="card bg-base-100 border-base-300 border" aria-labelledby="password-title">
   <form method="post" onsubmit={submit} class="card-body gap-4">
     <h2 id="password-title" class="card-title">{t('profile.password.title')}</h2>
+    <!-- The account the password belongs to, for the password manager that offers to update it. -->
+    <input
+      class="sr-only"
+      type="text"
+      name="username"
+      autocomplete="username"
+      value={username}
+      readonly
+      tabindex="-1"
+      aria-hidden="true"
+    />
     <p>{t('profile.password.lead')}</p>
     {#if failure}
       {#if failure.status === 409}

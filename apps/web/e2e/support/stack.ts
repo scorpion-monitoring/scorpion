@@ -21,10 +21,20 @@ export interface StackSpec {
   basePath: string;
   webPort: number;
   apiPort: number;
+  /**
+   * `false`: a fresh install with no administrator, for the first-admin form (the one-time token is
+   * printed on the API's standard error, which the log of the stack keeps). Default `true`: the
+   * administrator `ADMIN` exists, as for every other journey.
+   */
+  admin?: boolean;
+  /** The spec files of the project (default: every spec except those that need a fresh install). */
+  testMatch?: string;
 }
 
 export interface Stack extends StackSpec {
   origin: string;
+  /** The connection string of the stack's own database, for a test that reads a mail or ages a session. */
+  databaseUrl: string;
   /** Everything the two processes wrote, for a failing test. */
   logs: () => string;
   stop: () => Promise<void>;
@@ -34,7 +44,13 @@ export interface Stack extends StackSpec {
 export const SPECS: StackSpec[] = [
   { name: 'root', basePath: '/', webPort: 4173, apiPort: 4183 },
   { name: 'nested', basePath: '/a/b', webPort: 4174, apiPort: 4184 },
+  // Fresh installs, with no administrator: only the bootstrap journey runs on them.
+  { name: 'fresh-root', basePath: '/', webPort: 4175, apiPort: 4185, admin: false },
+  { name: 'fresh-nested', basePath: '/a/b', webPort: 4176, apiPort: 4186, admin: false },
 ];
+
+/** The spec that needs a fresh install; every other spec runs on the stacks that have an administrator. */
+export const FRESH_SPEC = 'bootstrap.spec.ts';
 
 const prefix = (basePath: string) => (basePath === '/' ? '' : basePath);
 
@@ -97,18 +113,20 @@ export async function startStack(spec: StackSpec, database: StartedPostgres): Pr
   } finally {
     await client.end();
   }
-  run(
-    [
-      'apps/server/src/cli.ts',
-      'create-admin',
-      '--username',
-      ADMIN.username,
-      '--email',
-      ADMIN.email,
-    ],
-    env,
-    `${ADMIN.password}\n`,
-  );
+  if (spec.admin !== false) {
+    run(
+      [
+        'apps/server/src/cli.ts',
+        'create-admin',
+        '--username',
+        ADMIN.username,
+        '--email',
+        ADMIN.email,
+      ],
+      env,
+      `${ADMIN.password}\n`,
+    );
+  }
 
   let log = '';
   // Also on disk, for a test that fails in a worker (which cannot see this process's memory).
@@ -144,6 +162,7 @@ export async function startStack(spec: StackSpec, database: StartedPostgres): Pr
   return {
     ...spec,
     origin,
+    databaseUrl: url,
     logs,
     stop: async () => {
       await Promise.all(

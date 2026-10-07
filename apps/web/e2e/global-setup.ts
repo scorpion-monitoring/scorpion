@@ -14,7 +14,13 @@ export default async function globalSetup() {
   }
   const { stacks, stop } = await startAll();
   process.env.SCORPION_E2E_STACKS = JSON.stringify(
-    stacks.map(({ name, basePath, origin, apiPort }) => ({ name, basePath, origin, apiPort })),
+    stacks.map(({ name, basePath, origin, apiPort, databaseUrl }) => ({
+      name,
+      basePath,
+      origin,
+      apiPort,
+      databaseUrl,
+    })),
   );
   return stop;
 }

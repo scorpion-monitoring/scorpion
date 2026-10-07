@@ -71,6 +71,8 @@ describe('the module', () => {
       'kernel.authenticator',
       'notify.recipientAddress',
       'notify.template',
+      'ui.nav',
+      'ui.routes',
     ]);
     expect(manifest.routes).toBeDefined();
     expect(manifest.commands?.map((command) => command.name)).toEqual(['create-admin']);
