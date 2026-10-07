@@ -3,7 +3,7 @@
 // token of a reset or a verification link travels in the URL **fragment**, which a browser does not
 // send to the server, so it is in no access log, no proxy log and no `Referer`. The page reads it and
 // posts it to the confirm route.
-import { mountPath } from '@scorpion/kernel';
+import { url } from '@scorpion/contracts';
 
 export const RESET_PAGE = '/reset-password';
 export const VERIFY_PAGE = '/verify-email';
@@ -27,8 +27,9 @@ export interface MailLinks {
 }
 
 export function createMailLinks(config: Config): MailLinks {
+  // `url()` is the one place that joins the base path and a path (defect 11).
   const page = (path: string, fragment = '') =>
-    `${config.ORIGIN}${mountPath(config)}${path}${fragment}`;
+    `${config.ORIGIN}${url(config.BASE_PATH, path)}${fragment}`;
   return {
     reset: (token) => page(RESET_PAGE, `#token=${encodeURIComponent(token)}`),
     verify: (token) => page(VERIFY_PAGE, `#token=${encodeURIComponent(token)}`),

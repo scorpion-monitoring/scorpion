@@ -1,0 +1,160 @@
+import type { UiRoute } from '@scorpion/contracts';
+import { ApiError } from '@scorpion/contracts/client';
+import type { Navigation, Session } from '@scorpion/contracts/client';
+import { isHttpError, isRedirect } from '@sveltejs/kit';
+import { describe, expect, it } from 'vitest';
+import { loadPage, type PageRequest, type PageTable } from './page.ts';
+
+const component = () => Promise.reject(new Error('not rendered here'));
+const calls: { params: Record<string, string> }[] = [];
+const routes: [string, UiRoute][] = [
+  ['/', { path: '/', component }],
+  ['/admin/users', { path: '/admin/users', component }],
+  [
+    '/admin/users/:id',
+    {
+      path: '/admin/users/:id',
+      component,
+      load: ({ params }) => {
+        calls.push({ params });
+        return { id: params.id };
+      },
+    },
+  ],
+  [
+    '/boom',
+    {
+      path: '/boom',
+      component,
+      load: () => {
+        throw new Error('a bug in a loader');
+      },
+    },
+  ],
+  [
+    '/gone',
+    {
+      path: '/gone',
+      component,
+      load: () => {
+        throw new ApiError(404, undefined);
+      },
+    },
+  ],
+  [
+    '/down',
+    {
+      path: '/down',
+      component,
+      load: () => {
+        throw new ApiError(500, undefined);
+      },
+    },
+  ],
+];
+const table: PageTable = {
+  patterns: routes.map(([pattern]) => pattern),
+  pages: new Map(routes.map(([pattern, route]) => [pattern, { package: 'fixture', route }])),
+};
+
+const session = { user: { id: 'u' }, roles: ['user'], csrfToken: 't' } as unknown as Session;
+function request(
+  path: string,
+  options: { signedIn?: boolean; routes?: string[]; basePath?: string } = {},
+): PageRequest {
+  return {
+    url: new URL(`http://localhost${path}`),
+    basePath: options.basePath ?? '/',
+    api: {} as never,
+    session: () => Promise.resolve(options.signedIn ? session : null),
+    navigation: () =>
+      Promise.resolve({
+        routes: options.routes ?? ['/'],
+        nav: [],
+        widgets: [],
+        themes: [],
+      } as Navigation),
+    publicApi: { openapi: '3.1.0', info: { title: 't', version: '1' } },
+  };
+}
+
+async function outcome(table_: PageTable, req: PageRequest) {
+  try {
+    return { result: await loadPage(table_, req) };
+  } catch (thrown) {
+    return { thrown };
+  }
+}
+
+describe('loadPage', () => {
+  it('opens a page the caller may open and passes the parameters to its load', async () => {
+    const { result } = await outcome(
+      table,
+      request('/admin/users/42', { signedIn: true, routes: ['/', '/admin/users/:id'] }),
+    );
+    expect(result).toEqual({
+      pattern: '/admin/users/:id',
+      params: { id: '42' },
+      data: { id: '42' },
+    });
+    expect(calls.at(-1)?.params).toEqual({ id: '42' });
+  });
+
+  it('gives a page without a load the data null', async () => {
+    const { result } = await outcome(table, request('/'));
+    expect(result).toEqual({ pattern: '/', params: {}, data: null });
+  });
+
+  it('answers 404 for a path no module registered, without asking who the caller is', async () => {
+    const { thrown } = await outcome(table, request('/nothing/here', { signedIn: true }));
+    expect(isHttpError(thrown) && thrown.status).toBe(404);
+  });
+
+  it('answers 403 to a signed-in caller the API did not list the page for: a plain user at an admin path', async () => {
+    const { thrown } = await outcome(
+      table,
+      request('/admin/users', { signedIn: true, routes: ['/'] }),
+    );
+    expect(isHttpError(thrown) && thrown.status).toBe(403);
+    const sub = await outcome(table, request('/admin/users/7', { signedIn: true, routes: ['/'] }));
+    expect(isHttpError(sub.thrown) && sub.thrown.status).toBe(403);
+  });
+
+  it('sends an anonymous caller to sign in, with the page they wanted as a returnTo under the base path', async () => {
+    for (const [basePath, expected] of [
+      ['/', '/login?returnTo=%2Fadmin%2Fusers%3Ftab%3D2'],
+      ['/a/b/c', '/a/b/c/login?returnTo=%2Fa%2Fb%2Fc%2Fadmin%2Fusers%3Ftab%3D2'],
+    ] as const) {
+      const { thrown } = await outcome(table, request('/admin/users?tab=2', { basePath }));
+      expect(isRedirect(thrown)).toBe(true);
+      expect(isRedirect(thrown) && thrown.status).toBe(303);
+      expect(isRedirect(thrown) && thrown.location).toBe(expected);
+    }
+  });
+
+  it('never runs the load of a page the caller may not open', async () => {
+    const before = calls.length;
+    await outcome(table, request('/admin/users/9', { signedIn: true, routes: ['/'] }));
+    expect(calls.length).toBe(before);
+  });
+
+  it('turns what a load throws into an HTTP error, and never returns a response (defect 12)', async () => {
+    const gone = await outcome(table, request('/gone', { routes: ['/gone'] }));
+    expect(isHttpError(gone.thrown) && gone.thrown.status).toBe(404);
+    const down = await outcome(table, request('/down', { routes: ['/down'] }));
+    expect(isHttpError(down.thrown) && down.thrown.status).toBe(502);
+    const bug = await outcome(table, request('/boom', { routes: ['/boom'] }));
+    expect(bug.result).toBeUndefined();
+    expect((bug.thrown as Error).message).toBe('a bug in a loader');
+  });
+
+  it('does not match a path with an encoded slash or a dot segment', async () => {
+    for (const path of ['/admin/users/a%2Fb', '/admin/users/%2e%2e']) {
+      const { thrown } = await outcome(
+        table,
+        request(path, { signedIn: true, routes: ['/admin/users/:id'] }),
+      );
+      expect(isHttpError(thrown) && thrown.status, path).toBe(404);
+    }
+  });
+});

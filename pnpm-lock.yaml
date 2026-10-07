@@ -127,12 +127,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/contracts
     devDependencies:
+      '@hono/node-server':
+        specifier: ^2.1.3
+        version: 2.1.3(hono@4.13.12)
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
       '@scorpion/core-ui-shell':
         specifier: workspace:*
         version: link:../../modules/core-ui-shell
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
@@ -385,6 +391,9 @@ importers:
       '@scorpion/core-authz':
         specifier: workspace:*
         version: link:../core-authz
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel

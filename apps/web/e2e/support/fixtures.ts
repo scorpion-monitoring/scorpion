@@ -82,3 +82,13 @@ export async function saveSettings(
   });
   expect(saved.status(), await saved.text()).toBe(200);
 }
+
+/** The product name the instance shows, as the API says it (never a literal: branding comes from settings). */
+export async function productName(
+  request: APIRequestContext,
+  at: (path: string) => string,
+): Promise<string> {
+  const response = await request.get(at('/api/internal/branding'));
+  expect(response.status()).toBe(200);
+  return ((await response.json()) as { productName: string }).productName;
+}

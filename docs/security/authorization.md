@@ -125,6 +125,7 @@ the same file answers 401 and 403 on every non-public route.
 | `PUT /preferences/{key}`                        | core.settings      | `core.settings.preference.write`       | default    | no             |
 | `PUT /secrets/{name}`                           | core.settings      | `core.settings.secret.write`           | strict     | yes            |
 | `PUT /settings/{module}`                        | core.settings      | `core.settings.write`                  | default    | yes, with body |
+| `GET /ui/navigation`                            | core.ui-shell      | **public**                             | default    | no             |
 
 <!-- routes:end -->
 

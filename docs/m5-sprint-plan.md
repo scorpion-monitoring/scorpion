@@ -116,8 +116,7 @@ Order matters. Sprint 1 settles the riskiest question (the catch-all route) and 
 uses. Sprint 2 needs only the shell. Sprint 3's `ui-kit` is used by sprint 4, so it cannot move after it. Sprint 4 holds the
 screens with the least new design and the acceptance journeys.
 
-Module graph after M5: `core.ui-shell` depends on `core.settings` (branding, locale) and `core.identity` (`/auth/me`, so the
-shell can ask who is signed in). It is the owner of the `ui.nav`, `ui.widget` and `ui.theme` registries. Other modules
+Module graph after M5: `core.ui-shell` depends on `core.authz` (to decide what a caller may see) and `core.settings` (branding); not on `core.identity`, because the browser asks `/auth/me` itself (ADR-0027). It is the owner of the `ui.routes`, `ui.nav`, `ui.widget` and `ui.theme` registries. Other modules
 contribute to them through an optional peer on `core.ui-shell` (a module must still start in a profile without the shell, as
 `core.audit` does). The module's table prefix is not needed: it owns no table (Decision 5).
 
@@ -139,8 +138,9 @@ Work items
    `ui.theme` (`{ id, label key, colorScheme }`), and exports the route entry schema `{ path, permission?, public?, load,
 component }`. Permission names are checked by the loader against the declared permissions. A `ui.routes` entry without
    `permission` or `public: true` fails at registration, as `createRoute()` does.
-3. **Navigation filtered by permission.** The server computes it: `GET /ui/navigation` (permission `core.ui-shell.nav.read`,
-   held by every signed-in role; anonymous callers get only the public entries) returns the entries the caller may see, built
+   _Sprint 1 outcome:_ the entry has two halves (ADR-0027): the server half is data in the registry (`{ path, permission }` or `{ path, public: true, publicReason }`), the browser half is `{ path, load, component }` in the module's `./ui` export; a test per module checks that they list the same paths.
+3. **Navigation filtered by permission.** The server computes it: `GET /ui/navigation` (a **public** route, with a reason, because anonymous callers must get the public entries too; it needs no
+   `core.ui-shell.nav.read` permission, the plan had one) returns the entries the caller may see, built
    from the registry and `ctx.authz`. The same list drives the catch-all's permission check. The client never hides a link
    it computed itself (defect-style test: a plain User's response contains no Administration entry; a request for an admin
    path as a User gives 403, not an empty page).
@@ -152,7 +152,7 @@ component }`. Permission names are checked by the loader against the declared pe
    strips and adds the prefix correctly for any number of segments, refuses an absolute URL with another origin. Table-driven
    tests for `/`, `/a`, `/a/b`, `/a/b/`, trailing slashes, encoded characters. Regression test
    `defect-11.base-path.test.ts` with `BASE_PATH=/a/b/c` against the server hook, the web hook and a redirect after login.
-6. **Typed API client** (Decision 4) in `packages/contracts`, generated from the same route definitions the server mounts, with
+6. **Typed API client** (Decision 4) in `packages/contracts` (`@scorpion/contracts/client`, `openapi-fetch` over `pnpm openapi:generate`), generated from the same route definitions the server mounts, with
    `url()` built in, the CSRF header added to unsafe methods, and one error type for problem+json. No hand-written fetch URL
    in the web app (lint rule from §2).
 7. **Session in the web layer.** `hooks.server.ts` forwards the cookie to the API, calls `GET /auth/me` once per request, keeps
@@ -169,8 +169,8 @@ component }`. Permission names are checked by the loader against the declared pe
     instance (an open-redirect test). Defect 12: a loader that cannot get its data throws; `defect-12.loader-errors.test.ts`
     fetches a page with a missing token and expects the error page and status, not a returned response.
 11. **Public pages:** `/legal/terms`, `/legal/privacy`, `/legal/imprint` from `GET /legal/{page}` (sanitised on the server),
-    `/docs` (the API documentation page; where it is served is a part of Decision 3), and the declared public route list.
-    Public routes are listed in one place and a test fails for a `ui.routes` entry that is public without being declared.
+    `/docs` (the API documentation page; ADR-0027: a public page of the shell, rendered from the build-time OpenAPI document of the public v1 surface), and the declared public route list.
+    Public routes are listed in one place (`PUBLIC_PAGES` in `modules/core-ui-shell/public.ts`) and a test (`apps/server/src/ui-routes.test.ts`) fails for a `ui.routes` entry that is public without being declared.
 12. **Security headers and CSP** in the web hook; a test asserts the headers and that a page has no inline script without a
     nonce.
     **ASVS 7.4.4.** A Playwright test, tagged `[ASVS-7.4.4]`, signs in through the API (the login page is sprint 2), walks the navigation of a plain User and of an Admin, and finds the
@@ -183,6 +183,18 @@ and one nav entry in a fixture profile and both appear for a user with the permi
 fixture runs under `BASE_PATH=/` and `/a/b/c`. Both defect tests pass. A profile without `core.ui-shell` still starts the
 API. The first Playwright test replaces `smoke.spec.ts`: the start page loads, the header shows the instance name from
 settings, the theme toggle works. ASVS 7.4.4 is `pass` with its tagged test, and `pnpm security:asvs` is green.
+
+### Corrections found in sprint 1
+
+Where the plan was wrong, the code and the ADRs won (ADR-0027 records each):
+
+- **Decision 4:** the server did not "already produce" the OpenAPI document and no route serves it. It is generated at build time (`pnpm openapi:generate`, no database; `pnpm check` fails on a diff); the typed client is `openapi-fetch`, not `hono/client`; `/docs` is a page of the shell, not an API route.
+- **`GET /ui/navigation`** is public (with a reason), not guarded by `core.ui-shell.nav.read`; the module declares no permission. It depends on `core.authz` and `core.settings`, not on `core.identity`.
+- **A `ui.routes` entry** is two halves (server data, browser code), not one object with `load` and `component`.
+- **SvelteKit 3** (not 2): `$lib` is `#lib`, there is no `svelte.config.js` (options go to the Vite plugin), hook types come from `@sveltejs/kit/hooks`, the error hook receives a `kind`, and environment variables are read from `process.env` by the node adapter. `paths.base` stays empty: the front of the web process takes `BASE_PATH` off every request, so one build serves any prefix.
+- **The image** runs two processes when the profile has the shell (`scripts/image-run.ts`); `/metrics` is on the API's port (3001) and is not proxied; the API trusts the web process as a proxy (`TRUSTED_PROXIES` gets `127.0.0.1,::1`).
+- **A kernel bug** surfaced by the first end-to-end run: `ctx.deps` was a snapshot taken when a context was made, and the server makes the context of `core.settings` before the kernel starts (`kernel.settingsOf()`), so every settings route answered 500 in a running server. Fixed, with a regression test.
+- **The legal pages** show the API's title as the page heading; write the Markdown text from level 2 (`##`).
 
 ## 5. Sprint 2: i18n, sign-in, register, profile
 

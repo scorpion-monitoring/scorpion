@@ -29,10 +29,13 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
+import uiShellModule from '@scorpion/core-ui-shell/module';
+import uiShellPackage from '@scorpion/core-ui-shell/package.json' with { type: 'json' };
 import {
   createKernel,
   createLogger,
   loadConfig,
+  mountPath,
   type Kernel,
   type ModuleManifest,
 } from '@scorpion/kernel';
@@ -80,7 +83,16 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   /** Start over a database that another app already uses (a second server process). */
   databaseUrl?: string;
   /** Fixture modules that depend on core.settings, for example one that registers user preferences. */
-  extraModules?: { id: string; manifest: ModuleManifest }[];
+  extraModules?: {
+    id: string;
+    manifest: ModuleManifest;
+    /** Package names of other modules it depends on (core.settings is always one). */
+    requires?: string[];
+  }[];
+  /** false: the profile has no core.ui-shell (it depends on core.authz only; default: it is there). */
+  uiShell?: boolean;
+  /** `BASE_PATH` of the application; the routes are mounted under it. Default `/`. */
+  basePath?: string;
   /** Use the limits stored in core.settings (as the server does) instead of the constants. */
   storedRateLimits?: boolean;
   /**
@@ -157,6 +169,7 @@ export function useIdentityApp() {
             'core.notifications',
             'core.identity',
             ...(options.audit === false ? [] : ['core.audit']),
+            ...(options.uiShell === false ? [] : ['core.ui-shell']),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -181,11 +194,17 @@ export function useIdentityApp() {
           ...(options.audit === false
             ? []
             : [{ manifest: createAuditModule(), packageJson: auditPackage }]),
+          ...(options.uiShell === false
+            ? []
+            : [{ manifest: uiShellModule, packageJson: uiShellPackage }]),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
               name: `@scorpion/${extra.id.replaceAll('.', '-')}`,
-              dependencies: { '@scorpion/core-settings': 'workspace:*' },
+              dependencies: {
+                '@scorpion/core-settings': 'workspace:*',
+                ...Object.fromEntries((extra.requires ?? []).map((name) => [name, 'workspace:*'])),
+              },
             },
           })),
         ],
@@ -196,6 +215,7 @@ export function useIdentityApp() {
           'core.notifications': '@scorpion/core-notifications',
           'core.identity': '@scorpion/core-identity',
           'core.audit': '@scorpion/core-audit',
+          'core.ui-shell': '@scorpion/core-ui-shell',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,
@@ -206,6 +226,7 @@ export function useIdentityApp() {
         config: loadConfig({
           DATABASE_URL: databaseUrl,
           PROFILE: 'identity-http',
+          BASE_PATH: options.basePath ?? '/',
         }),
         log,
         jobs: options.jobs,
@@ -263,7 +284,7 @@ export function useIdentityApp() {
         if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
         if (options.csrf !== undefined) headers['x-csrf-token'] = options.csrf;
         const res = await app.request(
-          `${API}${path}`,
+          `${mountPath(kernel.config)}${API}${path}`,
           {
             method,
             headers,

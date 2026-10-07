@@ -9,7 +9,7 @@
 // `BASE_PATH` is a run-time value, so one build serves any prefix of any depth. Plain Node, no dependency.
 import http from 'node:http';
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
-import { stripBase } from '@scorpion/contracts';
+import { stripBase } from '@scorpion/contracts/url';
 
 export type NextHandler = (request: IncomingMessage, response: ServerResponse) => void;
 

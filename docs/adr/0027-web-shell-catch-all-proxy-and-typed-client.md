@@ -21,9 +21,9 @@ have any number of segments (defect 11), and a profile without a browser must st
 
 - It owns the registries `ui.routes`, `ui.nav`, `ui.widget` and `ui.theme`, the public route `GET /ui/navigation`, and the first
   pages (`/`, the legal pages, `/docs`), which it contributes to its own registries like any other module would. It depends on
-  `core.authz` only (to decide what a caller may see). The plan also named `core.settings` and `core.identity`; the browser asks
-  `/branding` and `/auth/me` itself, so the shell needs neither on the server. Other modules contribute through an optional peer
-  on `core.ui-shell`; a profile without it still starts the API (and builds no web app, see below).
+  `core.authz` (to decide what a caller may see) and `core.settings` (the branding every page shows, so a page never needs a built-in name);
+  not on `core.identity`, because the browser asks `/auth/me` itself and a profile without sign-in still has public pages. Other modules
+  contribute through an optional peer on `core.ui-shell`; a profile without it still starts the API (and builds no web app, see below).
 - **A route entry has two halves.** The server half is data in the registry `ui.routes`: `{ path, permission }` or
   `{ path, public: true, publicReason }`, with `:param` segments. The browser half is code: a `ui` entry in the module
   (`./ui`, exported by the package, referenced by the manifest's `ui` field) that lists `{ path, load, component }` with a lazy

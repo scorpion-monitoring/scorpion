@@ -82,6 +82,18 @@ export async function startStack(spec: StackSpec, database: StartedPostgres): Pr
       `insert into settings_setting (module_id, value, version) values ('core.identity', $1, 1)`,
       [JSON.stringify({ passwordBreachCheck: false })],
     );
+    // The journeys sign in many times a minute from one address; the limits have their own tests.
+    await client.query(
+      `insert into settings_setting (module_id, value, version) values ('core.settings', $1, 1)`,
+      [
+        JSON.stringify({
+          rateLimits: {
+            default: { burst: 10_000, perMinute: 10_000 },
+            strict: { burst: 10_000, perMinute: 10_000 },
+          },
+        }),
+      ],
+    );
   } finally {
     await client.end();
   }

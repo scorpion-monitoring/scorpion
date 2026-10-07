@@ -7,16 +7,18 @@
 // The client is typed against the `full` profile, the superset; the Docker build of another profile
 // writes only the v1 document. No database is needed: each module's `routes()` runs with a registrar
 // that only collects the route definitions and with stand-ins for the services, which never run.
-// `--check` reports a file that differs instead of writing it (`pnpm check` runs it).
+// `--check` reports a file that differs instead of writing it (`pnpm check` runs it); `--web-only` writes the v1 document alone.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import openapiTS, { astToString } from 'openapi-typescript';
 import { generateOpenApiDocument, type AppRoute } from '@scorpion/contracts';
 import type { ModuleManifest } from '@scorpion/kernel';
 import { profileName, sources } from './generated/profile.ts';
 
 const root = resolve(import.meta.dirname, '../../..');
 const check = process.argv.includes('--check');
+// The Docker build of a profile writes the web app's v1 document only: the client types belong to the
+// committed `full` profile and need a development dependency that an image does not install.
+const webOnly = process.argv.includes('--web-only');
 
 /** Something that can be called, indexed and awaited without doing anything: a service that never runs. */
 function standIn(): unknown {
@@ -52,16 +54,17 @@ outputs.set(
   'apps/web/src/generated/openapi-v1.json',
   json(
     generateOpenApiDocument(v1, {
-      title: 'Scorpion public API',
+      title: 'Public API',
       version: '1',
       description: 'The public API, version 1.',
     }),
   ),
 );
 
-if (profileName === 'full') {
+if (profileName === 'full' && !webOnly) {
+  const { default: openapiTS, astToString } = await import('openapi-typescript');
   const document = generateOpenApiDocument(internal, {
-    title: 'Scorpion internal API',
+    title: 'Internal API',
     version: '1',
     description: 'The API of the web application. Not for third parties.',
   });

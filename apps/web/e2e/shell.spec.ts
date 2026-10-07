@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { admin, expect, saveSettings, signIn, test } from './support/fixtures.ts';
+import { admin, expect, productName, saveSettings, signIn, test } from './support/fixtures.ts';
 
 test.describe('the shell', () => {
   // `at()` refuses a path with `..` or an encoded slash (as `url()` does), which is what these requests need.
@@ -20,7 +20,9 @@ test.describe('the shell', () => {
     await page.goto(at('/'));
     await expect(page.getByRole('banner').getByText('Test Registry')).toBeVisible();
     await expect(page).toHaveTitle('Test Registry');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Scorpion');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      await productName(request, at),
+    );
     await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
     await page.screenshot({ path: `test-results/shell-${test.info().project.name}.png` });
   });
@@ -51,6 +53,7 @@ test.describe('the shell', () => {
 
   test('an unknown path is the error page with 404 and a way home under the base path', async ({
     page,
+    request,
     at,
   }) => {
     const response = await page.goto(at('/no/such/page'));
@@ -58,7 +61,9 @@ test.describe('the shell', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('This page does not exist.');
     await page.getByRole('link', { name: 'Go home' }).click();
     await expect(page).toHaveURL(new RegExp(`${at('/')}$`));
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Scorpion');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      await productName(request, at),
+    );
   });
 
   test('a path with an encoded slash or dot segment is not served', async ({
