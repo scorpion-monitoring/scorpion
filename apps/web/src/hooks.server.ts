@@ -1,6 +1,15 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { ApiError } from '@scorpion/contracts/client';
-import { clientFor, loadLocale, loadNavigation, loadSession, once } from '#lib/server/session.ts';
+import {
+  clientFor,
+  createBootstrapProbe,
+  loadLocale,
+  loadNavigation,
+  loadSession,
+  once,
+} from '#lib/server/session.ts';
+
+const needsFirstAdmin = createBootstrapProbe();
 
 /**
  * Hardening that applies to every response of the web app. The Content-Security-Policy is set by
@@ -22,6 +31,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   event.locals.api = api;
   event.locals.session = once(() => loadSession(api, event.request.headers.get('cookie') ?? ''));
   event.locals.navigation = once(() => loadNavigation(api));
+  event.locals.bootstrap = once(() => needsFirstAdmin(api));
   event.locals.locale = once(async () =>
     loadLocale(api, await event.locals.session(), event.request.headers.get('accept-language')),
   );

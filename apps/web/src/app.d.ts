@@ -11,6 +11,8 @@ declare global {
       session(): Promise<Session | null>;
       /** What the caller may see. Asked once per request. */
       navigation(): Promise<Navigation>;
+      /** Whether the instance has no administrator yet (the start page then offers the first-admin form). */
+      bootstrap(): Promise<boolean>;
       /** The language of this request (ADR-0022). Asked once per request. */
       locale(): Promise<Locale>;
     }

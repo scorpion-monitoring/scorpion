@@ -4,7 +4,7 @@
 import { globSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { catalogueProblems, mergeBundles } from '@scorpion/ui-kit';
+import { catalogueProblems, mergeBundles, uiKitMessages } from '@scorpion/ui-kit';
 import { uiModules } from './generated/ui.ts';
 import { findLiteralText } from './lib/check/literal-text.ts';
 import { shellMessages } from './lib/messages.ts';
@@ -14,8 +14,14 @@ const repo = resolve(import.meta.dirname, '../../..');
 describe('the message catalogue', () => {
   it('has every English text in German too, with the same placeholders', () => {
     expect(
-      catalogueProblems(mergeBundles([shellMessages, ...uiModules.map((m) => m.messages)])),
+      catalogueProblems(
+        mergeBundles([shellMessages, uiKitMessages, ...uiModules.map((m) => m.messages)]),
+      ),
     ).toEqual([]);
+  });
+
+  it('of the shared components is complete alone', () => {
+    expect(catalogueProblems(uiKitMessages)).toEqual([]);
   });
 
   it.each(uiModules.map((module) => [module.package, module.messages] as const))(

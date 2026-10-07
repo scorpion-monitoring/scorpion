@@ -29,12 +29,25 @@ export type LegalPage = Json<'/legal/{page}', 'get'>;
 export class ApiError extends Error {
   readonly status: number;
   readonly problem: Problem | undefined;
-  constructor(status: number, problem: Problem | undefined) {
+  /** `Retry-After` of a throttled answer (429), in seconds; `undefined` when there was none. */
+  readonly retryAfterSeconds: number | undefined;
+  constructor(status: number, problem: Problem | undefined, retryAfterSeconds?: number) {
     super(problem?.detail ?? problem?.title ?? `The request failed with status ${status}.`);
     this.name = 'ApiError';
     this.status = status;
     this.problem = problem;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+  /** The stable problem type (`reauthentication-required`, `account-pending`), `undefined` for `about:blank`. */
+  get type(): string | undefined {
+    const type = this.problem?.type;
+    return type === undefined || type === 'about:blank' ? undefined : type;
+  }
+}
+
+/** The seconds of a `Retry-After` header that holds a whole number (the API sends that form only). */
+export function retryAfterSeconds(header: string | null): number | undefined {
+  return header !== null && /^\d{1,7}$/.test(header.trim()) ? Number(header.trim()) : undefined;
 }
 
 export interface ApiClientOptions {
@@ -89,7 +102,11 @@ export async function unwrap<T>(
   const { data, error, response } = await call;
   if (!response.ok || error !== undefined) {
     const problem = problemSchema.safeParse(error);
-    throw new ApiError(response.status, problem.success ? problem.data : undefined);
+    throw new ApiError(
+      response.status,
+      problem.success ? problem.data : undefined,
+      retryAfterSeconds(response.headers.get('retry-after')),
+    );
   }
   return data as T;
 }

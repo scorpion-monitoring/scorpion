@@ -1,8 +1,19 @@
 <script lang="ts">
   import '../app.css';
+  import { goto, invalidateAll, replaceState } from '$app/navigation';
+  import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
-  import { url } from '@scorpion/contracts';
-  import { createTranslator, mergeBundles, setShell } from '@scorpion/ui-kit';
+  import { isLocalPath, url } from '@scorpion/contracts';
+  import {
+    createReauthController,
+    createTranslator,
+    mergeBundles,
+    ReauthDialog,
+    setShell,
+    takeReturn,
+    uiKitMessages,
+    type Intent,
+  } from '@scorpion/ui-kit';
   import AccountMenu from '#lib/components/AccountMenu.svelte';
   import Footer from '#lib/components/Footer.svelte';
   import Icon from '#lib/components/Icon.svelte';
@@ -14,7 +25,11 @@
 
   let { data, children }: LayoutProps = $props();
 
-  const bundles = mergeBundles([shellMessages, ...uiModules.map((module) => module.messages)]);
+  const bundles = mergeBundles([
+    shellMessages,
+    uiKitMessages,
+    ...uiModules.map((module) => module.messages),
+  ]);
   // The language follows the page's data, so a changed preference takes effect after `invalidateAll()`.
   const translate = $derived(createTranslator(bundles, data.locale));
   const t = (key: string, params?: Record<string, string | number>) => translate(key, params);
@@ -27,6 +42,30 @@
     csrfToken: () => data.session?.csrfToken ?? undefined,
   });
 
+  const localPath = (candidate: unknown) => (isLocalPath(basePath, candidate) ? candidate : null);
+
+  // Session storage may be missing (a private window) or throw: the dialog then cannot resume a change
+  // after a visit to the provider, and says nothing more about it.
+  const storage = () => {
+    try {
+      return window.sessionStorage;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const reauth = createReauthController({
+    api,
+    get storage() {
+      return storage();
+    },
+    path: () => `${window.location.pathname}${window.location.search}`,
+    navigate: (address) => window.location.assign(address),
+  });
+
+  // What the person asked for before they left for the provider: kept here until the page asks for it.
+  let returnedIntent: Intent | undefined;
+
   setShell({
     href,
     t,
@@ -35,6 +74,26 @@
     navigation: () => data.navigation,
     branding: () => data.branding,
     locale: () => data.locale,
+    localPath,
+    refresh: () => invalidateAll(),
+    goto: (address, options) => goto(address, { replaceState: options?.replace }),
+    replaceUrl: (address) => replaceState(address, {}),
+    withReauth: (action, intent) => reauth.run(action, intent),
+    takeIntent: (id) => {
+      if (returnedIntent?.id !== id) return undefined;
+      const { payload } = returnedIntent;
+      returnedIntent = undefined;
+      return { payload };
+    },
+  });
+
+  // The provider's callback ends at the start page with no return path. When this load is that return,
+  // the page that asked for the change is opened again and finds its intent waiting.
+  onMount(() => {
+    const returned = takeReturn(storage(), localPath);
+    if (!returned || !data.session) return;
+    returnedIntent = returned.intent;
+    void goto(returned.path, { replaceState: true });
   });
 
   let menuOpen = $state(false);
@@ -71,7 +130,9 @@
 </a>
 
 <div class="flex min-h-screen">
-  <Sidebar {collapsed} open={menuOpen} onclose={() => (menuOpen = false)} ontoggle={toggleRail} />
+  {#if !data.bootstrap}
+    <Sidebar {collapsed} open={menuOpen} onclose={() => (menuOpen = false)} ontoggle={toggleRail} />
+  {/if}
   <div class="flex min-w-0 flex-1 flex-col">
     <header
       class="bg-base-100 border-base-300 sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-2"
@@ -79,6 +140,7 @@
       <button
         type="button"
         class="btn btn-ghost btn-sm lg:hidden"
+        class:hidden={data.bootstrap}
         aria-label={t('app.menu.open')}
         aria-expanded={menuOpen}
         aria-controls="sidebar"
@@ -104,8 +166,10 @@
         <span>{brand.instanceName}</span>
       </a>
       <div class="flex-1"></div>
-      <ThemeToggle />
-      <AccountMenu />
+      {#if !data.bootstrap}
+        <ThemeToggle />
+        <AccountMenu />
+      {/if}
     </header>
     <main id="main" tabindex="-1" class="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">
       {@render children()}
@@ -113,3 +177,5 @@
     <Footer branding={brand} />
   </div>
 </div>
+
+<ReauthDialog controller={reauth} />

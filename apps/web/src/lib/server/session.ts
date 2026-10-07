@@ -78,3 +78,27 @@ export async function loadLocale(
   }
   return negotiateLocale({ preferred, acceptLanguage });
 }
+
+/**
+ * Asks whether the instance still has no administrator, so that the start page offers the first-admin
+ * form and nothing else is reachable. Once an administrator exists the answer is false for good, so
+ * it is remembered and costs no call; the "yes" is asked every time. A profile without `core.identity`
+ * has no such route (404) and no form.
+ */
+export function createBootstrapProbe(): (api: ApiClient) => Promise<boolean> {
+  let done = false;
+  return async (api) => {
+    if (done) return false;
+    try {
+      const { needsFirstAdmin } = await unwrap(api.GET('/bootstrap/status'));
+      if (!needsFirstAdmin) done = true;
+      return needsFirstAdmin;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        done = true;
+        return false;
+      }
+      throw error;
+    }
+  };
+}

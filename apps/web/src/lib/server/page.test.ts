@@ -205,3 +205,56 @@ describe('the returnTo of a sign-in redirect', () => {
     );
   });
 });
+
+describe('a fresh install (no administrator yet)', () => {
+  const first: [string, UiRoute] = [
+    '/first-admin',
+    { path: '/first-admin', component, load: () => ({ form: true }) },
+  ];
+  const fresh: PageTable = {
+    patterns: [...table.patterns, first[0]],
+    pages: new Map([...table.pages, [first[0], { package: 'fixture', route: first[1] }]]),
+  };
+  const needs = (value: boolean) => ({
+    ...request('/'),
+    needsFirstAdmin: () => Promise.resolve(value),
+  });
+
+  it('shows the first-admin form on the start page and nothing else', async () => {
+    const result = await loadPage(fresh, needs(true));
+    expect(result).toMatchObject({ pattern: '/first-admin', data: { form: true } });
+  });
+
+  it.each(['/admin/users', '/first-admin', '/login', '/no/such/page'])(
+    'turns %s away to the start page',
+    async (path) => {
+      const thrown = await loadPage(fresh, {
+        ...request(path),
+        needsFirstAdmin: () => Promise.resolve(true),
+      }).catch((e: unknown) => e);
+      expect(isRedirect(thrown) && thrown.location, path).toBe('/');
+    },
+  );
+
+  it('keeps the base path in that redirect', async () => {
+    const thrown = await loadPage(fresh, {
+      ...request('/admin/users', { basePath: '/a/b' }),
+      needsFirstAdmin: () => Promise.resolve(true),
+    }).catch((e: unknown) => e);
+    expect(isRedirect(thrown) && thrown.location).toBe('/a/b/');
+  });
+
+  it('is the ordinary start page once an administrator exists', async () => {
+    expect((await loadPage(fresh, needs(false))).pattern).toBe('/');
+    const thrown = await loadPage(fresh, {
+      ...request('/no/such/page'),
+      needsFirstAdmin: () => Promise.resolve(false),
+    }).catch((e: unknown) => e);
+    expect(isHttpError(thrown) && thrown.status).toBe(404);
+  });
+
+  it('does nothing without the page (a profile without sign-in)', async () => {
+    const result = await loadPage(table, needs(true));
+    expect(result.pattern).toBe('/');
+  });
+});

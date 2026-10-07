@@ -1,6 +1,6 @@
 import { ApiError } from '@scorpion/contracts/client';
 import { describe, expect, it } from 'vitest';
-import { loadSession, once } from './session.ts';
+import { createBootstrapProbe, loadLocale, loadSession, once } from './session.ts';
 
 const answering = (status: number, body: unknown) =>
   ({
@@ -62,5 +62,94 @@ describe('once', () => {
     const get = once(() => Promise.resolve(++runs));
     expect(await Promise.all([get(), get(), get()])).toEqual([1, 1, 1]);
     expect(runs).toBe(1);
+  });
+});
+
+describe('createBootstrapProbe', () => {
+  const counting = (answers: ({ needsFirstAdmin: boolean } | number)[]) => {
+    let asked = 0;
+    const api = {
+      GET: () => {
+        const answer = answers[Math.min(asked++, answers.length - 1)]!;
+        return Promise.resolve(
+          typeof answer === 'number'
+            ? {
+                error: { title: 'x', status: answer },
+                response: new Response(null, { status: answer }),
+              }
+            : { data: answer, response: new Response(null, { status: 200 }) },
+        );
+      },
+    } as never;
+    return { api, asked: () => asked };
+  };
+
+  it('asks every time while the answer is yes, and never again once it is no', async () => {
+    const probe = createBootstrapProbe();
+    const { api, asked } = counting([
+      { needsFirstAdmin: true },
+      { needsFirstAdmin: true },
+      { needsFirstAdmin: false },
+    ]);
+    expect(await probe(api)).toBe(true);
+    expect(await probe(api)).toBe(true);
+    expect(await probe(api)).toBe(false);
+    expect(await probe(api)).toBe(false);
+    expect(asked()).toBe(3);
+  });
+
+  it('is no, for good, in a profile without the route (404)', async () => {
+    const probe = createBootstrapProbe();
+    const { api, asked } = counting([404]);
+    expect(await probe(api)).toBe(false);
+    expect(await probe(api)).toBe(false);
+    expect(asked()).toBe(1);
+  });
+
+  it('throws when the API fails, and keeps asking', async () => {
+    const probe = createBootstrapProbe();
+    const { api } = counting([500, { needsFirstAdmin: false }]);
+    await expect(probe(api)).rejects.toBeInstanceOf(ApiError);
+    expect(await probe(api)).toBe(false);
+  });
+});
+
+describe('loadLocale', () => {
+  const preferences = (value: unknown) =>
+    ({
+      GET: () =>
+        Promise.resolve({
+          data: { result: [{ key: 'notifications.locale', value }] },
+          response: new Response(null, { status: 200 }),
+        }),
+    }) as never;
+  const session = { user: { id: 'u' }, roles: [], csrfToken: 't' } as never;
+
+  it('is the preference of a signed-in person before the browser language', async () => {
+    expect(await loadLocale(preferences('de'), session, 'en-GB,en')).toBe('de');
+  });
+
+  it('is the browser language for a visitor, without asking the API', async () => {
+    const api = {
+      GET: () => {
+        throw new Error('must not be asked');
+      },
+    } as never;
+    expect(await loadLocale(api, null, 'de-AT,de;q=0.9')).toBe('de');
+    expect(await loadLocale(api, null, 'fr')).toBe('en');
+    expect(await loadLocale(api, null, null)).toBe('en');
+  });
+
+  it('falls back to the browser when the preference is unreadable or names no shipped language', async () => {
+    expect(await loadLocale(preferences('fr'), session, 'de')).toBe('de');
+    expect(await loadLocale(preferences(42), session, 'de')).toBe('de');
+    const failing = {
+      GET: () =>
+        Promise.resolve({
+          error: { title: 'x', status: 403 },
+          response: new Response(null, { status: 403 }),
+        }),
+    } as never;
+    expect(await loadLocale(failing, session, 'de')).toBe('de');
   });
 });
