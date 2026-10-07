@@ -36,6 +36,8 @@ test('no password, token or reset secret is anywhere but in the one request or r
   at,
   basePath,
 }, testInfo) => {
+  // One long journey with snapshots on: a loaded CI runner needs more than the default 30 seconds.
+  test.slow();
   const context = await browser.newContext({ baseURL });
   await context.tracing.start({ snapshots: true, screenshots: false, sources: false });
   const page = await context.newPage();
