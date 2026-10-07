@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { admin, createUser, expect, signIn, test } from './support/fixtures.ts';
@@ -75,19 +76,22 @@ test.describe('the keyboard', () => {
     page,
     at,
   }) => {
-    await createUser(page.request, at, {
-      username: 'keyboarder',
+    // A name of its own, so a retry after a failed first try does not meet the account it made.
+    const who = {
+      username: `keyboarder${randomBytes(3).toString('hex')}`,
       password: 'a keyboard user password 1',
-    });
-    await signIn(page.request, at, {
-      username: 'keyboarder',
-      password: 'a keyboard user password 1',
-    });
+    };
+    await createUser(page.request, at, who);
+    await signIn(page.request, at, who);
     await page.goto(at('/'));
     const trigger = page.getByRole('button', { name: 'Account menu' });
-    await trigger.focus();
-    await page.keyboard.press('Enter');
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // The server renders the button before the page is interactive; a key pressed in that moment does
+    // nothing, so the press is repeated until the menu answers (as a person would press it again).
+    await expect(async () => {
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
