@@ -157,4 +157,31 @@ describe('loadPage', () => {
       expect(isHttpError(thrown) && thrown.status, path).toBe(404);
     }
   });
+
+  it('never redirects anywhere but to the login page of this application, whatever the path or the query says (open redirect)', async () => {
+    const hostile = [
+      '/admin/users?next=//evil.example',
+      '/admin/users?returnTo=https://evil.example/',
+      '//evil.example/admin/users',
+      '/%2F%2Fevil.example',
+      '/\\evil.example',
+      '/admin/users#//evil.example',
+    ];
+    for (const basePath of ['/', '/a/b']) {
+      for (const path of hostile) {
+        const { thrown } = await outcome(table, request(path, { basePath }));
+        if (isRedirect(thrown)) {
+          const prefix = basePath === '/' ? '' : basePath;
+          expect(thrown.location.startsWith(`${prefix}/login?returnTo=`), path).toBe(true);
+          // What is behind returnTo is one encoded value: it cannot end the query or start another URL.
+          const target = new URL(thrown.location, 'http://app.test');
+          expect(target.origin, path).toBe('http://app.test');
+          expect([...target.searchParams.keys()], path).toEqual(['returnTo']);
+        } else {
+          // A path that is not a page of the application is a 404, never a redirect.
+          expect(isHttpError(thrown) && thrown.status, path).toBe(404);
+        }
+      }
+    }
+  });
 });

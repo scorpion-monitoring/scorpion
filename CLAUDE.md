@@ -49,7 +49,8 @@ pnpm test --filter @scorpion/kpi-ingestion   # one module
 pnpm test:contract             # public API against OpenAPI
 pnpm test:e2e                  # Playwright
 pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a module (from db/schema.ts)
-pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts (build time)
+pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts and apps/web/src/generated/ui.ts (build time)
+pnpm openapi:generate          # write the typed client's types (packages/contracts/src/generated) and the web app's v1 document; pnpm check fails on a diff
 pnpm scorpion start | worker | migrate   # web server, jobs and events only, migrations only
                                # (seed arrives with the modules that need it)
 pnpm scorpion create-admin | set-secret <name> | rotate-secrets   # commands of core.identity and core.settings;

@@ -121,3 +121,13 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     expect(after.routes).not.toContain('/fixture/admin');
   });
 });
+
+describe('a profile without core.ui-shell', () => {
+  it('still starts and serves the API: the route is not there, sign-in works', async () => {
+    const app = await harness.start({ uiShell: false });
+    expect(app.kernel.profile.modules.map((module) => module.id)).not.toContain('core.ui-shell');
+    expect((await app.get('/ui/navigation')).status).toBe(404);
+    const { cookie } = await app.signedIn('headless');
+    expect((await app.get('/auth/me', { cookie })).status).toBe(200);
+  });
+});

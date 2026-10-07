@@ -11,7 +11,12 @@ export function scorpionFront(options: { basePath: string; apiOrigin: string }):
       server.middlewares.use((request, response, next) => {
         createFront({
           ...options,
-          next: () => next(),
+          next: () => {
+            // The front already took the base off `request.url`; Connect keeps the first URL in
+            // `originalUrl`, which SvelteKit's dev server reads, so it must say the same.
+            (request as { originalUrl?: string }).originalUrl = request.url;
+            next();
+          },
         })(request, response);
       });
     },
