@@ -24,7 +24,11 @@ for (let i = 0; i < input.length; i++) {
 // `[ASVS-x.y.z]` passed in this run. A reporter the caller names itself replaces ours.
 const reporters = args.some((arg) => arg === '--reporter' || arg.startsWith('--reporter='))
   ? []
-  : ['--reporter=default', '--reporter=junit', '--outputFile.junit=reports/vitest-junit.xml'];
+  : [
+      '--reporter=default',
+      '--reporter=junit',
+      `--outputFile.junit=${process.env.JUNIT_FILE ?? 'reports/vitest-junit.xml'}`,
+    ];
 
 const result = spawnSync('vitest', ['run', ...reporters, ...args], {
   stdio: 'inherit',
