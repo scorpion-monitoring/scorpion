@@ -3,19 +3,21 @@
   // last one is the page itself and says so (`aria-current`).
   import { getShell } from './context.ts';
   import type { Crumb } from './kit-types.ts';
+  import { crumbViews } from './tabs.ts';
 
   let { items }: { items: readonly Crumb[] } = $props();
   const { t } = getShell();
+  const views = $derived(crumbViews(items));
 </script>
 
 <nav aria-label={t('kit.breadcrumb.label')} class="breadcrumbs text-sm">
   <ol>
-    {#each items as item, index (index)}
+    {#each views as view, index (index)}
       <li>
-        {#if item.href && index < items.length - 1}
-          <a href={item.href}>{item.label}</a>
+        {#if view.href}
+          <a href={view.href}>{view.label}</a>
         {:else}
-          <span aria-current={index === items.length - 1 ? 'page' : undefined}>{item.label}</span>
+          <span aria-current={view.current ? 'page' : undefined}>{view.label}</span>
         {/if}
       </li>
     {/each}

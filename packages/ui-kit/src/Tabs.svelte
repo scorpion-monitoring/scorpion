@@ -4,6 +4,7 @@
   // order, so one Tab press goes from the list into the panel.
   import type { Snippet } from 'svelte';
   import type { TabItem } from './kit-types.ts';
+  import { tabTarget } from './tabs.ts';
 
   let {
     tabs,
@@ -26,11 +27,7 @@
 
   function move(event: KeyboardEvent) {
     const index = tabs.findIndex((tab) => tab.id === current);
-    let target: number | undefined;
-    if (event.key === 'ArrowRight') target = (index + 1) % tabs.length;
-    else if (event.key === 'ArrowLeft') target = (index - 1 + tabs.length) % tabs.length;
-    else if (event.key === 'Home') target = 0;
-    else if (event.key === 'End') target = tabs.length - 1;
+    const target = tabTarget(event.key, index, tabs.length);
     if (target === undefined) return;
     event.preventDefault();
     selected = tabs[target]!.id;
