@@ -9,6 +9,15 @@ export const componentMessages: MessageBundles = {
 
     'kit.confirm.cancel': 'Cancel',
 
+    'kit.error.network': 'The service could not be reached. Check your connection and try again.',
+    'kit.error.signedOut': 'You are signed out. Sign in again and repeat this.',
+    'kit.error.forbidden': 'You are not allowed to do this.',
+    'kit.error.notFound': 'That no longer exists. The list has been refreshed.',
+    'kit.error.conflict': 'That conflicts with the current state. Reload the page and try again.',
+    'kit.error.invalid': 'The service did not accept that.',
+    'kit.error.throttled': 'Too many requests. Wait a moment and try again.',
+    'kit.error.generic': 'That did not work. Try again.',
+
     'kit.breadcrumb.label': 'Breadcrumb',
 
     'kit.pagination.label': 'Pages',
@@ -71,6 +80,19 @@ export const componentMessages: MessageBundles = {
     'kit.toast.dismiss': 'Diese Benachrichtigung schließen',
 
     'kit.confirm.cancel': 'Abbrechen',
+
+    'kit.error.network':
+      'Der Dienst ist nicht erreichbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
+    'kit.error.signedOut':
+      'Sie sind abgemeldet. Melden Sie sich erneut an und wiederholen Sie das.',
+    'kit.error.forbidden': 'Dazu haben Sie keine Berechtigung.',
+    'kit.error.notFound': 'Das gibt es nicht mehr. Die Liste wurde aktualisiert.',
+    'kit.error.conflict':
+      'Das widerspricht dem aktuellen Stand. Laden Sie die Seite neu und versuchen Sie es erneut.',
+    'kit.error.invalid': 'Der Dienst hat das nicht akzeptiert.',
+    'kit.error.throttled':
+      'Zu viele Anfragen. Warten Sie einen Moment und versuchen Sie es erneut.',
+    'kit.error.generic': 'Das hat nicht funktioniert. Bitte versuchen Sie es erneut.',
 
     'kit.breadcrumb.label': 'Brotkrumennavigation',
 

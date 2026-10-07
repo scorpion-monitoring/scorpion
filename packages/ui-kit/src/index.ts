@@ -16,7 +16,13 @@ export {
 export { getShell, setShell, type Shell } from './context.ts';
 export { default as SafeHtml } from './SafeHtml.svelte';
 export { uiKitMessages } from './messages.ts';
-export { failureOf, firstError, type FieldErrors, type FormFailure } from './forms.ts';
+export {
+  failureMessage,
+  failureOf,
+  firstError,
+  type FieldErrors,
+  type FormFailure,
+} from './forms.ts';
 export {
   createReauthController,
   isReauthRequired,

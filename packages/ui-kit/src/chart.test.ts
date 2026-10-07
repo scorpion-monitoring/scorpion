@@ -113,7 +113,7 @@ describe('chartOption', () => {
   it('draws a line chart with the categories on the x axis and the theme colours', () => {
     const option = optionOf(spec, theme);
     expect(option.xAxis.data).toEqual(['2022', '2023', '2024']);
-    expect(option.series.map((s: { type: string; name: string }) => [s.type, s.name])).toEqual([
+    expect(option.series.map((s) => [s.type, s.name])).toEqual([
       ['line', 'Services'],
       ['line', 'Users'],
     ]);
@@ -127,7 +127,7 @@ describe('chartOption', () => {
       { ...spec, type: 'bar', series: [spec.series[0]!] },
       { ...theme, reducedMotion: true },
     );
-    expect(option.series[0].type).toBe('bar');
+    expect(option.series[0]!.type).toBe('bar');
     expect(option.legend).toBeUndefined();
     expect(option.animation).toBe(false);
   });
@@ -147,7 +147,7 @@ describe('chartOption', () => {
       { name: 'b', max: 5 },
       { name: 'c', max: 5 },
     ]);
-    expect(option.series[0].data).toEqual([{ name: 's', value: [1, 2, 3] }]);
+    expect(option.series[0]!.data).toEqual([{ name: 's', value: [1, 2, 3] }]);
   });
 });
 
