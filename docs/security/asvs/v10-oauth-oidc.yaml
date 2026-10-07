@@ -90,7 +90,7 @@ requirements:
       - test: ASVS-10.5.2
       - code: modules/core-identity/service/oidc.ts
       - code: modules/core-identity/db/schema.ts
-    note: 'A returning user is found only by (provider, sub), with a unique index. Email is used once, to link a first sign-in to an existing account when both addresses are verified; see 6.8.1 for why that is an open issue.'
+    note: 'A returning user is found only by (provider, sub), with a unique index. An address asserted by a provider links nothing: when it matches an existing account, a mail with a single-use 10-minute link goes to the address the account itself holds, and the identity is linked only after its holder, signed in and recently authenticated, confirms it (ADR-0026; see 6.8.1).'
   - id: v5.0.0-10.5.3
     status: pass
     evidence:

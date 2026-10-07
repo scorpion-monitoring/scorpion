@@ -99,8 +99,9 @@ requirements:
       - code: modules/core-identity/service/sessions.ts
       - code: modules/core-identity/service/profile.ts
       - code: modules/core-identity/service/oidc.ts
+      - code: modules/core-identity/service/oidc-link.ts
       - doc: docs/security/sessions.md
-    note: 'Changing the email address (PATCH /account/profile with a new email) and starting to link an OIDC identity ask for a recent authentication (default 5 minutes) in the service and answer 401 reauthentication-required without one; a password change already asks for the current password. The authentication is the password, or a fresh login at the provider with prompt=login, max_age=0 and a checked auth_time. The setting recentAuthSeconds is the window; a reviewer may judge a 5-minute window weaker than a prompt on every change. Recovery and MFA configuration do not exist as editable attributes yet; a new one must call requireRecentAuth.'
+    note: 'Changing the email address (PATCH /account/profile with a new email), starting to link an OIDC identity and confirming the mailed link that finishes a link (POST /account/oidc-link/confirm) ask for a recent authentication (default 5 minutes) in the service and answer 401 reauthentication-required without one; a password change already asks for the current password. The authentication is the password, or a fresh login at the provider with prompt=login, max_age=0 and a checked auth_time. The setting recentAuthSeconds is the window; a reviewer may judge a 5-minute window weaker than a prompt on every change. Recovery and MFA configuration do not exist as editable attributes yet; a new one must call requireRecentAuth.'
   - id: v5.0.0-7.5.2
     status: pass
     evidence:
