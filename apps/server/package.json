@@ -19,6 +19,7 @@
     "@scorpion/core-identity": "workspace:*",
     "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-settings": "workspace:*",
+    "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "hono": "^4.13.12",

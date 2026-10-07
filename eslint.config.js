@@ -63,6 +63,7 @@ export default defineConfig(
           // composition for a test, with injected settings and the real core.authz it depends on.
           manifestImporters: [
             'apps/server/src/generated/profile.ts',
+            'apps/web/src/generated/ui.ts',
             'apps/server/src/testing/identity-app.ts',
             'modules/core-audit/test/harness.ts',
             'modules/core-blob/test/harness.ts',

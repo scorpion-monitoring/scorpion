@@ -7,6 +7,7 @@ export const WORKSPACE_MODULES = {
   'core.identity': '@scorpion/core-identity',
   'core.notifications': '@scorpion/core-notifications',
   'core.settings': '@scorpion/core-settings',
+  'core.ui-shell': '@scorpion/core-ui-shell',
 } as const satisfies Record<string, string>;
 
 export type ModuleId = keyof typeof WORKSPACE_MODULES;
