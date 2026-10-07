@@ -62,7 +62,10 @@ describe('the pages of core.identity', () => {
       expect(paths.has(entry.path), entry.id).toBe(true);
       for (const locale of ['en', 'de']) {
         expect(messages[locale]?.[entry.label], `${locale} ${entry.label}`).toBeTruthy();
-        expect(messages[locale]?.[`nav.section.${entry.section}`], entry.section).toBeTruthy();
+        // The `admin` section is the shell's (it owns the sections of the navigation and its label); the others are this module's.
+        if (entry.section !== 'admin') {
+          expect(messages[locale]?.[`nav.section.${entry.section}`], entry.section).toBeTruthy();
+        }
       }
     }
   });
@@ -85,7 +88,7 @@ describe('the pages of core.identity', () => {
       Object.keys(messages.en!).map((key) => key.replace(/\.(one|other)$/, '')),
     );
     const own = [...used].filter((key) =>
-      /^(login|pending|register|forgot|reset|verify|link|first|profile|nav)\./.test(key),
+      /^(login|pending|register|forgot|reset|verify|link|first|profile|nav|admin)\./.test(key),
     );
     expect(own.filter((key) => !known.has(key))).toEqual([]);
     expect(own.length).toBeGreaterThan(100);
@@ -93,7 +96,14 @@ describe('the pages of core.identity', () => {
 
   it('load their data in `load`, which a page with data must have', () => {
     const withLoad = routes.filter((route) => route.load).map((route) => route.path);
-    expect(withLoad.sort()).toEqual(['/login', '/profile', '/setup']);
+    expect(withLoad.sort()).toEqual([
+      '/admin/users',
+      '/admin/users/:id',
+      '/admin/users/pending',
+      '/login',
+      '/profile',
+      '/setup',
+    ]);
   });
 });
 

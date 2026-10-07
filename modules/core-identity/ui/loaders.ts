@@ -106,7 +106,7 @@ export async function loadProfile({ api }: UiLoadContext): Promise<ProfileData> 
 }
 
 /** A part of the page the caller's role does not allow (403) is left out; any other failure fails the page. */
-async function allowed<T>(call: Promise<T>): Promise<T | null> {
+export async function allowed<T>(call: Promise<T>): Promise<T | null> {
   try {
     return await call;
   } catch (error) {
