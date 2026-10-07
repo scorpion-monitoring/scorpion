@@ -92,6 +92,15 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'POST', path: '/auth/oidc/nowhere/link' }),
   },
+  // M4b sprint 2 (ADR 0026): confirming the link that was mailed to the account holder.
+  'POST /account/oidc-link/confirm': {
+    kind: 'self',
+    sample: () => ({
+      method: 'POST',
+      path: '/account/oidc-link/confirm',
+      body: { token: `sol_${'A'.repeat(43)}` },
+    }),
+  },
   'POST /account/password': {
     kind: 'self',
     sample: () => ({
@@ -624,6 +633,11 @@ describe('defect 1: tokens of other people, and tokens of the caller', () => {
       { method: 'DELETE', path: `/account/sessions/${id}` },
       { method: 'POST', path: '/account/reauthenticate', body: { password: PASSWORD } },
       { method: 'POST', path: '/account/reauthenticate/oidc/nowhere' },
+      {
+        method: 'POST',
+        path: '/account/oidc-link/confirm',
+        body: { token: `sol_${'A'.repeat(43)}` },
+      },
     ];
     for (const attempt of attempts) {
       const reply = await s.call(attempt.method, attempt.path, {

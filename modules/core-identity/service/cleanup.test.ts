@@ -67,6 +67,7 @@ describe('what it removes', () => {
       mailTokens: 2,
       accessTokens: 0,
       firstRunTokens: 1,
+      loginThrottles: 0,
       purgedUsers: 0,
     });
     for (const table of [
@@ -135,6 +136,7 @@ describe('what it must not touch', () => {
       mailTokens: 0,
       accessTokens: 0,
       firstRunTokens: 0,
+      loginThrottles: 0,
       purgedUsers: 0,
     });
     for (const [table, n] of before) expect(await count(kernel, table)).toBe(n);

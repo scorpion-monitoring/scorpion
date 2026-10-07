@@ -586,3 +586,61 @@ describe('email verification', () => {
     expect((await mail.all()).map((m) => m.to)).toEqual(['new@example.org']);
   });
 });
+
+describe('the lifetime of the mailed links (ADR 0026)', () => {
+  const T0 = new Date('2026-10-06T12:00:00Z');
+  const minutesAfter = (minutes: number, extraMs = 0) =>
+    new Date(T0.getTime() + minutes * 60_000 + extraMs);
+
+  async function requested() {
+    const started = await start();
+    const user = await started.withPassword({ username: 'alice', email: 'alice@example.org' });
+    await started.recovery.requestReset({ email: 'alice@example.org' }, T0);
+    return { ...started, user, token: tokenFrom((await started.mail.all())[0]) };
+  }
+
+  it('refuses a reset link older than 10 minutes and accepts it up to the last moment [ASVS-6.5.5]', async () => {
+    const late = await requested();
+    await expect(
+      late.recovery.confirmReset(
+        { token: late.token, password: NEW_PASSWORD },
+        minutesAfter(10, 1),
+      ),
+    ).rejects.toBeInstanceOf(BadRequest);
+    // Refused, and the password is as it was.
+    const [method] = await rows(late.kernel, 'select password_hash from identity_auth_method');
+    expect(await verifyPassword(method!.password_hash as string, PASSWORD)).toBe(true);
+
+    const inTime = await requested();
+    await expect(
+      inTime.recovery.confirmReset(
+        { token: inTime.token, password: NEW_PASSWORD },
+        minutesAfter(10, -1),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('stores the reset token for 10 minutes and the verification token for 24 hours', async () => {
+    const { kernel, recovery, user } = await requested();
+    await recovery.startVerification(user.id, 'alice@example.org', { now: T0 });
+    const lifetimes = await rows(
+      kernel,
+      `select purpose, extract(epoch from expires_at - created_at)::int as seconds
+         from identity_mail_token order by purpose`,
+    );
+    expect(lifetimes).toEqual([
+      { purpose: 'email-verification', seconds: 24 * 3600 },
+      { purpose: 'password-reset', seconds: 600 },
+    ]);
+  });
+
+  it('says 10 minutes in the reset mail, and 24 hours in the confirmation mail', async () => {
+    const { mail, recovery, user } = await requested();
+    await recovery.startVerification(user.id, 'alice@example.org', { now: T0 });
+    const texts = (await mail.all()).map((m) => m.text);
+    expect(texts.find((text) => text?.includes('choose a new password'))).toMatch(
+      /within 10 minutes/,
+    );
+    expect(texts.find((text) => text?.includes('Confirm'))).toMatch(/within 24 hours/);
+  });
+});

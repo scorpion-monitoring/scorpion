@@ -1,2 +1,1 @@
-// Filled in a later milestone; see README.md.
-export {};
+export * from './pwned-passwords.ts';

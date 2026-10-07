@@ -22,6 +22,7 @@ import {
 import type { AccountService } from './service/accounts.ts';
 import type { ApprovalService } from './service/approval.ts';
 import type { BootstrapService } from './service/bootstrap.ts';
+import type { OidcLinkService } from './service/oidc-link.ts';
 import type { OidcService } from './service/oidc.ts';
 import type { ProfileService } from './service/profile.ts';
 import type { RecoveryService } from './service/recovery.ts';
@@ -33,6 +34,7 @@ import {
   approveInput,
   assignRoleInput,
   changePasswordInput,
+  confirmOidcLinkInput,
   createTokenInput,
   loginInput,
   oidcCallbackQuery,
@@ -53,6 +55,7 @@ export interface IdentityRoutesServices {
   approval: ApprovalService;
   bootstrap: BootstrapService;
   oidc: OidcService;
+  oidcLink: OidcLinkService;
   profile: ProfileService;
   recovery: RecoveryService;
   roles: RoleService;
@@ -253,7 +256,10 @@ export const oidcCallbackRoute = createRoute({
   rateLimit: 'strict',
   request: { params: oidcProviderParam, query: oidcCallbackQuery },
   responses: {
-    302: { description: 'Signed in (or linked). The session cookie is set when signing in.' },
+    302: {
+      description:
+        'Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026).',
+    },
     400: {
       description:
         'The state is unknown, expired, used or from another browser, or the provider refused.',
@@ -261,11 +267,33 @@ export const oidcCallbackRoute = createRoute({
     401: { description: 'The id_token did not pass validation, or the account may not sign in.' },
     403: { description: 'The account is waiting for approval.' },
     404: { description: 'No such sign-in provider.' },
-    409: {
-      description:
-        'The address belongs to an account that has not confirmed it, or the sign-in is already linked.',
-    },
+    409: { description: 'The sign-in is already linked to an account.' },
     502: { description: 'The provider could not be reached or answered unexpectedly.' },
+  },
+});
+
+export const confirmOidcLinkRoute = createRoute({
+  method: 'post',
+  path: '/account/oidc-link/confirm',
+  permission: 'core.identity.auth-method.link',
+  rateLimit: 'strict',
+  request: { body: json(confirmOidcLinkInput) },
+  responses: {
+    200: ok(
+      "The sign-in provider is linked to the caller's account.",
+      z.object({ provider: z.string(), name: z.string() }),
+    ),
+    400: {
+      description:
+        'The link is not valid, has been used, has expired, or belongs to another account.',
+    },
+    401: {
+      description:
+        'Not signed in, or not recently: the problem type is `reauthentication-required` (ADR 0025).',
+    },
+    403: { description: 'The caller is using an access token, not a session.' },
+    409: { description: 'The sign-in is already linked to an account.' },
+    422: { description: 'The body is not valid.' },
   },
 });
 
@@ -686,6 +714,7 @@ export function registerIdentityRoutes(
     approval,
     bootstrap,
     oidc,
+    oidcLink,
     profile,
     recovery,
     roles,
@@ -702,7 +731,9 @@ export function registerIdentityRoutes(
   }) satisfies RouteHandler<typeof registerRoute, AppEnv>);
 
   r.internal(loginRoute, (async (c) => {
-    const result = await accounts.login(c.req.valid('json'), readSessionCookie(c));
+    const result = await accounts.login(c.req.valid('json'), readSessionCookie(c), {
+      clientIp: c.get('clientIp'),
+    });
     writeSessionCookie(c, result.sessionId, result.expiresAt);
     c.header('cache-control', 'no-store');
     return c.json({ user: view(result.user), csrfToken: result.csrfToken }, 200);
@@ -844,9 +875,16 @@ export function registerIdentityRoutes(
     });
     // A re-authentication changes the session in the database; the browser keeps its cookie.
     if (done.kind === 'login') writeSessionCookie(c, done.sessionId, done.expiresAt);
-    // Always the application root: no caller-supplied target, so no open redirect.
-    return c.redirect(oidc.landing, 302);
+    // Always a fixed page: no caller-supplied target, so no open redirect. A sign-in that found an
+    // account holding the address ends on the sign-in page with a notice, signed in as nobody.
+    return c.redirect(done.kind === 'check-mail' ? oidc.checkMailLanding : oidc.landing, 302);
   }) satisfies RouteHandler<typeof oidcCallbackRoute, AppEnv>);
+
+  r.internal(confirmOidcLinkRoute, (async (c) => {
+    const linked = await oidcLink.confirm(c.get('actor'), c.req.valid('json'));
+    c.header('cache-control', 'no-store');
+    return c.json(linked, 200);
+  }) satisfies RouteHandler<typeof confirmOidcLinkRoute, AppEnv>);
 
   r.internal(listTokensRoute, (async (c) => {
     const query = c.req.valid('query');

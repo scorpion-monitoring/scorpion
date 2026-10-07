@@ -14,6 +14,7 @@ import type { ZodError } from 'zod';
 import { firstRunToken } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
 import { createAdminInput, redeemFirstRunInput, type CreateAdminInput } from '../validation.ts';
+import type { PasswordPolicy } from './password-policy.ts';
 import { ADMIN_ROLE } from './roles.ts';
 
 /** How long a first-run token lives. */
@@ -69,9 +70,10 @@ export function createBootstrapService(
      */
     announce: (text: string) => void;
     ttlMs?: number;
+    policy: PasswordPolicy;
   },
 ): BootstrapService {
-  const { users, authz, announce } = deps;
+  const { users, authz, announce, policy } = deps;
   const ttlMs = deps.ttlMs ?? FIRST_RUN_TTL_MS;
 
   /** Somebody holds the Admin role. A deactivated administrator counts until the purge removes the role. */
@@ -104,6 +106,8 @@ export function createBootstrapService(
     async createAdmin(input, origin = 'cli') {
       const parsed = createAdminInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
+      // The rules of every new password, before anything is written (the CLI shows the 422's fields).
+      await policy.check(parsed.data.password, parsed.data);
       return create(parsed.data, origin);
     },
 
@@ -165,6 +169,22 @@ export function createBootstrapService(
       const { token, ...account } = parsed.data;
       const refused = () => new Unauthorized('The first-run token is not valid.');
       if (!FIRST_RUN_TOKEN.test(token)) throw refused();
+      // A token that is no good is refused before the password is looked at, so nobody without one
+      // can make this route call the breach service. The check does not use the token up: it is the
+      // transaction below that does, and a refused password leaves it usable.
+      const [live] = await ctx.db
+        .select({ id: firstRunToken.id })
+        .from(firstRunToken)
+        .where(
+          and(
+            eq(firstRunToken.secretHash, hashToken(token)),
+            isNull(firstRunToken.redeemedAt),
+            gt(firstRunToken.expiresAt, now),
+          ),
+        )
+        .limit(1);
+      if (!live) throw refused();
+      await policy.check(account.password, account);
 
       return ctx.db.tx(async (tx) => {
         // Used up first and in this transaction: if creating the account fails, so does this.

@@ -283,6 +283,7 @@ describe('what a mail leaves in the inbox', () => {
     }
     expect(byName.security!.templates).toEqual([
       'identity.email-verification',
+      'identity.oidc-link',
       'identity.password-reset',
       'identity.register-attempt',
     ]);

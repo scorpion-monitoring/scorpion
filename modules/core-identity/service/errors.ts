@@ -5,7 +5,8 @@ import { DomainError } from '@scorpion/contracts';
  * callers who are signed in, so it never tells an outsider anything about an account.
  */
 export class TooManyRequests extends DomainError {
-  constructor(detail = 'Too many requests. Try again later.') {
+  constructor(detail = 'Too many requests. Try again later.', retryAfterSeconds?: number) {
     super(429, 'Too Many Requests', detail);
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }

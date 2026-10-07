@@ -17,6 +17,8 @@ export class DomainError extends Error {
   readonly errors: readonly FieldProblem[] | undefined;
   /** A stable problem type (RFC 9457) a client can switch on; `undefined` is `about:blank`. */
   readonly type: string | undefined;
+  /** For a 429: how long the caller should wait. The error mapper writes it as `Retry-After`. */
+  retryAfterSeconds: number | undefined;
 
   constructor(
     status: number,
@@ -31,6 +33,7 @@ export class DomainError extends Error {
     this.title = title;
     this.errors = errors;
     this.type = type;
+    this.retryAfterSeconds = undefined;
   }
 }
 

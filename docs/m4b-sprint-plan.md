@@ -24,30 +24,30 @@ M4b is size M (about 2 weeks for one developer). Three sprints, each one `featur
    authenticated page). They stay `fail` until M5 ships the screens and a Playwright test (M5 sprints 2 and 3).
 4. Add the lines in §10 to `implementation.md` (an M4b entry, the overview row, the M5 release number). The M5 plan already carries the three browser requirements in its hand-off
    table (6.2.6, 6.2.7, 7.4.4) and the release number `0.7.0`; its sprints consume the M4b routes.
-5. ADRs: sprint 1 takes ADR-0025, so the M5 plan now reserves ADR-0026 (the shell) and ADR-0027 (the inbox stream); sprint 2 takes the next free number if it needs one (written ADR-00xx below), written as the first commit of the sprint that needs them, and amends ADR-0007 and ADR-0011.
+5. ADRs: sprint 1 takes ADR-0025, so the M5 plan reserved ADR-0026 (the shell) and ADR-0027 (the inbox stream); sprint 2 takes ADR-0026 (credential rules, throttling and mail-confirmed linking), written as the first commit of the sprint, so the M5 plan now reserves ADR-0027 (the shell) and ADR-0028 (the inbox stream). It amends ADR-0010, ADR-0011 and ADR-0012.
 
 ## 1. The gaps and where they are closed
 
 22 of the 25 `fail` entries are M4b. Requirement ids are those of the YAML files.
 
-| Requirement   | What is missing today                                                                                           | Fix                                                                                            | Sprint |
-| ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------ |
-| 7.3.2         | `expiresAt` slides on every use and `createdAt` is never consulted: a used session never expires                | Absolute lifetime, enforced in `sessions.resolve`                                              | 1      |
-| 7.3.1, 7.1.1  | The 7-day inactivity rule has no written risk analysis; no absolute lifetime documented                         | Session policy document with the analysis and the NIST SP 800-63B deviations                   | 1      |
-| 7.1.2         | Concurrent sessions undocumented                                                                                | Decide and document the limit (Decision 6)                                                     | 1      |
-| 7.5.2         | No list of own sessions, no end-one, no re-authentication                                                       | `GET /account/sessions`, `DELETE /account/sessions/{id}`, behind re-authentication             | 1      |
-| 7.4.5         | An administrator cannot end the sessions of one user or all users                                               | Admin routes with a new permission, audited                                                    | 1      |
-| 7.5.1         | Changing the email address or linking an OIDC identity needs only the session                                   | Re-authentication ("recent authentication") before both (Decision 4)                           | 1      |
-| 7.1.3, 7.6.1  | Federated sessions undocumented; IdP not consulted after login                                                  | Document, and check `auth_time` where re-authentication is asked of the IdP                    | 1      |
-| 6.2.4, 6.2.12 | No common or breached password check                                                                            | Offline list, checked on register, reset and change (Decision 3)                               | 2      |
-| 6.1.2, 6.2.11 | No context-specific word list                                                                                   | A documented list built from settings (instance name, product name, host) and checked          | 2      |
-| 6.3.1, 6.1.1  | Only a per-IP strict bucket; no per-account control; the brute-force stance is not documented                   | Per-account throttle without hard lockout (Decision 5), documented                             | 2      |
-| 6.5.5         | Reset link lives 60 minutes, above the 10-minute maximum for out-of-band requests                               | 10 minutes for the reset link, interpretation of the verification link in the ADR (Decision 7) | 2      |
-| 6.8.1         | A first OIDC sign-in links to an account with the same verified email, so a provider can take over that account | Link only after the account's own mailbox confirms it (Decision 11)                            | 2      |
-| 6.3.3         | Password alone; no MFA and no written rationale                                                                 | Documented rationale with mitigating controls, TOTP into the backlog (Decision 8)              | 2      |
-| 6.1.3, 6.3.4  | Authentication pathways are not documented together                                                             | One document listing every pathway with its controls and strength                              | 2      |
-| 8.1.2         | Field-level rules are not documented                                                                            | `docs/security/authorization.md` with the rules per object                                     | 3      |
-| 8.2.3         | The response side was never audited                                                                             | Audit of every route's response schema, plus a walker test (Decision 9)                        | 3      |
+| Requirement   | What is missing today                                                                                           | Fix                                                                                               | Sprint |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------ |
+| 7.3.2         | `expiresAt` slides on every use and `createdAt` is never consulted: a used session never expires                | Absolute lifetime, enforced in `sessions.resolve`                                                 | 1      |
+| 7.3.1, 7.1.1  | The 7-day inactivity rule has no written risk analysis; no absolute lifetime documented                         | Session policy document with the analysis and the NIST SP 800-63B deviations                      | 1      |
+| 7.1.2         | Concurrent sessions undocumented                                                                                | Decide and document the limit (Decision 6)                                                        | 1      |
+| 7.5.2         | No list of own sessions, no end-one, no re-authentication                                                       | `GET /account/sessions`, `DELETE /account/sessions/{id}`, behind re-authentication                | 1      |
+| 7.4.5         | An administrator cannot end the sessions of one user or all users                                               | Admin routes with a new permission, audited                                                       | 1      |
+| 7.5.1         | Changing the email address or linking an OIDC identity needs only the session                                   | Re-authentication ("recent authentication") before both (Decision 4)                              | 1      |
+| 7.1.3, 7.6.1  | Federated sessions undocumented; IdP not consulted after login                                                  | Document, and check `auth_time` where re-authentication is asked of the IdP                       | 1      |
+| 6.2.4, 6.2.12 | No common or breached password check                                                                            | Have I Been Pwned range check on register, reset, change, first-run and create-admin (Decision 3) | 2      |
+| 6.1.2, 6.2.11 | No context-specific word list                                                                                   | A documented list built from settings (instance name, product name, host) and checked             | 2      |
+| 6.3.1, 6.1.1  | Only a per-IP strict bucket; no per-account control; the brute-force stance is not documented                   | Per-account throttle without hard lockout (Decision 5), documented                                | 2      |
+| 6.5.5         | Reset link lives 60 minutes, above the 10-minute maximum for out-of-band requests                               | 10 minutes for the reset link, interpretation of the verification link in the ADR (Decision 7)    | 2      |
+| 6.8.1         | A first OIDC sign-in links to an account with the same verified email, so a provider can take over that account | Link only after the account's own mailbox confirms it (Decision 11)                               | 2      |
+| 6.3.3         | Password alone; no MFA and no written rationale                                                                 | Documented rationale with mitigating controls, TOTP into the backlog (Decision 8)                 | 2      |
+| 6.1.3, 6.3.4  | Authentication pathways are not documented together                                                             | One document listing every pathway with its controls and strength                                 | 2      |
+| 8.1.2         | Field-level rules are not documented                                                                            | `docs/security/authorization.md` with the rules per object                                        | 3      |
+| 8.2.3         | The response side was never audited                                                                             | Audit of every route's response schema, plus a walker test (Decision 9)                           | 3      |
 
 6.8.4 changes status inside sprint 1: the moment the application asks the provider for a recent authentication, it **expects recentness**, so `n/a` becomes
 `pass` only if `auth_time` is validated (sprint 1 does that), and `fail` otherwise. The YAML entry is rewritten with the sprint.
@@ -108,8 +108,8 @@ Definition of done: `pnpm check`, the tests of `core-identity` and `apps/server`
 
 **Goal:** the password rules, the brute-force controls and the account-linking rule match the ASVS, and the authentication pathways are written down once.
 
-1. **Password breach check** (6.2.4, 6.2.12; Decision 3). An adapter `pwned-passwords` in `packages/integrations` (the pattern of the SPDX, DOI and OpenAlex adapters: cache, timeout,
-   stub) calls the Have I Been Pwned range API. Only the first 5 hex characters of the SHA-1 of the password leave the server (k-anonymity), with `Add-Padding: true`, over TLS, with a short
+1. **Password breach check** (6.2.4, 6.2.12; Decision 3). An adapter `pwned-passwords` in `packages/integrations` (the first adapter in the package, which was empty: cache, timeout, stub; the SPDX adapter of M7 and the DOI and OpenAlex
+   adapters of M16 follow its shape) calls the Have I Been Pwned range API. Only the first 5 hex characters of the SHA-1 of the password leave the server (k-anonymity), with `Add-Padding: true`, over TLS, with a short
    timeout and an in-memory cache of ranges; the password itself is never sent or logged. The check runs in the service that sets a password (register, reset, change, first-run, the
    `create-admin` command), on the password exactly as received (6.2.8). A password that appears in the set is refused with `422` and a message that does not say how often. The
    most common passwords (the top 3000 that 6.2.4 asks about) are in that set. **When the service does not answer** the check fails open: the password is accepted, a warning is logged and
@@ -122,20 +122,20 @@ Definition of done: `pnpm check`, the tests of `core-identity` and `apps/server`
    `docs/security/authentication.md`.
 3. **Per-account throttle** (6.3.1, 6.1.1; Decision 5). A counter keyed on the account (not only the IP) for failed password attempts, with exponential delay and a ceiling, **no
    hard lockout** (that is the malicious-lockout risk the requirement names). Over the limit the answer is `429` with `Retry-After`, the same answer for an unknown username (no user
-   enumeration), and a successful login resets the counter. A notice mail on repeated failures is a backlog item, not M4b. Settings for the thresholds; integration test with
-   injected time and a rollback case.
+   enumeration), and a successful login resets the counter. A notice mail on repeated failures is a backlog item, not M4b. Settings for the thresholds (`loginThrottle`); integration test with
+   injected time and a rollback case. The password checks of a signed-in session (re-authentication, change of password) count on the account alone. The login route gets the client address from a new request variable `clientIp`, and a domain error may carry `retryAfterSeconds`, which the error mapper writes as `Retry-After`.
 4. **Reset link lifetime** (6.5.5; Decision 7). `RESET_TTL_MS` becomes 10 minutes. The documented position on the verification link (24 h: it confirms an address, authenticates nobody) goes
    into the ADR; if the maintainer rejects that reading, the verification link also drops to 10 minutes and the mail text says "request a new link".
 5. **Linking by mail confirmation** (6.8.1; Decision 11). A first sign-in through a provider whose verified email matches an existing account no longer links and no longer signs in. The
    service creates a single-use mail token (purpose `oidc-link`, stored hashed like the other mail tokens of ADR-0012, 10 minutes, so it also meets 6.5.5) that remembers the provider and
    the subject, and mails it to the **existing account's own address**. The browser gets the same neutral "check your mail" answer whether or not an account matched (ADR-0022, no
-   enumeration). The link opens a page that names the provider and asks the account holder to confirm while **signed in to that account**; only then is the identity linked. The mail says
+   enumeration). The link opens a page (M5's) that posts the token to the new route `POST /account/oidc-link/confirm`, which needs a session of **that account** and a recent authentication; only then is the identity linked. The browser of the sign-in is redirected to `/login?notice=check-mail`. The mail says
    "if you did not just try to sign in with <provider>, ignore this", because an attacker can trigger the mail by asserting someone's address at a provider they run; the signed-in
    confirmation and the mail budget per address (already in `core.identity`) limit what a careless click can do. A sign-in with an address that matches no account creates the pending
-   account as today. Linking from the profile page while signed in stays, behind the re-authentication of item 2. There is no `trustEmailForLinking` setting. Tests: a provider that
+   account as today. Linking from the profile page while signed in stays; it is already behind the recent authentication (sprint 1: `startLink` calls `requireRecentAuth`). There is no `trustEmailForLinking` setting. Tests: a provider that
    asserts a victim's address links nothing and signs nobody in; the confirmation links exactly once, expires after 10 minutes, and is refused for another account's session; the Keycloak
    test covers the whole flow. The `email_verified` claim is still required before any mail is sent. A changeset tells operators that sign-in no longer links by itself.
-6. **MFA position** (6.3.3; Decision 8). ADR-00xx: why Scorpion has no own second factor in this milestone, the mitigating controls (Argon2id, strict and per-account throttling, the
+6. **MFA position** (6.3.3; Decision 8). ADR-0026: why Scorpion has no own second factor in this milestone, the mitigating controls (Argon2id, strict and per-account throttling, the
    blocklist, short reset links, session list and termination, and the recommendation that operators enable MFA at the OIDC provider), and what would bring it back. 6.3.3 moves to `pass` only on the strength of this documented rationale, as the requirement itself allows, and the entry says so.
 7. **Authentication document** `docs/security/authentication.md` (6.1.1, 6.1.3, 6.3.4, and the list of 6.1.2): every pathway (password, OIDC, PAT, first-run token, mail tokens, the
    `create-admin` command) with the controls and the authentication strength each one enforces, the rate-limit and throttle settings, the lockout stance, and the fallback assumption

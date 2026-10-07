@@ -15,7 +15,7 @@ branch and one pull request into `dev`. M5 is released once, after sprint 4.
    implementation.md says M5 is built with them in place. Decision 1: M4a runs first (plan: [m4a-sprint-plan.md](m4a-sprint-plan.md), size S). CLAUDE.md already tells contributors to update the ASVS files in scoped paths; with no tool,
    that rule cannot be followed or enforced.
 2. `dev` carries `0.5.0` (done: tag `v0.5.0`, merge-back #50). Sprint 1 starts from `dev`.
-3. §10 is answered. Write ADR-0026 (how the shell finds module pages and talks to the API) as the first commit of sprint 1.
+3. §10 is answered. Write ADR-0027 (how the shell finds module pages and talks to the API) as the first commit of sprint 1.
 4. Add the lines in §11 to M5's scope in `implementation.md`. FEATURES §3.19 describes the legacy app; where it conflicts
    with the architecture or this plan, the plan and the ADRs win.
 5. **Prototype the catch-all route in the first days of sprint 1** (risk in §12). If SSR hooks per route or `load` data
@@ -102,7 +102,7 @@ depth; the legal pages work.
 
 Work items
 
-1. ADR-0026 and the prototype (§0 item 5). The ADR records: how the web process learns the registered `ui.routes`
+1. ADR-0027 and the prototype (§0 item 5). The ADR records: how the web process learns the registered `ui.routes`
    (Decision 2), how it reaches the API (Decision 3), the typed client (Decision 4), and the fallback if the catch-all fails.
 2. Create `modules/core-ui-shell` with `module.ts`, `public.ts`, `README.md`. It declares the registries `ui.nav`
    (`{ id, label key, path, icon?, section, permission?, order }`), `ui.widget` (`{ id, slot, component, permission? }`) and
@@ -253,7 +253,7 @@ Work items
    user and a global cap (settings), the stream ends when the session is revoked or expires (the session is re-checked on each
    heartbeat), no `Last-Event-ID` replay (a reconnect starts with the current count), `Cache-Control: no-store`, and the web
    proxy must not buffer or time out the response. The page falls back to polling every 60 s when the stream fails or a proxy
-   cuts it. ADR-0027 records the design. Tests: two kernels over one database (a delivery on one reaches a stream on the
+   cuts it. ADR-0028 records the design. Tests: two kernels over one database (a delivery on one reaches a stream on the
    other), the caps, the end on logout (defect 4 seen from a stream), and a plain User cannot open another user's stream.
 5. **Preference form** for notifications: switches per mandatory and optional kind, mandatory ones shown as locked with the reason;
    the form reads the registered preference keys, as the backlog asks.
@@ -321,7 +321,7 @@ They are the blocking ones for sprint 1; the smaller ones appear in the sprint t
 4. **Typed client.** `hono/client` needs the app's TypeScript type, which `createRoute` routes assembled at run time by the
    loader do not give. Recommended: generate the client from the OpenAPI document the server already produces
    (`openapi-fetch` plus `openapi-typescript`, two small dependencies, the client stays typed and tested against the contract
-   tests). `implementation.md` names `hono/client`; this changes the wording and needs a line in ADR-0026.
+   tests). `implementation.md` names `hono/client`; this changes the wording and needs a line in ADR-0027.
 5. **Is `core.ui-shell` a kernel module or only the web app?** Recommended: a small module (registries, `GET /ui/navigation`,
    permission, no table), so profiles list it and a headless profile leaves it out. The loader's table-prefix check does not
    apply to a module without tables.
@@ -336,7 +336,7 @@ They are the blocking ones for sprint 1; the smaller ones appear in the sprint t
    (the unit job is 11 to 13 minutes today).
 9. **Inbox updates: server-sent events** (the recommendation was polling every 60 s). This adds a long-lived response to the
    API, which is new for the server: connection caps, session re-checks, proxy buffering and idle timeouts are now ours to get
-   right, and the web proxy of Decision 3 must stream. Polling stays as the fallback. Recorded in ADR-0027 and the risks.
+   right, and the web proxy of Decision 3 must stream. Polling stays as the fallback. Recorded in ADR-0028 and the risks.
 
 ## 11. Additions to M5's scope in `implementation.md` (to approve with this plan)
 
@@ -345,7 +345,7 @@ They are the blocking ones for sprint 1; the smaller ones appear in the sprint t
 - The typed client is generated from the OpenAPI document (Decision 4) and shared with `url()`; both live in `packages/contracts`.
 - New routes the screens need: `GET /auth/oidc/providers`, user management (`GET /users`, `/users/{id}`, `/users/{id}/roles`,
   `/users/{id}/tokens`, deactivate, revoke sessions), `PUT /roles/{key}/permissions`, `GET /system/job-runs`, `GET /ui/navigation`.
-- `GET /inbox/stream` (server-sent events, unread count only) in `core.notifications`, with ADR-0027.
+- `GET /inbox/stream` (server-sent events, unread count only) in `core.notifications`, with ADR-0028.
 - Screens: inbox bell, notification preferences, audit viewer, system page and job runs join the list in M5.
 - Acceptance additions: no secret in a browser trace or log; CSP and security headers; axe checks on every screen; the lint rules
   that make the typed client, `url()`, `SafeHtml` and thrown loader errors mandatory.

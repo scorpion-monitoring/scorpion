@@ -46,6 +46,7 @@ describe('the module', () => {
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
       'identity.admin.created@1',
+      'identity.authMethod.linkRequested@1',
       'identity.authMethod.linked@1',
       'identity.email.verified@1',
       'identity.password.changed@1',
@@ -95,11 +96,19 @@ describe('the module', () => {
       retention: { purgeAfterDays: 30, tokenGraceDays: 30, purgeBatch: 500 },
       sessions: { inactivityDays: 7, absoluteDays: 30, recentAuthSeconds: 300 },
       mailBudgets: { perAddress: { burst: 3, perHour: 3 }, perUser: { burst: 5, perHour: 5 } },
+      passwordBreachCheck: true,
+      loginThrottle: {
+        freeAttempts: 5,
+        freeAttemptsPerAccount: 20,
+        baseDelaySeconds: 15,
+        maxDelaySeconds: 900,
+        forgetAfterSeconds: 3600,
+      },
     });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
-  it('creates exactly its seven tables, all with the module prefix', async () => {
+  it('creates exactly its eight tables, all with the module prefix', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
@@ -109,6 +118,7 @@ describe('the module', () => {
       'identity_auth_method',
       'identity_first_run_token',
       'identity_login_state',
+      'identity_login_throttle',
       'identity_mail_token',
       'identity_session',
       'identity_token',
@@ -127,7 +137,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(8); // 0000 to 0007, each once
+    expect(journal.rows).toHaveLength(9); // 0000 to 0008, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
