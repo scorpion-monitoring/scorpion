@@ -4,7 +4,16 @@
 // Secrets are never stored in the clear: a session id and a login state are random 256-bit values
 // kept as a SHA-256 hash, a token secret and a password as an argon2id hash.
 import { sql } from 'drizzle-orm';
-import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -99,7 +108,12 @@ export const session = pgTable(
     secretHash: text('secret_hash').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     lastSeenAt: timestamptz('last_seen_at').notNull().defaultNow(),
+    /** The end of inactivity: slides with use, never beyond `absoluteExpiresAt`. */
     expiresAt: timestamptz('expires_at').notNull(),
+    /** The end however often the session is used (ADR 0025). Set from `createdAt` when the session is created. */
+    absoluteExpiresAt: timestamptz('absolute_expires_at').notNull(),
+    /** When the person last proved who they are in this session: the login, or a later re-authentication (ADR 0025). */
+    authenticatedAt: timestamptz('authenticated_at').notNull().defaultNow(),
     /** Set by logout and "log out everywhere"; a revoked session never authenticates. */
     revokedAt: timestamptz('revoked_at'),
   },
@@ -131,14 +145,30 @@ export const loginState = pgTable(
      * that started the login.
      */
     bindingHash: text('binding_hash').notNull(),
-    /** Set when a signed-in user started the flow to add this provider to their account. */
+    /** What the flow is for (ADR 0025): a `login`, adding a provider (`link`), or a re-authentication (`reauth`). */
+    purpose: text().notNull().default('login'),
+    /** The signed-in user who started a `link` or `reauth` flow. */
     linkUserId: uuid('link_user_id').references(() => user.id, { onDelete: 'cascade' }),
+    /** The session a `reauth` flow is for. */
+    reauthSessionId: uuid('reauth_session_id').references(() => session.id, {
+      onDelete: 'cascade',
+    }),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     expiresAt: timestamptz('expires_at').notNull(),
   },
   (table) => [
     uniqueIndex('identity_login_state_hash_uidx').on(table.stateHash),
     index('identity_login_state_expires_idx').on(table.expiresAt),
+    check(
+      'identity_login_state_purpose_known',
+      sql`${table.purpose} in ('login', 'link', 'reauth')`,
+    ),
+    check(
+      'identity_login_state_purpose_fields',
+      sql`(${table.purpose} = 'login' and ${table.linkUserId} is null and ${table.reauthSessionId} is null)
+        or (${table.purpose} = 'link' and ${table.linkUserId} is not null and ${table.reauthSessionId} is null)
+        or (${table.purpose} = 'reauth' and ${table.linkUserId} is not null and ${table.reauthSessionId} is not null)`,
+    ),
   ],
 );
 
@@ -198,12 +228,12 @@ export const firstRunToken = pgTable(
 );
 
 /** What a mail token is for. */
-export const MAIL_TOKEN_PURPOSES = ['password-reset', 'email-verification'] as const;
+export const MAIL_TOKEN_PURPOSES = ['password-reset', 'email-verification', 'oidc-link'] as const;
 export type MailTokenPurpose = (typeof MAIL_TOKEN_PURPOSES)[number];
 
 /**
- * A single-use token that travels by mail: a password reset or the confirmation of an address
- * (ADR 0012). Only the SHA-256 hash of 256 random bits is kept, so a leaked table is no way in.
+ * A single-use token that travels by mail: a password reset, the confirmation of an address
+ * (ADR 0012) or the confirmation of linking a sign-in provider (ADR 0026). Only the SHA-256 hash of 256 random bits is kept, so a leaked table is no way in.
  * A new token for the same user and purpose replaces the outstanding one.
  */
 export const mailToken = pgTable(
@@ -218,6 +248,9 @@ export const mailToken = pgTable(
     secretHash: text('secret_hash').notNull(),
     /** For `email-verification`: the address the token confirms (the current one, or a new one). */
     email: text(),
+    /** For `oidc-link`: the provider and the subject the person must confirm linking to this account (ADR 0026). */
+    provider: text(),
+    subject: text(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     expiresAt: timestamptz('expires_at').notNull(),
     /** Set when the token was used; a used token never works again. */
@@ -229,11 +262,32 @@ export const mailToken = pgTable(
     index('identity_mail_token_expires_idx').on(table.expiresAt),
     check(
       'identity_mail_token_purpose_known',
-      sql`${table.purpose} in ('password-reset', 'email-verification')`,
+      sql`${table.purpose} in ('password-reset', 'email-verification', 'oidc-link')`,
+    ),
+    check(
+      'identity_mail_token_link_has_identity',
+      sql`(${table.purpose} = 'oidc-link') = (${table.provider} is not null and ${table.subject} is not null)`,
     ),
     check(
       'identity_mail_token_verification_has_email',
       sql`(${table.purpose} = 'email-verification') = (${table.email} is not null)`,
     ),
   ],
+);
+
+/**
+ * Failed password attempts, per key (ADR 0026). A key is the SHA-256 of the submitted username with
+ * or without the client address, so the table holds no username and no address, and a name that
+ * does not exist is counted like one that does. Rows are forgotten by the cleanup job.
+ */
+export const loginThrottle = pgTable(
+  'identity_login_throttle',
+  {
+    keyHash: text('key_hash').primaryKey(),
+    failures: integer().notNull(),
+    lastFailureAt: timestamptz('last_failure_at').notNull(),
+    /** While this is in the future the key answers 429 without looking at the password. */
+    blockedUntil: timestamptz('blocked_until'),
+  },
+  (table) => [index('identity_login_throttle_last_failure_idx').on(table.lastFailureAt)],
 );

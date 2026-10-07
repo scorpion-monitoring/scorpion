@@ -168,12 +168,20 @@ export type ResetConfirmInput = z.infer<typeof resetConfirmInput>;
 /** `POST /auth/verify-email`. */
 export const verifyEmailInput = z.strictObject({ token: mailedToken });
 
+/** `POST /account/oidc-link/confirm`: the token of the link mail; whether it is good is the service's 400. */
+export const confirmOidcLinkInput = z.strictObject({ token: mailedToken });
+
 /** `POST /account/password`. The current password is checked, not validated against the rules. */
 export const changePasswordInput = z.strictObject({
   currentPassword: z.string().min(1).max(PASSWORD_MAX),
   newPassword: password,
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordInput>;
+
+/** `POST /account/reauthenticate`: the current password, checked and not validated against the rules. */
+export const reauthenticateInput = z.strictObject({
+  password: z.string().min(1).max(PASSWORD_MAX),
+});
 
 export const DISPLAY_NAME_MAX = 100;
 export const BIO_MAX = 2000;

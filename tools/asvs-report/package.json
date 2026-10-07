@@ -1,0 +1,14 @@
+{
+  "name": "@scorpion/asvs-report",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "description": "Validates the ASVS self-assessment files against the pinned source and the test reports, and generates the chapter reports and the README badge block.",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "yaml": "^2.9.1"
+  }
+}

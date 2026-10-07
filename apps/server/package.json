@@ -19,6 +19,7 @@
     "@scorpion/core-identity": "workspace:*",
     "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-settings": "workspace:*",
+    "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "hono": "^4.13.12",
     "prom-client": "^15.1.3",
@@ -27,6 +28,6 @@
   "devDependencies": {
     "@scorpion/testing": "workspace:*",
     "@types/pg": "^8.23.1",
-    "pg": "^8.23.0"
+    "pg": "^8.23.1"
   }
 }

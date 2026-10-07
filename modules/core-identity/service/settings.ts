@@ -43,6 +43,32 @@ export const DEFAULT_RETENTION = {
   purgeBatch: 500,
 } as const;
 
+/**
+ * The lifetime of a session and the window of a recent authentication (ADR 0025,
+ * `docs/security/sessions.md`). A session ends after `inactivityDays` without use, and at the latest
+ * `absoluteDays` after it began, however often it is used.
+ */
+export const DEFAULT_SESSIONS = {
+  inactivityDays: 7,
+  absoluteDays: 30,
+  recentAuthSeconds: 300,
+} as const;
+
+/**
+ * The throttle on failed password attempts (ADR 0026, `docs/security/authentication.md`). After
+ * `freeAttempts` failures for one account from one network, and after `freeAttemptsPerAccount` for
+ * the account from anywhere, a further failure blocks that key for `baseDelaySeconds`, doubling with
+ * each failure up to `maxDelaySeconds`. Counters are forgotten after `forgetAfterSeconds` without a
+ * failure. Nothing locks an account for good.
+ */
+export const DEFAULT_LOGIN_THROTTLE = {
+  freeAttempts: 5,
+  freeAttemptsPerAccount: 20,
+  baseDelaySeconds: 15,
+  maxDelaySeconds: 900,
+  forgetAfterSeconds: 3600,
+} as const;
+
 /** Mails that one address, and one signed-in user, may cause: a burst, then a steady rate per hour. */
 export const DEFAULT_MAIL_BUDGETS = {
   perAddress: { burst: 3, perHour: 3 },
@@ -82,6 +108,71 @@ export const settingsSchema = z.strictObject({
       perAddress: { ...DEFAULT_MAIL_BUDGETS.perAddress },
       perUser: { ...DEFAULT_MAIL_BUDGETS.perUser },
     }),
+  /**
+   * `inactivityDays`: a session ends this long after its last use. `absoluteDays`: it ends this long
+   * after it began whatever the use (at least `inactivityDays`). `recentAuthSeconds`: how recently
+   * the person must have signed in or confirmed their identity for an email change, linking a
+   * provider, ending a session or "log out everywhere". A session keeps the end it was created
+   * with; a changed value applies to new sessions.
+   */
+  sessions: z
+    .strictObject({
+      inactivityDays: z.number().int().min(1).max(365).default(DEFAULT_SESSIONS.inactivityDays),
+      absoluteDays: z.number().int().min(1).max(365).default(DEFAULT_SESSIONS.absoluteDays),
+      recentAuthSeconds: z
+        .number()
+        .int()
+        .min(30)
+        .max(3600)
+        .default(DEFAULT_SESSIONS.recentAuthSeconds),
+    })
+    .refine(
+      (value) => value.absoluteDays >= value.inactivityDays,
+      'absoluteDays must not be less than inactivityDays',
+    )
+    .default({ ...DEFAULT_SESSIONS }),
+  /**
+   * Whether a new password is checked against the Have I Been Pwned range API (only the first 5
+   * characters of its SHA-1 are sent). Turn it off for an installation that may not call out. A
+   * service that does not answer never blocks a password (it fails open and is counted).
+   */
+  passwordBreachCheck: z.boolean().default(true),
+  /** The brute-force throttle on failed password attempts; see `DEFAULT_LOGIN_THROTTLE`. */
+  loginThrottle: z
+    .strictObject({
+      freeAttempts: z.number().int().min(1).max(1000).default(DEFAULT_LOGIN_THROTTLE.freeAttempts),
+      freeAttemptsPerAccount: z
+        .number()
+        .int()
+        .min(1)
+        .max(10_000)
+        .default(DEFAULT_LOGIN_THROTTLE.freeAttemptsPerAccount),
+      baseDelaySeconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(3600)
+        .default(DEFAULT_LOGIN_THROTTLE.baseDelaySeconds),
+      maxDelaySeconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(86_400)
+        .default(DEFAULT_LOGIN_THROTTLE.maxDelaySeconds),
+      forgetAfterSeconds: z
+        .number()
+        .int()
+        .min(60)
+        .max(604_800)
+        .default(DEFAULT_LOGIN_THROTTLE.forgetAfterSeconds),
+    })
+    .refine((value) => value.maxDelaySeconds >= value.baseDelaySeconds, {
+      message: 'maxDelaySeconds must not be less than baseDelaySeconds',
+    })
+    .refine((value) => value.freeAttemptsPerAccount >= value.freeAttempts, {
+      message: 'freeAttemptsPerAccount must not be less than freeAttempts',
+    })
+    .default({ ...DEFAULT_LOGIN_THROTTLE }),
   /** The id of the `auth.approvalPolicy` entry that decides the status of a new account. */
   approvalPolicy: z.string().min(1).default('manual'),
   /**

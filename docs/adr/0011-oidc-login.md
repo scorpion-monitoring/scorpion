@@ -151,3 +151,10 @@ auth method. Linking emits the new `identity.authMethod.linked@1 { userId, usern
 `clientSecretFor()` is replaced by `clientSecretFrom(settings)`, which asks the secrets store of `core.settings` for
 `oidc.<provider id>.client-secret`. There is no environment fallback: `OIDC_<ID>_CLIENT_SECRET` is not read
 ([ADR-0016](0016-secrets-store-and-key-rotation.md)).
+
+## Update (M4b sprint 1)
+
+[ADR-0025](0025-absolute-session-lifetime-and-recent-authentication.md) gives the login state a **purpose** (`login`, `link`,
+`reauth`). A `reauth` login sends `prompt=login` and `max_age=0`, and its callback requires an `auth_time` that is not older than
+the request, and the same `sub` as the caller's own sign-in at that provider. It sets the session's `authenticated_at`; it creates
+no session.

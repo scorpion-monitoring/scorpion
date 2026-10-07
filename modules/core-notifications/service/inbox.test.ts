@@ -397,7 +397,7 @@ describe('the inbox service serves the caller’s own items', () => {
     expect((await t.notifications.inbox.list(a, { page: 0, pageSize: 10 })).total).toBe(0);
   });
 
-  it('answers 403 for another user’s item and for an id that does not exist, and changes nothing', async () => {
+  it('answers 403 for another user’s item and for an id that does not exist, and changes nothing [ASVS-8.2.2]', async () => {
     const a = await t.actorOf('user');
     const b = await t.actorOf('user');
     const theirs = await makeInboxItem(t.kernel.pool, { userId: b.userId });

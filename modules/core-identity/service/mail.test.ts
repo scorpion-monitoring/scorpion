@@ -12,8 +12,15 @@ const identity = useIdentity();
 const PASSWORD = 'correct horse battery';
 const input = { username: 'alice', email: 'alice@example.org', password: PASSWORD };
 
-const actorOf = (user: { id: string; username: string }) =>
-  ({ kind: 'user', userId: user.id, username: user.username, roles: [], via: 'session' }) as const;
+const actorOf = (user: { id: string; username: string }, sessionId?: string) =>
+  ({
+    kind: 'user',
+    userId: user.id,
+    username: user.username,
+    roles: [],
+    via: 'session',
+    sessionId,
+  }) as const;
 
 async function withAdmins(
   ...admins: { username: string; email: string | null; locale?: string }[]
@@ -398,10 +405,11 @@ describe('changing the address in the profile', () => {
       username: 'alice',
       email: 'old@example.org',
     });
+    const { sessionId } = await started.identity.sessions.create(alice.id);
     await failOutbox(started.kernel);
     await expect(
-      started.identity.profile.update(actorOf(alice), { email: 'new@example.org' }),
-    ).rejects.toThrow();
+      started.identity.profile.update(actorOf(alice, sessionId), { email: 'new@example.org' }),
+    ).rejects.toThrow('outbox');
     expect(await started.mail.all()).toEqual([]);
     expect((await started.kernel.pool.query('select 1 from identity_mail_token')).rows).toEqual([]);
   });
@@ -414,8 +422,9 @@ describe('changing the address in the profile', () => {
     });
     await makeMember(started.kernel.pool, { username: 'bobby', email: 'held@example.org' });
     await makePreference(started.kernel.pool, alice, 'notifications.locale', 'de');
-    await started.identity.profile.update(actorOf(alice), { email: 'new@example.org' });
-    await started.identity.profile.update(actorOf(alice), { email: 'held@example.org' });
+    const { sessionId } = await started.identity.sessions.create(alice.id);
+    await started.identity.profile.update(actorOf(alice, sessionId), { email: 'new@example.org' });
+    await started.identity.profile.update(actorOf(alice, sessionId), { email: 'held@example.org' });
     expect(await started.mail.all()).toMatchObject([
       { template: 'identity.email-verification', to: 'new@example.org', locale: 'de' },
     ]);

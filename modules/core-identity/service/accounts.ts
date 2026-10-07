@@ -1,23 +1,32 @@
 // Local accounts: register, log in, log out, and who am I. Everything that changes data goes
 // through here; the routes only parse, call one method and map the result.
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { Conflict, Forbidden, Invalid, Unauthorized, type Actor } from '@scorpion/contracts';
+import {
+  Conflict,
+  Forbidden,
+  Invalid,
+  NotFound,
+  Unauthorized,
+  type Actor,
+} from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { DbTx, ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
 import { authMethod, user } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
-import { loginInput, registerInput } from '../validation.ts';
+import { loginInput, reauthenticateInput, registerInput } from '../validation.ts';
 import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
 import type { IdentityMail } from './identity-mail.ts';
 import type { MailBudget } from './mail-budget.ts';
 import type { MailLinks } from './mail-links.ts';
 import { hashPassword, verifyPassword } from './password.ts';
-import { requireUser } from './require-user.ts';
+import type { PasswordPolicy } from './password-policy.ts';
+import type { LoginThrottle } from './login-throttle.ts';
+import { requireSession, requireUser } from './require-user.ts';
 import { ADMIN_ROLE, grantDefaultRole } from './roles.ts';
 import { csrfTokenFor } from './session-id.ts';
 import type { RecoveryService } from './recovery.ts';
-import type { SessionService } from './sessions.ts';
+import type { SessionService, SessionSummary } from './sessions.ts';
 import type { IdentitySettings } from './settings.ts';
 
 export interface LoginResult {
@@ -26,6 +35,13 @@ export interface LoginResult {
   sessionId: string;
   expiresAt: Date;
   csrfToken: string;
+}
+
+export interface LoginOptions {
+  /** The client's address, as the pipeline resolved it; it is one of the two throttle keys. */
+  clientIp?: string;
+  /** For tests: the time the throttle counts from. */
+  now?: Date;
 }
 
 export interface AccountService {
@@ -46,12 +62,39 @@ export interface AccountService {
    * Checks the password and starts a session. An unknown user and a wrong password answer the same
    * way and cost the same; a pending account is told to wait, a rejected or deleted one is not
    * told anything. `previousSessionId` (the caller's current session, if any) is ended.
+   *
+   * Failed attempts are throttled per account (ADR 0026): over the limit the answer is a 429 with
+   * `Retry-After`, before the password is looked at and the same for a name that does not exist. A
+   * success forgets the counters.
    */
-  login(input: unknown, previousSessionId?: string): Promise<LoginResult>;
+  login(input: unknown, previousSessionId?: string, options?: LoginOptions): Promise<LoginResult>;
   /** Ends the caller's own session. */
   logout(actor: Actor, sessionId: string | undefined): Promise<void>;
-  /** Ends every session of the caller; returns how many were open. */
+  /**
+   * Ends every session of the caller; returns how many were open. Needs a recent authentication
+   * (`ReauthenticationRequired`, 401) when the caller is a session.
+   */
   logoutAll(actor: Actor): Promise<number>;
+  /**
+   * The caller's own live sessions, newest first: id, created, last seen and which one is this.
+   * Nothing about a device or an address is stored or returned. Session callers only.
+   */
+  listSessions(
+    actor: Actor,
+    page: { page: number; pageSize: number },
+  ): Promise<{ sessions: SessionSummary[]; total: number }>;
+  /**
+   * Ends one of the caller's own sessions by id; `current` says it was the session of this request,
+   * whose cookie the route then clears. Needs a recent authentication. An id that is somebody
+   * else's, unknown or over is a `NotFound`, the same for all three.
+   */
+  endSession(actor: Actor, sessionId: string): Promise<{ current: boolean }>;
+  /**
+   * Re-authenticates the caller's session with the current password (ADR 0025), which sets its
+   * "authenticated at" to now. 422 for a wrong password, 409 for an account without a password
+   * (it re-authenticates at its provider instead).
+   */
+  reauthenticate(actor: Actor, input: unknown): Promise<void>;
   /**
    * The caller's own account, their roles (asked of core.authz every time, never cached here) and
    * the CSRF token of their session when they have one.
@@ -84,9 +127,12 @@ export function createAccountService(
     budget: MailBudget;
     links: MailLinks;
     authz: AuthzService;
+    passwords: PasswordPolicy;
+    throttle: LoginThrottle;
   },
 ): AccountService {
-  const { users, sessions, settings, recovery, mail, budget, links, authz } = deps;
+  const { users, sessions, settings, recovery, mail, budget, links, authz, passwords, throttle } =
+    deps;
 
   // A hash to check when there is nobody to check against, so that "no such user" takes as long as
   // "wrong password". Made with the same parameters as the real ones, once, on first use.
@@ -166,6 +212,10 @@ export function createAccountService(
       if (!parsed.success) throw invalid(parsed.error);
       const { username, email, password, locale } = parsed.data;
 
+      // Before anything is spent or looked up, and the same for a new and a taken address: a password
+      // that breaks the rules is a 422 on both paths.
+      await passwords.check(password, { username, email });
+
       // Spent on both paths, before anything tells them apart: exhausting it says nothing.
       const mayMailOwner = await budget.spend(email);
 
@@ -239,12 +289,16 @@ export function createAccountService(
       }
     },
 
-    async login(input, previousSessionId) {
+    async login(input, previousSessionId, options = {}) {
       const { localAccounts } = await settings.get();
       if (!localAccounts) throw new Forbidden('Signing in with a password is turned off.');
       const parsed = loginInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       const { username, password } = parsed.data;
+      const { clientIp, now = new Date() } = options;
+
+      // A blocked key answers 429 before anything else, the same for every name (ADR 0026).
+      await throttle.assertOpen(username, clientIp, now);
 
       const found = await users.findByUsername(username);
       const [method] = found
@@ -257,12 +311,14 @@ export function createAccountService(
       const storedHash = method?.passwordHash ?? undefined;
 
       const passwordOk = await verifyPassword(storedHash ?? (await decoy()), password);
-      if (found === undefined || storedHash === undefined || !passwordOk) {
+      // Every refusal that looks like a wrong name or password is counted, so a name that does not
+      // exist, a wrong password and a rejected account are slowed alike.
+      const refuse = async (): Promise<never> => {
+        await throttle.recordFailure(username, clientIp, now);
         throw new Unauthorized('The username or password is wrong.');
-      }
-      if (found.deletedAt !== null || found.status === 'rejected') {
-        throw new Unauthorized('The username or password is wrong.');
-      }
+      };
+      if (found === undefined || storedHash === undefined || !passwordOk) return refuse();
+      if (found.deletedAt !== null || found.status === 'rejected') return refuse();
       if (found.status === 'pending') {
         throw new Forbidden('Your account is waiting for approval.');
       }
@@ -273,6 +329,7 @@ export function createAccountService(
           .update(authMethod)
           .set({ lastLoginAt: sql`now()` })
           .where(eq(authMethod.id, method!.id));
+        await throttle.reset(tx, username, clientIp);
         return created;
       });
       // A new login replaces the session the browser held, so an old id cannot be carried over.
@@ -295,7 +352,65 @@ export function createAccountService(
     async logoutAll(actor) {
       const { userId } = requireUser(actor);
       await authz.require(actor, 'core.identity.session.manage');
+      await sessions.requireRecentAuth(actor);
       return sessions.revokeAll(userId);
+    },
+
+    async listSessions(actor, page) {
+      const { userId, sessionId } = requireSession(actor, 'The list of sessions');
+      await authz.require(actor, 'core.identity.session.manage');
+      return sessions.list(userId, page, sessionId);
+    },
+
+    async endSession(actor, sessionId) {
+      const caller = requireSession(actor, 'Ending a session');
+      // The permission names the caller's own sessions; the update below is what scopes it to them.
+      await authz.require(actor, 'core.identity.session.manage', {
+        type: 'session',
+        id: caller.userId,
+      });
+      await sessions.requireRecentAuth(actor);
+      // Scoped to the caller's own sessions in the update itself: someone else's id changes nothing.
+      if (!(await sessions.revokeOwn(caller.userId, sessionId))) {
+        throw new NotFound('There is no such session.');
+      }
+      return { current: sessionId === caller.sessionId };
+    },
+
+    async reauthenticate(actor, input) {
+      const caller = requireSession(actor, 'Re-authenticating');
+      await authz.require(actor, 'core.identity.session.manage');
+      if (caller.sessionId === undefined) throw new Unauthorized();
+      const parsed = reauthenticateInput.safeParse(input);
+      if (!parsed.success) throw invalid(parsed.error);
+
+      const [method] = await ctx.db
+        .select({ passwordHash: authMethod.passwordHash })
+        .from(authMethod)
+        .where(and(eq(authMethod.userId, caller.userId), eq(authMethod.provider, 'local')))
+        .limit(1);
+      if (!method?.passwordHash) {
+        throw new Conflict('This account has no password. Sign in again at your provider.');
+      }
+      // Guessing the password through a stolen session is throttled like guessing it at login.
+      await throttle.assertOpen(caller.username, undefined);
+      if (!(await verifyPassword(method.passwordHash, parsed.data.password))) {
+        await throttle.recordFailure(caller.username, undefined);
+        throw new Invalid('The password is wrong.', [
+          { path: 'password', message: 'is not your current password' },
+        ]);
+      }
+      await ctx.db.tx(async (tx) => {
+        if (!(await sessions.markAuthenticated(caller.userId, caller.sessionId!, tx))) {
+          throw new Unauthorized('The session is not valid. Sign in again.');
+        }
+        await throttle.reset(tx, caller.username, undefined);
+        await ctx.events.emit('identity.session.reauthenticated@1', {
+          userId: caller.userId,
+          username: caller.username,
+          method: 'password',
+        });
+      });
     },
 
     async me(actor, sessionId) {

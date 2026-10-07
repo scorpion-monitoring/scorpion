@@ -1,5 +1,14 @@
 export { ANONYMOUS, isUser, type Actor, type AnonymousActor, type UserActor } from './actor.ts';
-export { Conflict, DomainError, Forbidden, Invalid, NotFound, Unauthorized } from './errors.ts';
+export {
+  Conflict,
+  DomainError,
+  Forbidden,
+  Invalid,
+  NotFound,
+  REAUTHENTICATION_REQUIRED,
+  ReauthenticationRequired,
+  Unauthorized,
+} from './errors.ts';
 export type { FieldProblem } from './errors.ts';
 export {
   listEnvelope,

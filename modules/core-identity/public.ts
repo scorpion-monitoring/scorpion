@@ -1,4 +1,5 @@
 // The only file other modules may import. It holds the service interface and nothing else.
+import type { Actor } from '@scorpion/contracts';
 import type { CreateUserInput } from './validation.ts';
 
 export type UserStatus = 'pending' | 'active' | 'rejected';
@@ -32,6 +33,14 @@ export interface UserService {
 
 export interface IdentityService {
   users: UserService;
+  /**
+   * Resolves when the caller's session was authenticated within `maxAgeSeconds` (default: the
+   * setting `sessions.recentAuthSeconds`, 5 minutes). Throws `ReauthenticationRequired` (401,
+   * problem type `reauthentication-required`) when it was not; the client then asks for the
+   * password or the provider and repeats the request. A caller with an access token is not asked.
+   * Call it in the service, before the work, for a change that ASVS 7.5.1 protects.
+   */
+  requireRecentAuth(actor: Actor, maxAgeSeconds?: number): Promise<void>;
 }
 
 export type { CreateUserInput };

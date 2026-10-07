@@ -36,6 +36,7 @@ describe('the module', () => {
       'core.identity.role.assign',
       'core.identity.role.read',
       'core.identity.session.manage',
+      'core.identity.session.manage-any',
       'core.identity.token.manage',
       'core.identity.token.manage-any',
       'core.identity.token.read',
@@ -45,12 +46,16 @@ describe('the module', () => {
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
       'identity.admin.created@1',
+      'identity.authMethod.linkRequested@1',
       'identity.authMethod.linked@1',
       'identity.email.verified@1',
       'identity.password.changed@1',
       'identity.password.reset@1',
       'identity.password.resetRequested@1',
       'identity.profile.updated@1',
+      'identity.session.reauthenticated@1',
+      'identity.sessions.revoked@1',
+      'identity.sessions.revokedAll@1',
       'identity.token.created@1',
       'identity.token.revoked@1',
       'identity.token.rotated@1',
@@ -89,12 +94,21 @@ describe('the module', () => {
       oidcProviders: [],
       // Today's constants are the defaults (README, "Settings").
       retention: { purgeAfterDays: 30, tokenGraceDays: 30, purgeBatch: 500 },
+      sessions: { inactivityDays: 7, absoluteDays: 30, recentAuthSeconds: 300 },
       mailBudgets: { perAddress: { burst: 3, perHour: 3 }, perUser: { burst: 5, perHour: 5 } },
+      passwordBreachCheck: true,
+      loginThrottle: {
+        freeAttempts: 5,
+        freeAttemptsPerAccount: 20,
+        baseDelaySeconds: 15,
+        maxDelaySeconds: 900,
+        forgetAfterSeconds: 3600,
+      },
     });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
-  it('creates exactly its seven tables, all with the module prefix', async () => {
+  it('creates exactly its eight tables, all with the module prefix', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
@@ -104,6 +118,7 @@ describe('the module', () => {
       'identity_auth_method',
       'identity_first_run_token',
       'identity_login_state',
+      'identity_login_throttle',
       'identity_mail_token',
       'identity_session',
       'identity_token',
@@ -122,7 +137,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(7); // 0000 to 0006, each once
+    expect(journal.rows).toHaveLength(9); // 0000 to 0008, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -134,6 +149,7 @@ describe('the module', () => {
     expect(rows.map((r) => `${r.table_name}.${r.column_name}`).sort()).toEqual([
       'identity_auth_method.password_hash',
       'identity_first_run_token.secret_hash',
+      'identity_login_state.reauth_session_id', // the id of a session row, which holds no secret
       'identity_login_state.state_hash',
       'identity_mail_token.secret_hash',
       'identity_session.secret_hash',
@@ -182,6 +198,7 @@ describe('the permissions identity gives to roles (authz.defaultRole)', () => {
     expect(adminOnly.sort()).toEqual([
       'core.identity.role.assign',
       'core.identity.role.read',
+      'core.identity.session.manage-any',
       'core.identity.token.manage-any',
       'core.identity.user.approve',
       'core.identity.user.list-pending',
@@ -318,8 +335,8 @@ describe('the constraints of the tables', () => {
     expect(
       await refused(
         kernel.pool.query(
-          `insert into identity_session (id, user_id, secret_hash, expires_at)
-           select gen_random_uuid(), user_id, secret_hash, expires_at from identity_session where id = $1`,
+          `insert into identity_session (id, user_id, secret_hash, expires_at, absolute_expires_at)
+           select gen_random_uuid(), user_id, secret_hash, expires_at, absolute_expires_at from identity_session where id = $1`,
           [row.id],
         ),
       ),
@@ -344,6 +361,8 @@ describe('the constraints of the tables', () => {
       'link_user_id',
       'nonce_hash',
       'provider_id',
+      'purpose',
+      'reauth_session_id',
       'state_hash',
     ]);
     const insert = () =>

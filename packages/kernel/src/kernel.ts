@@ -8,7 +8,7 @@ import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts'
 import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
 import type { Config } from './config.ts';
 import type { ModuleContext } from './context.ts';
-import { createDb, createPool, type Db } from './db.ts';
+import { closePool, createDb, createPool, type Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { childLogger, createLogger, type Logger } from './logger.ts';
 import { SYSTEM_READY, type CommandIo, type DomainEvent } from './manifest.ts';
@@ -190,7 +190,17 @@ export function createKernel(options: KernelOptions): Kernel {
 
   const ownsPool = options.pool === undefined;
   let poolClosed = false;
-  const pool = options.pool ?? createPool(config);
+  // The error carries the pg client with its connection settings, password included. The logger
+  // reduces an Error to its message and stack anyway; the line names the SQLSTATE instead.
+  const pool =
+    options.pool ??
+    createPool(config, {
+      onError: (error) =>
+        log.warn(
+          { code: (error as { code?: string }).code, message: error.message },
+          'an idle database connection was lost',
+        ),
+    });
   const db = createDb(pool);
   const services = new Map<string, unknown>();
   let routes: readonly RegisteredRoute[] = [];
@@ -413,7 +423,7 @@ export function createKernel(options: KernelOptions): Kernel {
       await Promise.all([dispatcher.stop(timeoutMs), jobs.stop(timeoutMs)]);
       if (ownsPool && !poolClosed) {
         poolClosed = true;
-        await pool.end();
+        await closePool(pool);
       }
     },
   };

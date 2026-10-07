@@ -36,8 +36,9 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | M3 | `core.authz` + `core.settings` (incl. secrets, vocabularies) | 1 Foundation | M | M2 | 1 |
 | M4 | `core.notifications` + `core.audit` | 1 Foundation | M | M3 | none |
 | M4a | Security assurance tooling | 1 Foundation | S | M4 | none |
+| M4b | Closing the ASVS gaps in `core.identity`, `core.authz` and the pipeline | 1 Foundation | M | M4a | none |
 | M5 | `core.ui-shell` + web app skeleton | 1 Foundation | M | M3 | 11, 12 |
-| **G1** | **Gate 1: security foundation** | | | M0–M5 incl. M4a | |
+| **G1** | **Gate 1: security foundation** | | | M0–M5 incl. M4a and M4b | |
 | M6 | `registry.organisations` | 2 Registry | M | G1 | none |
 | M7 | `registry.services`: model, wizard, catalogue, detail/edit | 2 Registry | L | M6 | 2, 14 (partly) |
 | M8 | `public-api` v1 (read) + OpenAPI + Swagger | 2 Registry | M | M7 | 15 |
@@ -158,7 +159,21 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - `tools/asvs-report` (validator and generator), pinned ASVS 5.0.0 source, `pnpm security:asvs` in CI, the `asvs-impact` job (rule 10) and the generated README badge block.
 - Skeletons for V6, V7, V8 and V10 with every L1/L2 id. Fill in what M2–M4 already delivered: tag the existing tests (including the `defect-NN.*` tests) and move the matching requirements to `pass` or `n/a`. Everything else stays `fail`, with an issue for each gap.
 
-**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue assigned to M5 or to a fix before G1.
+**Release:** M4a changes no runtime behaviour and carries empty changesets, so it has no release of its own. It ships inside `0.6.0` with M4b (an exception to rule 1 above; decision 1 of [m4a-sprint-plan.md](m4a-sprint-plan.md), and Decision 1 of [m4b-sprint-plan.md](m4b-sprint-plan.md), which gave M5 the number `0.7.0`).
+
+**Acceptance:** CI runs `pnpm security:asvs` on every pull request, and a hand-edited badge fails it. The README shows Scorecard, Best Practices (in progress) and four ASVS badges at `in progress`. Every open `fail` links to an issue or to the plan section that schedules the fix; the M4b plan covers the gaps in `core.identity`, `core.authz` and the pipeline, and the M5 plan covers the three that need a browser.
+
+### M4b: Closing the ASVS gaps in `core.identity`, `core.authz` and the pipeline (M)
+
+**Goal:** every `fail` entry of the V6, V7 and V8 files that is about code and documentation of `core.identity`, `core.authz` and the request pipeline is closed, so that the Gate 1 first pass is worth making and M5's screens are built on routes that already exist. The three entries that need a browser (6.2.6, 6.2.7, 7.4.4) stay with M5. Closes no defect of FEATURES §5. Plan: [m4b-sprint-plan.md](m4b-sprint-plan.md), three sprints.
+
+- Sessions (sprint 1): an absolute lifetime next to the inactivity timeout, the caller's own session list and end-one, administrators ending the sessions of one user or all users, recent authentication before changing the address or linking a provider (ADR-0025), the session policy document.
+- Credentials (sprint 2): the breached and context-specific password checks, a per-account login throttle without hard lockout, a 10-minute reset link, mail-confirmed OIDC linking, the authentication document (ADR-0026).
+- Authorization (sprint 3): `docs/security/authorization.md` with one generated route matrix and the field rules per object, the response-schema audit and its walker test, and the final re-read of the four chapter files.
+
+**Release:** `0.6.0`, with M4a inside it (Decision 1 of the plan). M4b changes runtime behaviour (session lifetime, password rules, reset link lifetime, account linking), so unlike M4a it has user-visible changes.
+
+**Acceptance:** the generated reports show no `fail` entry except 6.2.6, 6.2.7 and 7.4.4, each of which links to the M5 plan; every entry M4b moved to `pass` has a tagged test that runs, or a document and code pointers where a test cannot show it. A response schema that names a secret fails the walker. The README badges still say `in progress`, because the human fields are filled at Gate 1.
 
 ### M5: `core.ui-shell` + web app skeleton (M)
 
@@ -421,8 +436,8 @@ requirements:
 Rules the tool enforces (`pnpm security:asvs`, which runs in CI on every pull request after the test jobs):
 
 1. Every L1 and L2 requirement of the chapter in the pinned source file appears exactly once. There are no unknown ids.
-2. `pass` needs at least one piece of evidence. A `test:` tag must match at least one test that **passed** in this CI run (the tool reads the Vitest and Playwright JUnit reports). `code:` and `doc:` paths must exist. A requirement that cannot be tested may pass on `code:` or `doc:` evidence only.
-3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue.
+2. `pass` needs at least one piece of evidence. A `test:` tag must match at least one test that **passed** in this CI run (the tool reads the Vitest and Playwright JUnit reports). `code:` and `doc:` paths must exist. A requirement that cannot be tested may pass on `code:` or `doc:` evidence only. The `test:` value is the tag of the requirement itself (`ASVS-6.2.1` for requirement 6.2.1), and a tag does not count while any test carrying it failed. In CI a missing or empty JUnit report is an error; locally the tool lists the tags it could not check and passes.
+3. `n/a` needs a `reason`. `fail` needs a `note` that links to an issue, or to the section of a sprint plan that schedules the fix (`docs/<plan>.md#<heading>`; the tool checks that the file and the heading exist). Two `n/a` entries of a chapter may not share the same reason text.
 4. `second_pass.on` is at least 7 days after `assessed_on`. For `assessment_type: peer` or `external`, a `reviewer` is set and differs from the assessor.
 5. The chapter status is **derived**, never stored:
 
@@ -448,7 +463,7 @@ Then come the summary counts (pass / n/a / fail), and then one table row per req
 
 **Best Practices (bestpractices.dev).** Register the project and answer the passing criteria. For each answer, link to a file in the repo (CONTRIBUTING.md, SECURITY.md, CI config, test docs) rather than writing free text. `docs/security/README.md` keeps a short mapping from criterion to evidence, so the answers can be re-checked at G4. Silver and gold need a second maintainer (and two-person review for gold), so they go to the backlog.
 
-**Scorecard.** Add `.github/workflows/scorecard.yml` using `ossf/scorecard-action` (pinned by SHA). It runs on pushes to `main`, weekly, and on branch-protection changes, with `publish_results: true`, and it uploads SARIF to code scanning. Repository settings and files needed for the target score:
+**Scorecard.** Add `.github/workflows/scorecard.yml` using `ossf/scorecard-action` (pinned by SHA). It runs on pushes to the default branch (`dev`; the action refuses any other branch), weekly, and on branch-protection changes, with `publish_results: true`, and it uploads SARIF to code scanning. Repository settings and files needed for the target score:
 
 | Scorecard check | What to do |
 |---|---|
@@ -471,9 +486,9 @@ Also turn on GitHub secret scanning with push protection, Dependabot alerts and 
 
 ### 8.4 Keeping the claim current
 
-- **Security-scoped paths:** `modules/core-identity/**`, `modules/core-authz/**`, `apps/server/src/pipeline/**`, `packages/contracts/src/create-route.ts` and `docs/security/**`. Each path is mapped to its ASVS chapters in `tools/asvs-report/scope.ts`. List them in `.github/CODEOWNERS` too, so a future second maintainer is requested automatically.
-- **Pull requests:** if a scoped path changes and the matching chapter YAML does not, the `asvs-impact` CI job fails unless the PR has the `asvs-no-impact` label and a reason (rule 10).
-- **Releases:** on `release/*` branches, any chapter whose scoped paths changed after its `assessed_commit` is derived as `stale`, and CI fails. Re-assess (or confirm and bump `assessed_commit` with a new second pass) before the release.
+- **Security-scoped paths:** `modules/core-identity/**`, `modules/core-authz/**`, `apps/server/src/pipeline/**`, `packages/contracts/src/route.ts` and `docs/security/**`. Each path is mapped to its ASVS chapters in `tools/asvs-report/scope.ts`. List them in `.github/CODEOWNERS` too, so a future second maintainer is requested automatically.
+- **Pull requests:** if a scoped path changes and the matching chapter YAML does not, the `asvs-impact` CI job fails unless the PR has the `asvs-no-impact` label and a reason (rule 10). `asvs-impact` is a workflow of its own (`.github/workflows/asvs-impact.yml`), so that adding a label or editing the description re-runs only it and not the test job. The chapter files themselves (`docs/security/asvs/v*.yaml` and the generated `.md`) are the update, not a scoped change; any other file under `docs/security/**` maps to all four chapters.
+- **Releases:** on `release/*` branches, any chapter whose scoped paths changed after its `assessed_commit` is derived as `stale`, and CI fails. Re-assess (or confirm and bump `assessed_commit` with a new second pass) before the release. `pnpm security:asvs --release` derives it; CI passes the flag on `release/*` and `hotfix/*` branches. A chapter without an `assessed_commit` is never `stale`.
 - **History:** each re-assessment adds a line to the history table in `docs/security/README.md`: date, commit, chapters, type, assessor, reviewer.
 - **Upgrade path:** when a second maintainer or an external reviewer checks a chapter, set `assessment_type` to `peer` or `external` and fill in `reviewer`. The badge then derives `peer-reviewed` or `externally verified`, with no other change.
 

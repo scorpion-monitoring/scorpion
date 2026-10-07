@@ -264,6 +264,26 @@ describe('scorpion create-admin', () => {
     }
   };
 
+  /**
+   * A migrated database whose `core.identity` settings turn the breach check off: the command runs as
+   * a real process (not under NODE_ENV=test, so no stub), and a test must not call a third party.
+   */
+  const offlineDatabase = async () => {
+    const url = await server.createDatabase();
+    expect(run(['migrate'], { DATABASE_URL: url }).code).toBe(0);
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+      await client.query(
+        `insert into settings_setting (module_id, value, version) values ('core.identity', $1, 1)`,
+        [JSON.stringify({ passwordBreachCheck: false })],
+      );
+    } finally {
+      await client.end();
+    }
+    return url;
+  };
+
   it('is listed in the usage text, with no database', () => {
     const result = run([]);
     expect(result.code).toBe(2);
@@ -271,7 +291,7 @@ describe('scorpion create-admin', () => {
   });
 
   it('creates an active administrator with a password read from stdin, and prints no secret', async () => {
-    const url = await server.createDatabase();
+    const url = await offlineDatabase();
     const result = run(args, { DATABASE_URL: url }, `${password}\n`);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('Created the administrator "root"');
@@ -329,7 +349,7 @@ describe('scorpion create-admin', () => {
   }, 90_000);
 
   it('exits with 1 for a name that is taken, and does not touch the first account', async () => {
-    const url = await server.createDatabase();
+    const url = await offlineDatabase();
     expect(run(args, { DATABASE_URL: url }, `${password}\n`).code).toBe(0);
     const again = run(args, { DATABASE_URL: url }, `another long password\n`);
     expect(again.code).toBe(1);

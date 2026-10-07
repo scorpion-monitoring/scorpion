@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hashMailToken, isMailTokenShape, newMailToken } from './mail-tokens.ts';
 
 describe('mail token format', () => {
-  it('is 256 random bits behind a mark, different every time', () => {
+  it('is 256 random bits behind a mark, different every time [ASVS-6.5.3] [ASVS-6.5.4]', () => {
     const a = newMailToken('password-reset');
     const b = newMailToken('password-reset');
     expect(a).toMatch(/^srt_[A-Za-z0-9_-]{43}$/);
@@ -10,7 +10,7 @@ describe('mail token format', () => {
     expect(a).not.toBe(b);
   });
 
-  it('hashes to SHA-256 hex, so the hash says nothing about the token', () => {
+  it('hashes to SHA-256 hex, so the hash says nothing about the token [ASVS-6.5.2]', () => {
     const hash = hashMailToken(newMailToken('password-reset'));
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });

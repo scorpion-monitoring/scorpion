@@ -20,5 +20,14 @@ for (let i = 0; i < input.length; i++) {
   }
 }
 
-const result = spawnSync('vitest', ['run', ...args], { stdio: 'inherit', shell: false });
+// One JUnit file for every project: `pnpm security:asvs` reads it as evidence that a test tagged
+// `[ASVS-x.y.z]` passed in this run. A reporter the caller names itself replaces ours.
+const reporters = args.some((arg) => arg === '--reporter' || arg.startsWith('--reporter='))
+  ? []
+  : ['--reporter=default', '--reporter=junit', '--outputFile.junit=reports/vitest-junit.xml'];
+
+const result = spawnSync('vitest', ['run', ...reporters, ...args], {
+  stdio: 'inherit',
+  shell: false,
+});
 process.exit(result.status ?? 1);

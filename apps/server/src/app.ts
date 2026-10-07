@@ -147,6 +147,11 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
       const group = route.rateLimit ?? 'default';
       const honoPath = `${base}${path}`.replace(/\{(\w+)\}/g, ':$1');
       const method = route.method.toUpperCase();
+      // The address, for handlers that must key something on the caller's network (a login throttle).
+      app.on(method, honoPath, async (c, next) => {
+        c.set('clientIp', clientIp(c));
+        await next();
+      });
       // Step 2a: the audit hook comes first, so it also sees what the steps below turn away.
       if (options.audit && routeAudit(route.audit)) {
         const surface = path.startsWith(SURFACE_PREFIX.v1) ? 'v1' : 'internal';

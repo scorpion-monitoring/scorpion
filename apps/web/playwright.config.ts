@@ -6,7 +6,14 @@ export default defineConfig({
   testDir: 'e2e',
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // The JUnit file is evidence for `pnpm security:asvs` (a test tagged `[ASVS-x.y.z]` passed in this run).
+  reporter: process.env.CI
+    ? [
+        ['list'],
+        ['html', { open: 'never' }],
+        ['junit', { outputFile: '../../reports/playwright-junit.xml' }],
+      ]
+    : 'list',
   use: {
     baseURL: `http://localhost:${port}`,
     trace: 'retain-on-failure',

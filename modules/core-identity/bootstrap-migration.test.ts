@@ -14,7 +14,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { createLogger, createPool, runMigrations, type MigrationTarget } from '@scorpion/kernel';
+import {
+  closePool,
+  createLogger,
+  createPool,
+  runMigrations,
+  type MigrationTarget,
+} from '@scorpion/kernel';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { useIdentity } from './test/harness.ts';
 
@@ -28,13 +34,13 @@ const authzFolder = join(repo, 'modules', 'core-authz', 'migrations');
 const scratch: string[] = [];
 const pools: Pool[] = [];
 afterEach(async () => {
-  await Promise.all(pools.splice(0).map((pool) => pool.end()));
+  await Promise.all(pools.splice(0).map((pool) => closePool(pool)));
 });
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
 });
 
-/** The identity migrations as 0.3.0 left them: the real folder without 0006. */
+/** The identity migrations as 0.3.0 left them: the real folder without 0006 and what came after it. */
 function migrationsBeforeBootstrap(): string {
   const dir = mkdtempSync(join(tmpdir(), 'identity-migrations-'));
   scratch.push(dir);
@@ -43,10 +49,11 @@ function migrationsBeforeBootstrap(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: { tag: string }[];
   };
-  const last = journal.entries.pop()!;
-  expect(last.tag).toBe('0006_bootstrap_admin_to_authz'); // this test is about the last migration
+  const first = journal.entries.findIndex((entry) => entry.tag === '0006_bootstrap_admin_to_authz');
+  expect(first).toBeGreaterThanOrEqual(0); // this test is about migration 0006
+  const dropped = journal.entries.splice(first);
   writeFileSync(journalPath, JSON.stringify(journal));
-  rmSync(join(dir, `${last.tag}.sql`));
+  for (const entry of dropped) rmSync(join(dir, `${entry.tag}.sql`));
   return dir;
 }
 

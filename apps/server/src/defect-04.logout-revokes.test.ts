@@ -10,7 +10,7 @@ describe('defect 4: a copied session cookie stops working', () => {
   // A long cache on purpose: the revocation must not wait for it to run out in this process.
   const options = { sessionCacheTtlMs: 60_000 };
 
-  it('after logout', async () => {
+  it('after logout [ASVS-7.4.1]', async () => {
     const { get, post, signedIn } = await app.start(options);
     const { cookie, csrf } = await signedIn('alice');
     const copy = cookie; // what an attacker who read the cookie holds
@@ -32,7 +32,7 @@ describe('defect 4: a copied session cookie stops working', () => {
     expect((await post('/auth/logout-all', { cookie, csrf })).status).toBe(401);
   });
 
-  it('after "log out everywhere", for every session of the user and only theirs', async () => {
+  it('after "log out everywhere", for every session of the user and only theirs [ASVS-7.4.1]', async () => {
     const { get, post, signedIn } = await app.start(options);
     const laptop = await signedIn('alice');
     const phone = await post('/auth/login', { body: { username: 'alice', password: PASSWORD } });
@@ -50,7 +50,7 @@ describe('defect 4: a copied session cookie stops working', () => {
     expect((await get('/auth/me', { cookie: bob.cookie })).status).toBe(200);
   });
 
-  it('is decided by the database: a session revoked in the table is refused once the cache has run out', async () => {
+  it('is decided by the database: a session revoked in the table is refused once the cache has run out [ASVS-7.2.1]', async () => {
     const { get, kernel, signedIn } = await app.start({ sessionCacheTtlMs: 0 });
     const { cookie } = await signedIn('alice');
     expect((await get('/auth/me', { cookie })).status).toBe(200);
@@ -58,7 +58,7 @@ describe('defect 4: a copied session cookie stops working', () => {
     expect((await get('/auth/me', { cookie })).status).toBe(401);
   });
 
-  it('is refused when the user is deleted, even though the session row is untouched', async () => {
+  it('is refused when the user is deleted, even though the session row is untouched [ASVS-7.4.2]', async () => {
     const { get, kernel, signedIn } = await app.start({ sessionCacheTtlMs: 0 });
     const { cookie } = await signedIn('alice');
     await kernel.pool.query('update identity_user set deleted_at = now()');

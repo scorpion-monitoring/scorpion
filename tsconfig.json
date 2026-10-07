@@ -47,6 +47,9 @@
       "path": "./scripts"
     },
     {
+      "path": "./tools/asvs-report"
+    },
+    {
       "path": "./tools/eslint-plugin"
     },
     {

@@ -230,7 +230,7 @@ describe('redeemFirstRunToken', () => {
     return { ...started, token: tokenIn(started.shown)! };
   }
 
-  it('creates the first administrator, uses the token up, and emits the event', async () => {
+  it('creates the first administrator, uses the token up, and emits the event [ASVS-6.4.1]', async () => {
     const { kernel, bootstrap, token } = await issued();
     const created = await bootstrap.redeemFirstRunToken({ ...admin, token });
 
@@ -323,7 +323,7 @@ describe('redeemFirstRunToken', () => {
     ]);
   });
 
-  it('lets exactly one of two parallel redemptions win', async () => {
+  it('lets exactly one of two parallel redemptions win [ASVS-6.5.1]', async () => {
     const { kernel, bootstrap, token } = await issued();
     const results = await Promise.allSettled([
       bootstrap.redeemFirstRunToken({ ...admin, token }),

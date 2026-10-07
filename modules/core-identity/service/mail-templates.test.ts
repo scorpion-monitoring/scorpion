@@ -1,4 +1,4 @@
-// The seven identity templates: both languages with the same keys and no English fallback, a snapshot
+// The eight identity templates: both languages with the same keys and no English fallback, a snapshot
 // per template and language, hostile names and a hostile instance name in every one, and the flags
 // that decide what is deleted after sending and what a preference may switch off.
 import { HOSTILE_STRINGS, templateProblems } from '@scorpion/testing';
@@ -38,10 +38,15 @@ const samples: Record<string, (text: string) => unknown> = {
     signInUrl: 'https://example.org/login',
     forgotPasswordUrl: 'https://example.org/forgot-password',
   }),
+  'identity.oidc-link': (text) => ({
+    linkUrl: 'https://example.org/link-sign-in#token=sol_AAAA',
+    providerName: text,
+    validForMinutes: 10,
+  }),
 };
 
 describe('the identity templates', () => {
-  it('are the seven of the plan, each with a sample here', () => {
+  it('are the seven of the plan and the link mail of ADR 0026, each with a sample here', () => {
     expect(IDENTITY_TEMPLATES.map((entry) => entry.key).sort()).toEqual(
       Object.keys(samples).sort(),
     );
@@ -99,13 +104,14 @@ describe('the identity templates', () => {
     expect(none.text).toContain('contact the administrators of Test Instance');
   });
 
-  it('only the reset and the verification mail are sensitive; those two and the register notice are mandatory', () => {
+  it('only the reset, the verification and the link mail are sensitive; those three and the register notice are mandatory', () => {
     expect(
       IDENTITY_TEMPLATES.map((e) => [e.key, e.sensitive, e.mandatory, e.category]).sort(),
     ).toEqual(
       [
         ['identity.approved', false, false, 'account'],
         ['identity.email-verification', true, true, 'security'],
+        ['identity.oidc-link', true, true, 'security'],
         ['identity.password-reset', true, true, 'security'],
         ['identity.register-attempt', false, true, 'security'],
         ['identity.registration-request', false, false, 'administration'],
@@ -115,8 +121,12 @@ describe('the identity templates', () => {
     );
   });
 
-  it('put the link in the text and in the HTML of the two credential mails, and never in a subject', () => {
-    for (const key of ['identity.password-reset', 'identity.email-verification']) {
+  it('put the link in the text and in the HTML of the three credential mails, and never in a subject', () => {
+    for (const key of [
+      'identity.password-reset',
+      'identity.email-verification',
+      'identity.oidc-link',
+    ]) {
       const entry = IDENTITY_TEMPLATES.find((e) => e.key === key)!;
       const rendered = entry.render(samples[key]!('x') as never, 'en', BRANDING);
       expect(rendered.text).toContain('#token=');
@@ -133,5 +143,30 @@ describe('the identity templates', () => {
     );
     expect(reset.schema.safeParse({ resetUrl: LINK }).success).toBe(false);
     expect(reset.schema.safeParse({ resetUrl: LINK, validForMinutes: 0 }).success).toBe(false);
+  });
+});
+
+describe('the link mail', () => {
+  const entry = IDENTITY_TEMPLATES.find((e) => e.key === 'identity.oidc-link')!;
+  const data = samples['identity.oidc-link']!('Example SSO');
+
+  it.each([
+    ['en', 'Example SSO', 'ignore this email', '10 minutes'],
+    ['de', 'Example SSO', 'ignorieren Sie diese E-Mail', '10 Minuten'],
+  ] as const)(
+    'in %s names the provider, the lifetime, and says to ignore it otherwise',
+    (locale, provider, ignore, minutes) => {
+      const rendered = entry.render(data as never, locale, BRANDING);
+      expect(rendered.text).toContain(provider);
+      expect(rendered.text).toContain(ignore);
+      expect(rendered.text).toContain(minutes);
+      expect(rendered.subject).toContain(provider);
+    },
+  );
+
+  it('says nothing was linked and nobody was signed in, so it does not read as an alarm', () => {
+    expect(entry.render(data as never, 'en', BRANDING).text).toContain(
+      'nothing was linked and nobody was signed in',
+    );
   });
 });

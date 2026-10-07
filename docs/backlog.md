@@ -134,7 +134,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   - **Revoke access tokens on a reset (optional).** A reset or a change ends sessions only (ADR-0012). A "revoke my tokens too" switch on the reset page, or a security-event setting, would cover the case of a token minted from a hijacked session.
   - **Reset marks the address confirmed?** Opening a reset link proves control of the mailbox, but the reset does not mark the address verified (kept separate on purpose). Revisit if the UI wants a one-step recovery for unverified accounts.
   - **Self-service account deletion and data export (GDPR).** FEATURES lists account deletion as missing; the purge job already deletes soft-deleted accounts, so deletion needs the route, the confirmation (password or mail link) and the event.
-  - **Admin user management (M3/M5).** List, deactivate, change email, force a reset, revoke sessions. Not in M2.
+  - **Admin user management (M3/M5).** List, deactivate, change email, force a reset. Not in M2. Revoking the sessions of one user or of everybody is done (M4b sprint 1, routes only; the screen is M5).
   - **2FA (TOTP, WebAuthn).** Not in M2.
   - **Public `GET /auth/oidc/providers`** for the login page (id and display name), with the UI in M5 (sprint 4 follow-up 1, still open).
   - ~~**Outbox retention** now also matters for the purge: events keep the usernames of purged accounts.~~ Done in M4 sprint 4: delivered events are deleted after `outboxRetentionDays`; a test proves the username of a purged account leaves the outbox. A `dead` delivery keeps its event (and the name) until somebody requeues it, see "Audit follow-ups".
@@ -182,3 +182,73 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **`GET /files/{hash}` below `/api/internal`.** The route registry has no root surface, so the public file URL is `/api/internal/files/{hash}`. If a shorter public path is wanted (for emails), add a root surface to the registry with an ADR.
 - **Content hash in the URL is the only access control** of a stored file, which is right for avatars and logos and wrong for private attachments. A module that stores private files needs a permission-checked route and a flag on the file; decide it with the first such module.
 - **Cross-process branding reads.** `getBranding()` is cached for 5 seconds like every setting; mail sent in the window after a change can still use the old name.
+
+## Repository hardening follow-ups (M4a sprint 1)
+
+- **The `57P01` teardown error (#48, #50).** Resolved 2026-10-06. The CI error's object carried `err.client` with `release` and `_poolUseCount`, which only pg-pool's idle listener sets: the pool re-emitted a pooled client's error as its own `error` event, and nothing listened. Two pg-pool behaviours met: `pool.end()` resolves once it has let go of its clients, before they have closed, and a client closing in that gap still has the idle listener. The harness stopped the container in the gap. Now `createPool` listens for `error` (the kernel logs a warning with the SQLSTATE), and `closePool` waits until every connection has closed; the kernel's `stop()` and `openDatabase().close()` use it. `db.test.ts` reproduces the uncaught error without the listener and the early return without the wait. The same fix keeps a running server alive when Postgres ends an idle connection. The earlier `jobs.stop()` fix stays. Not looked at further: the listener clients of the outbox and `wake.ts` (suspect 2), and harnesses without `afterEach` cleanup (suspect 3); neither matches the CI error.
+- **Base images outside the Dockerfile.** `postgres:16.15-alpine` (CI service, `docker-compose.dev.yml`) and `axllent/mailpit` are pinned by tag only, and Dependabot's `docker` ecosystem reads Dockerfiles, not these files. Scorecard does not count them. Pin by digest and add a `docker-compose` entry to `.github/dependabot.yml` if the score asks for it.
+- **Dependabot runtime bumps without a changeset.** A Dependabot pull request that changes only dependency files needs no changeset (`scripts/changeset-check.ts`), so a security bump of a production dependency does not reach `CHANGELOG.md` by itself. Write a changeset by hand at release time for those, or revisit the exemption.
+- **`cli.test.ts` picks a random port.** `freePort()` in `apps/server/src/cli.test.ts` returns a random number from 20000 to 40000 without checking it. It collided once with a port in use (`EADDRINUSE`, `exits 1 and says why when the database cannot be reached`) in a full local run and passed on the re-run. Bind port 0 and read the port back, or retry.
+
+## Security assurance follow-ups (M4a sprint 2)
+
+What the ASVS assessment and the tool left for later. The open requirements themselves are `fail` entries in `docs/security/asvs/v*.yaml` with an issue each; this list is what no entry covers.
+
+- **Other ASVS chapters, Best Practices silver and gold.** Only V6, V7, V8 and V10 are claimed. Further chapters, and silver and gold (they need a second maintainer and two-person review), go here until there is one. Scorecard targets above 6.5 likewise.
+- **Signed images, SLSA provenance and an SBOM** for the Signed-Releases check: M18 and Gate 4 (cosign on the profile images, provenance attached to the GitHub release).
+- **Fuzzing** (`fast-check`) for the pure calculation library and the parsers: M10 and M11. Check the current Scorecard detection rules first.
+- **Dependency review action** on pull requests and licence checks of dependencies.
+- **Peer or external review** of the assessments: a second maintainer or an outside reviewer sets `assessment_type` to `peer` or `external` and fills `reviewer`.
+- **Tests that would turn code pointers into tagged tests.** V6.2.8 (a password is verified exactly as received: surrounding spaces, case) and V6.3.2 (a fresh install has no user) pass on a code pointer only. The test OIDC providers (`apps/server/src/testing/oidc-flow.ts`, `modules/core-identity/test/oidc.ts`) do not check `code_verifier` against the S256 challenge, so V10.2.1 rests on the challenge being sent and the state being checked; make the stub verify it and add a test that a wrong verifier is refused. Nothing asserts that a configured `offline_access` scope leaves no refresh token stored.
+- **RFC 9207 `iss` authorization-response parameter.** Not validated; mix-up protection (V10.2.2) rests on the per-provider callback, the state tied to the provider and the id_token `iss`. Validating `iss` when the provider sends it would be extra hardening.
+- **Dedicated tests for table-driven evidence.** V10.5.3 and V10.5.4 (issuer and audience) and V6.2.1, V6.2.5 and V6.2.9 (password rules) are tagged on `it.each` titles, so the tag covers every case of the table. A test per requirement would make the evidence sharper.
+- **`pnpm test --filter` overwrites `reports/vitest-junit.xml`.** The report holds only the projects that ran, so `pnpm security:asvs` after a filtered run can report a tag as having no passed test. Run the full `pnpm test` first.
+- **`ASVS impact` as a required check.** It becomes one after it is on `main` (CONTRIBUTING.md, "Releases"): add it to the ruleset once the release that carries it is out.
+
+## Authorization follow-ups (M4b sprint 3)
+
+What the response-side audit and the walker (`apps/server/src/response-fields.test.ts`) left. The audit found no secret in any response schema, and nothing had to be fixed.
+
+- **The walker reads declared schemas, not payloads.** No pipeline step validates a response against its schema, so a service that returned an extra field would not be seen. Services build named fields and the route tests for tokens, secrets, settings and the audit trail read real responses, but nothing checks every route. The contract tests of M8 (`pnpm test:contract`, every public route against its OpenAPI schema) should also fail on a forbidden name in a real response body.
+- **Free-form values cannot be walked.** `values` of a setting and `value` of a preference are `z.unknown()` records, so a secret-named key inside them is not seen by the walker. The guard in "Secret hygiene checks" above (a settings schema with a secret-looking key is refused at start-up) would close that; do it with that item.
+- **The route matrix is regenerated by hand.** `authorization-doc.test.ts` fails when `docs/security/authorization.md` differs from the live registry, but regenerating needs Docker and an environment variable (the header of the test says how). A `pnpm` command that boots the kernel without a database would make that quicker.
+- **Rows for the registry modules.** `docs/security/authorization.md` gets the field tables of the services, KPIs and organisations when M6 and M7 add them; the generated route table needs no change, and the walker covers their responses from the first route.
+- **The assessment's accepted weaknesses, in one place.** Each is written in the note of its ASVS entry; this list keeps them from being forgotten. None has a milestone.
+  - **No second factor of our own (6.3.3).** See "Credentials follow-ups": TOTP, WebAuthn and recovery codes.
+  - **The breach check fails open and can be switched off** (6.2.4, 6.2.12): a breached password is accepted when the service does not answer or `passwordBreachCheck` is `off`. The offline floor above narrows it.
+  - **Access tokens survive a reset** (6.4.3): see the optional switch under "Revoke access tokens on a reset".
+  - **The recent-authentication window is 5 minutes for every action** (7.5.1): a reviewer may find it weaker than a prompt on every change; see "a stricter window per action" under the session follow-ups.
+  - **Federated sessions (7.6.1):** no maximum time between provider logins for an ordinary session and no back-channel logout; see the session follow-ups.
+  - **Evidence that is a document or a code pointer, not a test** (6.1.3, 6.3.4, 8.1.2; 6.2.8 and 6.3.2 above). The second pass should read the route tables and the field tables against the code.
+  - **The 10.2.1 test shows the PKCE challenge, not that the verifier reaches the token endpoint.** The test provider does not check it; make it check, and assert it.
+  - **Scorecard checks below 10** (Maintained, Code-Review, Fuzzing, Branch-Protection, CII-Best-Practices, Vulnerabilities): see the table in `docs/security/README.md`. Code-Review and Branch-Protection need a second maintainer.
+
+## Sessions follow-ups (M4b sprint 1)
+
+What the session work left for later ([ADR-0025](adr/0025-absolute-session-lifetime-and-recent-authentication.md), [docs/security/sessions.md](security/sessions.md)).
+
+- **Lifetimes in hours.** `sessions.inactivityDays` and `absoluteDays` are whole days, at least 1. A high-risk deployment that wants 12 hours or 1 hour of inactivity needs `inactivityMinutes` and `absoluteMinutes` (or ISO durations) and a validation range.
+- **Back-channel and RP-initiated logout.** Ending a session at the provider does not end the Scorpion session, and the reverse (sessions.md, 7.1.3). Needs a public back-channel endpoint, a table from the provider's `sid` to our sessions, a signature check of the logout token, and a provider setting for the end-session endpoint.
+- **A session list with device names.** Times and the current marker only today (Decision 6). A label or a coarse location needs a privacy text (M5), a retention rule, and a way to keep it out of logs.
+- **A limit on concurrent sessions,** if misuse shows up (Decision 6): a setting, the oldest session ended at the limit, and a message in the UI.
+- **Cross-process session invalidation.** Another process accepts an ended session for at most 5 seconds. A `LISTEN/NOTIFY` message from `revoke*` that empties the other caches would make it immediate.
+- **Re-authentication on admin termination, and a stricter window per action.** `sessions.recentAuthSeconds` is one window for every action; the administrators' routes do not ask for a recent authentication. A per-action `maxAgeSeconds` is already an argument of `requireRecentAuth`.
+- **AAL2 behaviour.** A deployment whose provider enforces MFA may want its local session to follow the provider's `acr` and the NIST periods for AAL2; `acr` and `amr` are not read (sessions.md).
+- **A notice mail when sessions are ended by an administrator, and when a new session starts** from an unfamiliar browser. The audit trail has the first; neither mails.
+- **A disable-account feature** must call `revokeAll` in the same transaction and get a test (ASVS 7.4.2).
+- **The re-authentication screen** (M5): the page that shows `reauthentication-required`, asks for the password or sends the person to the provider, and returns to the change. The OIDC callback redirects to the application root today, with no return path.
+
+## Credentials follow-ups (M4b sprint 2)
+
+What the credential work left for later ([ADR-0026](adr/0026-credential-rules-throttling-and-mail-confirmed-linking.md), [docs/security/authentication.md](security/authentication.md)).
+
+- **TOTP, WebAuthn and recovery codes** (6.3.3 passes on a documented rationale today). Needs a dependency, a secret per person in the encrypted store, recovery codes (6.5.x applies), screens, and a rule for what an OIDC-only account does. An operator who needs a second factor requires it at the OIDC provider.
+- **A notice mail on repeated failed logins** (6.3.5 and 6.3.7 are Level 3), and on a new link or a changed password. The throttle blocks; it does not tell the owner.
+- **An offline floor of the 3000 most common passwords** (a file in the repository with its licence and SHA-256 recorded), checked when the breach service does not answer, so the fail-open window is not empty (6.2.4). Together with a self-hosted mirror of the range API for an installation that may not call the public one.
+- **Alternatives to a hard lockout.** The throttle has no lockout on purpose. If a deployment sees distributed guessing that the ceiling does not stop: a CAPTCHA or proof-of-work after the free attempts (a dependency and a third party), a longer ceiling per account, or a requirement of a second factor for a blocked account. An administrator action to clear the counters of one account is also missing.
+- **An admin view of the throttle:** which accounts are blocked and for how long, and settings screens for `loginThrottle` and `passwordBreachCheck` (the schema validates them; no screen exists until M5 and later).
+- **Check the password at login.** The password is in hand at a successful login: checking it against the breach set then (and asking for a change) would catch a password that was breached after it was set. Today the rules apply when a password is set.
+- **The page that confirms a provider link (M5)** should name the provider before the person confirms, which needs a read route for the token (`POST /account/oidc-link/confirm` names it only in its answer). The callback redirects to `/login?notice=check-mail` and the mail links to `/link-sign-in#token=…`; both pages are M5's.
+- **A notice to the account holder when a provider is linked,** and a list of the linked providers with a way to unlink one, are not there.
+- **The breach counter is per process,** not per server: `scorpion_password_breach_check_failures_total` reads a counter in `packages/integrations`. A kernel metrics API for modules would let each server own its counters.
+- **Verification link of 10 minutes** if the maintainer rejects the reading of ADR-0026 section 3: change `VERIFICATION_TTL_MS`, the mail text and the README.

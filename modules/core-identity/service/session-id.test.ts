@@ -8,7 +8,7 @@ import {
 } from './session-id.ts';
 
 describe('session ids', () => {
-  it('are 256 random bits as 43 URL-safe characters, never repeated', () => {
+  it('are 256 random bits as 43 URL-safe characters, never repeated [ASVS-7.2.2] [ASVS-7.2.3]', () => {
     const made = new Set(Array.from({ length: 200 }, newSessionId));
     expect(made.size).toBe(200);
     for (const id of made) {

@@ -1,0 +1,49 @@
+name: ASVS impact
+
+# Rule 10 of CLAUDE.md ("Security assurance"): a pull request that changes a security-scoped path must
+# also change the matching chapter file in docs/security/asvs/, or carry the label `asvs-no-impact` and a
+# line `ASVS impact: none because <reason>` in its description (tools/asvs-report/scope.ts has the paths).
+#
+# This is its own workflow, not a job of ci.yml, because it must run again when a label or the description
+# changes (`labeled`, `unlabeled`, `edited`), and that must not repeat the 12 minute test job.
+# The pull request runs this file from the merge commit; it is a `pull_request` workflow, never
+# `pull_request_target`, and it never runs pull request text as code: the labels and the description
+# reach the script as environment variables and are only read as data.
+on:
+  pull_request:
+    branches: [main, dev, 'release/**']
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asvs-impact-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  impact:
+    name: ASVS impact
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # A job's permissions replace the top-level ones, so contents stays listed.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, so the script can diff against the base branch.
+          fetch-depth: 0
+
+      # The script uses Node's built-in type stripping and no package, so nothing is installed.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Scoped paths need a matching assessment
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node tools/asvs-report/impact-cli.ts "origin/$BASE_REF"

@@ -8,6 +8,8 @@ import { mountPath } from '@scorpion/kernel';
 export const RESET_PAGE = '/reset-password';
 export const VERIFY_PAGE = '/verify-email';
 export const SIGN_IN_PAGE = '/login';
+/** Where a signed-in person confirms linking a sign-in provider (the page is M5's; ADR 0026). */
+export const OIDC_LINK_PAGE = '/link-sign-in';
 /** Where a person who forgot their password asks for a link. */
 export const FORGOT_PASSWORD_PAGE = '/forgot-password';
 /** Where an administrator reviews the accounts that wait for a decision. */
@@ -18,6 +20,7 @@ type Config = { ORIGIN: string; BASE_PATH: string };
 export interface MailLinks {
   reset(token: string): string;
   verify(token: string): string;
+  oidcLink(token: string): string;
   signIn(): string;
   forgotPassword(): string;
   review(): string;
@@ -29,6 +32,7 @@ export function createMailLinks(config: Config): MailLinks {
   return {
     reset: (token) => page(RESET_PAGE, `#token=${encodeURIComponent(token)}`),
     verify: (token) => page(VERIFY_PAGE, `#token=${encodeURIComponent(token)}`),
+    oidcLink: (token) => page(OIDC_LINK_PAGE, `#token=${encodeURIComponent(token)}`),
     signIn: () => page(SIGN_IN_PAGE),
     forgotPassword: () => page(FORGOT_PASSWORD_PAGE),
     review: () => page(REVIEW_PAGE),

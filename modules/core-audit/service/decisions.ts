@@ -73,10 +73,19 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   'identity.user.approved@1': log(true, userBy('approvedBy'), subjectOf('user', 'userId')),
   'identity.user.rejected@1': log(true, userBy('rejectedBy'), subjectOf('user', 'userId')),
   'identity.authMethod.linked@1': log(true, userBy('userId'), subjectOf('user', 'userId')),
+  // A provider asserted the address of this account at a first sign-in; its holder was mailed a link (ADR 0026).
+  // The person is not signed in: the account is the subject, not the actor.
+  'identity.authMethod.linkRequested@1': log(true, anonymous, subjectOf('user', 'userId')),
   // Asked by somebody who is not signed in: the account is the subject, not the actor.
   'identity.password.resetRequested@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.reset@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.changed@1': log(true, userBy('userId'), subjectOf('user', 'userId')),
+  'identity.session.reauthenticated@1': log(false, userBy('userId'), subjectOf('user', 'userId')),
+  'identity.sessions.revoked@1': log(true, userBy('revokedBy'), subjectOf('user', 'userId')),
+  'identity.sessions.revokedAll@1': log(true, userBy('revokedBy'), () => ({
+    type: 'sessions',
+    id: null,
+  })),
   'identity.email.verified@1': log(false, anonymous, subjectOf('user', 'userId')),
   'identity.user.purged@1': log(true, system, subjectOf('user', 'userId')),
   'identity.profile.updated@1': log(false, userBy('userId'), subjectOf('user', 'userId')),

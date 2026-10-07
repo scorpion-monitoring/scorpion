@@ -1,0 +1,123 @@
+asvs_version: 5.0.0
+level: 2
+chapter: V10
+assessment_type: null
+assessed_commit: null
+assessed_on: null
+assessor: null
+second_pass: null
+reviewer: null
+requirements:
+  - id: v5.0.0-10.1.1
+    status: pass
+    evidence:
+      - test: ASVS-10.1.1
+      - code: modules/core-identity/service/oidc.ts
+    note: 'Server-side code flow: only the id_token is read from the token response, verified and discarded; the access token and any refresh token are never stored, forwarded or logged, and the browser gets only the opaque session cookie. The client secret goes only to the token endpoint.'
+  - id: v5.0.0-10.1.2
+    status: pass
+    evidence:
+      - test: ASVS-10.1.2
+      - code: modules/core-identity/service/login-state.ts
+    note: 'State, nonce and PKCE verifier are random per login, stored hashed, single use, and tied to the browser by the login cookie. Two parallel logins in one browser share the cookie and one fails closed (ADR-0011).'
+  - id: v5.0.0-10.2.1
+    status: pass
+    evidence:
+      - test: ASVS-10.2.1
+      - code: modules/core-identity/service/oidc.ts
+    note: 'The client sends a PKCE S256 challenge and checks a single-use state bound to the browser. The first test asserts the challenge, state and nonce in the authorization URL, not that the verifier reaches the token endpoint (the test provider does not check it; backlog); the state checks are what the tests prove.'
+  - id: v5.0.0-10.2.2
+    status: pass
+    evidence:
+      - test: ASVS-10.2.2
+      - code: modules/core-identity/service/oidc.ts
+      - code: modules/core-identity/service/oidc-provider.ts
+    note: "The defence is per-provider: a callback URL per provider, a state tied to the provider that started it, the code sent only to that provider's token endpoint, and an id_token iss check. The RFC 9207 iss response parameter is not validated; ASVS gives it only as an example."
+  - id: v5.0.0-10.3.1
+    status: n/a
+    reason: 'This applies to an OAuth resource server checking the audience of access tokens. Scorpion accepts no OAuth access token on any API; its credentials are its own session ids and PATs, which are not OAuth tokens and have no aud.'
+  - id: v5.0.0-10.3.2
+    status: n/a
+    reason: 'This applies to a resource server deciding from access token claims such as scope. Scorpion decides from its own roles and permissions (core.authz) and evaluates no scope of an externally issued access token.'
+  - id: v5.0.0-10.3.3
+    status: n/a
+    reason: 'This applies to a resource server identifying a user from an access token or introspection response. Scorpion does neither; the matching rule for the id_token it does receive is 10.5.2.'
+  - id: v5.0.0-10.3.4
+    status: n/a
+    reason: 'This applies to a resource server that demands acr, amr or auth_time of a presented access token. Scorpion accepts no access token and makes no such demand.'
+  - id: v5.0.0-10.4.1
+    status: n/a
+    reason: 'Matching redirect URIs against a pre-registered allowlist is done by the authorization server; scorpion is an oidc relying party only and is not an oauth authorization server and has no client registry. As a client it sends one fixed redirect URI per provider.'
+  - id: v5.0.0-10.4.2
+    status: n/a
+    reason: "Single use of an authorization code is the authorization server's duty; Scorpion issues no authorization codes."
+  - id: v5.0.0-10.4.3
+    status: n/a
+    reason: 'The lifetime of an authorization code is set by the server that issues it; Scorpion issues none.'
+  - id: v5.0.0-10.4.4
+    status: n/a
+    reason: 'Restricting the grant types of a client is an authorization server function. As a client Scorpion uses only the authorization code grant; no implicit, password or refresh grant is implemented.'
+  - id: v5.0.0-10.4.5
+    status: n/a
+    reason: 'Mitigating refresh token replay is an authorization server duty. Scorpion stores and uses no refresh token: only the id_token is read from the token response.'
+  - id: v5.0.0-10.4.6
+    status: n/a
+    reason: 'Requiring PKCE and refusing the plain method is enforced by the authorization server; Scorpion is the client that sends S256 (see 10.2.1) and cannot enforce anything on the server.'
+  - id: v5.0.0-10.4.7
+    status: n/a
+    reason: 'Dynamic client registration is an authorization server feature; Scorpion neither offers nor uses it, its providers are configured by an administrator.'
+  - id: v5.0.0-10.4.8
+    status: n/a
+    reason: 'Absolute expiry of refresh tokens concerns the server that issues them; Scorpion holds no refresh token (its own sessions are V7).'
+  - id: v5.0.0-10.4.9
+    status: n/a
+    reason: 'Revoking refresh and reference tokens in an authorization server user interface; Scorpion is not that server and holds no such tokens.'
+  - id: v5.0.0-10.4.10
+    status: n/a
+    reason: "Authenticating a confidential client at the token endpoint is something the authorization server requires; Scorpion's client side does send its client secret there when one is stored (oidc-secret.ts, ADR-0016), but the requirement itself is addressed to the server."
+  - id: v5.0.0-10.4.11
+    status: n/a
+    reason: "Assigning only the required scopes to a client is authorization server configuration; Scorpion's own scope request is the Level 3 requirement 10.2.3, out of scope."
+  - id: v5.0.0-10.5.1
+    status: pass
+    evidence:
+      - test: ASVS-10.5.1
+      - code: modules/core-identity/service/oidc-token.ts
+    note: 'The id_token must carry the nonce of this login (compared as a hash, per login, single use); a wrong or missing nonce is a 401 with no user and no session. The Keycloak test runs against a real provider.'
+  - id: v5.0.0-10.5.2
+    status: pass
+    evidence:
+      - test: ASVS-10.5.2
+      - code: modules/core-identity/service/oidc.ts
+      - code: modules/core-identity/db/schema.ts
+    note: 'A returning user is found only by (provider, sub), with a unique index. An address asserted by a provider links nothing: when it matches an existing account, a mail with a single-use 10-minute link goes to the address the account itself holds, and the identity is linked only after its holder, signed in and recently authenticated, confirms it (ADR-0026; see 6.8.1).'
+  - id: v5.0.0-10.5.3
+    status: pass
+    evidence:
+      - test: ASVS-10.5.3
+      - code: modules/core-identity/service/oidc-provider.ts
+    note: 'Discovery metadata is refused unless its issuer equals the configured issuer exactly, and the id_token iss must equal it too. The tagged tests are table-driven; the issuer cases are among them (a trailing slash, another host, the wrong issuer).'
+  - id: v5.0.0-10.5.4
+    status: pass
+    evidence:
+      - test: ASVS-10.5.4
+      - code: modules/core-identity/service/oidc-token.ts
+    note: 'aud must contain our client id (OIDC Core 3.1.3.7), and with several audiences azp must be present and equal it. ASVS says "equal"; the array containment of OIDC Core is the standard behaviour.'
+  - id: v5.0.0-10.5.5
+    status: n/a
+    reason: 'This applies to a relying party that implements OIDC back-channel logout. Scorpion has no back-channel logout endpoint and registers none; it would apply, and need re-assessing, if one is added.'
+  - id: v5.0.0-10.6.1
+    status: n/a
+    reason: 'Allowed response types of an OpenID Provider; Scorpion is not an OpenID Provider (as a client it only requests response_type=code).'
+  - id: v5.0.0-10.6.2
+    status: n/a
+    reason: "Protecting an OpenID Provider's logout from forced-logout denial of service; Scorpion exposes no OIDC end-session endpoint and is not a provider."
+  - id: v5.0.0-10.7.1
+    status: n/a
+    reason: 'An authorization server obtaining user consent for each client request; Scorpion is not an authorization server and has no OAuth consent screen.'
+  - id: v5.0.0-10.7.2
+    status: n/a
+    reason: 'The content of an authorization server consent prompt; Scorpion shows no such prompt.'
+  - id: v5.0.0-10.7.3
+    status: n/a
+    reason: 'Users reviewing and revoking consents at an authorization server; Scorpion stores no consents (unlinking a sign-in method is account management, not OAuth consent).'

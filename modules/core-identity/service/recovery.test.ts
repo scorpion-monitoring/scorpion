@@ -53,7 +53,7 @@ async function start(options: Parameters<typeof identity.start>[0] = {}) {
 }
 
 describe('requestReset', () => {
-  it('mails one link to the account behind the address, and stores only a hash of the token', async () => {
+  it('mails one link to the account behind the address, and stores only a hash of the token [ASVS-6.5.2]', async () => {
     const { kernel, mail, recovery, withPassword } = await start({
       env: { ORIGIN: 'https://registry.example.org', BASE_PATH: '/a/b' },
     });
@@ -130,7 +130,7 @@ describe('requestReset', () => {
     expect(JSON.stringify(keys)).not.toContain('alice'); // hashed, not the address
   });
 
-  it('replaces the outstanding link: only the newest one works', async () => {
+  it('replaces the outstanding link: only the newest one works [ASVS-6.6.2]', async () => {
     const { mail, recovery, withPassword } = await start();
     await withPassword({ email: 'alice@example.org' });
     await recovery.requestReset({ email: 'alice@example.org' });
@@ -193,7 +193,7 @@ describe('confirmReset', () => {
     return { ...s, user, token: tokenFrom((await s.mail.all())[0]) };
   }
 
-  it('sets the password, ends every session and every outstanding link, and keeps access tokens', async () => {
+  it('sets the password, ends every session and every outstanding link, and keeps access tokens [ASVS-6.4.3] [ASVS-7.4.3]', async () => {
     const { kernel, identity: id, recovery, user, token } = await requested();
     const sessionA = await id.sessions.create(user.id);
     const sessionB = await id.sessions.create(user.id);
@@ -237,7 +237,7 @@ describe('confirmReset', () => {
     ).resolves.toBeDefined();
   });
 
-  it('works once', async () => {
+  it('works once [ASVS-6.5.1]', async () => {
     const { recovery, token } = await requested();
     await recovery.confirmReset({ token, password: NEW_PASSWORD });
     await expect(
@@ -245,7 +245,7 @@ describe('confirmReset', () => {
     ).rejects.toBeInstanceOf(BadRequest);
   });
 
-  it('is the same 400 for unknown, malformed, expired, used and wrong-purpose tokens', async () => {
+  it('is the same 400 for unknown, malformed, expired, used and wrong-purpose tokens [ASVS-6.6.2]', async () => {
     const { kernel, mail, recovery, user, token } = await requested();
     await recovery.startVerification(user.id, 'alice@example.org');
     const verification = tokenFrom((await mail.all())[1]);
@@ -290,7 +290,7 @@ describe('confirmReset', () => {
     );
   });
 
-  it('lets exactly one of two parallel requests with the same link win', async () => {
+  it('lets exactly one of two parallel requests with the same link win [ASVS-6.5.1]', async () => {
     const { recovery, token } = await requested();
     const results = await Promise.allSettled([
       recovery.confirmReset({ token, password: NEW_PASSWORD }),
@@ -326,7 +326,7 @@ describe('confirmReset', () => {
 });
 
 describe('changePassword', () => {
-  it('needs the current password, sets the new one and ends every session, the caller’s included', async () => {
+  it('needs the current password, sets the new one and ends every session, the caller’s included [ASVS-6.2.2] [ASVS-6.2.3] [ASVS-7.4.3]', async () => {
     const { kernel, identity: id, recovery, withPassword } = await start({ tokenCacheTtlMs: 0 });
     const user = await withPassword();
     const other = await withPassword();
@@ -363,7 +363,7 @@ describe('changePassword', () => {
     ).toEqual([{ payload: { userId: user.id, username: user.username } }]);
   });
 
-  it('refuses a wrong current password (422) and changes nothing', async () => {
+  it('refuses a wrong current password (422) and changes nothing [ASVS-6.2.3]', async () => {
     const { identity: id, recovery, withPassword } = await start();
     const user = await withPassword();
     const session = await id.sessions.create(user.id);
@@ -434,7 +434,7 @@ describe('changePassword', () => {
 });
 
 describe('email verification', () => {
-  it('is started by registering: one mail, and the link confirms the address once', async () => {
+  it('is started by registering: one mail, and the link confirms the address once [ASVS-6.4.1]', async () => {
     const { identity: id, mail, recovery } = await start();
     const user = (await id.accounts.register({
       username: 'alice',
@@ -584,5 +584,63 @@ describe('email verification', () => {
     await recovery.startVerification(user.id, 'new@example.org', { send: false });
     await recovery.resendVerification(actorOf(user));
     expect((await mail.all()).map((m) => m.to)).toEqual(['new@example.org']);
+  });
+});
+
+describe('the lifetime of the mailed links (ADR 0026)', () => {
+  const T0 = new Date('2026-10-06T12:00:00Z');
+  const minutesAfter = (minutes: number, extraMs = 0) =>
+    new Date(T0.getTime() + minutes * 60_000 + extraMs);
+
+  async function requested() {
+    const started = await start();
+    const user = await started.withPassword({ username: 'alice', email: 'alice@example.org' });
+    await started.recovery.requestReset({ email: 'alice@example.org' }, T0);
+    return { ...started, user, token: tokenFrom((await started.mail.all())[0]) };
+  }
+
+  it('refuses a reset link older than 10 minutes and accepts it up to the last moment [ASVS-6.5.5]', async () => {
+    const late = await requested();
+    await expect(
+      late.recovery.confirmReset(
+        { token: late.token, password: NEW_PASSWORD },
+        minutesAfter(10, 1),
+      ),
+    ).rejects.toBeInstanceOf(BadRequest);
+    // Refused, and the password is as it was.
+    const [method] = await rows(late.kernel, 'select password_hash from identity_auth_method');
+    expect(await verifyPassword(method!.password_hash as string, PASSWORD)).toBe(true);
+
+    const inTime = await requested();
+    await expect(
+      inTime.recovery.confirmReset(
+        { token: inTime.token, password: NEW_PASSWORD },
+        minutesAfter(10, -1),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('stores the reset token for 10 minutes and the verification token for 24 hours', async () => {
+    const { kernel, recovery, user } = await requested();
+    await recovery.startVerification(user.id, 'alice@example.org', { now: T0 });
+    const lifetimes = await rows(
+      kernel,
+      `select purpose, extract(epoch from expires_at - created_at)::int as seconds
+         from identity_mail_token order by purpose`,
+    );
+    expect(lifetimes).toEqual([
+      { purpose: 'email-verification', seconds: 24 * 3600 },
+      { purpose: 'password-reset', seconds: 600 },
+    ]);
+  });
+
+  it('says 10 minutes in the reset mail, and 24 hours in the confirmation mail', async () => {
+    const { mail, recovery, user } = await requested();
+    await recovery.startVerification(user.id, 'alice@example.org', { now: T0 });
+    const texts = (await mail.all()).map((m) => m.text);
+    expect(texts.find((text) => text?.includes('choose a new password'))).toMatch(
+      /within 10 minutes/,
+    );
+    expect(texts.find((text) => text?.includes('Confirm'))).toMatch(/within 24 hours/);
   });
 });

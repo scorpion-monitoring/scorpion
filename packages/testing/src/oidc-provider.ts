@@ -20,6 +20,12 @@ export interface StubLogin {
   /** `true`, `false`, or another value to see that only the boolean `true` counts. */
   emailVerified?: unknown;
   preferredUsername?: string;
+  /**
+   * When the person last authenticated at the provider, in seconds since the epoch: what an
+   * authorisation request without `prompt=login` and `max_age=0` is answered with (the provider's
+   * single sign-on session). Without it no `auth_time` is sent for such a request.
+   */
+  authTime?: number;
 }
 
 export interface TokenFaults {
@@ -37,8 +43,12 @@ export interface TokenFaults {
   notBefore?: number;
   /** Which key signs: the provider's own (default), an unrelated one, nothing (`alg: none`), or HS256 keyed with the public key. */
   signWith?: 'issuer-key' | 'other-key' | 'none' | 'hs256-with-public-key';
-  /** Leaves `exp` / `iat` / `sub` out. */
-  omit?: ('exp' | 'iat' | 'sub')[];
+  /** Leaves `exp` / `iat` / `sub` / `auth_time` out. */
+  omit?: ('exp' | 'iat' | 'sub' | 'auth_time')[];
+  /** Seconds added to `auth_time` (negative: the login at the provider is older than it should be). */
+  authTimeOffset?: number;
+  /** The provider ignores `prompt=login` and `max_age`, as a provider that does not support them would. */
+  ignorePrompt?: boolean;
   /** The token endpoint answers without an `id_token`. */
   omitIdToken?: boolean;
 }
@@ -77,6 +87,8 @@ interface CodeRecord {
   redirectUri: string;
   clientId: string;
   login: StubLogin;
+  /** The `auth_time` this authorisation yields (seconds), if any. */
+  authTime: number | undefined;
 }
 
 const b64 = (value: string | Buffer) => Buffer.from(value).toString('base64url');
@@ -146,6 +158,7 @@ export async function startStubIdp(
       email_verified: code.login.emailVerified,
       preferred_username: code.login.preferredUsername,
     };
+    if (code.authTime !== undefined) claims.auth_time = code.authTime + (f.authTimeOffset ?? 0);
     if (f.nonce !== null) claims.nonce = f.nonce ?? code.nonce;
     if (f.azp !== null && f.azp !== undefined) claims.azp = f.azp;
     if (f.notBefore !== undefined) claims.nbf = now + f.notBefore;
@@ -201,7 +214,15 @@ export async function startStubIdp(
             return json(400, { error: 'invalid_request' });
           }
           const code = randomBytes(24).toString('base64url');
+          // `prompt=login` or `max_age=0` makes the provider ask for a login now; one that
+          // ignores them (`faults.ignorePrompt`) answers from its single sign-on session.
+          const asksForLogin = q.get('prompt') === 'login' || q.get('max_age') === '0';
+          const authTime =
+            asksForLogin && !state.faults.ignorePrompt
+              ? Math.floor(Date.now() / 1000)
+              : pendingLogin.authTime;
           codes.set(code, {
+            authTime,
             challenge: q.get('code_challenge')!,
             nonce: q.get('nonce') ?? undefined,
             redirectUri: redirect,

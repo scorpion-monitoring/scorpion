@@ -1,4 +1,9 @@
 import { z } from '@scorpion/contracts';
+import {
+  createPwnedPasswords,
+  createStubPwnedPasswords,
+  type PwnedPasswords,
+} from '@scorpion/integrations';
 import { defineModule, type ModuleContext } from '@scorpion/kernel';
 import { createAuthenticator } from './authenticator.ts';
 import type { IdentityService } from './public.ts';
@@ -11,10 +16,13 @@ import { createCleanupService, type CleanupService } from './service/cleanup.ts'
 import { createProfileService, type ProfileService } from './service/profile.ts';
 import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
 import { createIdentityMail } from './service/identity-mail.ts';
+import { createLoginThrottle } from './service/login-throttle.ts';
+import { createPasswordPolicy } from './service/password-policy.ts';
 import { createMailBudget } from './service/mail-budget.ts';
 import { createMailLinks } from './service/mail-links.ts';
 import { IDENTITY_TEMPLATES } from './service/mail-templates.ts';
 import { createLoginStateService, type LoginStateService } from './service/login-state.ts';
+import { createOidcLinkService, type OidcLinkService } from './service/oidc-link.ts';
 import { createOidcService, type OidcService } from './service/oidc.ts';
 import {
   clientSecretFrom,
@@ -28,6 +36,7 @@ import {
   manualPolicy,
 } from './service/approval-policy.ts';
 import { createRoleService, type RoleService } from './service/roles.ts';
+import { createSessionAdminService, type SessionAdminService } from './service/session-admin.ts';
 import { createSessionService, type SessionService } from './service/sessions.ts';
 import {
   settingsSchema,
@@ -48,9 +57,11 @@ export interface IdentityInternals extends IdentityService {
   cleanup: CleanupService;
   loginStates: LoginStateService;
   oidc: OidcService;
+  oidcLink: OidcLinkService;
   profile: ProfileService;
   recovery: RecoveryService;
   roles: RoleService;
+  sessionAdmin: SessionAdminService;
   sessions: SessionService;
   tokens: TokenService;
 }
@@ -70,6 +81,12 @@ export interface IdentityModuleOptions {
   announce?: (text: string) => void;
   /** For tests: how long a first-run token lives. */
   firstRunTtlMs?: number;
+  /**
+   * The breach service behind the password check. The default is the Have I Been Pwned range API;
+   * under `NODE_ENV=test` it is a stub that knows no password and never calls out, so no test
+   * reaches the network.
+   */
+  pwned?: PwnedPasswords;
   /**
    * Where an OIDC client secret comes from. The default is the secrets store of core.settings
    * (`service/oidc-secret.ts`); there is no environment fallback.
@@ -170,7 +187,12 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     tablePrefix: 'identity_',
 
     permissions: {
-      'core.identity.session.manage': { description: 'End your own sessions' },
+      'core.identity.session.manage': {
+        description: 'List and end your own sessions, and confirm your identity again',
+      },
+      'core.identity.session.manage-any': {
+        description: 'End the sessions of any user, or of everybody, not only your own',
+      },
       'core.identity.me.read': { description: 'Read your own account' },
       'core.identity.user.list-pending': { description: 'List accounts waiting for approval' },
       'core.identity.user.approve': { description: 'Approve a pending account' },
@@ -244,9 +266,24 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           provider: z.string(),
           via: z.enum(['email', 'profile']),
         }),
+        // A first sign-in at a provider found an account that holds the address; its holder was mailed a link (ADR 0026). Nothing was linked.
+        'identity.authMethod.linkRequested@1': userEvent.extend({ provider: z.string() }),
         'identity.password.resetRequested@1': userEvent,
         'identity.password.reset@1': userEvent,
         'identity.password.changed@1': userEvent,
+        // The caller proved who they are again in their session; `method` is how (never a credential).
+        'identity.session.reauthenticated@1': userEvent.extend({
+          method: z.enum(['password', 'oidc']),
+        }),
+        // An administrator ended the sessions of one user (`count` were open) or of everybody.
+        'identity.sessions.revoked@1': userEvent.extend({
+          revokedBy: z.string(),
+          count: z.number().int().min(0),
+        }),
+        'identity.sessions.revokedAll@1': z.strictObject({
+          revokedBy: z.string(),
+          count: z.number().int().min(0),
+        }),
         'identity.email.verified@1': userEvent,
         // Which fields changed, never their values. `email` means a change was asked for.
         // After the retention period (ADR 0013): subscribers delete or anonymise what refers to the user.
@@ -295,13 +332,29 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         settings: ctx.deps['core.settings'],
       });
       const links = createMailLinks(ctx.config);
+      const settingsService = ctx.deps['core.settings'];
+      const policy = createPasswordPolicy(ctx, {
+        settings,
+        names: async () => {
+          const branding = await settingsService.getBranding();
+          return { instanceName: branding.instanceName, productName: branding.productName };
+        },
+        pwned:
+          options.pwned ??
+          (process.env.NODE_ENV === 'test' ? createStubPwnedPasswords() : createPwnedPasswords()),
+      });
+      const throttle = createLoginThrottle(ctx, { settings });
       const budget = createMailBudget(ctx, settings);
       const blob = ctx.deps['core.blob'];
       currentSettings = settings;
       currentSecret = clientSecret;
       const users = createUserService(ctx);
       currentUsers = users;
-      const sessions = createSessionService(ctx, { cacheTtlMs: options.sessionCacheTtlMs });
+      const sessions = createSessionService(
+        ctx,
+        { settings },
+        { cacheTtlMs: options.sessionCacheTtlMs },
+      );
       const tokens = createTokenService(ctx, { cacheTtlMs: options.tokenCacheTtlMs, authz });
       current = sessions;
       currentTokens = tokens;
@@ -310,9 +363,19 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         authz,
         announce: options.announce ?? (process.env.NODE_ENV === 'test' ? toNowhere : toConsole),
         ttlMs: options.firstRunTtlMs,
+        policy,
       });
       currentBootstrap = bootstrap;
       const loginStates = createLoginStateService(ctx);
+      const oidcLink = createOidcLinkService(ctx, {
+        authz,
+        users,
+        sessions,
+        settings,
+        mail,
+        budget,
+        links,
+      });
       const oidc = createOidcService(ctx, {
         authz,
         users,
@@ -325,6 +388,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           now: options.oidcHttp?.now,
         }),
         clientSecret,
+        linking: oidcLink,
         exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
       });
       const recovery = createRecoveryService(ctx, {
@@ -334,6 +398,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         budget,
         links,
         authz,
+        policy,
+        throttle,
       });
       const cleanup = createCleanupService(ctx, {
         authz,
@@ -345,13 +411,17 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       return {
         bootstrap,
         cleanup,
-        profile: createProfileService(ctx, { recovery, mail, authz, blob, settings }),
+        profile: createProfileService(ctx, { recovery, mail, authz, blob, settings, sessions }),
         roles: createRoleService({ authz, users }),
         recovery,
         loginStates,
         oidc,
+        oidcLink,
         users,
         sessions,
+        sessionAdmin: createSessionAdminService(ctx, { sessions, users, authz }),
+        requireRecentAuth: (actor, maxAgeSeconds) =>
+          sessions.requireRecentAuth(actor, maxAgeSeconds),
         tokens,
         accounts: createAccountService(ctx, {
           users,
@@ -362,22 +432,36 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           budget,
           links,
           authz,
+          passwords: policy,
+          throttle,
         }),
         approval: createApprovalService(ctx, { sessions, authz, mail, links }),
       };
     },
 
     routes: (r) => {
-      const { accounts, approval, bootstrap, oidc, profile, recovery, roles, tokens } =
-        r.service<IdentityInternals>();
+      const {
+        accounts,
+        approval,
+        bootstrap,
+        oidc,
+        oidcLink,
+        profile,
+        recovery,
+        roles,
+        sessionAdmin,
+        tokens,
+      } = r.service<IdentityInternals>();
       registerIdentityRoutes(r, {
         accounts,
         approval,
         bootstrap,
         oidc,
+        oidcLink,
         profile,
         recovery,
         roles,
+        sessionAdmin,
         tokens,
       });
     },

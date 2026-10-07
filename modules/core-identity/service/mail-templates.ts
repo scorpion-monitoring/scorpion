@@ -1,4 +1,4 @@
-// The seven mails of core.identity (M4 plan \u00A75 item 4), as templates of the registry
+// The eight mails of core.identity (M4 plan \u00A75 item 4, and the link mail of ADR 0026), as templates of the registry
 // `notify.template`. Each has an English and a German catalogue; the layout, the instance name, the
 // logo, the contact address and the escaping come from core.notifications. A template holds no
 // address or token logic: the service passes ready links, and `sensitive` marks the two that carry a
@@ -297,6 +297,56 @@ export const registerAttempt = defineTemplate({
   }),
 });
 
+export const oidcLink = defineTemplate({
+  key: 'identity.oidc-link',
+  // To the address of an existing account when somebody signs in at a provider that says the address
+  // is theirs (ADR 0026). Carries the link with the token, so the rendered body is deleted once the
+  // mail is sent or dead. It must not read as an alarm: nothing changes until the account holder
+  // confirms, signed in.
+  schema: z.strictObject({
+    linkUrl: url,
+    providerName: name,
+    validForMinutes: z.number().int().min(1).max(1440),
+  }),
+  sensitive: true,
+  mandatory: true,
+  category: 'security',
+  categoryDescription: CATEGORY_SECURITY,
+  catalogue: {
+    en: {
+      subject: 'Link {provider} to your {instance} account?',
+      heading: 'Link {provider} to your account',
+      body: 'Someone signed in to {instance} with {provider} using this email address. You already have an account here with this address, so nothing was linked and nobody was signed in.',
+      link: 'If that was you and you want to sign in with {provider} from now on, sign in to your {instance} account, then open this link within {minutes} minutes. It works once.',
+      action: 'Link {provider}',
+      ignore:
+        'If you did not just try to sign in with {provider}, ignore this email. Your account stays as it is.',
+    },
+    de: {
+      subject: '{provider} mit Ihrem Konto bei {instance} verknüpfen?',
+      heading: '{provider} mit Ihrem Konto verknüpfen',
+      body: 'Jemand hat sich bei {instance} mit {provider} und dieser E-Mail-Adresse angemeldet. Sie haben hier bereits ein Konto mit dieser Adresse, daher wurde nichts verknüpft und niemand angemeldet.',
+      link: 'Wenn Sie das waren und sich künftig mit {provider} anmelden möchten, melden Sie sich bei Ihrem Konto bei {instance} an und öffnen Sie dann diesen Link innerhalb von {minutes} Minuten. Er funktioniert nur einmal.',
+      action: '{provider} verknüpfen',
+      ignore:
+        'Wenn Sie nicht gerade versucht haben, sich mit {provider} anzumelden, ignorieren Sie diese E-Mail. Ihr Konto bleibt unverändert.',
+    },
+  },
+  content: (data, { t, branding }) => {
+    const vars = { instance: branding.instanceName, provider: data.providerName };
+    return {
+      subject: t('subject', vars),
+      heading: t('heading', vars),
+      blocks: [
+        { kind: 'text', text: t('body', vars) },
+        { kind: 'text', text: t('link', { ...vars, minutes: data.validForMinutes }) },
+        { kind: 'action', label: t('action', vars), url: data.linkUrl },
+        { kind: 'note', text: t('ignore', vars) },
+      ],
+    };
+  },
+});
+
 export const IDENTITY_TEMPLATES = [
   welcome,
   registrationRequest,
@@ -305,6 +355,7 @@ export const IDENTITY_TEMPLATES = [
   passwordReset,
   emailVerification,
   registerAttempt,
+  oidcLink,
 ];
 
 /** The data each template takes, by key: what `IdentityMail.send` checks at compile time. */
@@ -316,4 +367,5 @@ export interface IdentityMailData {
   'identity.password-reset': z.input<typeof passwordReset.schema>;
   'identity.email-verification': z.input<typeof emailVerification.schema>;
   'identity.register-attempt': z.input<typeof registerAttempt.schema>;
+  'identity.oidc-link': z.input<typeof oidcLink.schema>;
 }

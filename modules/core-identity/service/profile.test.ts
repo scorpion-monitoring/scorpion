@@ -1,6 +1,14 @@
 // The profile on real Postgres: reading and editing one's own, the address change that waits for
 // its confirmation, and what a refusal or a rollback leaves behind.
-import { ANONYMOUS, Forbidden, Invalid, Unauthorized, type Actor } from '@scorpion/contracts';
+import {
+  ANONYMOUS,
+  Forbidden,
+  Invalid,
+  ReauthenticationRequired,
+  Unauthorized,
+  type Actor,
+  type UserActor,
+} from '@scorpion/contracts';
 import { makeAuthMethod } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { makeMember, useIdentity } from '../test/harness.ts';
@@ -12,10 +20,23 @@ const identity = useIdentity();
 type Pool = { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }> };
 const rows = async (kernel: { pool: Pool }, sql: string, values?: unknown[]) =>
   (await kernel.pool.query(sql, values)).rows as Record<string, unknown>[];
+/** The session row of each user a test made one for, so that "this session" exists (ADR 0025). */
+const sessionIds = new Map<string, string>();
+const withSession = async (
+  id: { sessions: { create(userId: string): Promise<{ sessionId: string }> } },
+  user: { id: string },
+) => void sessionIds.set(user.id, (await id.sessions.create(user.id)).sessionId);
 const actorOf = (
   user: { id: string; username: string },
   via: 'session' | 'token' = 'session',
-): Actor => ({ kind: 'user', userId: user.id, username: user.username, roles: [], via });
+): UserActor => ({
+  kind: 'user',
+  userId: user.id,
+  username: user.username,
+  roles: [],
+  via,
+  ...(via === 'session' && sessionIds.has(user.id) ? { sessionId: sessionIds.get(user.id) } : {}),
+});
 
 async function start() {
   const started = await identity.start();
@@ -25,6 +46,7 @@ async function start() {
     emailVerified: true,
   });
   await makeAuthMethod(started.kernel.pool, alice);
+  await withSession(started.identity, alice);
   return { ...started, alice, profile: started.identity.profile };
 }
 
@@ -92,7 +114,7 @@ describe('update: name and bio', () => {
     ).toHaveLength(1);
   });
 
-  it('changes only the caller’s own row', async () => {
+  it('changes only the caller’s own row [ASVS-8.2.2]', async () => {
     const { kernel, profile, alice } = await start();
     const bobby = await makeMember(kernel.pool, { username: 'bobby', email: 'bobby@example.org' });
     await profile.update(actorOf(alice), { displayName: 'Alice', bio: 'Mine' });
@@ -223,11 +245,52 @@ describe('update: the address', () => {
   it('works for an account that has no address yet', async () => {
     const { kernel, identity: id, mail, profile } = await start();
     const carol = await makeMember(kernel.pool, { username: 'carol', email: null });
+    await withSession(id, carol);
     await profile.update(actorOf(carol), { email: 'carol@example.org' });
     await id.recovery.confirmEmail({ token: tokenFrom((await mail.all())[0]) });
     expect(await profile.get(actorOf(carol))).toMatchObject({
       email: 'carol@example.org',
       emailVerified: true,
+    });
+  });
+
+  it('changing the email address needs a recent authentication, and writes and spends nothing without it [ASVS-7.5.1]', async () => {
+    const { kernel, identity: id, mail, profile, alice } = await start();
+    // A session that began, and was last authenticated, two hours ago.
+    const old = await id.sessions.create(alice.id, undefined, new Date(Date.now() - 2 * 3600_000));
+    const stale: Actor = { ...actorOf(alice), sessionId: old.sessionId };
+
+    const error = await profile
+      .update(stale, { email: 'new@example.org' })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ReauthenticationRequired);
+    expect(error).toMatchObject({ status: 401, type: 'reauthentication-required' });
+    expect(await mail.all()).toEqual([]);
+    expect(await rows(kernel, 'select 1 from identity_mail_token')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from kernel_outbox')).toEqual([]);
+    expect(await rows(kernel, 'select 1 from kernel_rate_bucket')).toEqual([]); // no budget spent either
+    expect(await profile.get(stale)).toMatchObject({
+      email: 'alice@example.org',
+      pendingEmail: null,
+    });
+
+    // After the person has confirmed who they are, the same request works.
+    await id.sessions.markAuthenticated(alice.id, old.sessionId);
+    expect(await profile.update(stale, { email: 'new@example.org' })).toMatchObject({
+      pendingEmail: 'new@example.org',
+    });
+  });
+
+  it('does not ask for a recent authentication to change a name or a bio, or to ask for the address the account already has', async () => {
+    const { identity: id, profile, alice } = await start();
+    const old = await id.sessions.create(alice.id, undefined, new Date(Date.now() - 2 * 3600_000));
+    const stale: Actor = { ...actorOf(alice), sessionId: old.sessionId };
+    await expect(
+      profile.update(stale, { displayName: 'Alice', bio: 'About' }),
+    ).resolves.toMatchObject({ displayName: 'Alice' });
+    await expect(profile.update(stale, { email: 'ALICE@example.org' })).resolves.toMatchObject({
+      pendingEmail: null,
     });
   });
 

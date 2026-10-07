@@ -55,12 +55,19 @@ export function browser<Who = undefined>(
   idp: Authorizer<Who>,
   providerId: string = PROVIDER,
 ) {
-  /** `POST .../start` (or `.../link` with a session) and keep the login cookie. */
+  /**
+   * `POST .../start` (`.../link` and `reauthenticate` need a session) and keep the login cookie.
+   * `reauthenticate` is the re-authentication of the caller's session (ADR 0025).
+   */
   async function start(
-    kind: 'start' | 'link' = 'start',
+    kind: 'start' | 'link' | 'reauthenticate' = 'start',
     options: RequestOptions = {},
   ): Promise<Started> {
-    const reply = await app.call('POST', `/auth/oidc/${providerId}/${kind}`, options);
+    const path =
+      kind === 'reauthenticate'
+        ? `/account/reauthenticate/oidc/${providerId}`
+        : `/auth/oidc/${providerId}/${kind}`;
+    const reply = await app.call('POST', path, options);
     if (reply.status !== 200) throw new Error(`start answered ${reply.status}`);
     return {
       reply,

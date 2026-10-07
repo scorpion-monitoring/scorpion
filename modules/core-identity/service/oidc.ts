@@ -4,8 +4,10 @@ import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
 import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import { ids, type ModuleContext } from '@scorpion/kernel';
+import type { ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
+import { addIdentityIn } from './identity-link.ts';
+import type { OidcLinkService } from './oidc-link.ts';
 import type { User, UserService } from '../public.ts';
 import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
 import {
@@ -17,7 +19,7 @@ import {
 import { BadRequest, InvalidIdToken, ProviderUnavailable } from './oidc-errors.ts';
 import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
-import { verifyIdToken, type IdentityClaims } from './oidc-token.ts';
+import { CLOCK_SKEW_SECONDS, verifyIdToken, type IdentityClaims } from './oidc-token.ts';
 import { requireSession } from './require-user.ts';
 import { grantDefaultRole } from './roles.ts';
 import type { SessionService } from './sessions.ts';
@@ -37,7 +39,15 @@ export interface StartedLogin {
 }
 
 export type CompletedLogin =
-  { kind: 'login'; sessionId: string; expiresAt: Date } | { kind: 'linked' };
+  | { kind: 'login'; sessionId: string; expiresAt: Date }
+  | { kind: 'linked' }
+  | { kind: 'reauthenticated' }
+  /**
+   * The provider asserted a verified address that an account holds. Nothing was linked and nobody was
+   * signed in; the holder of the account was mailed a link to confirm (ADR 0026). The same whether or
+   * not a mail could be sent.
+   */
+  | { kind: 'check-mail' };
 
 export interface CompleteInput {
   providerId: string;
@@ -54,11 +64,19 @@ export interface CompleteInput {
 export interface OidcService {
   /** Where the browser goes after the callback: the application root under `BASE_PATH`. Fixed, so there is no open redirect. */
   readonly landing: string;
+  /** Where it goes when a link mail was sent instead of a sign-in: the sign-in page with a notice. Fixed as well. */
+  readonly checkMailLanding: string;
   /** Starts a login for anyone. 404 for a provider that is not configured, 502 when it cannot be reached. */
   start(providerId: string): Promise<StartedLogin>;
   /** Starts the flow that adds a provider to the signed-in caller's account. Session only. */
   startLink(actor: Actor, providerId: string): Promise<StartedLogin>;
-  /** Completes the login (or the link) that this browser started. */
+  /**
+   * Starts the re-authentication of the caller's current session at a provider they have signed in
+   * with (`prompt=login`, `max_age=0`; ADR 0025). Session only. 404 when the account has no sign-in
+   * at that provider.
+   */
+  startReauthentication(actor: Actor, providerId: string): Promise<StartedLogin>;
+  /** Completes the login, the link or the re-authentication that this browser started. */
   complete(input: CompleteInput): Promise<CompletedLogin>;
 }
 
@@ -72,6 +90,8 @@ export interface OidcDeps {
   states: LoginStateService;
   providers: ProviderClient;
   clientSecret: ClientSecretLookup;
+  /** What a first sign-in with an address that an account holds does instead of linking (ADR 0026). */
+  linking: Pick<OidcLinkService, 'request'>;
   exchangeTimeoutMs?: number;
 }
 
@@ -117,10 +137,13 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     ctx.log.warn({ provider: providerId, reason, ...extra }, 'oidc login refused');
   }
 
-  async function begin(providerId: string, linkUserId?: string): Promise<StartedLogin> {
+  async function begin(
+    providerId: string,
+    signedIn?: { userId: string; reauthSessionId?: string },
+  ): Promise<StartedLogin> {
     const provider = await providerOrThrow(providerId);
     const discovery = await providers.discovery(provider);
-    const fresh = await states.create(provider.id, linkUserId);
+    const fresh = await states.create(provider.id, signedIn?.userId, signedIn?.reauthSessionId);
     const url = (await clientFor(provider, false)).createAuthorizationURLWithPKCE(
       discovery.authorizationEndpoint,
       fresh.state,
@@ -129,6 +152,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       provider.scopes,
     );
     url.searchParams.set('nonce', fresh.nonce);
+    if (signedIn?.reauthSessionId !== undefined) {
+      // Ask the provider for a login now, not for its single sign-on session (OIDC Core 3.1.2.1).
+      url.searchParams.set('prompt', 'login');
+      url.searchParams.set('max_age', '0');
+    }
     return {
       authorizationUrl: url.toString(),
       cookie: { value: fresh.verifier, maxAgeSeconds: 600 },
@@ -162,34 +190,8 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     return created;
   }
 
-  async function addIdentity(
-    found: User,
-    provider: string,
-    subject: string,
-    via: 'email' | 'profile',
-  ) {
-    await ctx.db.tx(async (tx) => {
-      const [sameSubject] = await tx
-        .select({ id: authMethod.id })
-        .from(authMethod)
-        .where(and(eq(authMethod.provider, provider), eq(authMethod.subject, subject)))
-        .limit(1);
-      const [sameProvider] = await tx
-        .select({ id: authMethod.id })
-        .from(authMethod)
-        .where(and(eq(authMethod.userId, found.id), eq(authMethod.provider, provider)))
-        .limit(1);
-      if (sameSubject || sameProvider) {
-        throw new Conflict('This sign-in is already linked to an account.');
-      }
-      await tx.insert(authMethod).values({ id: ids.uuidv7(), userId: found.id, provider, subject });
-      await ctx.events.emit('identity.authMethod.linked@1', {
-        userId: found.id,
-        username: found.username,
-        provider,
-        via,
-      });
-    });
+  async function addIdentity(found: User, provider: string, subject: string, via: 'profile') {
+    await ctx.db.tx((tx) => addIdentityIn(ctx, tx, found, provider, subject, via));
   }
 
   async function provision(provider: OidcProvider, claims: IdentityClaims): Promise<User> {
@@ -256,18 +258,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       const sameEmail =
         claims.emailVerified && claims.email ? await users.findByEmail(claims.email) : undefined;
       if (sameEmail) {
-        // Both sides must have proved the address. A password account whose owner has not
-        // confirmed it is never taken over: they sign in as before and link from their profile.
-        if (!sameEmail.emailVerified) {
-          throw new Conflict(
-            'An account with this email address already exists. Sign in the usual way, then link this provider from your profile.',
-          );
-        }
-        if (sameEmail.deletedAt !== null || sameEmail.status === 'rejected') {
-          throw new Unauthorized(GENERIC_REFUSAL);
-        }
-        await addIdentity(sameEmail, provider.id, claims.subject, 'email');
-        account = sameEmail;
+        // A provider's word for an address is not enough to enter the account that holds it (ASVS
+        // 6.8.1): nothing is linked and nobody is signed in. The holder is mailed a link and confirms
+        // it signed in. Every case ends the same way, so the browser learns nothing about the account.
+        await deps.linking.request(provider, claims.subject, sameEmail);
+        return { kind: 'check-mail' };
       } else {
         account = await provision(provider, claims);
       }
@@ -286,15 +281,76 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     await addIdentity(found, provider.id, claims.subject, 'profile');
   }
 
+  /**
+   * The callback of a re-authentication. The id_token has passed every check, `auth_time` included.
+   * It must be the caller's own sign-in at this provider (the same `sub`), and the session the
+   * flow was started for must still be live and theirs.
+   */
+  async function reauthenticate(
+    provider: OidcProvider,
+    claims: IdentityClaims,
+    userId: string,
+    sessionId: string,
+  ): Promise<CompletedLogin> {
+    const [own] = await ctx.db
+      .select({ id: authMethod.id })
+      .from(authMethod)
+      .where(
+        and(
+          eq(authMethod.userId, userId),
+          eq(authMethod.provider, provider.id),
+          eq(authMethod.subject, claims.subject),
+        ),
+      )
+      .limit(1);
+    if (!own) {
+      refuse(provider.id, 'reauth-other-subject');
+      throw new Unauthorized(GENERIC_REFUSAL);
+    }
+    const found = await users.findById(userId);
+    if (!found || found.deletedAt !== null || found.status !== 'active') {
+      throw new Unauthorized(GENERIC_REFUSAL);
+    }
+    await ctx.db.tx(async (tx) => {
+      if (!(await sessions.markAuthenticated(userId, sessionId, tx))) {
+        refuse(provider.id, 'reauth-session-gone');
+        throw new Unauthorized(GENERIC_REFUSAL);
+      }
+      await ctx.events.emit('identity.session.reauthenticated@1', {
+        userId,
+        username: found.username,
+        method: 'oidc',
+      });
+    });
+    return { kind: 'reauthenticated' };
+  }
+
   return {
     landing: ctx.config.BASE_PATH === '/' ? '/' : `${ctx.config.BASE_PATH}/`,
+    checkMailLanding: `${ctx.config.BASE_PATH === '/' ? '' : ctx.config.BASE_PATH}/login?notice=check-mail`,
 
     start: (providerId) => begin(providerId),
 
     async startLink(actor, providerId) {
       const caller = requireSession(actor, 'Linking a sign-in provider');
       await authz.require(actor, 'core.identity.auth-method.link');
-      return begin(providerId, caller.userId);
+      // Adding a way to sign in to the account needs a recent authentication (ASVS 7.5.1).
+      await sessions.requireRecentAuth(actor);
+      return begin(providerId, { userId: caller.userId });
+    },
+
+    async startReauthentication(actor, providerId) {
+      const caller = requireSession(actor, 'Re-authenticating');
+      await authz.require(actor, 'core.identity.session.manage');
+      if (caller.sessionId === undefined) throw new Unauthorized();
+      const provider = await providerOrThrow(providerId);
+      const [own] = await ctx.db
+        .select({ id: authMethod.id })
+        .from(authMethod)
+        .where(and(eq(authMethod.userId, caller.userId), eq(authMethod.provider, provider.id)))
+        .limit(1);
+      if (!own) throw new NotFound('There is no such sign-in provider.');
+      return begin(providerId, { userId: caller.userId, reauthSessionId: caller.sessionId });
     },
 
     async complete(input) {
@@ -356,6 +412,10 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         clientId: provider.clientId,
         nonceHash: stored.nonceHash,
         now: new Date(),
+        // A re-authentication must have happened at the provider after it was asked for.
+        ...(stored.purpose === 'reauth'
+          ? { authTimeNotBefore: new Date(stored.createdAt.getTime() - CLOCK_SKEW_SECONDS * 1000) }
+          : {}),
       };
       let claims: IdentityClaims;
       try {
@@ -379,8 +439,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         throw error;
       }
 
-      if (stored.linkUserId !== null) {
-        await link(provider, claims, stored.linkUserId);
+      if (stored.purpose === 'reauth') {
+        return reauthenticate(provider, claims, stored.linkUserId!, stored.reauthSessionId!);
+      }
+      if (stored.purpose === 'link') {
+        await link(provider, claims, stored.linkUserId!);
         return { kind: 'linked' };
       }
       return login(provider, claims, input.previousSessionId);

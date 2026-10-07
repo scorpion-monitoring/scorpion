@@ -15,13 +15,25 @@ export class DomainError extends Error {
   readonly status: number;
   readonly title: string;
   readonly errors: readonly FieldProblem[] | undefined;
+  /** A stable problem type (RFC 9457) a client can switch on; `undefined` is `about:blank`. */
+  readonly type: string | undefined;
+  /** For a 429: how long the caller should wait. The error mapper writes it as `Retry-After`. */
+  retryAfterSeconds: number | undefined;
 
-  constructor(status: number, title: string, detail: string, errors?: readonly FieldProblem[]) {
+  constructor(
+    status: number,
+    title: string,
+    detail: string,
+    errors?: readonly FieldProblem[],
+    type?: string,
+  ) {
     super(detail);
     this.name = new.target.name;
     this.status = status;
     this.title = title;
     this.errors = errors;
+    this.type = type;
+    this.retryAfterSeconds = undefined;
   }
 }
 
@@ -57,5 +69,18 @@ export class Unauthorized extends DomainError {
 export class Invalid extends DomainError {
   constructor(detail = 'The request is not valid.', errors?: readonly FieldProblem[]) {
     super(422, 'Unprocessable Content', detail, errors);
+  }
+}
+
+/** The problem type of {@link ReauthenticationRequired}. */
+export const REAUTHENTICATION_REQUIRED = 'reauthentication-required';
+
+/**
+ * 401 with a stable problem type: the session is good, but this change needs a recent
+ * authentication (ASVS 7.5.1). The client asks for the password or the provider, then repeats it.
+ */
+export class ReauthenticationRequired extends DomainError {
+  constructor(detail = 'Confirm your identity again to do this.') {
+    super(401, 'Unauthorized', detail, undefined, REAUTHENTICATION_REQUIRED);
   }
 }
