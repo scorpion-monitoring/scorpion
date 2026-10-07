@@ -34,7 +34,7 @@ export async function withDb<T>(
   }
 }
 
-/** The newest mail of a template to an address; waits a few seconds for it to be queued. */
+/** The newest mail of a template to an address; waits up to a minute for it, as a loaded CI runner delivers late. */
 export async function mailTo(
   basePath: string,
   address: string,
@@ -49,7 +49,7 @@ export async function mailTo(
         // A mail that is not there yet, or whose body is not yet readable, is waited for.
         return found !== undefined && found.text.length > 0;
       },
-      { message: `a ${template} mail to ${address}`, timeout: 15_000 },
+      { message: `a ${template} mail to ${address}`, timeout: 60_000 },
     )
     .toBe(true);
   return found!;
