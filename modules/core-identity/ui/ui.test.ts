@@ -90,7 +90,8 @@ describe('the pages of core.identity', () => {
     const own = [...used].filter((key) =>
       /^(login|pending|register|forgot|reset|verify|link|first|profile|nav|admin)\./.test(key),
     );
-    expect(own.filter((key) => !known.has(key))).toEqual([]);
+    // `nav.section.admin` is the shell's text (it owns the sections of the navigation).
+    expect(own.filter((key) => !known.has(key) && key !== 'nav.section.admin')).toEqual([]);
     expect(own.length).toBeGreaterThan(100);
   });
 
