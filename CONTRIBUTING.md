@@ -50,7 +50,7 @@ This file summarises how work gets into `main`.
 The README badges for ASVS 5.0 (chapters V6, V7, V8 and V10), OpenSSF Best Practices and OpenSSF Scorecard are claims that CI keeps true; see
 [docs/security/README.md](docs/security/README.md).
 
-- `pnpm security:asvs` runs in the **Lint, type check, test** job after the tests. It checks the assessment files in `docs/security/asvs/` against the
+- `pnpm security:asvs` runs in the **ASVS assessments** job after the unit and end-to-end tests, which hand it their JUnit reports. It checks the assessment files in `docs/security/asvs/` against the
   pinned ASVS source and the test reports, and fails if a generated report or the README badge block was edited by hand. Regenerate them with
   `pnpm security:asvs --write`; never edit them.
 - The **ASVS impact** check fails a pull request that changes a security-scoped path (`modules/core-identity/**`, `modules/core-authz/**`,
@@ -95,6 +95,24 @@ edit it by hand.
 
 The internal `@scorpion/*` packages are not versioned separately. The root package
 `scorpion` carries the one product version, which the image tags use.
+
+## Continuous integration
+
+The `CI` workflow runs its work as parallel jobs, so a run takes as long as its slowest job:
+
+| Job                          | Does                                                                                    |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| `Static checks`              | branch policy, changeset check, `pnpm check`                                            |
+| `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                       |
+| `End-to-end tests`           | Playwright (the browser download is cached)                                             |
+| `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                      |
+| **`Lint, type check, test`** | the gate: succeeds only when the four jobs above did; this is the required check        |
+| `Image (...)`                | builds and smoke-tests each profile image beside the tests (needs only `Static checks`) |
+
+Branch protection requires the gate by name, so the jobs behind it can be split, renamed or
+added without a change to the ruleset. When the unit tests near the 20-minute limit of a job,
+raise the shard count in `.github/workflows/ci.yml` (the matrix and the `/4` in the command);
+do not raise the limit. `pnpm test` without `--shard` still runs everything, as before.
 
 ## Dependency audit
 
