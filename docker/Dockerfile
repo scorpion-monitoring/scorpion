@@ -35,17 +35,21 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 
 # 2. Compose the server for the profile: apps/server/src/generated/profile.ts imports the profile's
 #    modules, and apps/server/package.json depends on exactly those modules. The generator also
-#    fails the build if the profile lacks a module that one of its modules requires. The web app's
-#    documentation page lists the public API of the profile, so its OpenAPI document is made here too.
+#    fails the build if the profile lacks a module that one of its modules requires.
 RUN set -eu; \
     args=""; for root in ${MODULE_ROOTS}; do args="$args --modules-root $root"; done; \
-    node apps/server/src/cli.ts profile:generate "${PROFILE}" ${PROFILE_FILE:+--profile-file "$PROFILE_FILE"} $args; \
-    node apps/server/src/openapi-generate.ts --web-only
+    node apps/server/src/cli.ts profile:generate "${PROFILE}" ${PROFILE_FILE:+--profile-file "$PROFILE_FILE"} $args
 
 # 3. Install again for the new dependency set. The lockfile is updated first (its versions are all
 #    reused; only the workspace links of the server and the web app change).
 RUN find . -name node_modules -prune -exec rm -rf {} + \
     && pnpm install --lockfile-only --no-frozen-lockfile --prefer-offline
+
+# 3b. The web app's documentation page lists the public API of the profile, so its OpenAPI document is made
+#    from the profile's own modules, which need the server's closure installed (the same install as step 5).
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --prod --filter "@scorpion/server..." \
+    && node apps/server/src/openapi-generate.ts --web-only
 
 # 4. The web app, when the profile has core.ui-shell (the generator says so in apps/web/src/generated/ui.ts).
 #    Its development dependencies are installed, because Vite bundles the pages of the profile's modules

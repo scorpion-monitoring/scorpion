@@ -8,7 +8,7 @@
 // writes only the v1 document. No database is needed: each module's `routes()` runs with a registrar
 // that only collects the route definitions and with stand-ins for the services, which never run.
 // `--check` reports a file that differs instead of writing it (`pnpm check` runs it); `--web-only` writes the v1 document alone.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { generateOpenApiDocument, type AppRoute } from '@scorpion/contracts';
 import type { ModuleManifest } from '@scorpion/kernel';
@@ -78,7 +78,13 @@ if (profileName === 'full' && !webOnly) {
 let stale = false;
 for (const [file, content] of outputs) {
   const path = resolve(root, file);
-  const current = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+  // Read and compare, never test-then-read: a missing file is simply "different".
+  let current: string | undefined;
+  try {
+    current = readFileSync(path, 'utf8');
+  } catch {
+    current = undefined;
+  }
   if (current === content) continue;
   if (check) {
     console.error(`${file} is out of date. Run: pnpm openapi:generate`);
