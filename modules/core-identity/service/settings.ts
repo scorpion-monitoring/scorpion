@@ -22,6 +22,14 @@ export const oidcProviderSchema = z.strictObject({
   /** Lower-case letters, digits and "-"; in the callback URL and in `identity_auth_method.provider`. */
   id: providerId.max(32).refine((value) => value !== 'local', 'is reserved for password accounts'),
   displayName: z.string().trim().min(1).max(100),
+  /**
+   * The icon of the sign-in button: a stored file, named by the SHA-256 of its content (uploaded as
+   * a logo is, ADR 0018; `GET /files/{hash}`). Without one the button shows the name only.
+   */
+  iconHash: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, 'must be the SHA-256 of an uploaded file (64 lower-case hex digits)')
+    .optional(),
   /** The issuer URL; discovery is `<issuer>/.well-known/openid-configuration`. */
   issuer: z.string().max(500).refine(isSecureUrl, 'must be an https URL (http only for localhost)'),
   clientId: z.string().min(1).max(255),

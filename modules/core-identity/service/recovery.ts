@@ -40,6 +40,7 @@ import type { LoginThrottle } from './login-throttle.ts';
 import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
 import { budgetLimit, type IdentitySettings } from './settings.ts';
+import { LOCAL_ACCOUNTS_OFF } from '../problem-types.ts';
 
 export interface RecoveryService {
   /**
@@ -146,7 +147,8 @@ export function createRecoveryService(
 
   async function requireLocalAccounts(what: string) {
     const { localAccounts } = await settings.get();
-    if (!localAccounts) throw new Forbidden(`${what} with a password is turned off.`);
+    if (!localAccounts)
+      throw new Forbidden(`${what} with a password is turned off.`, LOCAL_ACCOUNTS_OFF);
   }
 
   async function startVerificationIn(

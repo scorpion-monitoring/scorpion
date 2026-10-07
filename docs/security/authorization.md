@@ -71,6 +71,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /account/sessions`                         | core.identity      | `core.identity.session.manage`         | default    | no             |
 | `GET /auth/me`                                  | core.identity      | `core.identity.me.read`                | default    | no             |
 | `GET /auth/oidc/{provider}/callback`            | core.identity      | **public**                             | strict     | no             |
+| `GET /auth/oidc/providers`                      | core.identity      | **public**                             | default    | no             |
+| `GET /bootstrap/status`                         | core.identity      | **public**                             | default    | no             |
 | `GET /roles`                                    | core.identity      | `core.identity.role.read`              | default    | no             |
 | `GET /tokens`                                   | core.identity      | `core.identity.token.read`             | default    | no             |
 | `GET /users/pending`                            | core.identity      | `core.identity.user.list-pending`      | default    | no             |
