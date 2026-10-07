@@ -107,6 +107,13 @@ To re-authenticate: `POST /account/reauthenticate` with the current password (42
 password), or `POST /account/reauthenticate/oidc/{provider}` for the provider flow described above. Both are rate limited and audited
 (`identity.session.reauthenticated@1`). The check is made in the service, before anything is written or any budget spent.
 
+**In the browser.** The web app wraps each of these actions in one function, `withReauth()` (`packages/ui-kit`, `reauth.ts`). On a 401 with that problem type
+it opens a dialog that asks for the password; on a 409 (no password) it offers the buttons of the sign-in providers; then it runs the action again. The provider
+path leaves the page, and the callback ends at the start page with no return path, so the page keeps the path it was on and a small intent (an id and a payload
+such as the new address, never a password or a token) in `sessionStorage` for at most ten minutes; after the return the layout reads it once, removes it, checks
+that the path is one of this instance (as a `returnTo` is checked) and opens it, and the page repeats the action. The dialog closes with Escape or Cancel and
+changes nothing then. The journeys `apps/web/e2e/reauth.spec.ts` and `oidc.spec.ts` prove both paths.
+
 ## Ending sessions for others (7.4.5)
 
 The permission `core.identity.session.manage-any` is held by Admin only. `POST /users/{id}/sessions/revoke` ends every open session of one
@@ -151,7 +158,7 @@ Every request asks the database, behind a per-process cache of 5 seconds (`SESSI
 | 7.3.2       | `[ASVS-7.3.2]` in `sessions.test.ts`: a session used every day dies at the absolute limit                                                                                    |
 | 7.4.4       | `[ASVS-7.4.4]` in `apps/web/e2e/navigation.spec.ts` (Playwright), and this page, "The logout control"                                                                        |
 | 7.4.5       | `[ASVS-7.4.5]` in `modules/core-identity/service/session-admin.test.ts` and `apps/server/src/sessions-routes.test.ts`                                                        |
-| 7.5.1       | `[ASVS-7.5.1]` in `profile.test.ts`, `oidc-reauth.test.ts` and `sessions-routes.test.ts`                                                                                     |
-| 7.5.2       | `[ASVS-7.5.2]` in `session-accounts.test.ts` and `sessions-routes.test.ts`                                                                                                   |
+| 7.5.1       | `[ASVS-7.5.1]` in `profile.test.ts`, `oidc-reauth.test.ts` and `sessions-routes.test.ts`, and in the browser in `apps/web/e2e/reauth.spec.ts` and `oidc.spec.ts`             |
+| 7.5.2       | `[ASVS-7.5.2]` in `session-accounts.test.ts` and `sessions-routes.test.ts`, and in the browser in `apps/web/e2e/reauth.spec.ts` and `profile.spec.ts` (two contexts)         |
 | 7.6.1       | This page, and `[ASVS-7.6.1]` in `sessions-oidc-routes.test.ts` (with `oidc-reauth.test.ts` and the Keycloak test in `oidc-keycloak.test.ts`) for the behaviour it describes |
 | 6.8.4       | `[ASVS-6.8.4]` in `oidc-reauth.test.ts` and `sessions-oidc-routes.test.ts`: a stale `auth_time` is refused                                                                   |

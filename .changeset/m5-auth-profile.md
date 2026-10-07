@@ -1,0 +1,9 @@
+---
+'scorpion': minor
+---
+
+People can now sign in, register and manage their account in the browser (M5, second part). The pages: sign in (with a button for each configured OIDC provider), register, "check your mail", forgot and reset password, confirm an email address, connect a provider from a mailed link, and a profile page with details, picture, language, password, access tokens (the secret is shown once), the list of sessions and the sign-in providers to connect. Changes that need a recent sign-in (a new email address, ending a session, signing out everywhere, connecting a provider) ask for the password in a dialog, or for a sign-in at the provider when the account has no password, and then go through. German is the second language: the page follows the language preference of a signed-in person, then the browser's `Accept-Language`, then English. A fresh install shows the first-administrator form on its start page and nothing else is reachable until it is used; the one-time token still comes from the server console as before.
+
+New API routes (both public): `GET /auth/oidc/providers` (id, display name and icon hash of each provider, nothing else) and `GET /bootstrap/status` (`{ needsFirstAdmin }`). A provider setting may now carry `iconHash`, the SHA-256 of an uploaded file (uploaded as a logo is) that is shown on its button. Additive change to existing answers: a 403 at sign-in, register and reset now carries a problem `type`, `account-pending` or `local-accounts-disabled`; the status and the body are otherwise the same. The routes of the API did not change otherwise.
+
+Operators: a profile that lists `core.identity` and `core.ui-shell` serves these pages; the mails and the OIDC callback already linked to them. No setting is required. To show an icon on a provider's button, upload it with `POST /files` and put its hash in `iconHash` of the provider. No new runtime dependency.

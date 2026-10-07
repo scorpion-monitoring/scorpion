@@ -59,11 +59,19 @@ requirements:
       - code: modules/core-identity/validation.ts
     note: 'The password schema is z.string().min(8).max(255) with no composition rule; the table-driven cases accept spaces, symbols and non-ASCII.'
   - id: v5.0.0-6.2.6
-    status: fail
-    note: 'Not demonstrable yet. apps/web has only a placeholder page and no password field exists; re-assess when the M5 login and registration screens land. Fix planned in docs/m5-sprint-plan.md#5-sprint-2-i18n-sign-in-register-profile.'
+    status: pass
+    evidence:
+      - test: ASVS-6.2.6
+      - code: packages/ui-kit/src/TextField.svelte
+      - code: modules/core-identity/ui/Login.svelte
+    note: 'Every password the web app asks for is a `TextField` with `type="password"`: sign-in, registration, the new password of a reset, the current and new password of a change, the first administrator, and the dialog that confirms the identity. The Playwright test apps/web/e2e/password-fields.spec.ts opens the first four forms and the dialog, under BASE_PATH / and /a/b, and fails for any input named like a password that is not type=password, for a password input whose autocomplete is anything but current-password or new-password, and for one that is read-only or disabled; it also types into each and checks the text is not echoed into the page. The component offers no "show the password" toggle, so the entry is masked at all times. Not covered by the test: a screen that a later sprint adds is covered only if the test lists its form, and the form of the first administrator is checked by the bootstrap journey (apps/web/e2e/bootstrap.spec.ts) for type, autocomplete and the username field, not for paste.'
   - id: v5.0.0-6.2.7
-    status: fail
-    note: 'Not demonstrable yet, for the same reason as 6.2.6: no form exists that could allow or block pasting and password managers. Fix planned in docs/m5-sprint-plan.md#5-sprint-2-i18n-sign-in-register-profile.'
+    status: pass
+    evidence:
+      - test: ASVS-6.2.7
+      - code: packages/ui-kit/src/TextField.svelte
+      - code: modules/core-identity/ui/profile/Password.svelte
+    note: 'No password field sets an attribute or handler that blocks pasting, dropping or the help of the browser: apps/web/e2e/password-fields.spec.ts fails for onpaste, oncopy, ondrop, readonly or disabled on the field and for autocomplete off or none, dispatches a paste event that the page must not cancel, and pastes from the real clipboard (Control or Command and V) into the field of the sign-in, registration, reset and change forms and checks that the value arrives. For password managers the test requires each password field to sit in a form, with an input marked autocomplete="username" in the same form on the sign-in, registration and change forms (the change form carries the account name in a visually hidden read-only field so that a manager updates the right entry); the reset form has none, because the person is not signed in and the page does not know the name. The test does not drive a real password manager extension, which a headless browser does not have; it proves the markup such a manager relies on (a form, autocomplete tokens, a username field) and that nothing blocks it.'
   - id: v5.0.0-6.2.8
     status: pass
     evidence:

@@ -122,6 +122,8 @@ export function useAudit(): AuditHarness {
         'core.blob': '@scorpion/core-blob',
         'core.notifications': '@scorpion/core-notifications',
         'core.identity': '@scorpion/core-identity',
+        // An optional peer of core.identity (its pages): known, so that its absence is not a mistake.
+        'core.ui-shell': '@scorpion/core-ui-shell',
         'core.audit': '@scorpion/core-audit',
       },
       config: loadConfig({

@@ -169,7 +169,7 @@ test.describe('the access tokens', () => {
 });
 
 test.describe('the sessions', () => {
-  test('are listed, and a second browser ends the first one from the list', async ({
+  test('[ASVS-7.5.2] are listed, and a second browser ends the first one from the list', async ({
     browser,
     baseURL,
     at,

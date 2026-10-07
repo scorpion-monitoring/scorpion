@@ -21,8 +21,10 @@
       await refresh();
       if (wasCurrent) await goto(href('/login?notice=signed-out'));
     } catch (error) {
-      if (!(error instanceof ReauthCancelled)) failed = failureOf(error).status !== 404;
-      if (!(error instanceof ReauthCancelled) && !failed) await refresh();
+      if (error instanceof ReauthCancelled) return;
+      // 404: it is already gone (ended elsewhere), so the list is shown as it is now.
+      if (failureOf(error).status === 404) await refresh();
+      else failed = true;
     }
   }
 

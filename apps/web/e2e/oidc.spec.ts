@@ -78,7 +78,7 @@ async function approve(
 }
 
 test.describe('a sign-in at a provider', () => {
-  test('creates an account that waits for approval, and signs in once it is approved', async ({
+  test('[ASVS-10.2.1] creates an account that waits for approval, and signs in once it is approved', async ({
     page,
     playwright,
     baseURL,
@@ -166,7 +166,7 @@ test.describe('a sign-in at a provider', () => {
     await expect(page.locator('#account-menu').getByText('Signed in as wren')).toBeVisible();
   });
 
-  test('is how an account without a password confirms its identity, and the change it asked for is then made', async ({
+  test('[ASVS-7.5.1] is how an account without a password confirms its identity, and the change it asked for is then made', async ({
     page,
     playwright,
     baseURL,
