@@ -98,8 +98,9 @@
       <div class="alert alert-warning flex-col items-start" role="status">
         <p class="font-medium">{t('profile.tokens.secretTitle', { name: shown.name })}</p>
         <p>{t('profile.tokens.secretWarning')}</p>
-        <code class="bg-base-200 w-full rounded p-2 break-all" data-testid="token-secret"
-          >{shown.secret}</code
+        <code
+          class="bg-base-100 text-base-content w-full rounded p-2 break-all"
+          data-testid="token-secret">{shown.secret}</code
         >
         <div class="flex flex-wrap items-center gap-2">
           <button type="button" class="btn btn-sm" onclick={copy}>{t('profile.tokens.copy')}</button
@@ -129,7 +130,7 @@
       <div class="overflow-x-auto">
         <table class="table">
           <caption class="sr-only">{t('profile.tokens.title')}</caption>
-          <thead>
+          <thead class="text-base-content">
             <tr>
               <th scope="col">{t('profile.tokens.name')}</th>
               <th scope="col">{t('profile.tokens.prefix')}</th>

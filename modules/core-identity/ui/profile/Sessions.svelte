@@ -52,7 +52,7 @@
     <div class="overflow-x-auto">
       <table class="table">
         <caption class="sr-only">{t('profile.sessions.title')}</caption>
-        <thead>
+        <thead class="text-base-content">
           <tr>
             <th scope="col">{t('profile.sessions.started')}</th>
             <th scope="col">{t('profile.sessions.lastSeen')}</th>
