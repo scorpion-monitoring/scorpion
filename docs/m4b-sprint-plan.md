@@ -154,8 +154,8 @@ Definition of done as in sprint 1, plus: no password in any log, response or aud
 2. **Response-side audit** (8.2.3; Decision 9). Read every route's response schema; fix a leak in a one-line change or list it for a fix before Gate 1. Add a walker test over the route
    registry that fails when a response schema contains a forbidden property name (`secretHash`, `passwordHash`, `clientSecret`, `secret`, `token` on anything but the one-time creation response) —
    the same style as the deny-by-default walker of defect 1. 8.2.3 moves to `pass` only if the audit finds nothing left; otherwise it stays `fail` with the findings.
-3. **Close the assessment.** Re-read every `pass` and `n/a` of the three files against the final code, fix notes that are no longer true, run `pnpm security:asvs --write`, and list the entries that are
-   still `fail` (6.2.6, 6.2.7, 7.4.4 and whatever the audit found) with their M5 owner (the links to the M5 plan stay; the M4b links are gone).
+3. **Close the assessment.** Re-read every `pass` and `n/a` of the four chapter files (V6, V7, V8, V10) against the final code, fix notes that are no longer true, run `pnpm security:asvs --write`, and list the entries that are
+   still `fail` (6.2.6, 6.2.7, 7.4.4 and whatever the audit found) with their M5 owner (the links to the M5 plan stay; the M4b links are gone). The audit found nothing, so the three are all that is left.
 4. **Docs.** Module README of `core.identity` (new routes, permission, settings, events), `docs/backlog.md` (TOTP, notice mail on failed logins, a session list with device names, hard
    lockout alternatives, an admin UI for all of it), M5 plan hand-off table.
 

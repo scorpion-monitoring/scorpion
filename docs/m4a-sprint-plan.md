@@ -2,7 +2,7 @@
 
 Status: proposed, 2026-10-05. Decisions 1 to 8 (§9) were answered on 2026-10-05; every answer took the recommendation.
 Scope source: [implementation.md](implementation.md) §3, M4a, and §8 (security assurance signals). Closes no defect of FEATURES §5.
-Releases with `0.6.0` (Decision 1), together with M5.
+Releases with `0.6.0` (Decision 1), together with M4b (the M4b plan, Decision 1, moved M5 to `0.7.0`).
 
 M4a is size S (about 1 week for one developer). It adds no runtime code. It makes the claims of §8 true and checkable: a repository
 that is hardened, a Scorecard run, a Best Practices registration, and an ASVS 5.0 assessment tool whose output CI verifies. It runs
@@ -240,7 +240,7 @@ If the assessment pass alone passes two days, split it: merge the tool with the 
 All eight took the recommendation.
 
 1. **Does M4a get its own release?** Recommended: no. It changes no runtime behaviour, and every pull request carries an empty changeset, so
-   `changeset version` would not bump anything. It ships inside `0.6.0` with M5. This departs from "every milestone ends with a
+   `changeset version` would not bump anything. It ships inside `0.6.0` with M4b. This departs from "every milestone ends with a
    release" (implementation.md §1) and needs one sentence there. The alternative is a `0.5.1` with a hand-written changeset about
    `SECURITY.md`, which is a user-visible fact.
 2. **Dependabot or Renovate.** Recommended: Dependabot. No extra app or token, it is built into the repository settings, it covers npm

@@ -11,13 +11,19 @@ requirements:
   - id: v5.0.0-8.1.1
     status: pass
     evidence:
+      - test: ASVS-8.1.1
+      - doc: docs/security/authorization.md
       - doc: modules/core-authz/README.md
       - doc: docs/adr/0014-authorisation-model-and-dependency-direction.md
       - doc: docs/adr/0005-deny-by-default-before-authz.md
-    note: 'The rules for function-level and resource-scoped access (permissions, roles, resource policies, deny by default) are documented in the core.authz README ("How a decision is made", "Built-in protections") and the two ADRs. They are spread over several documents; there is no single matrix.'
+    note: 'docs/security/authorization.md is the single place: the two checks (route permission, then the service with the resource), one table of every route with its permission, the rules on one resource (own sessions, tokens, inbox items, pending accounts, role assignment) and the rules that hold for Admin too. The route table is generated from the live registry and a tagged test fails when the page differs from it. The mechanics of a decision stay in the core.authz README and the two ADRs, which the page links. Resource policies exist as a mechanism and are tested with a fixture module; the page gets their rows when the registry modules add real ones (M7).'
   - id: v5.0.0-8.1.2
-    status: fail
-    note: 'Not met. No document defines field-level read and write rules; there are only code comments in modules/core-identity/validation.ts. Fix planned in docs/m4b-sprint-plan.md#6-sprint-3-authorization-rules-and-closing-the-assessment.'
+    status: pass
+    evidence:
+      - doc: docs/security/authorization.md
+      - code: modules/core-identity/validation.ts
+      - code: apps/server/src/response-fields.test.ts
+    note: 'The section "Fields, per object" of docs/security/authorization.md gives, for user, role, token, session, inbox item, setting, secret, vocabulary, preference, file, audit entry, delivery and the mail and login tokens: who reads which fields, who writes which, which fields only a dedicated route changes (status, roles, the password) and which are never returned. It also states the state-dependent rules (a pending account, a revoked token). A page is a description and not a test: the tests that enforce each rule are named in the page, and the second pass should read the tables against the response schemas.'
   - id: v5.0.0-8.2.1
     status: pass
     evidence:
@@ -32,8 +38,13 @@ requirements:
       - code: modules/core-authz/service/authz.ts
     note: 'Covers the data that exists today (own tokens, sessions, inbox items, profile). The resource-policy mechanism is tested with a fixture module; the real provider and service policies arrive in M7. This is sampling per service, not a systematic IDOR sweep.'
   - id: v5.0.0-8.2.3
-    status: fail
-    note: 'Not met. Write side: strict input schemas refuse status, roles and unknown fields on the profile, and role changes go through their own permissioned route. There is no field-level permission model and the response side (fields shown to each reader) was not audited. Fix planned in docs/m4b-sprint-plan.md#6-sprint-3-authorization-rules-and-closing-the-assessment.'
+    status: pass
+    evidence:
+      - test: ASVS-8.2.3
+      - doc: docs/security/authorization.md
+      - code: apps/server/src/response-fields.test.ts
+      - code: modules/core-identity/validation.ts
+    note: 'Scorpion has no field-level permission engine, by decision (M4b Decision 9); field access is kept by construction. Read side: every route returns one fixed response schema, and the tagged walker reads the response schema of every route of the live registry at any depth (arrays, unions, optionals, references) and fails on secretHash, passwordHash, tokenHash, clientSecret, secret, password or token, with the two one-time token responses (token create and rotate) as the only named exceptions; a planted violation is proved to be named. The audit of every response schema found no such field, and a further test in the same file checks the declared event payloads. Write side: every request body is a strict Zod object, so status, roles, userId or any unknown field is a 422, and status and roles change only through their own permissioned routes. Not shown: that a real response holds only what its schema declares (no step validates a response body; services build named fields, and the route tests for tokens, secrets, settings and the audit trail read real responses; docs/backlog.md schedules a check in the contract tests), that a free-form value such as a setting holds no secret-named key, and that a field is right for its reader. That is a review of the tables in docs/security/authorization.md against each schema, not something a test decides, and there is no per-role projection: two readers of one route see the same fields.'
   - id: v5.0.0-8.3.1
     status: pass
     evidence:
