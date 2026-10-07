@@ -129,7 +129,28 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **The icon set is a dozen drawn paths** (`Icon.svelte`). A module that needs another name gets a dot. Add icons as screens need them, or take a set when more than about thirty are used.
 - **`GET /ui/navigation` is asked on every page request** (twice with `/auth/me`). They are cheap, but a short per-session cache in the web process would halve the calls if profiling asks for it.
 - **The legal page shows the API's title as its heading;** a text that starts with `#` has two. Documented in the module README; a later change could drop a leading `h1` of the text on the server.
-- **German and the catalogue checks** (every key in `de`, no literal text in a `.svelte` text node) are sprint 2.
+
+## Sign-in and profile screen follow-ups (M5 sprint 2)
+
+- **The OIDC callback answers a failure as problem+json in the browser.** A sign-in of an account that waits for approval (403 `account-pending`), a refused state (400) or an
+  unreachable provider (502) end on a page of raw JSON, because the callback is a navigation and not a fetch. Redirect to `/login?error=<code>` (a fixed list of codes, never
+  text from the provider) and show the text on the sign-in page, as `?notice=check-mail` already does. An API change, so it needs a decision; `apps/web/e2e/oidc.spec.ts` shows the JSON today.
+- **The instance's default language has no public route.** `defaultLocale` is a setting of `core.notifications` and nothing public returns it, so the order of ADR-0022 is the person,
+  then the browser, then English. Expose it (for example in `GET /branding`, which would need a decision on which module owns it) and pass it to `negotiateLocale()` as `instanceDefault`.
+- **A token form that offers every permission the caller holds.** The profile page offers the permissions of the role `user` of `core.identity` (the list is `permissions.ts`),
+  because no route lists the caller's own permissions (`GET /roles` is the administrator's). A `GET /account/permissions` (id and description) would let the form offer the scopes
+  of every module, including those of later milestones.
+- **The theme is kept in the browser only** (the buttons in the header, `localStorage`). A user preference `ui.theme`, registered by `core.ui-shell`, would follow the person to another device.
+- **A second mailed link in the same tab is not read.** A reset, verification or link page reads `#token=` once when it loads; opening another link by changing only the fragment
+  (a paste into the address bar of the same tab) does not load the page again. Listen to `hashchange` if people do this.
+- **No second password field** on the reset, registration and change forms; a typing error is corrected with a new reset. Add a "show the password" toggle (ASVS allows it) before a confirmation field.
+- **The wait of a throttled sign-in is text, not a clock.** The page says "try again in 30 seconds" and does not count down or enable the button again by itself.
+- **Texts that come from the server are English.** A 422's field messages, a problem's `detail` and the `message` of the error page are the API's words. Map the common problem types to catalogue
+  keys, or send the language with the request and let the API answer in it.
+- **The password-manager evidence has no manager.** `password-fields.spec.ts` proves the markup a manager relies on and that nothing blocks it; a headless browser has no extension to drive.
+- **The first-run token cannot be asked for again from the page.** When it has expired (one hour) the form says to restart the server or run `scorpion create-admin`; a command that issues a new one
+  without a restart would help operators.
+- **A private window cannot resume a re-authentication at a provider.** Without `sessionStorage` the intended action is lost and the person lands on the start page; the dialog does not warn of it.
 
 ## Later
 

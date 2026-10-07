@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, createApiClient, unwrap } from './client.ts';
+import { ApiError, createApiClient, retryAfterSeconds, unwrap } from './client.ts';
 
 interface Seen {
   method: string;
@@ -121,6 +121,38 @@ describe('unwrap', () => {
     expect(failure).toBeInstanceOf(ApiError);
     expect(failure).toMatchObject({ status: 422, message: 'The request is not valid.' });
     expect((failure as ApiError).problem?.errors).toEqual(errors);
+  });
+
+  it('carries the Retry-After of a throttled answer and the stable type of a problem', async () => {
+    const { api } = setup(
+      () =>
+        new Response(JSON.stringify({ type: 'account-pending', title: 'Too Many', status: 429 }), {
+          status: 429,
+          headers: { 'content-type': 'application/problem+json', 'retry-after': '12' },
+        }),
+      { origin: 'http://x' },
+    );
+    const failure = (await unwrap(api.GET('/auth/me')).catch((e: unknown) => e)) as ApiError;
+    expect(failure.retryAfterSeconds).toBe(12);
+    expect(failure.type).toBe('account-pending');
+  });
+
+  it.each([
+    ['5', 5],
+    [' 30 ', 30],
+    ['Wed, 21 Oct 2026 07:28:00 GMT', undefined],
+    ['-3', undefined],
+    ['1.5', undefined],
+    [null, undefined],
+  ])('reads a Retry-After of %j as %j', (header, expected) => {
+    expect(retryAfterSeconds(header)).toBe(expected);
+  });
+
+  it('has no type for about:blank', async () => {
+    const { api } = setup(() => problem(404, { detail: 'No.' }), { origin: 'http://x' });
+    const failure = (await unwrap(api.GET('/auth/me')).catch((e: unknown) => e)) as ApiError;
+    expect(failure.type).toBeUndefined();
+    expect(failure.retryAfterSeconds).toBeUndefined();
   });
 
   it('throws an ApiError without a problem when the body is not one (a proxy error page)', async () => {

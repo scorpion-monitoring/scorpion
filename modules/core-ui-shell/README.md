@@ -4,8 +4,8 @@ The shell of the web app: the registries through which modules put pages, links,
 route that tells the browser what the caller may see. It owns no table. The web app (`apps/web`) draws the layout and one catch-all
 route `/[...path]`; this module is the part the server knows about ([ADR-0027](../../docs/adr/0027-web-shell-catch-all-proxy-and-typed-client.md)).
 
-Status: M5 sprint 1. Its own pages are the start page, the legal pages and the API documentation; the screens of the other `core.*`
-modules arrive in sprints 2 to 4.
+Status: M5 sprint 2. Its own pages are the start page, the legal pages and the API documentation; the screens of the other `core.*`
+modules come with those modules (sprint 2: the sign-in, registration, recovery and profile pages of `core.identity`; sprints 3 and 4: the rest).
 
 ## Manifest
 
@@ -94,5 +94,5 @@ the order of their first entry, entries by `order` and then `id`.
 | `/legal/:page` | public | `terms`, `privacy` or `imprint`, rendered from the Markdown of the branding settings by `GET /legal/{page}` (sanitised on the server; shown through `SafeHtml`). Write the text from level 2 down (`##`): the page has its own title. A page nobody wrote is a 404 |
 | `/docs`        | public | The operations of the public API (v1) of this build, from `apps/web/src/generated/openapi-v1.json`. v1 has no routes before M8                                                                                                                                     |
 
-Public pages are declared in `ui/routes.ts` with a reason each; `apps/server/src/ui-routes.test.ts` fails for a public page of any module that
+Public pages are declared in `ui/routes.ts` (and, for another module, in its own `ui/routes.ts`) with a reason each, and listed in `PUBLIC_PAGES` of `public.ts`; `apps/server/src/ui-routes.test.ts` fails for a public page of any module that
 is not on the list of declared public pages.

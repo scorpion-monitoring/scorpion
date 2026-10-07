@@ -1,4 +1,4 @@
-import { test as base, expect, type APIRequestContext } from '@playwright/test';
+import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { url } from '@scorpion/contracts';
 import { ADMIN } from './stack.ts';
 
@@ -92,3 +92,23 @@ export async function productName(
   expect(response.status()).toBe(200);
   return ((await response.json()) as { productName: string }).productName;
 }
+
+/** Signs in through the sign-in page, as a person does, and waits until the page shows who is signed in. */
+export async function signInThroughPage(
+  page: Page,
+  at: (path: string) => string,
+  credentials: Credentials,
+): Promise<void> {
+  await page.goto(at('/login'));
+  await page.getByLabel('Username').fill(credentials.username);
+  await page.getByLabel('Password', { exact: true }).fill(credentials.password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
+}
+
+/** An account that signs in with this username and password, registered and approved through the API. */
+export const person = (name: string): Credentials => ({
+  username: name,
+  // Not the name: the server refuses a password that contains the username.
+  password: 'quiet river and tall mountains 42',
+});

@@ -25,7 +25,7 @@ requirements:
     evidence:
       - test: ASVS-10.2.1
       - code: modules/core-identity/service/oidc.ts
-    note: 'The client sends a PKCE S256 challenge and checks a single-use state bound to the browser. The first test asserts the challenge, state and nonce in the authorization URL, not that the verifier reaches the token endpoint (the test provider does not check it; backlog); the state checks are what the tests prove.'
+    note: 'The client sends a PKCE S256 challenge and checks a single-use state bound to the browser. The first test asserts the challenge, state and nonce in the authorization URL, not that the verifier reaches the token endpoint (the test provider does not check it; backlog); the state checks are what the tests prove. The browser journey apps/web/e2e/oidc.spec.ts runs the whole flow through the web app against a provider on a local port whose token endpoint checks the code verifier against the S256 challenge it was given and answers invalid_grant otherwise: the sign-in, the sign-in again for a change that needs a recent authentication, and the start of a link all succeed, so the verifier does reach the token endpoint, and the test reads the last authorization request (S256, a nonce, a state, prompt=login and max_age=0 for the re-authentication).'
   - id: v5.0.0-10.2.2
     status: pass
     evidence:

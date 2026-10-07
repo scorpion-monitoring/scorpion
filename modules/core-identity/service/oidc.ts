@@ -25,6 +25,7 @@ import { grantDefaultRole } from './roles.ts';
 import type { SessionService } from './sessions.ts';
 import type { IdentitySettings, OidcProvider } from './settings.ts';
 import { usernameBase, usernameCandidates } from './username.ts';
+import { ACCOUNT_PENDING } from '../problem-types.ts';
 
 /** Where the internal API is mounted; the callback URL registered at the provider ends in `/auth/oidc/<id>/callback`. */
 const INTERNAL_PREFIX = '/api/internal';
@@ -61,7 +62,16 @@ export interface CompleteInput {
   previousSessionId: string | undefined;
 }
 
+/** What the sign-in page may know of a provider: no issuer, no client id. */
+export interface PublicProvider {
+  id: string;
+  displayName: string;
+  iconHash?: string;
+}
+
 export interface OidcService {
+  /** The providers people may sign in with, in the order of the setting. Nothing but what a button needs. */
+  listProviders(): Promise<PublicProvider[]>;
   /** Where the browser goes after the callback: the application root under `BASE_PATH`. Fixed, so there is no open redirect. */
   readonly landing: string;
   /** Where it goes when a link mail was sent instead of a sign-in: the sign-in page with a notice. Fixed as well. */
@@ -173,7 +183,8 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     if (found.deletedAt !== null || found.status === 'rejected') {
       throw new Unauthorized(GENERIC_REFUSAL);
     }
-    if (found.status === 'pending') throw new Forbidden('Your account is waiting for approval.');
+    if (found.status === 'pending')
+      throw new Forbidden('Your account is waiting for approval.', ACCOUNT_PENDING);
   }
 
   async function startSession(userId: string, provider: string, previous: string | undefined) {
@@ -327,6 +338,15 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
   return {
     landing: url(ctx.config.BASE_PATH, '/'),
     checkMailLanding: url(ctx.config.BASE_PATH, '/login?notice=check-mail'),
+
+    async listProviders() {
+      const { oidcProviders } = await settings.get();
+      return oidcProviders.map(({ id, displayName, iconHash }) => ({
+        id,
+        displayName,
+        ...(iconHash ? { iconHash } : {}),
+      }));
+    },
 
     start: (providerId) => begin(providerId),
 

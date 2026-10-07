@@ -1,9 +1,22 @@
-import { expect, test } from './support/fixtures.ts';
+import { makePng } from '@scorpion/testing';
+import { makeSessionsStale } from './support/db.ts';
+import { createUser, expect, person, signInThroughPage, test } from './support/fixtures.ts';
 
 // The headers and the Content-Security-Policy of the web app (M5 plan §2): no 'unsafe-inline', nonces
 // for the inline scripts SvelteKit and the theme script need, framing denied, no sniffing.
 test.describe('the security headers of a page', () => {
-  for (const path of ['/', '/docs', '/legal/terms', '/no/such/page']) {
+  for (const path of [
+    '/',
+    '/docs',
+    '/legal/terms',
+    '/no/such/page',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+    '/verify-email',
+    '/link-sign-in',
+  ]) {
     test(`on ${path}`, async ({ request, at }) => {
       const response = await request.get(at(path));
       const headers = response.headers();
@@ -48,6 +61,34 @@ test.describe('the security headers of a page', () => {
       await page.getByRole('button', { name: 'Dark' }).click();
       await page.getByRole('button', { name: 'System' }).click();
     }
+    expect(problems).toEqual([]);
+  });
+
+  test('the sign-in and profile pages run without a policy violation, dialog and picture included', async ({
+    page,
+    at,
+    basePath,
+  }) => {
+    const problems: string[] = [];
+    page.on('console', (message) => {
+      if (/content security policy|refused to/i.test(message.text())) problems.push(message.text());
+    });
+    page.on('pageerror', (error) => problems.push(error.message));
+    for (const path of ['/login', '/register', '/forgot-password']) await page.goto(at(path));
+    const who = person('csp');
+    await createUser(page.request, at, who);
+    await signInThroughPage(page, at, who);
+    await page.goto(at('/profile'));
+    await page.getByLabel('Choose a picture').setInputFiles({
+      name: 'me.png',
+      mimeType: 'image/png',
+      buffer: makePng(16),
+    });
+    await expect(page.getByRole('img', { name: 'Picture of csp' })).toBeVisible();
+    await makeSessionsStale(basePath, who.username);
+    await page.getByLabel('Email address').fill('csp.new@example.org');
+    await page.getByRole('button', { name: 'Save' }).first().click();
+    await expect(page.getByRole('dialog', { name: 'Confirm your identity' })).toBeVisible();
     expect(problems).toEqual([]);
   });
 

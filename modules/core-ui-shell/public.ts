@@ -18,7 +18,19 @@ export type {
  * for an entry here that no module registers, so a page cannot become public by accident (CLAUDE.md,
  * security rules: public endpoints are listed and justified).
  */
-export const PUBLIC_PAGES: readonly string[] = ['/', '/docs', '/legal/:page'];
+export const PUBLIC_PAGES: readonly string[] = [
+  '/',
+  '/docs',
+  '/legal/:page',
+  // core.identity: the sign-in, registration and recovery pages, and the first-admin form of a fresh install.
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+  '/link-sign-in',
+  '/setup',
+];
 
 declare module '@scorpion/kernel' {
   interface ModuleServices {

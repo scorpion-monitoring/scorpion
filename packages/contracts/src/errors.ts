@@ -53,8 +53,9 @@ export class Conflict extends DomainError {
 
 /** 403: the caller is known but may not do this. */
 export class Forbidden extends DomainError {
-  constructor(detail = 'You are not allowed to do this.') {
-    super(403, 'Forbidden', detail);
+  /** `type`: a stable problem type when a client has to tell this refusal from another 403. */
+  constructor(detail = 'You are not allowed to do this.', type?: string) {
+    super(403, 'Forbidden', detail, undefined, type);
   }
 }
 

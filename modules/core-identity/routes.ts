@@ -218,6 +218,42 @@ export const firstAdminRoute = createRoute({
 
 const startedSchema = z.object({ authorizationUrl: z.url() });
 
+export const bootstrapStatusRoute = createRoute({
+  method: 'get',
+  path: '/bootstrap/status',
+  public: true,
+  publicReason:
+    'The start page of a fresh install must know, before anybody can sign in, whether to offer the first-admin form. It answers one boolean, which is false for ever once an administrator exists; the form still needs the single-use token from the server console.',
+  responses: {
+    200: ok(
+      'Whether the instance has no administrator yet.',
+      z.object({ needsFirstAdmin: z.boolean() }),
+    ),
+  },
+});
+
+const publicProviderSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  /** SHA-256 of the icon file, shown at `GET /files/{hash}`; absent without an icon. */
+  iconHash: z.string().optional(),
+});
+
+export const listOidcProvidersRoute = createRoute({
+  method: 'get',
+  path: '/auth/oidc/providers',
+  public: true,
+  publicReason:
+    'The sign-in page lists the providers before anybody is signed in. It returns the id, the display name and the icon hash of each, which are what a button shows; the issuer and the client id stay private.',
+  request: { query: paginationQuery() },
+  responses: {
+    200: ok(
+      'The providers a person may sign in with, in the order of the setting.',
+      listEnvelope(publicProviderSchema),
+    ),
+  },
+});
+
 export const oidcStartRoute = createRoute({
   method: 'post',
   path: '/auth/oidc/{provider}/start',
@@ -843,6 +879,19 @@ export function registerIdentityRoutes(
     c.header('cache-control', 'no-store');
     return c.json({ user: view(admin) }, 201);
   }) satisfies RouteHandler<typeof firstAdminRoute, AppEnv>);
+
+  r.internal(bootstrapStatusRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json({ needsFirstAdmin: await bootstrap.needsFirstAdmin() }, 200);
+  }) satisfies RouteHandler<typeof bootstrapStatusRoute, AppEnv>);
+
+  r.internal(listOidcProvidersRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const all = await oidc.listProviders();
+    const page = all.slice(query.page * query.pageSize, (query.page + 1) * query.pageSize);
+    c.header('cache-control', 'no-store');
+    return c.json(paginate(query, all.length, page), 200);
+  }) satisfies RouteHandler<typeof listOidcProvidersRoute, AppEnv>);
 
   r.internal(oidcStartRoute, (async (c) => {
     const started = await oidc.start(c.req.valid('param').provider);

@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { SPECS } from './e2e/support/stack.ts';
+import { FRESH_SPEC, SPECS } from './e2e/support/stack.ts';
 
 // Two projects, one per base path: every journey runs under `/` and under `/a/b` (M5 acceptance).
 // `globalSetup` starts a PostgreSQL container and, for each project, the API and the web server.
@@ -22,6 +22,10 @@ export default defineConfig<{ basePath: string }>({
   use: { trace: 'retain-on-failure' },
   projects: SPECS.map((spec) => ({
     name: spec.name,
+    // A fresh install has no administrator, so only the bootstrap spec runs on it, and that spec runs nowhere else.
+    ...(spec.admin === false
+      ? { testMatch: `**/${FRESH_SPEC}` }
+      : { testIgnore: `**/${FRESH_SPEC}` }),
     use: {
       ...devices['Desktop Chrome'],
       baseURL: `http://localhost:${spec.webPort}`,

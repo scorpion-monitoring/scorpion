@@ -19,6 +19,8 @@ export interface PageRequest {
   api: ApiClient;
   session: () => Promise<Session | null>;
   navigation: () => Promise<Navigation>;
+  /** Whether the instance has no administrator yet. Without it (a test, a profile without sign-in) it is never so. */
+  needsFirstAdmin?: () => Promise<boolean>;
   publicApi: Parameters<NonNullable<UiRoute['load']>>[0]['publicApi'];
 }
 
@@ -37,8 +39,24 @@ export function safeQuery(search: string): string {
   return search.replace(/[\u0000-\u001f\u007f\\]/g, (char) => encodeURIComponent(char));
 }
 
+/** The page of `core.identity` that creates the first administrator. */
+export const SETUP_PAGE = '/setup';
+
 export async function loadPage(table: PageTable, request: PageRequest): Promise<PageResult> {
   const { url, basePath } = request;
+
+  // A fresh install has nobody who could sign in: the start page is the first-admin form and nothing
+  // else is reachable until it has been used. Afterwards the form is a 404 (its own `load` says so).
+  // A path that is no page stays a 404 (a probe of the web server's /metrics must not be sent to the form).
+  if (
+    table.pages.has(SETUP_PAGE) &&
+    (url.pathname === '/' || resolvePath(table.patterns, url.pathname)) &&
+    (await request.needsFirstAdmin?.())
+  ) {
+    if (url.pathname !== '/') redirect(303, withBase(basePath, '/'));
+    return runPage(table.pages.get(SETUP_PAGE)!, SETUP_PAGE, {}, request);
+  }
+
   const match = resolvePath(table.patterns, url.pathname);
   if (!match) error(404, 'This page does not exist.');
   const page = table.pages.get(match.pattern)!;
@@ -55,14 +73,23 @@ export async function loadPage(table: PageTable, request: PageRequest): Promise<
     error(403, 'You are not allowed to open this page.');
   }
 
+  return runPage(page, match.pattern, match.params, request);
+}
+
+async function runPage(
+  page: { route: UiRoute },
+  pattern: string,
+  params: Record<string, string>,
+  request: PageRequest,
+): Promise<PageResult> {
   try {
     const data: unknown = await page.route.load?.({
-      params: match.params,
-      url,
+      params,
+      url: request.url,
       api: request.api,
       publicApi: request.publicApi,
     });
-    return { pattern: match.pattern, params: match.params, data: data ?? null };
+    return { pattern, params, data: data ?? null };
   } catch (failure) {
     toHttpError(failure);
   }

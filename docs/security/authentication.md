@@ -7,7 +7,7 @@ documents what the code does and why; the decisions are [ADR-0026](../adr/0026-c
 [ADR-0011](../adr/0011-oidc-login.md), [ADR-0012](../adr/0012-mail-tokens-and-mail-ordering.md) and
 [ADR-0025](../adr/0025-absolute-session-lifetime-and-recent-authentication.md). Sessions after sign-in are in
 [sessions.md](sessions.md). The module's routes and settings are in [modules/core-identity/README.md](../../modules/core-identity/README.md).
-This page backs ASVS 5.0 requirements 6.1.1, 6.1.2, 6.1.3, 6.3.1, 6.3.3 and 6.3.4
+This page backs ASVS 5.0 requirements 6.1.1, 6.1.2, 6.1.3, 6.2.6, 6.2.7, 6.3.1, 6.3.3 and 6.3.4
 ([docs/security/asvs/v6-authentication.yaml](asvs/v6-authentication.yaml)).
 
 ## The pathways (6.1.3, 6.3.4)
@@ -143,6 +143,17 @@ command by `bootstrap`, mail tokens by `mail-tokens`. The walker test of defect 
 a non-public route has no permission, or a public one has no stated reason; the same walker checks that a token caller is refused on
 every session-only route. A new route cannot be an undocumented way in without failing it.
 
+## The screens
+
+The sign-in, registration, recovery and profile pages ([modules/core-identity/README.md](../../modules/core-identity/README.md), "Pages") show what the server
+decides and add no rule of their own. A refused sign-in says "the username or password is wrong" whichever part it was, a throttled account is shown the
+`Retry-After` of the 429 (the same for an unknown name), the registration and the reset request say one thing for a known and an unknown address, and a
+password the server refuses (too short, in a breach, containing the name) is shown with the server's words under the field. A password field is
+`type="password"` with `autocomplete` `current-password` or `new-password`, nothing blocks paste, and every form sits in a `<form method="post">` whose submit
+button is disabled until the page is interactive, so a password is never put in an address (6.2.6, 6.2.7). The token of a reset, verification or link mail is in the
+address fragment, which no server and no `Referer` sees; the page reads it once and replaces the address. `apps/web/e2e/secrets.spec.ts` follows a whole journey
+with a network trace and the server log and fails for a password, a token or a session id anywhere but in the request or response that has to carry it.
+
 ## Where the controls are tested
 
 | Control                                       | Test                                                                                                                       |
@@ -153,3 +164,5 @@ every session-only route. A new route cannot be an undocumented way in without f
 | Reset link of 10 minutes                      | `recovery.test.ts`                                                                                                         |
 | Mail-confirmed linking                        | `oidc-accounts.test.ts`, `oidc-link.test.ts`, `oidc-accounts-routes.test.ts`, `oidc-keycloak.test.ts`                      |
 | Every pathway is denied by default            | `apps/server/src/defect-01.privilege-escalation.test.ts`                                                                   |
+| Password fields, paste, password managers     | `[ASVS-6.2.6]`, `[ASVS-6.2.7]` in `apps/web/e2e/password-fields.spec.ts` (Playwright)                                      |
+| No secret in an address, trace or log         | `apps/web/e2e/secrets.spec.ts`, `recovery.spec.ts`                                                                         |

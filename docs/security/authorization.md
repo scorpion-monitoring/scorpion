@@ -71,6 +71,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /account/sessions`                         | core.identity      | `core.identity.session.manage`         | default    | no             |
 | `GET /auth/me`                                  | core.identity      | `core.identity.me.read`                | default    | no             |
 | `GET /auth/oidc/{provider}/callback`            | core.identity      | **public**                             | strict     | no             |
+| `GET /auth/oidc/providers`                      | core.identity      | **public**                             | default    | no             |
+| `GET /bootstrap/status`                         | core.identity      | **public**                             | default    | no             |
 | `GET /roles`                                    | core.identity      | `core.identity.role.read`              | default    | no             |
 | `GET /tokens`                                   | core.identity      | `core.identity.token.read`             | default    | no             |
 | `GET /users/pending`                            | core.identity      | `core.identity.user.list-pending`      | default    | no             |
@@ -131,8 +133,16 @@ the same file answers 401 and 403 on every non-public route.
 
 Public routes, and why each is open: sign-in, registration, password reset, address confirmation and the OIDC start and callback are how
 anonymous people become signed-in ones, and carry the `strict` rate limit; `POST /bootstrap/first-admin` needs the first-run token that
-only the console shows and only while nobody is Admin; `GET /branding` and `GET /legal/{page}` are what the sign-in page shows;
-`GET /files/{hash}` serves logos and avatars to the sign-in page, and a file is named by the SHA-256 of its content.
+only the console shows and only while nobody is Admin; `GET /bootstrap/status` answers one boolean (is an Admin still missing) so that the
+start page of a fresh install can show the form for that token, and is `false` for good after the first Admin; `GET /auth/oidc/providers`
+lists the id, the display name and the icon hash of each sign-in provider and nothing else (no issuer, no client id), which is what a
+button needs; `GET /branding` and `GET /legal/{page}` are what the sign-in page shows; `GET /files/{hash}` serves logos, provider icons
+and avatars to the sign-in page, and a file is named by the SHA-256 of its content.
+
+The pages of the web app follow the same rule ([ADR-0027](../adr/0027-web-shell-catch-all-proxy-and-typed-client.md)): a page is public only
+when its module says why and `PUBLIC_PAGES` of `core.ui-shell` lists it, and the server decides who may open a page from the same list that
+builds the navigation. The sign-in, registration, recovery and first-admin pages are public; the profile needs
+`core.identity.profile.read`. Public pages call only routes that are public or need the session the page checks for itself.
 
 ## Rules on one resource
 

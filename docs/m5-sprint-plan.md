@@ -241,6 +241,26 @@ Definition of done: the journeys above pass in CI under both base paths. 6.2.6 a
 Playwright trace, a server log, or the browser's URL history after use (a test greps the trace and the log stream). The register
 page gives the same response for a taken and a free address. Missing German keys fail the build.
 
+### Corrections found in sprint 2
+
+Where the plan was silent or wrong, the code and the maintainer's answers won:
+
+- **Bootstrap needed a route.** No route said whether an administrator exists, so the web app could not know when to show the first-admin form. Added the public `GET /bootstrap/status`
+  (`{ needsFirstAdmin }`; maintainer's decision). The form is the page `/setup` and not `/first-admin`, because the navigation answer of a plain User must contain nothing that matches "admin"
+  (the test of ASVS 7.4.4 greps it). While an Admin is missing, `/` shows the form and every other path redirects to `/`; afterwards `/setup` is a 404.
+- **The pending-approval page is shown on the sign-in page, from the answer of the API.** A pending account never has a session (the login answers 403 and sets no cookie), so there is no "signed-in
+  user whose status is pending". The 403 now carries the problem type `account-pending` (and `local-accounts-disabled` for the other 403; maintainer's decision), and the sign-in page shows the page for the first.
+- **Language order.** The instance default (a setting of `core.notifications`) has no public route; the order is the person's preference, `Accept-Language`, English (maintainer's decision; backlog).
+- **`GET /auth/oidc/providers`** is paged like every list (`{ metadata, result }`), and a provider setting got `iconHash`.
+- **Access-token scopes** are chosen from the permissions of the role `user`, as no route lists the caller's own (backlog).
+- **The theme preference** stays the header toggle (a browser setting), not a profile field (backlog).
+- **The re-authentication return** is `takeReturn()` in the layout plus `takeIntent()` in the page that asked, with the path, an intent and a time kept in `sessionStorage` for ten minutes. The plan said "the shell repeats it"; a
+  closure cannot survive a page load, so the page that asked repeats its own action from a small description.
+- **The Playwright projects** are four: `root` and `nested` for every journey, and two fresh installs (no administrator) that run only `bootstrap.spec.ts`.
+- **No secret in a trace.** A trace of the network necessarily holds a password in the body of the request that sends it, and a token in the body that makes or spends it; the test
+  (`secrets.spec.ts`) therefore reads the trace and fails for a secret **anywhere else** (an address, a header, the wrong body, storage, the log). The text a test types is in the action log of the
+  trace and is not the application's doing.
+
 ## 6. Sprint 3: `ui-kit` and administration
 
 **Branch:** `feature/m5-ui-kit-admin`. **Goal:** the shared components exist, are keyboard and screen-reader tested, and three

@@ -28,6 +28,8 @@ const ISSUE_LOCK = 'identity.first-run-token';
 export type AdminOrigin = 'cli' | 'first-run';
 
 export interface BootstrapService {
+  /** Whether the instance still has no administrator, so that the first-admin form has a use. */
+  needsFirstAdmin(): Promise<boolean>;
   /**
    * Creates an active user with a password and the Admin role, and ends every outstanding
    * first-run token. 422 for bad input, 409 for a taken name or address.
@@ -103,6 +105,10 @@ export function createBootstrapService(
   }
 
   return {
+    async needsFirstAdmin() {
+      return !(await anAdminExists(ctx.db));
+    },
+
     async createAdmin(input, origin = 'cli') {
       const parsed = createAdminInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
