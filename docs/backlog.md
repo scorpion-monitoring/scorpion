@@ -152,6 +152,22 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   without a restart would help operators.
 - **A private window cannot resume a re-authentication at a provider.** Without `sessionStorage` the intended action is lost and the person lands on the start page; the dialog does not warn of it.
 
+## Administration screen follow-ups (M5 sprint 3)
+
+- **Change an e-mail address and force a password reset for another person.** The user detail page has neither (decision of sprint 3); no route acts on another user's address or password. A route that changes an address should mark it unconfirmed and mail the new one, and a forced reset should mail the existing reset link and end the sessions.
+- **Reactivate a deactivated account.** `POST /users/{id}/deactivate` has no inverse and the screen says so. A reactivation needs its own permission and an audit entry, and decides whether the old sessions and tokens stay gone (they should).
+- **A list of the declared permissions.** The roles page groups permissions by module from the shape of their ids (`core.identity.…`, a known list of two-part namespaces) and shows no description, because `GET /roles` returns ids only. A `GET /permissions` (id, module, description) would replace the heuristic and let the page explain what each permission does.
+- **Declared secrets.** The secrets page lists the secrets that are stored and cannot show one that is missing (a provider's client secret, the mail relay's password); the name an Admin must type is in the module's README. The registry of decision 6 (`settings.secret`: name pattern, description) would let the page list the unset ones and offer a form per name.
+- **The labels of a settings form are English.** `.meta({ title, description })` is a text in the schema, so a German administrator sees English field titles under German chrome. Key the titles (`.meta({ titleKey })`) and look them up in the catalogue, or let the schema route take a language.
+- **A saved settings form stores every value, defaults included.** `GET /settings/{module}` returns the effective values (defaults applied) and the form sends them all back, so a later change of a shipped default does not reach an instance that saved once. Send only the values that differ from the default, or let the API merge.
+- **Several administrators editing one form at the same time** get the version conflict and "load the current values", which drops their edits. A field-by-field merge or showing what changed would help.
+- **The vocabulary screen edits `en` and `de` only.** A label in another language is kept as it was and not shown. Offer the locales a vocabulary already holds, and a way to add one.
+- **A custom role cannot be created or deleted** from the roles page (out of M5's scope); the page edits the permissions of the seeded roles.
+- **The deactivation of an account stops its access tokens after the token cache time** (5 s, `tokenCacheTtlMs`), like a revoked token in another server process; there is no cross-process invalidation (see "Sessions follow-ups").
+- **`core.authz` and `core.settings` cannot contribute pages** because `core.ui-shell` depends on them. If that matters later (a module that owns its own screens), the shell would have to depend on neither, which means moving the permission check of the navigation out of the shell, and needs an ADR.
+- **The icon set** has `lock` now; a `key` and a `tag` would suit secrets and vocabularies (the navigation shows Settings with one icon today).
+- **`SchemaForm` shows an array of objects with the first control focused after Add**, but does not ask before removing an item. A confirm for a removal that cannot be undone (a provider with a stored secret) is the page's to add.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.
@@ -173,7 +189,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   - **Revoke access tokens on a reset (optional).** A reset or a change ends sessions only (ADR-0012). A "revoke my tokens too" switch on the reset page, or a security-event setting, would cover the case of a token minted from a hijacked session.
   - **Reset marks the address confirmed?** Opening a reset link proves control of the mailbox, but the reset does not mark the address verified (kept separate on purpose). Revisit if the UI wants a one-step recovery for unverified accounts.
   - **Self-service account deletion and data export (GDPR).** FEATURES lists account deletion as missing; the purge job already deletes soft-deleted accounts, so deletion needs the route, the confirmation (password or mail link) and the event.
-  - **Admin user management (M3/M5).** List, deactivate, change email, force a reset. Not in M2. Revoking the sessions of one user or of everybody is done (M4b sprint 1, routes only; the screen is M5).
+  - **Admin user management (M3/M5).** Done in M5 sprint 3: list, one account, roles, tokens, ending sessions (the screens for the M4b routes) and deactivate. Still open: change an email address and force a reset for another person, and reactivate (see "Administration screen follow-ups").
   - **2FA (TOTP, WebAuthn).** Not in M2.
   - **Public `GET /auth/oidc/providers`** for the login page (id and display name), with the UI in M5 (sprint 4 follow-up 1, still open).
   - ~~**Outbox retention** now also matters for the purge: events keep the usernames of purged accounts.~~ Done in M4 sprint 4: delivered events are deleted after `outboxRetentionDays`; a test proves the username of a purged account leaves the outbox. A `dead` delivery keeps its event (and the name) until somebody requeues it, see "Audit follow-ups".
@@ -194,7 +210,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Old token scopes.** Tokens made in 0.3.0 keep their `read:kpi`-shaped scopes, which grant nothing. A cleanup that lists them for their owners, or a one-time migration that revokes them, is not built.
 - **Wildcard scopes.** A scope names one permission. `core.identity.*` or a "read-only" preset would help scripts with many scopes; decide with the first real script.
 - **Actor of kind `system`.** Trusted code with no human caller uses three methods of the authz service (ADR-0015). If jobs need to call methods that check permissions (`assignRole`), they need an actor for that; add it with the first such job and keep it out of the authenticator.
-- ~~**Role events are not audited yet.**~~ Done in M4 sprint 4: `core.audit` records `authz.role.assigned@1`, `.removed@1` and the new `authz.role.permissions.changed@1`, which `setRolePermissions` emits when the set changes. There is still no HTTP route that calls `setRolePermissions`; the admin UI (M5) adds it.
+- ~~**Role events are not audited yet.**~~ Done in M4 sprint 4: `core.audit` records `authz.role.assigned@1`, `.removed@1` and the new `authz.role.permissions.changed@1`, which `setRolePermissions` emits when the set changes. Done in M5 sprint 3: `PUT /roles/{key}/permissions` calls `setRolePermissions`, with the roles page.
 
 ## Settings follow-ups (M3 sprint 3)
 
@@ -274,7 +290,7 @@ What the session work left for later ([ADR-0025](adr/0025-absolute-session-lifet
 - **Re-authentication on admin termination, and a stricter window per action.** `sessions.recentAuthSeconds` is one window for every action; the administrators' routes do not ask for a recent authentication. A per-action `maxAgeSeconds` is already an argument of `requireRecentAuth`.
 - **AAL2 behaviour.** A deployment whose provider enforces MFA may want its local session to follow the provider's `acr` and the NIST periods for AAL2; `acr` and `amr` are not read (sessions.md).
 - **A notice mail when sessions are ended by an administrator, and when a new session starts** from an unfamiliar browser. The audit trail has the first; neither mails.
-- **A disable-account feature** must call `revokeAll` in the same transaction and get a test (ASVS 7.4.2).
+- ~~**A disable-account feature** must call `revokeAll` in the same transaction and get a test (ASVS 7.4.2).~~ Done in M5 sprint 3: `POST /users/{id}/deactivate`, tested for the ended sessions and for the rollback.
 - **The re-authentication screen** (M5): the page that shows `reauthentication-required`, asks for the password or sends the person to the provider, and returns to the change. The OIDC callback redirects to the application root today, with no return path.
 
 ## Credentials follow-ups (M4b sprint 2)
