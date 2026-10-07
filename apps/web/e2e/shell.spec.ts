@@ -36,15 +36,27 @@ test.describe('the shell', () => {
       if (response.status() >= 400) failed.push(`${response.status()} ${response.url()}`);
     });
     await page.goto(at('/'));
-    await page
-      .getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('link', { name: 'API documentation' })
-      .click();
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    // The link of the page that is shown is the current one, under any base path.
+    await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    await expect(nav.getByRole('link', { name: 'API documentation' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await nav.getByRole('link', { name: 'API documentation' }).click();
     await expect(page).toHaveURL(new RegExp(`${at('/docs')}$`));
     await expect(page.getByRole('heading', { level: 1, name: 'API documentation' })).toBeVisible();
     await expect(
       page.getByText('The public API of this instance has no routes yet.'),
     ).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'API documentation' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(nav.getByRole('link', { name: 'Home' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     // A full load of the same address renders the same page.
     await page.reload();
     await expect(page.getByRole('heading', { level: 1, name: 'API documentation' })).toBeVisible();

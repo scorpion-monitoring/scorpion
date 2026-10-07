@@ -100,10 +100,16 @@ export function createFront(options: FrontOptions): http.RequestListener {
       },
     );
     upstream.on('error', () => plain(response, 502, 'The API did not answer.'));
-    // The caller went away: stop the upstream request too (an event stream must not outlive it).
+    // The caller went away: stop the upstream request too (an event stream must not outlive it), and
+    // do not leave the API waiting for the rest of a body that is never coming.
     response.on('close', () => {
       if (!response.writableEnded) upstream.destroy();
     });
+    request.on('error', () => upstream.destroy());
+    request.on('close', () => {
+      if (!request.complete) upstream.destroy();
+    });
+    response.on('error', () => upstream.destroy());
     request.pipe(upstream);
   }
 

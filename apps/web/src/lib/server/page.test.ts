@@ -3,7 +3,7 @@ import { ApiError } from '@scorpion/contracts/client';
 import type { Navigation, Session } from '@scorpion/contracts/client';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { describe, expect, it } from 'vitest';
-import { loadPage, type PageRequest, type PageTable } from './page.ts';
+import { loadPage, safeQuery, type PageRequest, type PageTable } from './page.ts';
 
 const component = () => Promise.reject(new Error('not rendered here'));
 const calls: { params: Record<string, string> }[] = [];
@@ -183,5 +183,25 @@ describe('loadPage', () => {
         }
       }
     }
+  });
+});
+
+describe('the returnTo of a sign-in redirect', () => {
+  it.each([
+    ['', ''],
+    ['?tab=2', '?tab=2'],
+    ['?x=\\', '?x=%5C'],
+    ['?a=b\\c&d=1', '?a=b%5Cc&d=1'],
+    ['?x=\u0001', '?x=%01'],
+  ])('encodes %j as %j', (search, expected) => {
+    expect(safeQuery(search)).toBe(expected);
+  });
+
+  it('is still a redirect to the login page for an address with a raw backslash in its query', async () => {
+    const { thrown } = await outcome(table, request('/admin/users?x=\\'));
+    expect(isRedirect(thrown)).toBe(true);
+    expect(isRedirect(thrown) && thrown.location).toBe(
+      '/login?returnTo=%2Fadmin%2Fusers%3Fx%3D%255C',
+    );
   });
 });

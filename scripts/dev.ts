@@ -84,6 +84,14 @@ const dev = spawn(
       // The server reads PORT as the port to listen on; the web app reads it as its own.
       API_PORT: apiPort,
       API_ORIGIN: `http://127.0.0.1:${apiPort}`,
+      // The API's only peer is the web app on the loopback address (as in an image): it must trust it, or
+      // the rate limit sees one address for everybody.
+      TRUSTED_PROXIES: [
+        process.env.TRUSTED_PROXIES ?? fromEnvFile('TRUSTED_PROXIES'),
+        '127.0.0.1,::1',
+      ]
+        .filter(Boolean)
+        .join(','),
     },
   },
 );

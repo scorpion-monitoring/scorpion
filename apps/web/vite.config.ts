@@ -16,7 +16,7 @@ export default defineConfig({
   plugins: [
     scorpionFront({
       basePath: process.env.BASE_PATH ?? '/',
-      apiOrigin: process.env.API_ORIGIN ?? 'http://127.0.0.1:3000',
+      apiOrigin: process.env.API_ORIGIN ?? 'http://127.0.0.1:3001',
     }),
     tailwindcss(),
     sveltekit({

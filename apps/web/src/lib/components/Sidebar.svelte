@@ -23,8 +23,12 @@
     return groups;
   });
   let closed = $state<Record<string, boolean>>({});
+  // The page the catch-all route shows is known by its registered pattern (`/admin/users/:id`), which
+  // does not depend on how the address is written or under which base path (defect 11). A link is
+  // current on its own page and on the pages below it, at a segment boundary.
+  const shown = $derived((page.data as { pattern?: string }).pattern);
   const current = (path: string) =>
-    path === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(path);
+    shown !== undefined && (shown === path || (path !== '/' && shown.startsWith(`${path}/`)));
 </script>
 
 {#if open}

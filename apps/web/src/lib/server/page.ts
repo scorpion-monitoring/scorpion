@@ -28,6 +28,15 @@ export interface PageResult {
   data: unknown;
 }
 
+/**
+ * The query string of the request for a `returnTo`. The URL parser leaves a raw backslash in a query,
+ * which `url()` refuses; encoding it keeps the sign-in redirect from failing for an odd address.
+ */
+export function safeQuery(search: string): string {
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what is encoded here
+  return search.replace(/[\u0000-\u001f\u007f\\]/g, (char) => encodeURIComponent(char));
+}
+
 export async function loadPage(table: PageTable, request: PageRequest): Promise<PageResult> {
   const { url, basePath } = request;
   const match = resolvePath(table.patterns, url.pathname);
@@ -40,7 +49,7 @@ export async function loadPage(table: PageTable, request: PageRequest): Promise<
   const [session, navigation] = await Promise.all([request.session(), request.navigation()]);
   if (!navigation.routes.includes(match.pattern)) {
     if (!session) {
-      const here = withBase(basePath, `${url.pathname}${url.search}`);
+      const here = withBase(basePath, `${url.pathname}${safeQuery(url.search)}`);
       redirect(303, withBase(basePath, `/login?returnTo=${encodeURIComponent(here)}`));
     }
     error(403, 'You are not allowed to open this page.');

@@ -256,6 +256,39 @@ describe('the proxy', () => {
     expect(first).toBe('data: 1\n\n');
   });
 
+  it('stops the upstream request when the caller aborts the body of a request halfway', async () => {
+    let closed: () => void = () => undefined;
+    const upstreamGone = new Promise<void>((resolve) => (closed = resolve));
+    const apiPort = await listen((request) => {
+      // The API has the head of the request and waits for a body that never completes.
+      request.resume();
+      request.on('close', closed);
+    });
+    const port = await listen(
+      createFront({
+        basePath: '/',
+        apiOrigin: `http://127.0.0.1:${apiPort}`,
+        next: () => undefined,
+      }),
+    );
+    await new Promise<void>((resolve) => {
+      const request = http.request(
+        {
+          host: '127.0.0.1',
+          port,
+          path: '/api/internal/upload',
+          method: 'POST',
+          headers: { 'content-length': '1000' },
+        },
+        () => undefined,
+      );
+      request.on('error', () => resolve());
+      request.write('half of the body');
+      setTimeout(() => request.destroy(), 100);
+    });
+    await upstreamGone;
+  });
+
   it('stops the upstream request when the caller goes away', async () => {
     let closed: () => void = () => undefined;
     const upstreamClosed = new Promise<void>((resolve) => (closed = resolve));

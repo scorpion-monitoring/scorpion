@@ -89,32 +89,27 @@ export function createNavigationService(
 
   return {
     async navigation(actor) {
-      // One decision per permission and request, however many entries name it.
-      const decisions = new Map<string, Promise<boolean>>();
-      const allowed = async (entry: Gated): Promise<boolean> => {
-        if (entry.public === true) return true;
-        const permission = entry.permission!;
-        let decision = decisions.get(permission);
-        if (!decision) {
-          decision = authz.can(actor, permission);
-          decisions.set(permission, decision);
-        }
-        return decision;
-      };
-
-      const openPaths = new Set<string>();
-      for (const route of routes) if (await allowed(route)) openPaths.add(route.path);
-
-      const items: NavEntry[] = [];
-      for (const entry of nav) {
-        if (openPaths.has(entry.path) && (await allowed(entry))) items.push(entry);
+      // One decision per permission and request, however many entries name it, asked together.
+      const wanted = new Set<string>();
+      for (const entry of [...routes, ...nav, ...widgets]) {
+        if (entry.public !== true && entry.permission !== undefined) wanted.add(entry.permission);
       }
+      const granted = new Set<string>();
+      await Promise.all(
+        [...wanted].map(async (permission) => {
+          if (await authz.can(actor, permission)) granted.add(permission);
+        }),
+      );
+      const allowed = (entry: Gated): boolean =>
+        entry.public === true || granted.has(entry.permission!);
+
+      const openPaths = new Set(routes.filter(allowed).map((route) => route.path));
+      const items: NavEntry[] = nav.filter((entry) => openPaths.has(entry.path) && allowed(entry));
       const sectionRank = new Map<string, number>();
       for (const entry of [...items].sort(byOrder)) {
         if (!sectionRank.has(entry.section)) sectionRank.set(entry.section, sectionRank.size);
       }
-      const visibleWidgets: WidgetEntry[] = [];
-      for (const widget of widgets) if (await allowed(widget)) visibleWidgets.push(widget);
+      const visibleWidgets: WidgetEntry[] = widgets.filter(allowed);
 
       return {
         nav: items

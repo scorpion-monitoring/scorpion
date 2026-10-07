@@ -1,6 +1,6 @@
 import { ApiError } from '@scorpion/contracts/client';
 import { describe, expect, it } from 'vitest';
-import { hasSessionCookie, loadSession, once } from './session.ts';
+import { loadSession, once } from './session.ts';
 
 const answering = (status: number, body: unknown) =>
   ({
@@ -33,20 +33,7 @@ describe('loadSession', () => {
   });
 });
 
-describe('a visitor without the session cookie', () => {
-  it.each([
-    ['', false],
-    [null, false],
-    ['theme=dark', false],
-    ['x__Host-session=abc', false],
-    ['__Host-sessionx=abc', false],
-    ['__Host-session=abc', true],
-    ['theme=dark; __Host-session=abc', true],
-    ['theme=dark;  __Host-session=abc; other=1', true],
-  ])('%j → has a session cookie: %s', (header, expected) => {
-    expect(hasSessionCookie(header)).toBe(expected);
-  });
-
+describe('a visitor without a cookie', () => {
   it('is nobody, and the API is not asked', async () => {
     let asked = 0;
     const api = {
@@ -55,9 +42,17 @@ describe('a visitor without the session cookie', () => {
         return Promise.reject(new Error('should not be called'));
       },
     } as never;
-    expect(await loadSession(api, 'theme=dark')).toBeNull();
     expect(await loadSession(api, '')).toBeNull();
+    expect(await loadSession(api, '   ')).toBeNull();
     expect(asked).toBe(0);
+  });
+
+  it('is asked about when there is a cookie (the API judges it)', async () => {
+    const me = { user: { id: 'u' }, roles: [], csrfToken: null };
+    expect(await loadSession(answering(200, me), '__Host-session=abc')).toEqual(me);
+    expect(
+      await loadSession(answering(401, { title: 'x', status: 401 }), '__Host-session=old'),
+    ).toBeNull();
   });
 });
 
