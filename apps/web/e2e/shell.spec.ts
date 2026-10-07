@@ -150,8 +150,8 @@ test.describe('the shell', () => {
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.goto(at('/'));
     const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    // scorpiondark: base-100 is #111827.
-    expect(background).toMatch(/rgb\(17, 24, 39\)|oklch|color\(/);
+    // scorpiondark: base-100 is #070c1e (the style guide).
+    expect(background).toMatch(/rgb\(7, 12, 30\)|oklch|color\(/);
     await page.emulateMedia({ colorScheme: 'light' });
     await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
   });

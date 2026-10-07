@@ -12,26 +12,32 @@
     scorpiondark --prefersdark;
 }
 
+/*
+ * The palette of the UI/UX style guide (docs/ui-style-guide.md). Dark mode takes the guide's values as they are.
+ * Light mode keeps the hues and darkens the ones that fail WCAG 2.1 AA as text or as a fill under white text
+ * (the guide's own #0082C8 is 3.9:1 on the page and 4.2:1 under white): primary, error, success and warning.
+ * The guide's bright tones stay as decoration (--scorpion-glow, focus halo, chart series), never as text.
+ */
 @plugin 'daisyui/theme' {
   name: 'scorpionlight';
   default: true;
   prefersdark: false;
   color-scheme: light;
-  --color-base-100: #ffffff;
-  --color-base-200: #f3f4f6;
-  --color-base-300: #d1d5db;
-  --color-base-content: #1f2937;
-  --color-primary: #9a3412;
+  --color-base-100: #f4f8fc;
+  --color-base-200: #e3edf7;
+  --color-base-300: #d0e1f2;
+  --color-base-content: #0f172a;
+  --color-primary: #006da8;
   --color-primary-content: #ffffff;
-  --color-secondary: #1e3a5f;
-  --color-secondary-content: #ffffff;
-  --color-accent: #0f766e;
-  --color-accent-content: #ffffff;
-  --color-neutral: #1f2937;
-  --color-neutral-content: #f9fafb;
-  --color-info: #075985;
+  --color-secondary: #0a2540;
+  --color-secondary-content: #f4f8fc;
+  --color-accent: #29b6f6;
+  --color-accent-content: #0a2540;
+  --color-neutral: #0f172a;
+  --color-neutral-content: #f4f8fc;
+  --color-info: #006da8;
   --color-info-content: #ffffff;
-  --color-success: #166534;
+  --color-success: #047857;
   --color-success-content: #ffffff;
   --color-warning: #92400e;
   --color-warning-content: #ffffff;
@@ -50,32 +56,69 @@
   default: false;
   prefersdark: true;
   color-scheme: dark;
-  --color-base-100: #111827;
-  --color-base-200: #0b1220;
-  --color-base-300: #374151;
-  --color-base-content: #e5e7eb;
-  --color-primary: #fb923c;
-  --color-primary-content: #1c1917;
-  --color-secondary: #93c5fd;
-  --color-secondary-content: #0b1220;
-  --color-accent: #5eead4;
-  --color-accent-content: #0b1220;
-  --color-neutral: #374151;
-  --color-neutral-content: #f3f4f6;
-  --color-info: #7dd3fc;
-  --color-info-content: #0b1220;
-  --color-success: #86efac;
-  --color-success-content: #0b1220;
-  --color-warning: #fcd34d;
-  --color-warning-content: #1c1917;
-  --color-error: #fca5a5;
-  --color-error-content: #1c1917;
+  --color-base-100: #070c1e;
+  --color-base-200: #0e1738;
+  --color-base-300: #192653;
+  --color-base-content: #e2e8f0;
+  --color-primary: #00e5ff;
+  --color-primary-content: #070c1e;
+  --color-secondary: #1a237e;
+  --color-secondary-content: #e2e8f0;
+  --color-accent: #80d8ff;
+  --color-accent-content: #070c1e;
+  --color-neutral: #192653;
+  --color-neutral-content: #e2e8f0;
+  --color-info: #00e5ff;
+  --color-info-content: #070c1e;
+  --color-success: #10b981;
+  --color-success-content: #070c1e;
+  --color-warning: #f59e0b;
+  --color-warning-content: #070c1e;
+  --color-error: #f87171;
+  --color-error-content: #070c1e;
   --radius-selector: 0.5rem;
   --radius-field: 0.375rem;
   --radius-box: 0.5rem;
   --border: 1px;
   --depth: 0;
   --noise: 0;
+}
+
+/* Muted content (labels, metadata): 6.4:1 on the card colour in light, 6.8:1 in dark. */
+:root,
+:root[data-theme='scorpionlight'] {
+  --scorpion-muted: #475569;
+  --scorpion-glow: #29b6f6;
+  --scorpion-glow-shadow: none;
+}
+:root[data-theme='scorpiondark'] {
+  --scorpion-muted: #94a3b8;
+  --scorpion-glow: #00e5ff;
+  /* The guide caps a glow at 8px and 0.35 opacity in dark mode, so text never blooms. */
+  --scorpion-glow-shadow: 0 0 8px rgb(0 229 255 / 0.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --scorpion-muted: #94a3b8;
+    --scorpion-glow: #00e5ff;
+    --scorpion-glow-shadow: 0 0 8px rgb(0 229 255 / 0.35);
+  }
+}
+.text-muted {
+  color: var(--scorpion-muted);
+}
+
+/* Numbers that line up: metrics, tables of figures and codes. */
+.num {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An explicit focus ring on every control (style guide §6): a two-pixel primary ring with an offset. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: var(--scorpion-glow-shadow);
 }
 
 /* The logo that fits the theme: the light one on light themes, the dark one on dark themes. */
