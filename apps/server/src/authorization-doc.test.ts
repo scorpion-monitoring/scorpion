@@ -32,8 +32,7 @@ describe('docs/security/authorization.md', () => {
       '| Route | Module | Permission | Rate limit | Audited |',
       '| --- | --- | --- | --- | --- |',
       ...rows.map(
-        (row) =>
-          `| \`${row.key}\` | ${row.module} | ${row.access} | ${row.limit} | ${row.audit} |`,
+        (row) => `| \`${row.key}\` | ${row.module} | ${row.access} | ${row.limit} | ${row.audit} |`,
       ),
     ].join('\n');
 
