@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Scorpion public API",
+    "version": "1",
+    "description": "The public API, version 1."
+  },
+  "components": {
+    "schemas": {},
+    "parameters": {}
+  },
+  "paths": {},
+  "webhooks": {}
+}

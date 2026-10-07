@@ -119,4 +119,18 @@ page request and is held in memory on the page, never in storage. The session co
 
 ## Prototype result
 
-To be filled in when the prototype has run (sprint 1, step 2).
+Sprint 1, run on 2026-10-07 with SvelteKit 3.0.0, `adapter-node`, Vite 8 and Playwright's Chromium, against the real API and a PostgreSQL
+container, under `BASE_PATH=/` and `BASE_PATH=/a/b` (`apps/web/e2e/session-cookie.spec.ts`, `shell.spec.ts`):
+
+- **The catch-all route works.** Pages come from the generated table; the permission check, `load` (server side), the lazy component, the
+  404 for an unknown path and a client-side navigation by link all work through `/[...path]`. The fallback was not needed.
+- **`BASE_PATH` of any depth works without a build-time base.** The front removes the prefix; SvelteKit runs with `paths.base = ''` and
+  relative paths (`paths.relative`, the default in SvelteKit 3), computes the browser's base from the page's own depth, and `url()` puts the
+  prefix on every link the application writes. Assets, `__data.json` requests and `goto()` under `/a/b` all resolve.
+- **Chromium keeps `__Host-session` on `http://localhost`.** The cookie (`Secure; HttpOnly; SameSite=Lax; Path=/`) set by the API through
+  the front is stored, sent on the next page request and used by the server-rendered page, under both prefixes. No local certificate is needed.
+- **`Set-Cookie` passes the proxy unchanged**, and a server-rendered page reaches the API with the caller's cookie and `X-Forwarded-For`.
+- Found on the way: `kernel.settingsOf()` is called by the server before `kernel.start()`, which made the context of `core.settings` early;
+  `ctx.deps` was a snapshot, so every settings route answered 500 in a running server. Fixed in the kernel (read when used), with a regression test.
+- SvelteKit 3 differences that shaped the code: `$lib` is `#lib` (package `imports`), hook types come from `@sveltejs/kit/hooks`, the error
+  hook receives a `kind`, and `$app/env` replaces `$env/*` (the two values the web process reads come from `process.env`).
