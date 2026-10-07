@@ -211,9 +211,14 @@ describe('a fresh install (no administrator yet)', () => {
     '/setup',
     { path: '/setup', component, load: () => ({ form: true }) },
   ];
+  const login: [string, UiRoute] = ['/login', { path: '/login', component }];
   const fresh: PageTable = {
-    patterns: [...table.patterns, first[0]],
-    pages: new Map([...table.pages, [first[0], { package: 'fixture', route: first[1] }]]),
+    patterns: [...table.patterns, first[0], login[0]],
+    pages: new Map([
+      ...table.pages,
+      [first[0], { package: 'fixture', route: first[1] }],
+      [login[0], { package: 'fixture', route: login[1] }],
+    ]),
   };
   const needs = (value: boolean) => ({
     ...request('/'),
@@ -225,16 +230,21 @@ describe('a fresh install (no administrator yet)', () => {
     expect(result).toMatchObject({ pattern: '/setup', data: { form: true } });
   });
 
-  it.each(['/admin/users', '/setup', '/login', '/no/such/page'])(
-    'turns %s away to the start page',
-    async (path) => {
-      const thrown = await loadPage(fresh, {
-        ...request(path),
-        needsFirstAdmin: () => Promise.resolve(true),
-      }).catch((e: unknown) => e);
-      expect(isRedirect(thrown) && thrown.location, path).toBe('/');
-    },
-  );
+  it.each(['/admin/users', '/setup', '/login'])('turns %s away to the start page', async (path) => {
+    const thrown = await loadPage(fresh, {
+      ...request(path),
+      needsFirstAdmin: () => Promise.resolve(true),
+    }).catch((e: unknown) => e);
+    expect(isRedirect(thrown) && thrown.location, path).toBe('/');
+  });
+
+  it('keeps a path that is no page a 404, so a probe of /metrics is not sent to the form', async () => {
+    const thrown = await loadPage(fresh, {
+      ...request('/no/such/page'),
+      needsFirstAdmin: () => Promise.resolve(true),
+    }).catch((e: unknown) => e);
+    expect(isHttpError(thrown) && thrown.status).toBe(404);
+  });
 
   it('keeps the base path in that redirect', async () => {
     const thrown = await loadPage(fresh, {

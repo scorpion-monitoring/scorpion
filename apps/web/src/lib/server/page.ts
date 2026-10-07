@@ -47,7 +47,12 @@ export async function loadPage(table: PageTable, request: PageRequest): Promise<
 
   // A fresh install has nobody who could sign in: the start page is the first-admin form and nothing
   // else is reachable until it has been used. Afterwards the form is a 404 (its own `load` says so).
-  if (table.pages.has(SETUP_PAGE) && (await request.needsFirstAdmin?.())) {
+  // A path that is no page stays a 404 (a probe of the web server's /metrics must not be sent to the form).
+  if (
+    table.pages.has(SETUP_PAGE) &&
+    (url.pathname === '/' || resolvePath(table.patterns, url.pathname)) &&
+    (await request.needsFirstAdmin?.())
+  ) {
     if (url.pathname !== '/') redirect(303, withBase(basePath, '/'));
     return runPage(table.pages.get(SETUP_PAGE)!, SETUP_PAGE, {}, request);
   }

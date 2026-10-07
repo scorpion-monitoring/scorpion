@@ -36,12 +36,16 @@ test('the first administrator is created on the start page, and the form is gone
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
-  for (const path of ['/login', '/register', '/docs', '/legal/terms', '/setup', '/no/such/page']) {
+  for (const path of ['/login', '/register', '/docs', '/legal/terms', '/setup']) {
     await page.goto(at(path));
     await expect(page).toHaveURL(new RegExp(`${at('/')}$`));
     await expect(
       page.getByRole('heading', { name: 'Set up the first administrator' }),
     ).toBeVisible();
+  }
+  // A path that is no page is not sent to the form: the front's probes (/metrics) must still see a 404.
+  for (const path of ['/no/such/page', '/metrics']) {
+    expect((await page.request.get(at(path), { maxRedirects: 0 })).status(), path).toBe(404);
   }
   // The password of the administrator is masked and may be pasted and filled by a password manager (ASVS 6.2.6, 6.2.7).
   const password = page.getByLabel('Password', { exact: true });
