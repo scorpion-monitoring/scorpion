@@ -381,7 +381,9 @@ export function createRecoveryService(
             .from(user)
             .where(and(eq(user.id, claimed.userId), isNull(user.deletedAt)))
             .limit(1);
-          if (!account || account.status === 'rejected') throw new BadRequest(LINK_PROBLEM);
+          if (!account || account.status === 'rejected' || account.status === 'deactivated') {
+            throw new BadRequest(LINK_PROBLEM);
+          }
           // The address may have been taken by another account since the mail went out.
           const [taken] = await tx
             .select({ id: user.id })

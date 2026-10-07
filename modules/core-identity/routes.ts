@@ -30,6 +30,7 @@ import type { RoleService } from './service/roles.ts';
 import type { SessionAdminService } from './service/session-admin.ts';
 import type { SessionSummary } from './service/sessions.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
+import type { AdminUser, UserAdminService } from './service/user-admin.ts';
 import {
   approveInput,
   assignRoleInput,
@@ -47,6 +48,7 @@ import {
   roleParam,
   rotateTokenInput,
   updateProfileInput,
+  userListQuery,
   verifyEmailInput,
 } from './validation.ts';
 
@@ -61,6 +63,7 @@ export interface IdentityRoutesServices {
   roles: RoleService;
   sessionAdmin: SessionAdminService;
   tokens: TokenService;
+  userAdmin: UserAdminService;
 }
 
 const userSchema = z.object({
@@ -68,7 +71,7 @@ const userSchema = z.object({
   username: z.string(),
   email: z.string().nullable(),
   emailVerified: z.boolean(),
-  status: z.enum(['pending', 'active', 'rejected']),
+  status: z.enum(['pending', 'active', 'rejected', 'deactivated']),
 });
 
 const idParam = z.object({ id: z.uuid() });
@@ -160,6 +163,66 @@ export const listPendingRoute = createRoute({
   permission: 'core.identity.user.list-pending',
   request: { query: paginationQuery() },
   responses: { 200: ok('Accounts waiting for approval.', listEnvelope(pendingUserSchema)) },
+});
+
+const adminUserSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  emailVerified: z.boolean(),
+  status: z.enum(['pending', 'active', 'rejected', 'deactivated']),
+  createdAt: z.iso.datetime(),
+});
+
+export const listUsersRoute = createRoute({
+  method: 'get',
+  path: '/users',
+  permission: 'core.identity.user.read',
+  request: { query: userListQuery },
+  responses: {
+    200: ok(
+      'The accounts, sorted by the chosen column and then by id. Without `status`: pending, active and deactivated ones; `rejected` lists the rejected (soft-deleted) ones.',
+      listEnvelope(adminUserSchema),
+    ),
+  },
+});
+
+export const getUserRoute = createRoute({
+  method: 'get',
+  path: '/users/{id}',
+  permission: 'core.identity.user.read',
+  request: { params: idParam },
+  responses: {
+    200: ok('One account.', adminUserSchema),
+    404: { description: 'No such user.' },
+  },
+});
+
+export const listUserRolesRoute = createRoute({
+  method: 'get',
+  path: '/users/{id}/roles',
+  permission: 'core.identity.user.read',
+  request: { params: idParam, query: paginationQuery() },
+  responses: {
+    200: ok('The role keys the user holds, by key.', listEnvelope(z.object({ key: z.string() }))),
+    403: { description: 'Needs `core.authz.role.read` too.' },
+    404: { description: 'No such user.' },
+  },
+});
+
+export const deactivateUserRoute = createRoute({
+  method: 'post',
+  path: '/users/{id}/deactivate',
+  permission: 'core.identity.user.deactivate',
+  audit: true,
+  request: { params: idParam },
+  responses: {
+    200: ok('The account is deactivated and every one of its sessions has ended.', adminUserSchema),
+    403: { description: 'Your own account.' },
+    404: { description: 'No such user.' },
+    409: { description: 'The account is not active, or it is the last Admin who can sign in.' },
+  },
 });
 
 const decision = z.object({ id: z.string(), status: z.enum(['pending', 'active', 'rejected']) });
@@ -708,6 +771,31 @@ export const rotateTokenRoute = createRoute({
   },
 });
 
+export const listUserTokensRoute = createRoute({
+  method: 'get',
+  path: '/users/{id}/tokens',
+  permission: 'core.identity.token.manage-any',
+  request: { params: idParam, query: paginationQuery() },
+  responses: {
+    200: ok(
+      "The user's open access tokens, without their secrets. A token is revoked with `DELETE /tokens/{id}`.",
+      listEnvelope(tokenSchema),
+    ),
+    403: { description: 'The caller is using an access token, not a session.' },
+    404: { description: 'No such user.' },
+  },
+});
+
+const adminUserView = (found: AdminUser) => ({
+  id: found.id,
+  username: found.username,
+  displayName: found.displayName,
+  email: found.email,
+  emailVerified: found.emailVerified,
+  status: found.status,
+  createdAt: found.createdAt.toISOString(),
+});
+
 const tokenView = (token: TokenInfo) => ({
   id: token.id,
   name: token.name,
@@ -734,7 +822,7 @@ const view = (user: {
   username: string;
   email: string | null;
   emailVerified: boolean;
-  status: 'pending' | 'active' | 'rejected';
+  status: 'pending' | 'active' | 'rejected' | 'deactivated';
 }) => ({
   id: user.id,
   username: user.username,
@@ -756,6 +844,7 @@ export function registerIdentityRoutes(
     roles,
     sessionAdmin,
     tokens,
+    userAdmin,
   }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
@@ -840,6 +929,44 @@ export function registerIdentityRoutes(
       200,
     );
   }) satisfies RouteHandler<typeof listPendingRoute, AppEnv>);
+
+  r.internal(listUsersRoute, (async (c) => {
+    const { dir, ...query } = c.req.valid('query');
+    const { users, total } = await userAdmin.list(c.get('actor'), { ...query, direction: dir });
+    return c.json(paginate(query, total, users.map(adminUserView)), 200);
+  }) satisfies RouteHandler<typeof listUsersRoute, AppEnv>);
+
+  // After `/users/pending` above: that path is not an id.
+  r.internal(getUserRoute, (async (c) => {
+    const found = await userAdmin.get(c.get('actor'), c.req.valid('param').id);
+    return c.json(adminUserView(found), 200);
+  }) satisfies RouteHandler<typeof getUserRoute, AppEnv>);
+
+  r.internal(listUserRolesRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const keys = await roles.rolesOf(c.get('actor'), c.req.valid('param').id);
+    const page = keys.slice(query.page * query.pageSize, (query.page + 1) * query.pageSize);
+    return c.json(
+      paginate(
+        query,
+        keys.length,
+        page.map((key) => ({ key })),
+      ),
+      200,
+    );
+  }) satisfies RouteHandler<typeof listUserRolesRoute, AppEnv>);
+
+  r.internal(listUserTokensRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const result = await tokens.listFor(c.get('actor'), c.req.valid('param').id, query);
+    c.header('cache-control', 'no-store');
+    return c.json(paginate(query, result.total, result.tokens.map(tokenView)), 200);
+  }) satisfies RouteHandler<typeof listUserTokensRoute, AppEnv>);
+
+  r.internal(deactivateUserRoute, (async (c) => {
+    const deactivated = await userAdmin.deactivate(c.get('actor'), c.req.valid('param').id);
+    return c.json(adminUserView(deactivated), 200);
+  }) satisfies RouteHandler<typeof deactivateUserRoute, AppEnv>);
 
   r.internal(approveRoute, (async (c) => {
     const { id } = c.req.valid('param');

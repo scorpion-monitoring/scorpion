@@ -180,7 +180,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
   /** The same refusals as a password login: a pending account waits, a rejected or deleted one is simply refused. */
   function assertMaySignIn(found: User): void {
-    if (found.deletedAt !== null || found.status === 'rejected') {
+    if (found.deletedAt !== null || found.status === 'rejected' || found.status === 'deactivated') {
       throw new Unauthorized(GENERIC_REFUSAL);
     }
     if (found.status === 'pending')

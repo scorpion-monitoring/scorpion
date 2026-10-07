@@ -1,7 +1,7 @@
 // The role service of core.identity on real Postgres, with the real core.authz: the two
 // permissions (identity's and authz's), the built-in protections, and what a refusal leaves behind.
 import { ANONYMOUS, Conflict, Forbidden, NotFound, Unauthorized } from '@scorpion/contracts';
-import { makeRole, makeUser } from '@scorpion/testing';
+import { makeRole, makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { makeMember, useIdentity } from '../test/harness.ts';
@@ -159,5 +159,57 @@ describe('assign and remove', () => {
     await expect(authz.require(otherActor, 'core.identity.role.assign')).rejects.toBeInstanceOf(
       Forbidden,
     );
+  });
+});
+
+describe('rolesOf', () => {
+  it('lists the role keys of one user for the administrator, 404 for an unknown user', async () => {
+    const { roles, adminActor, target } = await start();
+    await expect(roles.rolesOf(adminActor, target.id)).resolves.toEqual(['user']);
+    await expect(roles.rolesOf(adminActor, randomUUID())).rejects.toBeInstanceOf(NotFound);
+  });
+
+  it('is denied to a plain user, a reader of roles without the user permission, and anonymous', async () => {
+    const { kernel, roles, target, actorOf } = await start();
+    const plain = await makeMember(kernel.pool);
+    const plainActor = {
+      kind: 'user',
+      userId: plain.id,
+      username: plain.username,
+      roles: [],
+      via: 'session',
+    } as const;
+    await expect(roles.rolesOf(plainActor, target.id)).rejects.toBeInstanceOf(Forbidden);
+    const role = await makeRole(kernel.pool, {
+      permissions: ['core.identity.role.read', 'core.authz.role.read'],
+    });
+    const reader = await makeUser(kernel.pool);
+    await expect(roles.rolesOf(await actorOf(reader, role.key), target.id)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(roles.rolesOf(ANONYMOUS, target.id)).rejects.toBeInstanceOf(Unauthorized);
+  });
+});
+
+describe('the last Admin who can sign in', () => {
+  it('cannot lose the role while another account that holds it is deactivated, and nothing changes', async () => {
+    const { kernel, roles, admin, actorOf } = await start();
+    const deactivated = await makeUser(kernel.pool, { username: 'closed', status: 'deactivated' });
+    await makeRoleAssignment(kernel.pool, deactivated, 'admin');
+    // A manager who may change roles but is not an Admin account themselves.
+    const role = await makeRole(kernel.pool, {
+      permissions: ['core.identity.role.assign', 'core.authz.role.assign'],
+    });
+    const manager = await makeUser(kernel.pool, { username: 'manager' });
+    const managerActor = await actorOf(manager, role.key);
+
+    // Two accounts hold Admin (so core.authz would allow it), but only one can sign in.
+    await expect(roles.remove(managerActor, admin.id, 'admin')).rejects.toBeInstanceOf(Conflict);
+    expect(await rolesOf(kernel, admin.id)).toEqual(['admin']);
+    expect(
+      await rows(kernel, "select 1 from kernel_outbox where name = 'authz.role.removed@1'"),
+    ).toEqual([]);
+    // The deactivated one can lose it: an active Admin remains.
+    await expect(roles.remove(managerActor, deactivated.id, 'admin')).resolves.toBe(true);
   });
 });

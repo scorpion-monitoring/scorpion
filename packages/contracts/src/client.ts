@@ -2,6 +2,7 @@
 // It is `openapi-fetch` over the types generated from the routes (`pnpm openapi:generate`), with the
 // base path built by `url()`, the CSRF header on every unsafe method, and one error type for problems.
 // A separate entry (`@scorpion/contracts/client`), so the server does not load it.
+import './zod-config.ts';
 import createClient, { type Client, type Middleware } from 'openapi-fetch';
 import type { paths } from './generated/schema.ts';
 import { problemSchema, type Problem } from './problem.ts';

@@ -41,7 +41,9 @@ describe('the module', () => {
       'core.identity.token.manage-any',
       'core.identity.token.read',
       'core.identity.user.approve',
+      'core.identity.user.deactivate',
       'core.identity.user.list-pending',
+      'core.identity.user.read',
       'core.identity.user.reject',
     ]);
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
@@ -60,6 +62,7 @@ describe('the module', () => {
       'identity.token.revoked@1',
       'identity.token.rotated@1',
       'identity.user.approved@1',
+      'identity.user.deactivated@1',
       'identity.user.purged@1',
       'identity.user.registered@1',
       'identity.user.rejected@1',
@@ -139,7 +142,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(9); // 0000 to 0008, each once
+    expect(journal.rows).toHaveLength(10); // 0000 to 0009, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
@@ -203,7 +206,9 @@ describe('the permissions identity gives to roles (authz.defaultRole)', () => {
       'core.identity.session.manage-any',
       'core.identity.token.manage-any',
       'core.identity.user.approve',
+      'core.identity.user.deactivate',
       'core.identity.user.list-pending',
+      'core.identity.user.read',
       'core.identity.user.reject',
     ]);
     for (const permission of USER_PERMISSIONS) expect(declared).toContain(permission);
