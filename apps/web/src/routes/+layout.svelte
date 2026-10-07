@@ -15,7 +15,9 @@
   let { data, children }: LayoutProps = $props();
 
   const bundles = mergeBundles([shellMessages, ...uiModules.map((module) => module.messages)]);
-  const t = createTranslator(bundles, 'en');
+  // The language follows the page's data, so a changed preference takes effect after `invalidateAll()`.
+  const translate = $derived(createTranslator(bundles, data.locale));
+  const t = (key: string, params?: Record<string, string | number>) => translate(key, params);
   // `BASE_PATH` is a constant of the process, so reading it once is right.
   // svelte-ignore state_referenced_locally
   const basePath = data.basePath;
@@ -32,7 +34,7 @@
     session: () => data.session,
     navigation: () => data.navigation,
     branding: () => data.branding,
-    locale: () => 'en',
+    locale: () => data.locale,
   });
 
   let menuOpen = $state(false);

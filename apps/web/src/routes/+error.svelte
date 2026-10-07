@@ -6,7 +6,7 @@
 
   // The error page can be shown when the layout itself failed, so it holds no context and reads its
   // own few texts. The path of "go home" is the page's own origin plus the base the browser is under.
-  const t = createTranslator(shellMessages, 'en');
+  const t = createTranslator(shellMessages, (page.data as { locale?: string }).locale ?? 'en');
   const status = $derived(page.status);
   const text = $derived(
     status === 403 || status === 404

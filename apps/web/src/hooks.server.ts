@@ -1,6 +1,6 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { ApiError } from '@scorpion/contracts/client';
-import { clientFor, loadNavigation, loadSession, once } from '#lib/server/session.ts';
+import { clientFor, loadLocale, loadNavigation, loadSession, once } from '#lib/server/session.ts';
 
 /**
  * Hardening that applies to every response of the web app. The Content-Security-Policy is set by
@@ -22,8 +22,18 @@ export const handle: Handle = async ({ event, resolve }) => {
   event.locals.api = api;
   event.locals.session = once(() => loadSession(api, event.request.headers.get('cookie') ?? ''));
   event.locals.navigation = once(() => loadNavigation(api));
+  event.locals.locale = once(async () =>
+    loadLocale(api, await event.locals.session(), event.request.headers.get('accept-language')),
+  );
 
-  const response = await resolve(event);
+  const response = await resolve(event, {
+    // The document's language is the page's (`<html lang="%lang%">` in app.html). The error page of a
+    // request whose API calls failed stays English: it must not fail again for want of a language.
+    transformPageChunk: async ({ html }) =>
+      html.includes('%lang%')
+        ? html.replace('%lang%', await event.locals.locale().catch(() => 'en'))
+        : html,
+  });
   for (const [name, value] of Object.entries(HEADERS)) {
     if (!response.headers.has(name)) response.headers.set(name, value);
   }

@@ -6,6 +6,7 @@ import {
   type Navigation,
   type Session,
 } from '@scorpion/contracts/client';
+import { negotiateLocale, type Locale } from '@scorpion/ui-kit';
 import { apiOrigin, basePath } from './env.ts';
 
 /** The client for one request: it forwards the caller's cookie and the chain of client addresses. */
@@ -47,4 +48,33 @@ export function loadNavigation(api: ApiClient): Promise<Navigation> {
 export function once<T>(load: () => Promise<T>): () => Promise<T> {
   let result: Promise<T> | undefined;
   return () => (result ??= load());
+}
+
+/** The preference that names the language of a person's mail, and of the screens (ADR-0022). */
+export const LOCALE_PREFERENCE = 'notifications.locale';
+
+/**
+ * The language of this request: the person's preference when someone is signed in, then the browser's
+ * `Accept-Language`, then English (the instance default has no public route yet, see docs/backlog.md).
+ * A preference that cannot be read, because the profile has no settings module or the API is slow,
+ * never fails a page: the next step of the order is used.
+ */
+export async function loadLocale(
+  api: ApiClient,
+  session: Session | null,
+  acceptLanguage: string | null,
+): Promise<Locale> {
+  let preferred: string | undefined;
+  if (session) {
+    try {
+      const { result } = await unwrap(
+        api.GET('/preferences', { params: { query: { pageSize: '100' } } }),
+      );
+      const found = result.find((preference) => preference.key === LOCALE_PREFERENCE);
+      if (typeof found?.value === 'string') preferred = found.value;
+    } catch {
+      // Not readable: fall through to the browser's language.
+    }
+  }
+  return negotiateLocale({ preferred, acceptLanguage });
 }

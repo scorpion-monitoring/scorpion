@@ -1,4 +1,5 @@
 import type { ApiClient, Navigation, Session } from '@scorpion/contracts/client';
+import type { Locale } from '@scorpion/ui-kit';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
 declare global {
@@ -10,6 +11,8 @@ declare global {
       session(): Promise<Session | null>;
       /** What the caller may see. Asked once per request. */
       navigation(): Promise<Navigation>;
+      /** The language of this request (ADR-0022). Asked once per request. */
+      locale(): Promise<Locale>;
     }
     interface Error {
       message: string;
