@@ -5,6 +5,7 @@ import { getContext, setContext } from 'svelte';
 import type { ApiClient, Branding, Navigation, Session } from '@scorpion/contracts/client';
 import type { Translate } from './i18n.ts';
 import type { Intent } from './reauth.ts';
+import type { Toaster } from './toaster.ts';
 
 export interface Shell {
   /** A path of this application under `BASE_PATH`. */
@@ -32,6 +33,13 @@ export interface Shell {
    * be repeated by the page after a return from a provider (`takeIntent`).
    */
   withReauth: <T>(action: () => Promise<T>, intent?: Intent) => Promise<T>;
+  /** Short messages that appear and go (a save worked, a request failed). The layout shows them. */
+  toaster: Toaster;
+  /**
+   * Asks the person before they leave the page while `isDirty()` is true: a reload, a closed tab or a link
+   * inside the application. Returns the function that removes the guard (call it when the component goes).
+   */
+  guardLeave: (isDirty: () => boolean) => () => void;
   /** The action the person asked for before they left for a provider, once; `undefined` if there is none for `id`. */
   takeIntent: (id: string) => { payload: unknown } | undefined;
 }

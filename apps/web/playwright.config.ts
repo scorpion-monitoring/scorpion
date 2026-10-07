@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { HARNESS_PORT } from './e2e/support/harness.ts';
 import { FRESH_SPEC, SPECS } from './e2e/support/stack.ts';
 
 // Two projects, one per base path: every journey runs under `/` and under `/a/b` (M5 acceptance).
@@ -20,16 +21,28 @@ export default defineConfig<{ basePath: string }>({
       ]
     : 'list',
   use: { trace: 'retain-on-failure' },
-  projects: SPECS.map((spec) => ({
-    name: spec.name,
-    // A fresh install has no administrator, so only the bootstrap spec runs on it, and that spec runs nowhere else.
-    ...(spec.admin === false
-      ? { testMatch: `**/${FRESH_SPEC}` }
-      : { testIgnore: `**/${FRESH_SPEC}` }),
-    use: {
-      ...devices['Desktop Chrome'],
-      baseURL: `http://localhost:${spec.webPort}`,
-      basePath: spec.basePath,
+  projects: [
+    ...SPECS.map((spec) => ({
+      name: spec.name,
+      // A fresh install has no administrator, so only the bootstrap spec runs on it, and that spec runs nowhere else.
+      ...(spec.admin === false
+        ? { testMatch: `**/${FRESH_SPEC}` }
+        : { testIgnore: [`**/${FRESH_SPEC}`, '**/components/**'] }),
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${spec.webPort}`,
+        basePath: spec.basePath,
+      },
+    })),
+    // The shared components on their own page (e2e/components/harness): behaviour, keyboard and axe, no stack.
+    {
+      name: 'components',
+      testMatch: '**/components/*.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://127.0.0.1:${HARNESS_PORT}`,
+        basePath: '/',
+      },
     },
-  })),
+  ],
 });
