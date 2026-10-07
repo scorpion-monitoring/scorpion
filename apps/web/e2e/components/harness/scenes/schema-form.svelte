@@ -50,7 +50,7 @@
 
   const stored = {
     enabled: true,
-    name: 'Scorpion',
+    name: 'Alpha',
     port: 25,
     mode: 'plain',
     tags: ['one'],

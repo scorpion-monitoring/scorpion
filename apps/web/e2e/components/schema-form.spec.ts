@@ -6,7 +6,7 @@ import { expect, inBothThemes, test } from './support.ts';
 
 const stored = {
   enabled: true,
-  name: 'Scorpion',
+  name: 'Alpha',
   port: 25,
   mode: 'plain',
   tags: ['one'],
@@ -25,7 +25,7 @@ test.describe('SchemaForm', () => {
     scene,
   }) => {
     await scene('schema-form');
-    await expect(name(page)).toHaveValue('Scorpion');
+    await expect(name(page)).toHaveValue('Alpha');
     await expect(page.getByText('What people see.')).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Enabled' })).toBeChecked();
     await expect(page.getByRole('textbox', { name: 'Note' }).first()).toBeVisible(); // a long string is a text area

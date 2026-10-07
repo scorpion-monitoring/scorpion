@@ -123,7 +123,7 @@ describe('the system methods (ADR 0015)', () => {
         registered.push(`v1 ${route.method.toUpperCase()} ${route.path}`),
       service: () => service,
     };
-    authzModule.routes!(registrar as never);
+    authzModule.routes!(registrar as never, {} as never);
     expect(registered).toEqual(['PUT /roles/{key}/permissions']);
   });
 

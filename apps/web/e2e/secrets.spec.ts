@@ -186,3 +186,66 @@ test('no password, token or reset secret is anywhere but in the one request or r
     expect(log).not.toContain(secret);
   }
 });
+
+// A secret stored from the settings screen (M5 sprint 3): its value is in the one request that sends it and
+// nowhere else. The screen never shows it, the list of secrets never returns it, the box that held it is
+// emptied, and neither the address bar, the browser's storage nor the server's log holds it.
+test('a secret stored on the settings page is only in the request that sends it', async ({
+  browser,
+  baseURL,
+  at,
+  basePath,
+}, testInfo) => {
+  test.slow();
+  const context = await browser.newContext({ baseURL });
+  await context.tracing.start({ snapshots: true, screenshots: false, sources: false });
+  const page = await context.newPage();
+  const visited: string[] = [];
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) visited.push(frame.url());
+  });
+  const name = `e2e.trace.${Math.random().toString(36).slice(2, 8)}`;
+  const value = `a-secret-value-${Math.random().toString(36).slice(2, 12)}`;
+
+  await page.goto(at('/login'));
+  await page.getByLabel('Username').fill(admin.username);
+  await page.getByLabel('Password', { exact: true }).fill(admin.password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
+
+  await page.goto(at('/admin/settings/secrets'));
+  await page.getByLabel('Name', { exact: false }).first().fill(name);
+  await page.getByLabel('Value', { exact: false }).fill(value);
+  await page.getByRole('button', { name: 'Store the secret' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText(`The secret ${name} was stored.`),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('rowheader', { name })).toBeVisible();
+  // The page, as the browser holds it, has no trace of the value.
+  const html = await page.content();
+  const kept = await page.evaluate(() =>
+    JSON.stringify({ local: { ...window.localStorage }, session: { ...window.sessionStorage } }),
+  );
+  await page.getByRole('button', { name: `Delete the secret ${name}` }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('rowheader', { name })).toHaveCount(0);
+
+  const zip = testInfo.outputPath('secret-trace.zip');
+  await context.tracing.stop({ path: zip });
+  await context.close();
+
+  const exchanges = readTrace(zip);
+  expect(exchanges.length, 'the trace has a network log').toBeGreaterThan(10);
+  // On the wire the value is in the body of the request that sends it, and nowhere else: no address, no
+  // header, no response (not the answer to the PUT, not the list that follows).
+  expect(whereIs(exchanges, value, basePath)).toEqual([`PUT /secrets/${name} requestBody`]);
+  expect(html).not.toContain(value);
+  expect(kept).not.toContain(value);
+  for (const address of visited) expect(decodeURIComponent(address)).not.toContain(value);
+  const log = readFileSync(
+    resolve(import.meta.dirname, `../test-results/stack-${testInfo.project.name}.log`),
+    'utf8',
+  );
+  expect(log).not.toContain(value);
+});

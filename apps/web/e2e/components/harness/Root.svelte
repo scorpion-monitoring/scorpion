@@ -32,8 +32,8 @@
     session: () => null,
     navigation: () => ({ nav: [], routes: [], widgets: [], themes: [] }),
     branding: () => ({
-      productName: 'Scorpion',
-      instanceName: 'Scorpion',
+      productName: 'Harness',
+      instanceName: 'Harness',
       contactEmail: null,
       imprintUrl: null,
       logos: { light: null, dark: null },
