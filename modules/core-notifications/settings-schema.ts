@@ -34,17 +34,50 @@ const webhookSettings = z.strictObject({
 export const settingsSchema = z
   .strictObject({
     /** The id of an entry of the registry `notify.transport` with channel `email`: `smtp` or `none`. */
-    emailTransport: z.enum(['smtp', 'none']).default('none'),
-    smtp: smtpSettings.default(() => smtpSettings.parse({})),
-    webhook: webhookSettings.default(() => webhookSettings.parse({})),
+    emailTransport: z.enum(['smtp', 'none']).default('none').meta({
+      title: 'Mail transport',
+      description:
+        '"smtp" sends through the relay below; "none" sends nothing (mail is recorded and marked sent).',
+    }),
+    smtp: smtpSettings
+      .default(() => smtpSettings.parse({}))
+      .meta({
+        title: 'Mail relay (SMTP)',
+        description:
+          'The password of the relay is the secret notifications.smtp.password (see Secrets).',
+      }),
+    webhook: webhookSettings
+      .default(() => webhookSettings.parse({}))
+      .meta({
+        title: 'Webhook',
+        description: 'The signing secret is the secret notifications.webhook.secret (see Secrets).',
+      }),
     /** For a message that names no locale. */
-    defaultLocale: z.string().regex(LOCALE).default('en'),
+    defaultLocale: z.string().regex(LOCALE).default('en').meta({
+      title: 'Default language',
+      description: 'For a message that names no language.',
+    }),
     /** Attempts before a delivery is `dead`. */
-    maxAttempts: z.number().int().min(1).max(20).default(DEFAULT_MAX_ATTEMPTS),
+    maxAttempts: z.number().int().min(1).max(20).default(DEFAULT_MAX_ATTEMPTS).meta({
+      title: 'Delivery attempts',
+      description: 'Attempts before a delivery is marked dead.',
+    }),
     /** How long `sent` and `dead` delivery rows are kept; the daily job `core.notifications.retention` deletes the older ones. */
-    retentionDays: z.number().int().min(1).max(3650).default(DEFAULT_RETENTION_DAYS),
+    retentionDays: z.number().int().min(1).max(3650).default(DEFAULT_RETENTION_DAYS).meta({
+      title: 'Keep deliveries for (days)',
+      description: 'How long sent and dead deliveries are kept.',
+    }),
     /** How long a read inbox item is kept, counted from the moment it was read. Unread items are kept. */
-    inboxRetentionDays: z.number().int().min(1).max(3650).default(DEFAULT_INBOX_RETENTION_DAYS),
+    inboxRetentionDays: z
+      .number()
+      .int()
+      .min(1)
+      .max(3650)
+      .default(DEFAULT_INBOX_RETENTION_DAYS)
+      .meta({
+        title: 'Keep read inbox items for (days)',
+        description: 'Counted from the moment an item was read. Unread items are kept.',
+      }),
   })
   .superRefine((value, ctx) => {
     if (value.emailTransport === 'smtp' && value.smtp.host === '') {

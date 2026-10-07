@@ -38,19 +38,52 @@ const legalText = z.string().max(MAX_LEGAL_TEXT);
 
 const brandingSchema = z.strictObject({
   /** The software's name, shown as "Powered by …" and used where no instance name is set. */
-  productName: z.string().trim().min(1).max(100).default(DEFAULT_PRODUCT_NAME),
+  productName: z.string().trim().min(1).max(100).default(DEFAULT_PRODUCT_NAME).meta({
+    title: 'Product name',
+    description:
+      'The software\'s name, shown as "Powered by …" and used where no instance name is set.',
+    group: 'Names',
+  }),
   /** What this instance calls itself (headers, mails). Falls back to the product name. */
-  instanceName: z.string().trim().min(1).max(100).optional(),
+  instanceName: z.string().trim().min(1).max(100).optional().meta({
+    title: 'Instance name',
+    description:
+      'What this instance calls itself (headers, mails). Falls back to the product name.',
+    group: 'Names',
+  }),
   /** The `From` address of mails. Falls back to `no-reply@localhost`, which no real relay accepts. */
-  mailFrom: z.string().trim().min(3).max(254).optional(),
-  contactEmail: z.email().max(254).optional(),
+  mailFrom: z.string().trim().min(3).max(254).optional().meta({
+    title: 'Sender address of mails',
+    description: 'The From address of mails. Without one, no real mail relay will accept them.',
+    group: 'Contact',
+  }),
+  contactEmail: z.email().max(254).optional().meta({
+    title: 'Contact address',
+    description: 'Shown in the footer and in mails to people who need to reach someone.',
+    group: 'Contact',
+  }),
   /** Where the imprint lives when it is not written here. http or https. */
   imprintUrl: z
     .url({ protocol: /^https?$/ })
     .max(500)
-    .optional(),
+    .optional()
+    .meta({
+      title: 'Imprint address',
+      description: 'Where the imprint lives when it is not written below. http or https.',
+      group: 'Contact',
+    }),
   /** Logos by hash of an uploaded file; `dark` is for dark themes and falls back to `light`. */
-  logos: z.strictObject({ light: fileHash.optional(), dark: fileHash.optional() }).prefault({}),
+  logos: z
+    .strictObject({
+      light: fileHash.optional().meta({ title: 'Logo for the light theme', widget: 'logo' }),
+      dark: fileHash.optional().meta({
+        title: 'Logo for the dark theme',
+        description: 'Optional. Without one the light logo is used.',
+        widget: 'logo',
+      }),
+    })
+    .prefault({})
+    .meta({ title: 'Logos' }),
   /** Markdown, rendered on the server and sanitised. Raw HTML in it shows as text. */
   legal: z
     .strictObject({
@@ -58,12 +91,17 @@ const brandingSchema = z.strictObject({
       privacy: legalText.optional(),
       imprint: legalText.optional(),
     })
-    .prefault({}),
+    .prefault({})
+    .meta({
+      title: 'Legal texts',
+      description:
+        'Markdown, shown on the legal pages. Start at level 2 headings (##): the page title is the first heading. Raw HTML shows as text.',
+    }),
 });
 
 export const settingsSchema = z.strictObject({
   /** How the instance presents itself: names, sender, contact, logos and legal texts. */
-  branding: brandingSchema.prefault({}),
+  branding: brandingSchema.prefault({}).meta({ title: 'Branding' }),
   /**
    * Limits per client address (and per credential) for each route group. `strict` is for routes an
    * attacker gains from by repeating them: login, register, token use and creation.
@@ -76,6 +114,11 @@ export const settingsSchema = z.strictObject({
     .default({
       default: { ...DEFAULT_RATE_LIMITS.default },
       strict: { ...DEFAULT_RATE_LIMITS.strict },
+    })
+    .meta({
+      title: 'Rate limits',
+      description:
+        'Requests per client address (and per credential) for each route group. "strict" is for routes an attacker gains from by repeating them: sign-in, registration, token use and creation.',
     }),
 });
 
