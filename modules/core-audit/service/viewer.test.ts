@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { makeAuditEvent } from '@scorpion/testing';
+import { makeAuditEvent, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { useAudit } from '../test/harness.ts';
 import { escapeLike } from './viewer.ts';
@@ -78,6 +78,32 @@ describe('the list', () => {
     );
     expect(events.events.map((e) => e.id)).toContain(rows.d.id);
     expect(events.events.every((e) => e.source === 'event')).toBe(true);
+  });
+
+  it('joins the username of the acting user, and leaves it empty for an account that no longer exists', async () => {
+    const s = await audit.startShared();
+    const admin = await s.actor('admin');
+    const tag = `/api/internal/joined-${randomUUID().slice(0, 8)}`;
+    const alive = await makeUser(s.pool, { username: `alive-${randomUUID().slice(0, 8)}` });
+    const purged = randomUUID(); // an id the trail kept after the account row was deleted
+    const keep = await makeAuditEvent(s.pool, { path: `${tag}/a`, userId: alive.id });
+    const gone = await makeAuditEvent(s.pool, { path: `${tag}/b`, userId: purged });
+    const nobody = await makeAuditEvent(s.pool, {
+      path: `${tag}/c`,
+      userId: null,
+      actorKind: 'anonymous',
+    });
+    const { events } = await s.audit.viewer.list(
+      admin,
+      { endpoint: tag },
+      { page: 0, pageSize: 10 },
+    );
+    const by = (id: string) => events.find((event) => event.id === id)!;
+    expect(by(keep.id)).toMatchObject({ userId: alive.id, userName: alive.username });
+    expect(by(gone.id)).toMatchObject({ userId: purged, userName: null });
+    expect(by(nobody.id)).toMatchObject({ userId: null, userName: null });
+    expect((await s.audit.viewer.get(admin, keep.id)).userName).toBe(alive.username);
+    expect((await s.audit.viewer.get(admin, gone.id)).userName).toBeNull();
   });
 
   it('takes the endpoint prefix literally: % and _ match themselves', async () => {

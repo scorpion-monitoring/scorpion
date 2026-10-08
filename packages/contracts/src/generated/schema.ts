@@ -6035,6 +6035,8 @@ export interface paths {
                                 subjectType: string | null;
                                 subjectId: string | null;
                                 payload?: unknown;
+                                /** @description The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only). */
+                                userName: string | null;
                             }[];
                         };
                     };
@@ -6133,6 +6135,8 @@ export interface paths {
                             subjectType: string | null;
                             subjectId: string | null;
                             payload?: unknown;
+                            /** @description The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only). */
+                            userName: string | null;
                         };
                     };
                 };
@@ -6243,6 +6247,111 @@ export interface paths {
                 };
                 /** @description Not allowed. */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/job-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                    /** @description The exact job name. */
+                    jobName?: string;
+                    status?: "running" | "succeeded" | "failed";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Job runs, newest first (`startedAt`, then id). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                jobName: string;
+                                module: string;
+                                attempt: number;
+                                /** @enum {string} */
+                                status: "running" | "succeeded" | "failed";
+                                /** Format: date-time */
+                                startedAt: string;
+                                /** Format: date-time */
+                                finishedAt: string | null;
+                                durationMs: number | null;
+                                /** @description The failure, masked and cut short. Never a stack. */
+                                error: string | null;
+                                /** @description The counts and flags the handler returned, for example `{ removed: 12 }`. */
+                                result: {
+                                    [key: string]: number | boolean | string;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };

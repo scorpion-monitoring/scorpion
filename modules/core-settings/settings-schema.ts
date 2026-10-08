@@ -95,7 +95,7 @@ const brandingSchema = z.strictObject({
     .meta({
       title: 'Legal texts',
       description:
-        'Markdown, shown on the legal pages. Start at level 2 headings (##): the page title is the first heading. Raw HTML shows as text.',
+        'Markdown, shown on the legal pages. Start at level 2 headings (##): the page title is the first heading. Raw HTML shows as text. The privacy text should say that the id of a deleted account stays in the audit trail until the retention period ends.',
     }),
 });
 

@@ -136,9 +136,15 @@ importers:
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
+      '@scorpion/core-audit':
+        specifier: workspace:*
+        version: link:../../modules/core-audit
       '@scorpion/core-identity':
         specifier: workspace:*
         version: link:../../modules/core-identity
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../../modules/core-notifications
       '@scorpion/core-ui-shell':
         specifier: workspace:*
         version: link:../../modules/core-ui-shell
@@ -221,9 +227,15 @@ importers:
       '@scorpion/core-notifications':
         specifier: workspace:*
         version: link:../core-notifications
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
@@ -360,9 +372,15 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       '@types/nodemailer':
         specifier: ^8.0.2
         version: 8.0.2

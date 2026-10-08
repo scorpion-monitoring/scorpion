@@ -34,6 +34,7 @@ import {
 } from './service/transports/types.ts';
 import { webhookTransportEntry, type WebhookDeps } from './service/transports/webhook.ts';
 import { createWakeListener } from './service/wake.ts';
+import { NOTIFICATION_NAV, NOTIFICATION_ROUTES } from './ui/routes.ts';
 
 export {
   settingsSchema,
@@ -202,7 +203,14 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
       // this one can mail the caller's own address without importing it (ADR 0023).
       [RECIPIENT_ADDRESS_REGISTRY]: recipientAddressEntrySchema,
     },
+    // The pages themselves (Svelte) are loaded by the web app only; the manifest just names the entry.
+    ui: () => import('./ui/index.ts'),
+
     contributes: {
+      // The status page and its link. Entries for registries of core.ui-shell, which is an optional
+      // peer: a profile without it skips them.
+      'ui.routes': NOTIFICATION_ROUTES,
+      'ui.nav': NOTIFICATION_NAV,
       // The templates of modules that do not exist yet ship here, registered and tested.
       [TEMPLATE_REGISTRY]: [...SHIPPED_TEMPLATES, ...SYSTEM_TEMPLATES],
       'authz.defaultRole': [{ role: 'user', permissions: USER_PERMISSIONS }],
