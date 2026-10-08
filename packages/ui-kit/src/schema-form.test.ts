@@ -9,9 +9,11 @@ import {
   hasErrorsUnder,
   humanize,
   messagesFor,
+  omitDefaults,
   pointerOf,
   prune,
   resolve,
+  sameJson,
   labelOfPointer,
   variantIndex,
   variantSeed,
@@ -392,5 +394,96 @@ describe('labelOfPointer', () => {
     ['', ''],
   ])('names %s as %s', (pointer, expected) => {
     expect(labelOfPointer(root, pointer, item)).toBe(pointer === '' ? root.label : expected);
+  });
+});
+
+describe('sameJson', () => {
+  it.each([
+    [1, 1, true],
+    ['a', 'a', true],
+    [1, '1', false],
+    [null, null, true],
+    [null, undefined, false],
+    [{ a: 1, b: 2 }, { b: 2, a: 1 }, true],
+    [{ a: 1 }, { a: 1, b: undefined }, false],
+    [[1, [2]], [1, [2]], true],
+    [[1, 2], [2, 1], false],
+    [{}, [], false],
+    [{ a: { b: [1] } }, { a: { b: [1] } }, true],
+  ])('%j and %j: %s', (a, b, same) => expect(sameJson(a, b)).toBe(same));
+});
+
+describe('omitDefaults (a saved settings form keeps no default)', () => {
+  const channels = z.strictObject({
+    admin: z.boolean().default(true),
+    api: z.boolean().default(true),
+  });
+  const schema = z.strictObject({
+    channels: channels.default(() => channels.parse({})),
+    retentionDays: z.number().int().default(365),
+    host: z.string().default(''),
+    name: z.string(),
+    tags: z.array(z.string()).default([]),
+  });
+  const root = describeRoot(json(schema));
+
+  it('drops the values that equal their default and keeps the ones that differ', () => {
+    expect(
+      omitDefaults(
+        {
+          channels: { admin: true, api: true },
+          retentionDays: 90,
+          host: '',
+          name: 'x',
+          tags: [],
+        },
+        root,
+      ),
+    ).toEqual({ retentionDays: 90, name: 'x' });
+  });
+
+  it('keeps only the changed keys of an object that is not the default', () => {
+    expect(
+      omitDefaults(
+        {
+          channels: { admin: false, api: true },
+          retentionDays: 365,
+          host: '',
+          name: 'x',
+          tags: [],
+        },
+        root,
+      ),
+    ).toEqual({ channels: { admin: false }, name: 'x' });
+  });
+
+  it('always keeps a field that has no default, and an array that differs', () => {
+    expect(omitDefaults({ name: '', tags: ['a'] }, root)).toEqual({ name: '', tags: ['a'] });
+  });
+
+  it('keeps a key the schema does not name, and leaves a value that is no object alone', () => {
+    expect(omitDefaults({ name: 'x', extra: 1 }, root)).toEqual({ name: 'x', extra: 1 });
+    expect(omitDefaults('text', root)).toBe('text');
+    expect(omitDefaults(null, root)).toBeNull();
+  });
+
+  it('stores something the server reads back as the same settings (the defaults fill the gaps)', () => {
+    const form = {
+      channels: { admin: false, api: true },
+      retentionDays: 365,
+      host: 'smtp.example.org',
+      name: 'x',
+      tags: [],
+    };
+    const stored = omitDefaults(form, root);
+    expect(schema.parse(stored)).toEqual(schema.parse(form));
+  });
+
+  it('lets a later default reach an instance that saved without touching the value', () => {
+    // The instance saved with retentionDays at 365 (the default then); the stored object has no such key.
+    const stored = omitDefaults({ retentionDays: 365, name: 'x' }, root) as Record<string, unknown>;
+    expect('retentionDays' in stored).toBe(false);
+    const later = z.strictObject({ ...schema.shape, retentionDays: z.number().int().default(180) });
+    expect(later.parse(stored).retentionDays).toBe(180);
   });
 });

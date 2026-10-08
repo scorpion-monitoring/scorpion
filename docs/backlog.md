@@ -31,17 +31,17 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Export to an external log sink.** Syslog, OTLP logs or an S3 archive of old rows before retention deletes them. The trail is only in the database; the CSV export is the way out.
 - **Tamper evidence.** The table refuses `UPDATE`, `DELETE` and `TRUNCATE` for the application (ADR-0021) but a database superuser can drop the trigger. A hash chain over the rows, or a periodically signed digest, would make a change detectable; so would shipping rows to a second system as they are written.
 - **Partitioning.** `audit_event` is one table with an index on `(occurred_at, id)`. Revisit monthly range partitions (and dropping a partition instead of batched deletes) if the load test (M18) shows bloat. Batched `DELETE` under the flag leaves dead tuples until autovacuum.
-- **Audit volume of reads.** The three read routes of the viewer are audited (who looked). A busy admin screen that polls fills the table. Sample reads, or stop auditing the list and keep the export and the single entry, when the UI exists.
+- ~~**Audit volume of reads.**~~ Done in M5 sprint 4: the list view (`GET /audit`) is no longer audited; opening one entry and the CSV export still are. Recorded in the README of `core.audit`. (was: The three read routes of the viewer are audited (who looked). A busy admin screen that polls fills the table. Sample reads, or stop auditing the list and keep the export and the single entry, when the UI exists.)
 - **Login, logout and failed sign-ins are not in the trail.** Auth routes are not `audit` routes: the actor of a login is anonymous when the pipeline writes the entry, and a failed-login flood would fill the table. A `identity.session.created@1` event (success) and a counted failure event would fix both; decide with the account-lockout question (identity follow-ups).
 - **Redaction is by name.** A secret under an innocent key, or in a value (a token pasted into a free-text field), is not recognised. A content check for the token and key formats this system issues (`scp_`, `srt_`) would catch the likeliest case. Routes that store a body should stay few and reviewed.
 - **Settings values are stored in the body of `PUT /settings/{module}`.** Settings never hold secrets by rule, but a URL with a token in its query would be stored. Add a secret-hygiene guard on the settings schemas (settings follow-ups) or `redact: ['url']` for that route.
 - **The old value of a setting is not in the trail.** The event names the keys, not the values (ADR-0017). If an operator needs "from what to what", store the diff in the audit payload for keys that a schema marks as non-sensitive.
-- **Event payloads without `username`.** The stored payload leaves the username out so a purge does not leave a name in an append-only table. The viewer shows ids; the admin UI must join the user table and show "deleted account" for a purged one.
-- **A purged account's id stays in the trail** as an actor or subject, until retention. That is the point of an audit trail; say so in the privacy text (M5).
+- ~~**Event payloads without `username`.**~~ Done in M5 sprint 4: `GET /audit` and `GET /audit/{id}` carry `userName` (the name the account has now, `null` for a purged one) and the Logs page shows "deleted account" with the first characters of the id. (was: The stored payload leaves the username out so a purge does not leave a name in an append-only table. The viewer shows ids; the admin UI must join the user table and show "deleted account" for a purged one.)
+- ~~**A purged account's id stays in the trail**~~ Done in M5 sprint 4: the description of the legal texts in the settings of `core.settings` says the privacy text should say so; the Logs page says it too. (was: as an actor or subject, until retention. That is the point of an audit trail; say so in the privacy text (M5).)
 - **The public API channel has no writer yet.** `channels.api` and `apiRetentionDays` are in place, but `/api/v1` exists only from M8. The first public route sets `audit: true`; check that `surface: 'v1'` entries land under `channels.api`.
 - **Optional peers for later modules.** A module that declares events (M6 onwards) fails the decisions test until `core.audit` has a decision for it; add the module as an optional peer of `core.audit` at the same time. A registry through which a module contributes its own decisions would remove the edit to `decisions.ts`; not worth it for a few modules.
 - **`ctx.audit` has no caller yet** besides the module's own export and requeue entries. The first service that changes something without an event (M6 and later) uses it inside its transaction.
-- **A job-run page.** `kernel_job_run.result` is filled, and `listJobRuns` returns it, but there is no route to list job runs. Add `GET /system/job-runs` (`core.audit.system.read`) with the system page (M5).
+- ~~**A job-run page.**~~ Done in M5 sprint 4: `GET /system/job-runs` and the System page. (was: `kernel_job_run.result` is filled, and `listJobRuns` returns it, but there is no route to list job runs. Add `GET /system/job-runs` (`core.audit.system.read`) with the system page (M5).)
 - **Dead outbox deliveries are kept for ever.** Outbox retention never deletes an event with a `dead` delivery. A dead delivery that nobody will fix should be dismissed on purpose: a `DELETE /system/outbox/deliveries/{id}` (audited) is not built.
 - **Requeue is one delivery at a time**, as for mail.
 - **CSV extras.** No BOM (Excel users import as UTF-8), no choice of columns, no XLSX. The row cap is a setting; a larger export is a background job that writes a file to the blob store, not built.
@@ -121,8 +121,8 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   A per-profile client is possible (`openapi:generate` already knows the profile) if a screen ever needs to know.
 - **No per-page SSR options.** Every page of a module goes through one catch-all route, so a page cannot set `ssr = false` or `csr = false`.
   Add an optional `render: { ssr?: boolean }` to `UiRoute` if a page needs it (a chart page that cannot render on the server).
-- **The proxy has no timeout of its own** (an event stream must outlive any). If a slow API call should give up, add `API_TIMEOUT_MS` for
-  non-stream requests. Sprint 4 (inbox stream) decides.
+- ~~**The proxy has no timeout of its own**~~ Done in M5 sprint 4: `API_TIMEOUT_MS` (default 30000, `0` for none): a limit on silence, 504 from the proxy, the page server's own calls fail the same way; event streams are exempt. (was: (an event stream must outlive any). If a slow API call should give up, add `API_TIMEOUT_MS` for
+  non-stream requests. Sprint 4 (inbox stream) decides.)
 - **`openapi-typescript` declares a peer of TypeScript 5**; the repository uses 6. It works; move to a release that lists 6 when there is one.
 - **Dev dependencies of the web app are heavy for the image build:** `@scorpion/testing` (Testcontainers) and Playwright come in through the
   e2e tests. Moving `e2e/` to its own package would shorten step 4 of `docker/Dockerfile`.
@@ -132,14 +132,14 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 
 ## Sign-in and profile screen follow-ups (M5 sprint 2)
 
-- **The OIDC callback answers a failure as problem+json in the browser.** A sign-in of an account that waits for approval (403 `account-pending`), a refused state (400) or an
+- ~~**The OIDC callback answers a failure as problem+json in the browser.**~~ Done in M5 sprint 4: ADR-0029: a browser is redirected to `/login?error=<code>` (a fixed list); other clients keep the problem answer. (was: A sign-in of an account that waits for approval (403 `account-pending`), a refused state (400) or an
   unreachable provider (502) end on a page of raw JSON, because the callback is a navigation and not a fetch. Redirect to `/login?error=<code>` (a fixed list of codes, never
-  text from the provider) and show the text on the sign-in page, as `?notice=check-mail` already does. An API change, so it needs a decision; `apps/web/e2e/oidc.spec.ts` shows the JSON today.
+  text from the provider) and show the text on the sign-in page, as `?notice=check-mail` already does. An API change, so it needs a decision; `apps/web/e2e/oidc.spec.ts` shows the JSON today.)
 - **The instance's default language has no public route.** `defaultLocale` is a setting of `core.notifications` and nothing public returns it, so the order of ADR-0022 is the person,
   then the browser, then English. Expose it (for example in `GET /branding`, which would need a decision on which module owns it) and pass it to `negotiateLocale()` as `instanceDefault`.
-- **A token form that offers every permission the caller holds.** The profile page offers the permissions of the role `user` of `core.identity` (the list is `permissions.ts`),
+- ~~**A token form that offers every permission the caller holds.**~~ Done in M5 sprint 4: `GET /account/permissions`; the form offers what the caller holds, with descriptions. (was: The profile page offers the permissions of the role `user` of `core.identity` (the list is `permissions.ts`),
   because no route lists the caller's own permissions (`GET /roles` is the administrator's). A `GET /account/permissions` (id and description) would let the form offer the scopes
-  of every module, including those of later milestones.
+  of every module, including those of later milestones.)
 - **The theme is kept in the browser only** (the buttons in the header, `localStorage`). A user preference `ui.theme`, registered by `core.ui-shell`, would follow the person to another device.
 - **A second mailed link in the same tab is not read.** A reset, verification or link page reads `#token=` once when it loads; opening another link by changing only the fragment
   (a paste into the address bar of the same tab) does not load the page again. Listen to `hashchange` if people do this.
@@ -152,21 +152,31 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   without a restart would help operators.
 - **A private window cannot resume a re-authentication at a provider.** Without `sessionStorage` the intended action is lost and the person lands on the start page; the dialog does not warn of it.
 
+## Operations screen follow-ups (M5 sprint 4)
+
+- **The audit list pages by offset, so "Load more" can repeat or skip a row** when entries arrive while the page is open (the page keeps each id once, so it never repeats, but a skipped row is possible). A cursor (`before=<occurredAt>,<id>`) on `GET /audit` would make it exact; the CSV export already reads by keyset.
+- **The Logs page shows the name an account has now, not the name it had.** A renamed account shows under the new name (usernames are not renamable today). Events carry ids only, on purpose (a purge cannot erase an append-only table).
+- **Reading the audit list leaves no trace**, and neither does a refused read of it (403). The CSV export, one entry and every other refused read are on record. If an auditor wants "who looked at the list", sample it (one entry per person and hour) rather than one per page.
+- **The "transport is none" banner has no browser test.** The e2e stacks run with a relay that does not exist (`smtp`) so that the delivery job leaves queued mail alone; switching the transport in a journey would race that job. The condition is rendered from `status.transportIsNone`, which the service tests cover.
+- **Permission descriptions are English.** `GET /permissions` returns the text a module declares (`description`); a German administrator reads English under the roles page and the token form. A catalogue key per permission would fix it (like the labels of settings forms).
+- **The API proxy timeout is one number** for every route. A route that is slow on purpose (a large CSV) is protected by the "silence, not total time" rule; a per-route value would need the route table in the web process.
+- **Server-side page calls and the browser share `API_TIMEOUT_MS`.** The browser's own `fetch` has no timeout of its own; a hung request there waits for the proxy's 504.
+
 ## Administration screen follow-ups (M5 sprint 3)
 
 - **Change an e-mail address and force a password reset for another person.** The user detail page has neither (decision of sprint 3); no route acts on another user's address or password. A route that changes an address should mark it unconfirmed and mail the new one, and a forced reset should mail the existing reset link and end the sessions.
 - **Reactivate a deactivated account.** `POST /users/{id}/deactivate` has no inverse and the screen says so. A reactivation needs its own permission and an audit entry, and decides whether the old sessions and tokens stay gone (they should).
-- **A list of the declared permissions.** The roles page groups permissions by module from the shape of their ids (`core.identity.…`, a known list of two-part namespaces) and shows no description, because `GET /roles` returns ids only. A `GET /permissions` (id, module, description) would replace the heuristic and let the page explain what each permission does.
+- ~~**A list of the declared permissions.**~~ Done in M5 sprint 4: `GET /permissions`; the roles page groups by the module the API names and shows each description. (was: The roles page groups permissions by module from the shape of their ids (`core.identity.…`, a known list of two-part namespaces) and shows no description, because `GET /roles` returns ids only. A `GET /permissions` (id, module, description) would replace the heuristic and let the page explain what each permission does.)
 - **Declared secrets.** The secrets page lists the secrets that are stored and cannot show one that is missing (a provider's client secret, the mail relay's password); the name an Admin must type is in the module's README. The registry of decision 6 (`settings.secret`: name pattern, description) would let the page list the unset ones and offer a form per name.
 - **The labels of a settings form are English.** `.meta({ title, description })` is a text in the schema, so a German administrator sees English field titles under German chrome. Key the titles (`.meta({ titleKey })`) and look them up in the catalogue, or let the schema route take a language.
-- **A saved settings form stores every value, defaults included.** `GET /settings/{module}` returns the effective values (defaults applied) and the form sends them all back, so a later change of a shipped default does not reach an instance that saved once. Send only the values that differ from the default, or let the API merge.
+- ~~**A saved settings form stores every value, defaults included.**~~ Done in M5 sprint 4: the form stores only what differs from the default (`omitDefaults` in `@scorpion/ui-kit`). Settings that were saved before keep their stored defaults until they are saved again. (was: `GET /settings/{module}` returns the effective values (defaults applied) and the form sends them all back, so a later change of a shipped default does not reach an instance that saved once. Send only the values that differ from the default, or let the API merge.)
 - **Several administrators editing one form at the same time** get the version conflict and "load the current values", which drops their edits. A field-by-field merge or showing what changed would help.
 - **The vocabulary screen edits `en` and `de` only.** A label in another language is kept as it was and not shown. Offer the locales a vocabulary already holds, and a way to add one.
 - **A custom role cannot be created or deleted** from the roles page (out of M5's scope); the page edits the permissions of the seeded roles.
 - **The deactivation of an account stops its access tokens after the token cache time** (5 s, `tokenCacheTtlMs`), like a revoked token in another server process; there is no cross-process invalidation (see "Sessions follow-ups").
 - **`core.authz` and `core.settings` cannot contribute pages** because `core.ui-shell` depends on them. If that matters later (a module that owns its own screens), the shell would have to depend on neither, which means moving the permission check of the navigation out of the shell, and needs an ADR.
 - **The icon set** has `lock` now; a `key` and a `tag` would suit secrets and vocabularies (the navigation shows Settings with one icon today).
-- **`SchemaForm` shows an array of objects with the first control focused after Add**, but does not ask before removing an item. A confirm for a removal that cannot be undone (a provider with a stored secret) is the page's to add.
+- ~~**`SchemaForm` shows an array of objects with the first control focused after Add**~~ Done in M5 sprint 4: `SchemaForm` asks before it removes an item (an item nothing was typed in is removed at once). (was:, but does not ask before removing an item. A confirm for a removal that cannot be undone (a provider with a stored secret) is the page's to add.)
 
 ## Later
 

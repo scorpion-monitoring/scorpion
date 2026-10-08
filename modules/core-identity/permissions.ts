@@ -1,5 +1,6 @@
-// The permissions of the role `user`: every self-service permission of this module. A plain file, so the
-// browser half of the module can offer them as the scopes of an access token without loading the manifest.
+// The permissions of the role `user`: every self-service permission of this module. A plain file, so a
+// test can read it without loading the manifest. (The token form no longer uses it: it offers what
+// `GET /account/permissions` says the caller holds.)
 /** What the role `user` holds: every self-service permission of this module (README, "Roles"). */
 export const USER_PERMISSIONS = [
   'core.identity.me.read',

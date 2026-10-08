@@ -19,7 +19,8 @@
   let password = $state('');
   let busy = $state(false);
   let failure = $state<FormFailure>();
-  let pending = $state(false);
+  // A sign-in at a provider that waits for approval ends here with `?error=account-pending`, like a password one.
+  let pending = $derived(data.error === 'account-pending');
   let providerFailed = $state(false);
   const who = $derived(session());
 
@@ -66,6 +67,10 @@
   {:else}
     <h1 class="text-2xl font-bold">{t('login.title')}</h1>
 
+    {#if data.error}
+      <Alert kind="error">{t(`login.oidcError.${data.error}`)}</Alert>
+    {/if}
+
     {#if data.notice === 'check-mail'}
       <Alert kind="info">{t('login.notice.checkMail')}</Alert>
     {:else if data.notice === 'password-changed'}
@@ -88,7 +93,17 @@
         {:else if failure.type === LOCAL_ACCOUNTS_OFF}
           <Alert kind="error">{t('login.localOff')}</Alert>
         {:else if failure.status === 401}
-          <Alert kind="error">{t('login.failed')}</Alert>
+          <Alert kind="error">
+            <div class="flex flex-col gap-1">
+              <span>{t('login.failed')}</span>
+              <!-- The same for every failure: a declined registration looks like a wrong password. -->
+              <span>
+                {branding().contactEmail
+                  ? t('login.failedHelp', { contact: branding().contactEmail! })
+                  : t('login.failedHelpNone', { instance: branding().instanceName })}
+              </span>
+            </div>
+          </Alert>
         {:else if failure.status === 0}
           <Alert kind="error">{t('login.network')}</Alert>
         {:else}

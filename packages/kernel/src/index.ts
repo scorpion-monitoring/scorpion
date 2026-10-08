@@ -112,7 +112,7 @@ export {
   type JobRunReport,
 } from './jobs.ts';
 export type { JobResult } from './manifest.ts';
-export { listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';
+export { countJobRuns, listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';
 export {
   AUTHORIZER_REGISTRY,
   denyByDefault,

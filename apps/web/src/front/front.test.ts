@@ -1,7 +1,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createFront, isApiPath } from './front.ts';
+import { createFront, isApiPath, parseApiTimeout } from './front.ts';
 
 interface Seen {
   method?: string;
@@ -30,7 +30,11 @@ afterEach(async () => {
 });
 
 /** A fake API that records what it receives, and a front in front of it that also records what it hands on. */
-async function setup(basePath: string, api?: http.RequestListener) {
+async function setup(
+  basePath: string,
+  api?: http.RequestListener,
+  front: { apiTimeoutMs?: number } = {},
+) {
   const apiSeen: Seen[] = [];
   const nextSeen: { url?: string; headers: http.IncomingHttpHeaders }[] = [];
   const apiPort = await listen((request, response) => {
@@ -47,6 +51,7 @@ async function setup(basePath: string, api?: http.RequestListener) {
     createFront({
       basePath,
       apiOrigin: `http://127.0.0.1:${apiPort}`,
+      ...front,
       next: (request, response) => {
         nextSeen.push({ url: request.url, headers: request.headers });
         response.writeHead(200, { 'content-type': 'text/plain' });
@@ -313,5 +318,114 @@ describe('the proxy', () => {
       });
     });
     await upstreamClosed;
+  });
+});
+
+describe('the timeout of the proxy (API_TIMEOUT_MS)', () => {
+  it('parses the setting: a default, whole milliseconds, 0 for none, and refuses the rest', () => {
+    expect(parseApiTimeout(undefined)).toBe(30_000);
+    expect(parseApiTimeout('')).toBe(30_000);
+    expect(parseApiTimeout('1500')).toBe(1500);
+    expect(parseApiTimeout('0')).toBe(0);
+    for (const bad of ['-1', '1.5', 'abc', '1e3', '12345678901', ' 5']) {
+      expect(() => parseApiTimeout(bad), bad).toThrow(/API_TIMEOUT_MS/);
+    }
+  });
+
+  it('answers 504 when the API does not answer in time, and stops waiting for it', async () => {
+    let upstreamClosed: () => void = () => undefined;
+    const closed = new Promise<void>((resolve) => (upstreamClosed = resolve));
+    const { port } = await setup(
+      '/',
+      (request) => {
+        request.socket.on('close', upstreamClosed);
+        // never answers
+      },
+      { apiTimeoutMs: 150 },
+    );
+    const started = Date.now();
+    const reply = await get(port, '/api/internal/slow');
+    expect(reply.status).toBe(504);
+    expect(reply.body).toBe('The API did not answer in time.');
+    expect(Date.now() - started).toBeLessThan(3000);
+    await closed;
+  });
+
+  it('is a limit on silence, not on the whole time: a body that keeps coming is not cut off', async () => {
+    const { port } = await setup(
+      '/',
+      (_request, response) => {
+        response.writeHead(200, { 'content-type': 'text/csv' });
+        let n = 0;
+        const timer = setInterval(() => {
+          response.write(`row ${n++}\n`);
+          if (n === 6) {
+            clearInterval(timer);
+            response.end();
+          }
+        }, 60);
+      },
+      { apiTimeoutMs: 200 },
+    );
+    const reply = await get(port, '/api/internal/export.csv');
+    expect(reply.status).toBe(200);
+    expect(reply.body.trim().split('\n')).toHaveLength(6);
+  });
+
+  it('gives up on a body that goes silent halfway', async () => {
+    const { port } = await setup(
+      '/',
+      (_request, response) => {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.write('{"a":');
+        // then silence
+      },
+      { apiTimeoutMs: 150 },
+    );
+    const outcome = await new Promise<string>((resolve) => {
+      const request = http.get({ host: '127.0.0.1', port, path: '/api/internal/half' }, (res) => {
+        res.on('data', () => undefined);
+        res.on('close', () => resolve(res.complete ? 'complete' : 'cut'));
+        res.on('error', () => resolve('cut'));
+      });
+      request.on('error', () => resolve('cut'));
+    });
+    expect(outcome).toBe('cut');
+  });
+
+  it('leaves an event stream alone however long it is silent, and 0 turns the limit off', async () => {
+    let finish: () => void = () => undefined;
+    const stream = await setup(
+      '/',
+      (_request, response) => {
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.write(': open\n\n');
+        finish = () => response.end('data: late\n\n');
+      },
+      { apiTimeoutMs: 120 },
+    );
+    const text = await new Promise<string>((resolve, reject) => {
+      const request = http.get(
+        { host: '127.0.0.1', port: stream.port, path: '/api/internal/inbox/stream' },
+        (res) => {
+          let all = '';
+          res.on('data', (chunk: Buffer) => (all += chunk.toString()));
+          res.on('end', () => resolve(all));
+          // Silent for more than twice the limit, then the API speaks again.
+          setTimeout(finish, 400);
+        },
+      );
+      request.on('error', reject);
+    });
+    expect(text).toBe(': open\n\ndata: late\n\n');
+
+    const off = await setup(
+      '/',
+      (_request, response) => {
+        setTimeout(() => response.end('slow but fine'), 300);
+      },
+      { apiTimeoutMs: 0 },
+    );
+    expect((await get(off.port, '/api/internal/x')).body).toBe('slow but fine');
   });
 });

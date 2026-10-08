@@ -97,7 +97,7 @@ test.describe('forgotten passwords', () => {
     await page.getByLabel('Username').fill(gus.username);
     await page.getByLabel('Password', { exact: true }).fill(gus.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByRole('alert')).toHaveText('The username or password is wrong.');
+    await expect(page.getByRole('alert')).toContainText('The username or password is wrong.');
     await signInThroughPage(page, at, { username: gus.username, password: NEW_PASSWORD });
   });
 

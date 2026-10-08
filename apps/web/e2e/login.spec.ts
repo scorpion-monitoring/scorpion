@@ -45,7 +45,10 @@ test.describe('the sign-in page', () => {
       await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
       await expect(page.getByLabel('Password', { exact: true })).toHaveValue('');
     }
-    expect(refusals[0]).toBe('The username or password is wrong.');
+    expect(refusals[0]).toContain('The username or password is wrong.');
+    // Whoever cannot get in is told whom to ask, the same way for every reason (a declined registration looks like a wrong password).
+    expect(refusals[0]).toContain('may have been declined');
+    expect(refusals[0]).toMatch(/Contact the administrators of|Write to /);
     expect(refusals[1]).toBe(refusals[0]);
   });
 

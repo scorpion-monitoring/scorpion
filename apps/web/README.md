@@ -14,7 +14,7 @@ The web app: SvelteKit 3 with `adapter-node`, Tailwind and DaisyUI. It is the **
 | `e2e/`                      | Playwright tests against the real API and a PostgreSQL container, under `BASE_PATH=/` and `/a/b` (`playwright.config.ts`). A third and fourth stack have no administrator and run only `bootstrap.spec.ts`. `e2e/support/db.ts` reads the mail the application queued (the links in it) and ages a session; `oidc.spec.ts` starts a provider on a local port, so no test calls a third party |
 
 Environment (read when the process starts, so one build serves any prefix): `PORT` (default 3000), `BASE_PATH` (default `/`), `API_ORIGIN`
-(default `http://127.0.0.1:3001`), and `ORIGIN` for adapter-node. The browser sees one origin: one cookie, no CORS.
+(default `http://127.0.0.1:3001`), `API_TIMEOUT_MS` (default 30000, `0` for none) and `ORIGIN` for adapter-node. `API_TIMEOUT_MS` is how long a call of the API may be silent (no answer yet, or a pause in the body) before the proxy answers `504` and the page server's own calls fail; an event stream is exempt. The browser sees one origin: one cookie, no CORS.
 
 ```bash
 pnpm dev                  # API on PORT+1, this app on PORT (default 3000)

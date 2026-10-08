@@ -6,3 +6,19 @@
 export const ACCOUNT_PENDING = 'account-pending';
 /** The instance does not take passwords (the setting `localAccounts` is off). */
 export const LOCAL_ACCOUNTS_OFF = 'local-accounts-disabled';
+
+/**
+ * Why a sign-in at a provider failed, as the sign-in page shows it (ADR-0029). A fixed list: the callback
+ * redirects a browser to `/login?error=<code>` and the page owns the text, so nothing the provider sent,
+ * and no detail of ours, ever reaches the address bar.
+ */
+export const LOGIN_ERROR_CODES = [
+  'account-pending',
+  'state-invalid',
+  'provider-denied',
+  'provider-unavailable',
+  'verification-failed',
+  'not-allowed',
+  'already-linked',
+] as const;
+export type LoginErrorCode = (typeof LOGIN_ERROR_CODES)[number];

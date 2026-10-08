@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import { parseApiTimeout } from './src/front/front.ts';
 import { scorpionFront } from './src/front/vite-plugin.ts';
 
 // SvelteKit 3 no longer reads svelte.config.js; its options go to the plugin.
@@ -17,6 +18,7 @@ export default defineConfig({
     scorpionFront({
       basePath: process.env.BASE_PATH ?? '/',
       apiOrigin: process.env.API_ORIGIN ?? 'http://127.0.0.1:3001',
+      apiTimeoutMs: parseApiTimeout(process.env.API_TIMEOUT_MS),
     }),
     tailwindcss(),
     sveltekit({

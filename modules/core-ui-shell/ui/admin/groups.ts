@@ -1,34 +1,27 @@
-// How the roles page lays out the permissions: one group per module, and the set of a role as a list of
-// ids. Plain functions, so the rules are table-driven tests.
+// How the roles page lays out the permissions: one group per declaring module (as the API says, not guessed from
+// the id), and the set of a role as a list of ids. Plain functions, so the rules are table-driven tests.
 
-/**
- * Module ids that have two parts (`core.identity`, `registry.services`, `kpi.ingestion`). A module id of one
- * part (`maturity`, `backup`) is the first part of its permissions. A permission id is
- * `<module id>.<resource>.<action>`, or `<module id>.<action>`.
- */
-const TWO_PART_NAMESPACES = ['core', 'registry', 'kpi'] as const;
-
-/** The module a permission belongs to, by the shape of its id. */
-export function moduleOf(permission: string): string {
-  const parts = permission.split('.');
-  const first = parts[0] ?? permission;
-  if ((TWO_PART_NAMESPACES as readonly string[]).includes(first) && parts.length > 1) {
-    return `${first}.${parts[1]}`;
-  }
-  return first;
+/** A permission as `GET /permissions` lists it. */
+export interface PermissionInfo {
+  id: string;
+  /** The id of the module that declares it. */
+  module: string;
+  description: string;
 }
 
 export interface PermissionGroup {
   module: string;
-  permissions: string[];
+  permissions: PermissionInfo[];
 }
 
-/** The permissions in groups by module, modules and permissions sorted, so the page is the same every time. */
-export function groupPermissions(permissions: readonly string[]): PermissionGroup[] {
-  const groups = new Map<string, string[]>();
-  for (const permission of [...new Set(permissions)].sort()) {
-    const module = moduleOf(permission);
-    groups.set(module, [...(groups.get(module) ?? []), permission]);
+/** The permissions in groups by their declaring module, modules and permissions sorted, so the page is the same every time. */
+export function groupPermissions(permissions: readonly PermissionInfo[]): PermissionGroup[] {
+  const groups = new Map<string, PermissionInfo[]>();
+  const seen = new Set<string>();
+  for (const permission of [...permissions].sort((a, b) => a.id.localeCompare(b.id))) {
+    if (seen.has(permission.id)) continue;
+    seen.add(permission.id);
+    groups.set(permission.module, [...(groups.get(permission.module) ?? []), permission]);
   }
   return [...groups]
     .sort(([a], [b]) => a.localeCompare(b))

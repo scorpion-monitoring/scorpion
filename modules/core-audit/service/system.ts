@@ -4,11 +4,14 @@
 import { Conflict, NotFound, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import {
+  countJobRuns,
   listDeadDeliveries,
+  listJobRuns,
   outboxStats,
   requeueDelivery,
   type DeadDelivery,
   type Db,
+  type JobRunRow,
   type OutboxStats,
 } from '@scorpion/kernel';
 import { sql } from 'drizzle-orm';
@@ -25,9 +28,23 @@ export interface OutboxOverview {
   dead: DeadDelivery[];
 }
 
+export interface JobRunQuery {
+  jobName?: string;
+  status?: JobRunRow['status'];
+}
+
 export interface SystemService {
   /** Needs `core.audit.system.read`. */
   outbox(actor: Actor): Promise<OutboxOverview>;
+  /**
+   * Needs `core.audit.system.read`. The history of job runs, newest first: the status, the duration, the
+   * counts a handler returned and the (masked) failure. `page` is 0-based.
+   */
+  jobRuns(
+    actor: Actor,
+    query: JobRunQuery,
+    paging: { page: number; pageSize: number },
+  ): Promise<{ runs: JobRunRow[]; total: number }>;
   /**
    * Needs `core.audit.system.manage`. Puts a `dead` outbox delivery back in the queue. `NotFound` for an
    * unknown id, `Conflict` for a delivery that is not dead. The audit entry (`system.outbox.requeued`)
@@ -49,6 +66,15 @@ export function createSystem(deps: {
     async outbox(actor) {
       await authz.require(actor, PERMISSION_SYSTEM_READ);
       return { stats: await outboxStats(db), dead: await listDeadDeliveries(db, { limit: 100 }) };
+    },
+
+    async jobRuns(actor, query, { page, pageSize }) {
+      await authz.require(actor, PERMISSION_SYSTEM_READ);
+      const [runs, total] = await Promise.all([
+        listJobRuns(db, { ...query, limit: pageSize, offset: page * pageSize }),
+        countJobRuns(db, query),
+      ]);
+      return { runs, total };
     },
 
     async requeue(actor, deliveryId) {

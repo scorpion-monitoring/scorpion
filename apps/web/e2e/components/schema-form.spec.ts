@@ -18,6 +18,12 @@ const stored = {
 const submitted = async (page: Page) =>
   JSON.parse(await page.getByTestId('submitted').innerText()) as Record<string, unknown>;
 const name = (page: Page) => page.getByLabel(/^Name\b/);
+/** The "Remove this item?" dialog that removing an array item opens. */
+const confirmRemoval = (page: Page) =>
+  page
+    .getByRole('dialog', { name: 'Remove this item?' })
+    .getByRole('button', { name: 'Remove', exact: true })
+    .click();
 
 test.describe('SchemaForm', () => {
   test('draws a labelled control for every kind of field, with its hint and its group', async ({
@@ -88,6 +94,7 @@ test.describe('SchemaForm', () => {
     await expect(tags.getByRole('textbox', { name: 'Tags, item 2' })).toBeFocused();
     await page.keyboard.type('two');
     await tags.getByRole('button', { name: 'Remove Tags, item 1' }).click();
+    await confirmRemoval(page);
     await page.getByRole('button', { name: 'Save' }).click();
     expect((await submitted(page)).tags).toEqual(['two']);
   });
@@ -111,8 +118,51 @@ test.describe('SchemaForm', () => {
       'Providers: item 3 moved to position 2.',
     );
     await providers.getByRole('button', { name: 'Remove Providers, item 1' }).click();
+    await confirmRemoval(page);
     await page.getByRole('button', { name: 'Save' }).click();
     expect((await submitted(page)).providers).toEqual([{ id: 'c' }, { id: 'b' }]);
+  });
+
+  test('asks before it removes an item: Cancel and Escape keep it and give focus back, Remove takes it out', async ({
+    page,
+    scene,
+  }) => {
+    await scene('schema-form');
+    const providers = page.getByRole('group', { name: 'Providers', exact: true });
+    const remove = providers.getByRole('button', { name: 'Remove Providers, item 1' });
+    await remove.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Remove this item?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Providers, item 1');
+    // The dialog opens on the safe choice, and Escape cancels.
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(remove).toBeFocused();
+    await page.getByRole('button', { name: 'Save' }).click();
+    expect((await submitted(page)).providers).toEqual([{ id: 'a', label: 'First' }, { id: 'b' }]);
+
+    // Confirm with the keyboard: Tab to Remove, Enter. Focus lands in the item that took its place.
+    await remove.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Remove', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeHidden();
+    await expect(providers.getByRole('status')).toHaveText('Providers: item 1 removed.');
+    await expect(
+      providers.getByRole('group', { name: 'Providers, item 1' }).getByRole('textbox').first(),
+    ).toBeFocused();
+  });
+
+  test('removes a text item nobody typed in without asking', async ({ page, scene }) => {
+    await scene('schema-form');
+    const tags = page.getByRole('group', { name: 'Tags', exact: true });
+    await tags.getByRole('button', { name: 'Add' }).click();
+    await tags.getByRole('button', { name: 'Remove Tags, item 2' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(tags.getByRole('textbox')).toHaveCount(1);
   });
 
   test('offers a choice between shapes and shows the fields of the chosen one', async ({

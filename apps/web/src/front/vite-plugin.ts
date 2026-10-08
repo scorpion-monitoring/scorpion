@@ -3,7 +3,11 @@
 import type { Plugin } from 'vite';
 import { createFront } from './front.ts';
 
-export function scorpionFront(options: { basePath: string; apiOrigin: string }): Plugin {
+export function scorpionFront(options: {
+  basePath: string;
+  apiOrigin: string;
+  apiTimeoutMs?: number;
+}): Plugin {
   return {
     name: 'scorpion-front',
     configureServer(server) {

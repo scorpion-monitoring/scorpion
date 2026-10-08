@@ -523,11 +523,18 @@ describe('the viewer', () => {
     expect((await s.get(`/audit?endpoint=${'x'.repeat(501)}`, session(root))).status).toBe(422);
   });
 
-  it('records that the log was read (who looked), without the filters', async () => {
+  it('does not audit the list (a screen pages it) but audits opening one entry, without the filters', async () => {
     const s = await start();
     const root = await s.signedIn('root', { roles: ['admin'] });
+    const made = await makeAuditEvent(s.kernel.pool, { path: '/looked-at' });
     await s.get('/audit?user=somebody', session(root));
-    const [row] = await trail(s, "path = '/api/internal/audit' and user_id = $1", [root.user.id]);
+    expect(await trail(s, "path = '/api/internal/audit' and user_id = $1", [root.user.id])).toEqual(
+      [],
+    );
+    await s.get(`/audit/${made.id}`, session(root));
+    const [row] = await trail(s, "path = '/api/internal/audit/{id}' and user_id = $1", [
+      root.user.id,
+    ]);
     expect(row).toMatchObject({ method: 'GET', outcome: 'ok', status: 200 });
     expect(row!.query).toBeNull();
   });
@@ -573,7 +580,7 @@ describe('the viewer', () => {
     expect(request!.query).toEqual({ endpoint: tag });
   });
 
-  it('answers 403 to a plain User, 401 to nobody, and records the denied try', async () => {
+  it('answers 403 to a plain User, 401 to nobody, and records the denied try of every read but the list', async () => {
     const s = await start();
     const plain = await s.signedIn('plain');
     for (const path of ['/audit', `/audit/${randomUUID()}`, '/audit/export.csv']) {
@@ -583,7 +590,6 @@ describe('the viewer', () => {
     }
     const rows = await trail(s, "outcome = 'denied' and user_id = $1", [plain.user.id]);
     expect(rows.map((r) => r.path).sort()).toEqual([
-      '/api/internal/audit',
       '/api/internal/audit/export.csv',
       '/api/internal/audit/{id}',
     ]);
@@ -648,11 +654,45 @@ describe('the system routes', () => {
     ).toBe(404);
   });
 
+  it('lists the job runs in the list envelope, with the result counts and the failure, and filters them', async () => {
+    const s = await start();
+    const root = await s.signedIn('root', { roles: ['admin'] });
+    for (const [name, status, result, error] of [
+      ['core.audit.retention', 'succeeded', { removed: 12, capped: false }, null],
+      ['core.audit.system.outbox-retention', 'failed', null, 'connection reset'],
+    ] as const) {
+      await s.kernel.pool.query(
+        `insert into kernel_job_run (id, job_name, module, job_id, attempt, status, timeout_seconds, started_at, finished_at, duration_ms, error, result)
+         values ($1, $2, 'core.audit', $2, 1, $3, 60, now(), now(), 5, $4, $5::jsonb)`,
+        [randomUUID(), name, status, error, result ? JSON.stringify(result) : null],
+      );
+    }
+    const all = await s.get('/system/job-runs?pageSize=1', session(root));
+    expect(all.status).toBe(200);
+    expect(all.body).toMatchObject({
+      metadata: { currentPage: 0, pageSize: 1, totalCount: 2, totalPages: 2 },
+    });
+    const failed = (await s.get('/system/job-runs?status=failed', session(root))).body as {
+      result: { jobName: string; error: string; result: unknown }[];
+    };
+    expect(failed.result).toHaveLength(1);
+    expect(failed.result[0]).toMatchObject({
+      jobName: 'core.audit.system.outbox-retention',
+      error: 'connection reset',
+      result: null,
+    });
+    const one = (await s.get('/system/job-runs?jobName=core.audit.retention', session(root)))
+      .body as { result: { result: unknown }[] };
+    expect(one.result[0]!.result).toEqual({ removed: 12, capped: false });
+    expect((await s.get('/system/job-runs?pageSize=0', session(root))).status).toBe(422);
+  });
+
   it('answers 403 to a plain User and changes nothing', async () => {
     const s = await start();
     const plain = await s.signedIn('plain');
     const id = await deadDelivery(s);
     expect((await s.get('/system/outbox', session(plain))).status).toBe(403);
+    expect((await s.get('/system/job-runs', session(plain))).status).toBe(403);
     expect(
       (await s.call('POST', `/system/outbox/deliveries/${id}/requeue`, session(plain))).status,
     ).toBe(403);

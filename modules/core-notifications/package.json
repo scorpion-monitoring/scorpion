@@ -7,6 +7,7 @@
   "exports": {
     "./module": "./module.ts",
     "./public": "./public.ts",
+    "./ui": "./ui/index.ts",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -23,8 +24,18 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/testing": "workspace:*",
+    "@scorpion/ui-kit": "workspace:*",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1"
+  },
+  "peerDependencies": {
+    "@scorpion/core-ui-shell": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@scorpion/core-ui-shell": {
+      "optional": true
+    }
   }
 }

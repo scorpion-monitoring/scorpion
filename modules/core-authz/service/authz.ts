@@ -18,7 +18,7 @@ import {
 import { ids, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { defaultGrant, role, roleAssignment, rolePermission } from '../db/schema.ts';
-import type { AuthzService, RoleInfo } from '../public.ts';
+import type { AuthzService, PermissionInfo, RoleInfo } from '../public.ts';
 import {
   ADMIN_ROLE_KEY,
   effectivePermissions,
@@ -190,6 +190,16 @@ export function createAuthzService(
     return found;
   }
 
+  const infoOf = (permission: {
+    id: string;
+    module: string;
+    description: string;
+  }): PermissionInfo => ({
+    id: permission.id,
+    module: permission.module,
+    description: permission.description,
+  });
+
   async function describeRoles(keys?: string[]): Promise<RoleInfo[]> {
     const roles = await ctx.db
       .select({ id: role.id, key: role.key, label: role.label, system: role.system })
@@ -270,6 +280,23 @@ export function createAuthzService(
     async listRoles(actor) {
       await requireNow(actor, PERMISSION_ROLE_READ);
       return describeRoles();
+    },
+
+    async listPermissions(actor) {
+      await requireNow(actor, PERMISSION_ROLE_READ);
+      return [...declaredInfo.values()].map(infoOf).sort((a, b) => a.id.localeCompare(b.id));
+    },
+
+    async permissionsHeldBy(actor) {
+      if (actor.kind !== 'user') throw new Unauthorized();
+      const held = await permissionsOf(actor.userId, true);
+      return [...held]
+        .filter((id) => withinScopes(actor, id))
+        .flatMap((id) => {
+          const info = declaredInfo.get(id);
+          return info ? [infoOf(info)] : [];
+        })
+        .sort((a, b) => a.id.localeCompare(b.id));
     },
 
     async rolesOf(actor, userId) {

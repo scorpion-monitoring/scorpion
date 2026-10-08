@@ -17,6 +17,7 @@ import {
   type LoginStateService,
 } from './login-state.ts';
 import { BadRequest, InvalidIdToken, ProviderUnavailable } from './oidc-errors.ts';
+import type { LoginErrorCode } from '../problem-types.ts';
 import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
 import { CLOCK_SKEW_SECONDS, verifyIdToken, type IdentityClaims } from './oidc-token.ts';
@@ -76,6 +77,8 @@ export interface OidcService {
   readonly landing: string;
   /** Where it goes when a link mail was sent instead of a sign-in: the sign-in page with a notice. Fixed as well. */
   readonly checkMailLanding: string;
+  /** Where a browser goes when the sign-in failed: the sign-in page with a fixed `error` code (ADR 0029). */
+  loginErrorLanding(code: LoginErrorCode): string;
   /** Starts a login for anyone. 404 for a provider that is not configured, 502 when it cannot be reached. */
   start(providerId: string): Promise<StartedLogin>;
   /** Starts the flow that adds a provider to the signed-in caller's account. Session only. */
@@ -338,6 +341,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
   return {
     landing: url(ctx.config.BASE_PATH, '/'),
     checkMailLanding: url(ctx.config.BASE_PATH, '/login?notice=check-mail'),
+    loginErrorLanding: (code) => url(ctx.config.BASE_PATH, `/login?error=${code}`),
 
     async listProviders() {
       const { oidcProviders } = await settings.get();

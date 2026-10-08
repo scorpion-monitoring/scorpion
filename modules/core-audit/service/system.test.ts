@@ -58,6 +58,50 @@ describe('the outbox overview', () => {
   });
 });
 
+describe('the job-run history', () => {
+  it('pages the runs newest first with their result counts, and filters by name and status', async () => {
+    const s = await audit.startShared();
+    const admin = await s.actor('admin');
+    const name = `core.audit.test-${randomUUID()}`;
+    for (const [i, status] of (['succeeded', 'failed', 'succeeded'] as const).entries()) {
+      await s.pool.query(
+        `insert into kernel_job_run (id, job_name, module, job_id, attempt, status, timeout_seconds, started_at, finished_at, duration_ms, error, result)
+         values ($1, $2, 'core.audit', $2, 1, $3, 60, now() - ($4 || ' minutes')::interval, now(), 7, $5, $6::jsonb)`,
+        [
+          randomUUID(),
+          name,
+          status,
+          String(10 - i),
+          status === 'failed' ? 'boom' : null,
+          status === 'failed' ? null : JSON.stringify({ removed: i }),
+        ],
+      );
+    }
+    const first = await s.audit.system.jobRuns(admin, { jobName: name }, { page: 0, pageSize: 2 });
+    expect(first.total).toBe(3);
+    expect(first.runs.map((r) => r.result)).toEqual([{ removed: 2 }, null]);
+    const rest = await s.audit.system.jobRuns(admin, { jobName: name }, { page: 1, pageSize: 2 });
+    expect(rest.runs).toHaveLength(1);
+    const failed = await s.audit.system.jobRuns(
+      admin,
+      { jobName: name, status: 'failed' },
+      { page: 0, pageSize: 10 },
+    );
+    expect(failed.runs.map((r) => r.error)).toEqual(['boom']);
+  });
+
+  it('is denied to a plain User and to an anonymous caller', async () => {
+    const s = await audit.startShared();
+    const paging = { page: 0, pageSize: 10 };
+    await expect(s.audit.system.jobRuns(await s.actor('user'), {}, paging)).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(s.audit.system.jobRuns({ kind: 'anonymous' }, {}, paging)).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+});
+
 describe('requeue of a dead outbox delivery', () => {
   it('puts it back, the dispatcher delivers it, and the repair is on the record with the actor', async () => {
     const s = await audit.startShared();

@@ -439,6 +439,49 @@ export function prune(value: unknown, node: FieldNode): unknown {
   }
 }
 
+/** Structural equality of two JSON values (key order does not matter). */
+export function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, index) => sameJson(item, b[index]))
+    );
+  }
+  if (isObject(a) && isObject(b)) {
+    const keys = Object.keys(a);
+    return (
+      keys.length === Object.keys(b).length &&
+      keys.every((key) => key in b && sameJson(a[key], b[key]))
+    );
+  }
+  return false;
+}
+
+/**
+ * What a settings form stores: the values minus every one that equals its default. A saved form must not
+ * freeze today's defaults into the instance, or a later change of a default would never reach it (the
+ * server fills a missing key in from the schema). A value that differs stays, as does a key the schema does
+ * not name and an array (an item is stored whole). An object that is not itself the default is kept with
+ * only its changed keys. A field with no default (a required one) is always kept.
+ */
+export function omitDefaults(value: unknown, node: FieldNode): unknown {
+  if (node.kind !== 'object' || !isObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const child = node.children.find((candidate) => candidate.key === key);
+    if (!child) {
+      out[key] = entry;
+      continue;
+    }
+    if (child.defaultValue !== undefined && sameJson(entry, child.defaultValue)) continue;
+    out[key] = omitDefaults(entry, child);
+  }
+  return out;
+}
+
 /** Which variant of a `oneOf` a value matches: the first whose `const` and `enum` properties agree with it. */
 export function variantIndex(variants: readonly JsonSchema[], value: unknown): number {
   if (!isObject(value)) return -1;

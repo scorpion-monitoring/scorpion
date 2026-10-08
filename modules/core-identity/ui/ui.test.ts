@@ -7,7 +7,6 @@ import { ApiError } from '@scorpion/contracts/client';
 import { catalogueProblems } from '@scorpion/ui-kit/i18n';
 import { describe, expect, it } from 'vitest';
 import manifest from '../module.ts';
-import { USER_PERMISSIONS } from '../permissions.ts';
 import { MAX_AVATAR_BYTES } from './limits.ts';
 import routes, { messages } from './index.ts';
 import { IDENTITY_NAV, IDENTITY_ROUTES } from './routes.ts';
@@ -109,14 +108,6 @@ describe('the pages of core.identity', () => {
 });
 
 describe('the constants the pages share with the server', () => {
-  it('offer as the scopes of a token exactly what the role `user` holds', () => {
-    expect([...USER_PERMISSIONS].sort()).toEqual(
-      Object.keys(manifest.permissions ?? {})
-        .filter((permission) => USER_PERMISSIONS.includes(permission))
-        .sort(),
-    );
-  });
-
   it('check an avatar against the upload ceiling of core.blob', () => {
     expect(MAX_AVATAR_BYTES).toBe(MAX_UPLOAD_BYTES);
   });
@@ -152,7 +143,18 @@ describe('the loaders', () => {
       providers: providers.result,
       returnTo: '/profile',
       notice: 'check-mail',
+      error: null,
     });
+    // The code of a failed provider sign-in: only a code of the fixed list is taken (ADR-0029).
+    expect((await loadLogin(context(api, '?error=provider-denied'))).error).toBe('provider-denied');
+    for (const bad of [
+      '?error=<script>',
+      '?error=Secret+reason',
+      '?error=',
+      '?error=constructor',
+    ]) {
+      expect((await loadLogin(context(api, bad))).error, bad).toBeNull();
+    }
     expect(await loadLogin(context(api, '?notice=<script>'))).toMatchObject({
       returnTo: null,
       notice: null,
@@ -190,16 +192,27 @@ describe('the loaders', () => {
       '/account/sessions': { result: [] },
       '/auth/oidc/providers': providers,
       '/preferences': { result: [{ key: 'notifications.locale', value: 'de' }] },
+      '/account/permissions': {
+        result: [
+          { id: 'core.identity.me.read', module: 'core.identity', description: 'See who you are' },
+        ],
+      },
     };
     expect(await loadProfile(context(apiOf(base)))).toMatchObject({
       locale: 'de',
       tokens: [],
       sessions: [],
+      // What the token form offers as scopes: the caller's own permissions, as the API lists them.
+      permissions: [
+        { id: 'core.identity.me.read', module: 'core.identity', description: 'See who you are' },
+      ],
     });
     const limited = await loadProfile(
       context(apiOf({ ...base, '/tokens': 403, '/preferences': 403 })),
     );
     expect(limited).toMatchObject({ tokens: null, locale: null });
+    const blind = await loadProfile(context(apiOf({ ...base, '/account/permissions': 403 })));
+    expect(blind.permissions).toBeNull();
     await expect(
       loadProfile(context(apiOf({ ...base, '/account/sessions': 500 }))),
     ).rejects.toMatchObject({

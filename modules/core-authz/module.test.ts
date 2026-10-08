@@ -101,10 +101,10 @@ describe('what the module imports', () => {
 
 describe('the system methods (ADR 0015)', () => {
   // `listHoldersAsSystem`, `assignRoleAsSystem` and `removeAllAssignments` check no permission, so no
-  // route may reach them. Since M5 sprint 3 core.authz has one route of its own, the one that edits the
-  // permissions of a role (listing roles and giving one stay in core.identity); it is the only one, and no
-  // route file in the repository names the system methods.
-  it('registers exactly one route, the permissions of a role, and touches no system method', () => {
+  // route may reach them. Since M5 sprint 3 core.authz has routes of its own: the one that edits the
+  // permissions of a role and (sprint 4) the two lists of permissions (listing roles and giving one stay in
+  // core.identity); no route file in the repository names the system methods.
+  it('registers exactly three routes, the permissions of a role and two lists of permissions, and touches no system method', () => {
     const registered: string[] = [];
     const SYSTEM = ['listHoldersAsSystem', 'assignRoleAsSystem', 'removeAllAssignments'];
     const service = new Proxy(
@@ -124,7 +124,11 @@ describe('the system methods (ADR 0015)', () => {
       service: () => service,
     };
     authzModule.routes!(registrar as never, {} as never);
-    expect(registered).toEqual(['PUT /roles/{key}/permissions']);
+    expect(registered.sort()).toEqual([
+      'GET /account/permissions',
+      'GET /permissions',
+      'PUT /roles/{key}/permissions',
+    ]);
   });
 
   it('are not named in any route file of any module', () => {

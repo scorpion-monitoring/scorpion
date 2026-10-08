@@ -92,8 +92,12 @@ test.describe('a sign-in at a provider', () => {
     });
     await page.goto(at('/login'));
     await providerButton(page).click();
-    // The account exists but waits: nobody is signed in.
-    await expect(page.getByText('waiting for approval')).toBeVisible();
+    // The account exists but waits: nobody is signed in, and the sign-in page says so (ADR-0029: the
+    // callback sent the browser here with a fixed code, not a page of JSON).
+    await expect(page).toHaveURL(/\/login\?error=account-pending$/);
+    await expect(
+      page.getByRole('heading', { name: 'Your account is waiting for approval' }),
+    ).toBeVisible();
     expect((await page.context().cookies()).some((c) => c.name === '__Host-session')).toBe(false);
 
     await approve(playwright, baseURL, at, 'newbie');
@@ -104,6 +108,34 @@ test.describe('a sign-in at a provider', () => {
     await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
     await page.getByRole('button', { name: 'Account menu' }).click();
     await expect(page.locator('#account-menu').getByText('Signed in as newbie')).toBeVisible();
+  });
+
+  test('[ASVS-10.2.1] says why a sign-in failed on the sign-in page, with a fixed code and none of the provider’s words', async ({
+    page,
+    at,
+  }) => {
+    signInAs({
+      subject: 'sub-broken',
+      email: 'broken@example.org',
+      emailVerified: true,
+      preferredUsername: 'broken',
+    });
+    await page.goto(at('/login'));
+    idp.fail.token = true;
+    try {
+      await providerButton(page).click();
+      await expect(page).toHaveURL(/\/login\?error=provider-unavailable$/);
+      await expect(page.getByRole('alert')).toContainText(
+        'The sign-in provider could not be reached or answered unexpectedly.',
+      );
+    } finally {
+      idp.fail.token = false;
+    }
+    // A made-up code in the address shows nothing: the page takes only the codes it knows.
+    await page.goto(`${at('/login')}?error=Secret+provider+text`);
+    await expect(page.getByRole('heading', { name: 'Sign in', level: 1 })).toBeVisible();
+    await expect(page.getByText('Secret provider text')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
   });
 
   test('does not sign in an address that an account holds: a mail goes to its holder, who connects the provider', async ({

@@ -2,6 +2,7 @@
 // **throw** when they cannot get their data (defect 12): an `ApiError` becomes the error page.
 import type { UiLoadContext } from '@scorpion/contracts';
 import { ApiError, unwrap, type ApiClient } from '@scorpion/contracts/client';
+import { LOGIN_ERROR_CODES, type LoginErrorCode } from '../problem-types.ts';
 import { PAGE_SIZE, RETURN_TO_MAX } from './limits.ts';
 
 export interface PublicProvider {
@@ -17,6 +18,8 @@ export interface LoginData {
   /** The raw `returnTo` of the address; the page checks it against the base path before it goes there. */
   returnTo: string | null;
   notice: LoginNotice | null;
+  /** Why a sign-in at a provider failed, from the fixed list the callback redirects with (ADR 0029); anything else is ignored. */
+  error: LoginErrorCode | null;
 }
 
 const NOTICES: readonly LoginNotice[] = ['check-mail', 'password-changed', 'signed-out'];
@@ -33,6 +36,7 @@ export async function loadLogin({ api, url }: UiLoadContext): Promise<LoginData>
     providers: await providersOf(api),
     returnTo: returnTo !== null && returnTo.length <= RETURN_TO_MAX ? returnTo : null,
     notice: NOTICES.find((known) => known === notice) ?? null,
+    error: LOGIN_ERROR_CODES.find((known) => known === url.searchParams.get('error')) ?? null,
   };
 }
 
@@ -79,6 +83,8 @@ export interface ProfileData {
       }[]
     | null;
   sessions: { id: string; createdAt: string; lastSeenAt: string; current: boolean }[] | null;
+  /** What the caller holds now (the scopes a new token may name), or `null` when the caller may not list them. */
+  permissions: { id: string; module: string; description: string }[] | null;
   providers: PublicProvider[];
   /** The stored language preference (`en`, `de`), or `null` for "as the browser says". */
   locale: string | null;
@@ -88,12 +94,13 @@ export const LOCALE_PREFERENCE = 'notifications.locale';
 
 export async function loadProfile({ api }: UiLoadContext): Promise<ProfileData> {
   const query = { pageSize: PAGE_SIZE };
-  const [profile, tokens, sessions, providers, preferences] = await Promise.all([
+  const [profile, tokens, sessions, providers, preferences, permissions] = await Promise.all([
     unwrap(api.GET('/account/profile')),
     allowed(unwrap(api.GET('/tokens', { params: { query } }))),
     allowed(unwrap(api.GET('/account/sessions', { params: { query } }))),
     providersOf(api),
     allowed(unwrap(api.GET('/preferences', { params: { query } }))),
+    allowed(unwrap(api.GET('/account/permissions', { params: { query: { pageSize: '500' } } }))),
   ]);
   const stored = preferences?.result.find((preference) => preference.key === LOCALE_PREFERENCE);
   return {
@@ -101,6 +108,7 @@ export async function loadProfile({ api }: UiLoadContext): Promise<ProfileData> 
     tokens: tokens?.result ?? null,
     sessions: sessions?.result ?? null,
     providers,
+    permissions: permissions?.result ?? null,
     locale: typeof stored?.value === 'string' ? stored.value : null,
   };
 }

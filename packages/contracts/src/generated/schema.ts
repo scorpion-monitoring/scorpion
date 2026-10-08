@@ -87,6 +87,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 500. */
+                    pageSize?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Every permission a loaded module declares, by id, with the module and a description. What a role editor offers. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                /** @description The id of the module that declares the permission. */
+                                module: string;
+                                description: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 500. */
+                    pageSize?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The permissions the caller holds now, by id. For an access token only those its scopes name as well. What a token form offers as scopes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                /** @description The id of the module that declares the permission. */
+                                module: string;
+                                description: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings": {
         parameters: {
             query?: never;
@@ -4729,21 +4907,21 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026). */
+                /** @description A browser (it asks for `text/html`) is redirected when the sign-in failed too: to the sign-in page with `?error=<code>`, a fixed code (`account-pending`, `state-invalid`, `provider-denied`, `provider-unavailable`, `verification-failed`, `not-allowed`, `already-linked`), never text of the provider (ADR 0029). Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026). */
                 302: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description The state is unknown, expired, used or from another browser, or the provider refused. */
+                /** @description The state is unknown, expired, used or from another browser, or the provider refused. Answered to a client that does not ask for `text/html`; a browser is redirected (see 302). */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description The id_token did not pass validation, or the account may not sign in. */
+                /** @description The id_token did not pass validation, or the account may not sign in. Not for a browser (see 302). */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -6035,6 +6213,8 @@ export interface paths {
                                 subjectType: string | null;
                                 subjectId: string | null;
                                 payload?: unknown;
+                                /** @description The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only). */
+                                userName: string | null;
                             }[];
                         };
                     };
@@ -6133,6 +6313,8 @@ export interface paths {
                             subjectType: string | null;
                             subjectId: string | null;
                             payload?: unknown;
+                            /** @description The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only). */
+                            userName: string | null;
                         };
                     };
                 };
@@ -6243,6 +6425,111 @@ export interface paths {
                 };
                 /** @description Not allowed. */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/job-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                    /** @description The exact job name. */
+                    jobName?: string;
+                    status?: "running" | "succeeded" | "failed";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Job runs, newest first (`startedAt`, then id). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                jobName: string;
+                                module: string;
+                                attempt: number;
+                                /** @enum {string} */
+                                status: "running" | "succeeded" | "failed";
+                                /** Format: date-time */
+                                startedAt: string;
+                                /** Format: date-time */
+                                finishedAt: string | null;
+                                durationMs: number | null;
+                                /** @description The failure, masked and cut short. Never a stack. */
+                                error: string | null;
+                                /** @description The counts and flags the handler returned, for example `{ removed: 12 }`. */
+                                result: {
+                                    [key: string]: number | boolean | string;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };

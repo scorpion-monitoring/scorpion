@@ -365,6 +365,25 @@ Work items
 Definition of done: the four acceptance journeys pass in CI under both base paths; no serious axe violation on any screen;
 `pnpm check`, the full `pnpm test` and `pnpm test:e2e` are green on `dev` after the merge; `0.7.0` is tagged and merged back into `dev`.
 
+### Corrections found in sprint 4
+
+Where the plan was silent or wrong, the code and the maintainer's answers won. Sprint 4 went into two pull requests (the operations screens, then the inbox, the dashboard and the journeys); this part is the first.
+
+- **The audit list pages by offset, not by keyset.** The plan says "keyset load more"; `GET /audit` has pages (0-based, the legacy envelope) and its CSV export reads by keyset. "Load more" asks for the next page and keeps each id once (backlog: a cursor on the list).
+- **The list view is no longer audited** (item 1; maintainer's recommendation taken). The Logs page pages and refreshes it, and an entry per page would fill the table it reads. Opening one entry and the CSV export stay audited. A refused read of the list (403) is not on record either (backlog).
+- **The user column is joined in the API, not in the page.** `GET /audit` and `GET /audit/{id}` carry `userName`, read through the public service of `core.identity` (`core.audit` already depended on it), so the page makes no call per row and an account that was purged is `null`. The page says "deleted account" and shows the first characters of the id.
+- **`GET /system/job-runs`** has the permission `core.audit.system.read` (item 2), the list envelope, the filters `jobName` and `status`, and the masked `error` and `result` the kernel keeps. `pnpm test:contract` is still the stub of M8, so the "contract test" is the route test that reads the real answer (`audit-routes.test.ts`) and the generated OpenAPI document.
+- **"Requeue" and the test mail need no recent authentication** (they are audited, not step-up); the notification and outbox requeues answer 403, 404 and 409 on the page in words.
+- **The retention numbers on the System page are read-only with a link.** They are settings of `core.audit`; the generic settings form already edits them (with `omitDefaults`), so the page shows the five numbers and links there instead of repeating a form.
+- **The privacy text is the operator's, not ours.** The legal texts are Markdown the operator writes in the branding settings; the repository has no default text. The sentence "the id of a deleted account stays in the audit trail until the retention period ends" is in the description of that setting and in the README of `core.audit`.
+- **Item E (OIDC callback)** was decided with the maintainer on 2026-10-08: a browser (`Accept: text/html`) is redirected to `/login?error=<code>`, any other client keeps the problem answer; the codes are a fixed list. ADR-0029 records it.
+- **Item F** (`GET /permissions`, `GET /account/permissions`) went into the first pull request, as the maintainer chose. `GET /permissions` needs `core.authz.role.read`; `GET /account/permissions` needs the new permission `core.authz.account.read`, which `core.authz` gives to the role `user` through `authz.defaultRole`. An access token sees only its scopes (scope ∩ owner). Both are in `core.authz`, which had a route of its own already (`PUT /roles/{key}/permissions`).
+- **Item A** is done in the form, not in the API: `omitDefaults(values, describeRoot(schema))` drops every value that equals its default before `PUT /settings/{module}` (an object that is not the default keeps only its changed keys). The server stores what it is given, so nothing else changed; values saved earlier keep their defaults until they are saved again.
+- **Item B**: removing an item asks first (the dialog of `ConfirmDialog`); an item nothing was typed in is removed at once.
+- **Item C**: `API_TIMEOUT_MS` is a limit on **silence** (no answer yet, or a pause in the body), not on the whole time, so a long CSV download is not cut off while it flows. The proxy answers 504; the page server's own calls to the API use the same value. An event stream is exempt once its headers say `text/event-stream`.
+- **Item D**: the rejection mail already named the contact address. What was missing is the screens: the "check your mail" page and every refusal of a password say whom to ask, the same way for every reason (so a declined registration is not told from a wrong password), with the contact address from the branding settings and the instance name when there is none.
+- **The bell, the dashboard cards and the notification preferences are pages of `core.notifications` and `core.identity`**, not of the shell; the first pull request does not have them (see the second part).
+
 ## 8. Acceptance (from implementation.md) mapped to tests
 
 | Acceptance criterion                                                      | Where it is proved                                                                          |

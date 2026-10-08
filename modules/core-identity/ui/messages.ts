@@ -18,6 +18,10 @@ const accountMessages: UiMessages = {
     'login.forgot': 'Forgot your password?',
     'login.register': 'Create an account',
     'login.failed': 'The username or password is wrong.',
+    'login.failedHelp':
+      'If you registered and cannot sign in, your registration may still be waiting or may have been declined. Write to {contact}.',
+    'login.failedHelpNone':
+      'If you registered and cannot sign in, your registration may still be waiting or may have been declined. Contact the administrators of {instance}.',
     'login.throttled.one': 'Too many failed attempts. Try again in {count} second.',
     'login.throttled.other': 'Too many failed attempts. Try again in {count} seconds.',
     'login.throttled.later': 'Too many failed attempts. Try again later.',
@@ -31,6 +35,16 @@ const accountMessages: UiMessages = {
       'If an account already uses the address your provider gave us, its owner has been sent a message with a link. Nobody was signed in.',
     'login.notice.passwordChanged': 'Your password was changed. Sign in again with the new one.',
     'login.notice.signedOut': 'You were signed out.',
+    'login.oidcError.account-pending':
+      'Your account is waiting for approval. You are told by mail when an administrator has looked at it.',
+    'login.oidcError.state-invalid': 'This sign-in link is not valid or has expired. Start again.',
+    'login.oidcError.provider-denied': 'The sign-in at the provider was not completed. Try again.',
+    'login.oidcError.provider-unavailable':
+      'The sign-in provider could not be reached or answered unexpectedly. Try again later.',
+    'login.oidcError.verification-failed':
+      'The answer of the sign-in provider could not be verified. Try again.',
+    'login.oidcError.not-allowed': 'This account may not sign in.',
+    'login.oidcError.already-linked': 'This sign-in is already linked to an account.',
 
     'pending.title': 'Your account is waiting for approval',
     'pending.body':
@@ -58,6 +72,10 @@ const accountMessages: UiMessages = {
       'We have sent a message to the address you gave. If it can be used for a new account, the message tells you what happens next.',
     'register.done.approval':
       'An administrator has to approve a new account before you can sign in.',
+    'register.done.help':
+      'Nothing arrived within a few minutes, or your registration was declined earlier? Write to {contact}.',
+    'register.done.helpNone':
+      'Nothing arrived within a few minutes, or your registration was declined earlier? Contact the administrators of {instance}.',
     'register.done.login': 'Go to the sign-in page',
 
     'forgot.title': 'Forgot your password?',
@@ -249,6 +267,10 @@ const accountMessages: UiMessages = {
     'login.forgot': 'Passwort vergessen?',
     'login.register': 'Konto erstellen',
     'login.failed': 'Benutzername oder Passwort sind falsch.',
+    'login.failedHelp':
+      'Wenn Sie sich registriert haben und sich nicht anmelden können, wartet Ihre Registrierung vielleicht noch oder wurde nicht freigegeben. Schreiben Sie an {contact}.',
+    'login.failedHelpNone':
+      'Wenn Sie sich registriert haben und sich nicht anmelden können, wartet Ihre Registrierung vielleicht noch oder wurde nicht freigegeben. Wenden Sie sich an die Administratoren von {instance}.',
     'login.throttled.one':
       'Zu viele fehlgeschlagene Versuche. Bitte in {count} Sekunde erneut versuchen.',
     'login.throttled.other':
@@ -267,6 +289,18 @@ const accountMessages: UiMessages = {
     'login.notice.passwordChanged':
       'Ihr Passwort wurde geändert. Melden Sie sich mit dem neuen Passwort erneut an.',
     'login.notice.signedOut': 'Sie wurden abgemeldet.',
+    'login.oidcError.account-pending':
+      'Ihr Konto wartet auf Freigabe. Sie erfahren per E-Mail, wenn eine Administratorin oder ein Administrator es geprüft hat.',
+    'login.oidcError.state-invalid':
+      'Dieser Anmeldelink ist ungültig oder abgelaufen. Beginnen Sie von vorn.',
+    'login.oidcError.provider-denied':
+      'Die Anmeldung beim Anbieter wurde nicht abgeschlossen. Bitte versuchen Sie es erneut.',
+    'login.oidcError.provider-unavailable':
+      'Der Anmeldeanbieter war nicht erreichbar oder hat unerwartet geantwortet. Bitte versuchen Sie es später erneut.',
+    'login.oidcError.verification-failed':
+      'Die Antwort des Anmeldeanbieters konnte nicht geprüft werden. Bitte versuchen Sie es erneut.',
+    'login.oidcError.not-allowed': 'Dieses Konto darf sich nicht anmelden.',
+    'login.oidcError.already-linked': 'Diese Anmeldung ist bereits mit einem Konto verknüpft.',
 
     'pending.title': 'Ihr Konto wartet auf Freigabe',
     'pending.body':
@@ -296,6 +330,10 @@ const accountMessages: UiMessages = {
       'Wir haben eine Nachricht an die angegebene Adresse gesendet. Wenn sie für ein neues Konto verwendet werden kann, steht darin, wie es weitergeht.',
     'register.done.approval':
       'Ein Administrator muss ein neues Konto freigeben, bevor Sie sich anmelden können.',
+    'register.done.help':
+      'Ist innerhalb weniger Minuten nichts angekommen, oder wurde Ihre Registrierung früher abgelehnt? Schreiben Sie an {contact}.',
+    'register.done.helpNone':
+      'Ist innerhalb weniger Minuten nichts angekommen, oder wurde Ihre Registrierung früher abgelehnt? Wenden Sie sich an die Administratoren von {instance}.',
     'register.done.login': 'Zur Anmeldeseite',
 
     'forgot.title': 'Passwort vergessen?',
