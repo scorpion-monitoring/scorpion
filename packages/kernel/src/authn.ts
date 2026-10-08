@@ -13,6 +13,11 @@ export interface AuthenticationRequest {
    * validated yet and must not be read.
    */
   context: Context;
+  /**
+   * A check that must not count as activity (the re-check of an open event stream): it validates the
+   * credentials as always but moves no inactivity timer and writes nothing. Default `false`.
+   */
+  passive?: boolean;
 }
 
 /**

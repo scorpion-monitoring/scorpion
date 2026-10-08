@@ -47,4 +47,4 @@ export {
   type RouteHandler,
 } from './route.ts';
 export { basePrefix, isLocalPath, stripBase, url } from './url.ts';
-export type { UiLoadContext, UiMessages, UiRoute } from './ui.ts';
+export type { UiLoadContext, UiMessages, UiRoute, UiWidgets } from './ui.ts';

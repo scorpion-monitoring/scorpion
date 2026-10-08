@@ -9,6 +9,21 @@ import type { IdentityMailData } from './mail-templates.ts';
 /** The user preference that picks a person's language (registered by core.notifications). */
 export const LOCALE_PREFERENCE = 'notifications.locale';
 
+/**
+ * The identity mails that also earn an inbox item (M5 sprint 4, recorded in the README of
+ * core.notifications). A mail earns one when the person it goes to is an account and may be reading the
+ * application: a registration that waits for review (to the administrators, with a link to the page), the
+ * approval of an account (the first thing a person finds after signing in) and the notice that somebody
+ * tried to register with the address of an account (a security notice for its holder). The rest do not: a
+ * link that is a credential never goes to an inbox (the template is `sensitive`), the welcome mail goes to
+ * somebody who cannot sign in yet, and a rejected account is gone.
+ */
+export const INBOX_TEMPLATES: ReadonlySet<keyof IdentityMailData> = new Set([
+  'identity.registration-request',
+  'identity.approved',
+  'identity.register-attempt',
+]);
+
 export interface Recipient {
   address: string;
   /** An opaque user id, kept on the delivery row for the status list. */
@@ -42,6 +57,8 @@ export function createIdentityMail(deps: {
         template,
         data,
         recipient: to,
+        // Only for an account (a user id); core.notifications still honours the person's switches.
+        inApp: INBOX_TEMPLATES.has(template) && to.userId !== undefined,
         locale,
       });
     },

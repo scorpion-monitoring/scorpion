@@ -13,7 +13,7 @@ requirements:
     evidence:
       - test: ASVS-10.1.1
       - code: modules/core-identity/service/oidc.ts
-    note: 'Server-side code flow: only the id_token is read from the token response, verified and discarded; the access token and any refresh token are never stored, forwarded or logged, and the browser gets only the opaque session cookie. The client secret goes only to the token endpoint.'
+    note: 'Server-side code flow: only the id_token is read from the token response, verified and discarded; the access token and any refresh token are never stored, forwarded or logged, and the browser gets only the opaque session cookie. The client secret goes only to the token endpoint. M5 sprint 4: the flow is unchanged; the session a provider login creates is an ordinary session, which the live inbox stream re-checks like any other (ADR-0028).'
   - id: v5.0.0-10.1.2
     status: pass
     evidence:

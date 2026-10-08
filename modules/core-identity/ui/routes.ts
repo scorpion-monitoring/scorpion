@@ -2,7 +2,7 @@
 // it without loading Svelte. The browser half (`./index.ts`) lists the same paths with their components,
 // and `ui.test.ts` checks that the two agree. Every public page is also listed in `PUBLIC_PAGES` of
 // core.ui-shell, which is what makes a page public on purpose.
-import type { NavEntry, RouteEntry } from '@scorpion/core-ui-shell/public';
+import type { NavEntry, RouteEntry, WidgetEntry } from '@scorpion/core-ui-shell/public';
 
 export const IDENTITY_ROUTES: RouteEntry[] = [
   {
@@ -82,6 +82,16 @@ export const IDENTITY_NAV: NavEntry[] = [
     icon: 'list',
     section: 'admin',
     order: 20,
+    permission: 'core.identity.user.list-pending',
+  },
+];
+
+export const IDENTITY_WIDGETS: WidgetEntry[] = [
+  {
+    id: 'identity.pending-approvals',
+    slot: 'dashboard',
+    component: 'pending-approvals',
+    order: 10,
     permission: 'core.identity.user.list-pending',
   },
 ];

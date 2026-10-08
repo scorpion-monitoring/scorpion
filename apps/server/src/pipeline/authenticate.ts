@@ -1,4 +1,10 @@
-import { ANONYMOUS, Unauthorized, type AppEnv, type AppRoute } from '@scorpion/contracts';
+import {
+  ANONYMOUS,
+  Unauthorized,
+  type Actor,
+  type AppEnv,
+  type AppRoute,
+} from '@scorpion/contracts';
 import type { Authenticator, Logger, RateLimit, RateLimiter } from '@scorpion/kernel';
 import type { MiddlewareHandler } from 'hono';
 import type { ClientIpResolver } from './client-ip.ts';
@@ -19,6 +25,34 @@ function presentsToken(headers: { get(name: string): string | undefined }): bool
     /^bearer(\s|$)/i.test(headers.get('authorization') ?? '') ||
     headers.get('x-api-key') !== undefined
   );
+}
+
+/**
+ * "Is the caller of this request still good?", for a response that lives on after the check of step 3. The
+ * credentials are read again from the same request and judged by the same authenticator, passively (no
+ * sliding of a session). Good means the same person by the same means: the same session or token.
+ * Anything that is not a clean "yes" is a "no", including an error: a stream must never outlive a doubt.
+ */
+function recheckOf(
+  authenticator: Authenticator,
+  c: Parameters<Authenticator>[0]['context'],
+  first: Actor | undefined,
+): () => Promise<boolean> {
+  return async () => {
+    if (first === undefined || first.kind !== 'user') return false;
+    try {
+      const again = await authenticator({ context: c, passive: true });
+      return (
+        again?.kind === 'user' &&
+        again.userId === first.userId &&
+        again.via === first.via &&
+        again.sessionId === first.sessionId &&
+        again.tokenId === first.tokenId
+      );
+    } catch {
+      return false;
+    }
+  };
 }
 
 export interface FailedAttemptLimit {
@@ -70,11 +104,13 @@ export function authenticate(
         throw new TypeError('the authenticator returned something that is not an Actor');
       }
       c.set('actor', actor ?? ANONYMOUS);
+      c.set('recheckActor', recheckOf(authenticator, c, actor));
     } catch (error) {
       if (!(error instanceof Unauthorized)) throw error;
       if (tracked) await failures.limiter.consume(bucket, limit);
       if (route.public !== true) throw error;
       c.set('actor', ANONYMOUS);
+      c.set('recheckActor', () => Promise.resolve(false));
     }
     return next();
   };

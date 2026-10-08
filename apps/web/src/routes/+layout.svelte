@@ -20,6 +20,7 @@
   import Footer from '#lib/components/Footer.svelte';
   import Icon from '#lib/components/Icon.svelte';
   import Sidebar from '#lib/components/Sidebar.svelte';
+  import Widgets from '#lib/components/Widgets.svelte';
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
   import { shellMessages } from '#lib/messages.ts';
   import { uiModules } from '../generated/ui.ts';
@@ -111,6 +112,7 @@
     replaceUrl: (address) => void replaceState(address, {}),
     withReauth: (action, intent) => reauth.run(action, intent),
     toaster,
+    Widgets,
     guardLeave: (isDirty) => {
       guards.add(isDirty);
       return () => void guards.delete(isDirty);
@@ -204,6 +206,7 @@
       <div class="flex-1"></div>
       {#if !data.bootstrap}
         <ThemeToggle />
+        <Widgets slot="header" />
         <AccountMenu />
       {/if}
     </header>

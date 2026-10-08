@@ -48,7 +48,7 @@ import {
 import { createTokenService, type TokenService } from './service/tokens.ts';
 import { createUserService } from './service/users.ts';
 import type { AccountService } from './service/accounts.ts';
-import { IDENTITY_NAV, IDENTITY_ROUTES } from './ui/routes.ts';
+import { IDENTITY_NAV, IDENTITY_ROUTES, IDENTITY_WIDGETS } from './ui/routes.ts';
 import type { ApprovalService } from './service/approval.ts';
 
 export { settingsSchema, type IdentitySettings } from './service/settings.ts';
@@ -312,6 +312,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       // a registry of core.ui-shell, which is an optional peer: a profile without it skips them.
       'ui.routes': IDENTITY_ROUTES,
       'ui.nav': IDENTITY_NAV,
+      // The card of the dashboard that counts the accounts waiting for approval.
+      'ui.widget': IDENTITY_WIDGETS,
       // The mails of this module. The rendering, the layout and the delivery are core.notifications'.
       'notify.template': IDENTITY_TEMPLATES,
       // How core.notifications finds the address of the administrator who asks for a test mail.

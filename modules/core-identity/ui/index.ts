@@ -5,6 +5,7 @@ import { loadUser, loadPending, loadUsers } from './admin/loaders.ts';
 import { loadFirstAdmin, loadLogin, loadProfile } from './loaders.ts';
 
 export { messages } from './messages.ts';
+export { widgets } from './widgets.ts';
 
 const routes: UiRoute[] = [
   { path: '/login', load: loadLogin, component: () => import('./Login.svelte') },

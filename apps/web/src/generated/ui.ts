@@ -12,8 +12,8 @@ export const profileName = "full";
 export const hasShell = true;
 
 export const uiModules: UiModule[] = [
-  { package: "@scorpion/core-notifications", routes: ui0.default, messages: ui0.messages },
-  { package: "@scorpion/core-identity", routes: ui1.default, messages: ui1.messages },
-  { package: "@scorpion/core-audit", routes: ui2.default, messages: ui2.messages },
-  { package: "@scorpion/core-ui-shell", routes: ui3.default, messages: ui3.messages },
+  { package: "@scorpion/core-notifications", routes: ui0.default, messages: ui0.messages, widgets: ui0.widgets },
+  { package: "@scorpion/core-identity", routes: ui1.default, messages: ui1.messages, widgets: ui1.widgets },
+  { package: "@scorpion/core-audit", routes: ui2.default, messages: ui2.messages, widgets: ui2.widgets },
+  { package: "@scorpion/core-ui-shell", routes: ui3.default, messages: ui3.messages, widgets: ui3.widgets },
 ];

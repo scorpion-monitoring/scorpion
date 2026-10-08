@@ -86,8 +86,11 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     const app = await start();
     const { cookie } = await app.signedIn('plain');
     const body = (await app.get('/ui/navigation', { cookie })).body as Navigation;
-    // A plain user also has the profile page and its link (core.identity.profile.read).
-    expect(body.routes).toEqual(sorted(...PUBLIC_PAGES, '/fixture/open', '/profile'));
+    // A plain user also has the profile page and its link (core.identity.profile.read), and the inbox and
+    // the notification settings (core.notifications, M5 sprint 4).
+    expect(body.routes).toEqual(
+      sorted(...PUBLIC_PAGES, '/fixture/open', '/profile', '/inbox', '/profile/notifications'),
+    );
     expect(body.nav.map((entry) => entry.id)).toContain('account.profile');
     expect(body.nav.map((entry) => entry.id)).not.toContain('fixture.admin');
     expect(JSON.stringify(body)).not.toContain('/fixture/admin');
@@ -119,6 +122,8 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/fixture/admin/:id',
         '/fixture/open',
         '/profile',
+        '/inbox',
+        '/profile/notifications',
         // The administration of M5 sprint 3: users and pending approvals (core.identity), roles and settings (the shell).
         '/admin/users',
         '/admin/users/:id',
@@ -140,6 +145,8 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
       'home',
       'docs',
       'account.profile',
+      'account.inbox',
+      'account.notifications',
       'admin.users',
       'admin.users.pending',
       'admin.roles',

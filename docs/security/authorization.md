@@ -110,6 +110,7 @@ the same file answers 401 and 403 on every non-public route.
 | `POST /users/{id}/sessions/revoke`              | core.identity      | `core.identity.session.manage-any`     | default    | yes            |
 | `PUT /account/avatar`                           | core.identity      | `core.identity.avatar.update`          | strict     | no             |
 | `DELETE /notifications/inbox/{id}`              | core.notifications | `core.notifications.inbox.write`       | default    | no             |
+| `GET /inbox/stream`                             | core.notifications | `core.notifications.inbox.read`        | default    | no             |
 | `GET /notifications/deliveries`                 | core.notifications | `core.notifications.deliveries.read`   | default    | no             |
 | `GET /notifications/inbox`                      | core.notifications | `core.notifications.inbox.read`        | default    | no             |
 | `GET /notifications/inbox/unread-count`         | core.notifications | `core.notifications.inbox.read`        | default    | no             |

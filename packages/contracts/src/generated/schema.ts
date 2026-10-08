@@ -2221,6 +2221,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inbox/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A server-sent event stream (`text/event-stream`) of the caller's unread count: `event: unread` with `{"count": n}` at once and whenever it changes, and a comment line every 25 s as a heartbeat. Nothing but the number: never the title, text or link of an item. It carries no event ids and does not replay: a client that reconnects gets the current count. The stream ends when the session or token behind it stops being good (checked at each heartbeat). `Cache-Control: no-store`; the web proxy must not buffer it. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller has the most streams open that the settings allow (`inboxStream.perUser`), or the process does (`inboxStream.global`). Retry-After says when to try again. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/preferences/categories": {
         parameters: {
             query?: never;

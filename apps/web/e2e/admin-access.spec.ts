@@ -136,8 +136,16 @@ test.describe('who may open the administration', () => {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     const nav = page.getByRole('navigation', { name: 'Main navigation' });
     await expect(nav.getByText('Administration')).toBeVisible();
-    for (const name of ['Users', 'Pending approvals', 'Roles', 'Settings']) {
-      await expect(nav.getByRole('link', { name })).toBeVisible();
+    for (const name of [
+      'Users',
+      'Pending approvals',
+      'Roles',
+      'Settings',
+      'Logs',
+      'Notification status',
+      'System',
+    ]) {
+      await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
     }
   });
 });

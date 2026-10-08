@@ -87,6 +87,23 @@ export const deleteInboxItemRoute = createRoute({
   responses: { 204: { description: 'The item is deleted.' }, 403: forbidden },
 });
 
+export const inboxStreamRoute = createRoute({
+  method: 'get',
+  path: '/inbox/stream',
+  permission: 'core.notifications.inbox.read',
+  responses: {
+    200: {
+      description:
+        'A server-sent event stream (`text/event-stream`) of the caller\'s unread count: `event: unread` with `{"count": n}` at once and whenever it changes, and a comment line every 25 s as a heartbeat. Nothing but the number: never the title, text or link of an item. It carries no event ids and does not replay: a client that reconnects gets the current count. The stream ends when the session or token behind it stops being good (checked at each heartbeat). `Cache-Control: no-store`; the web proxy must not buffer it.',
+      content: { 'text/event-stream': { schema: z.string() } },
+    },
+    429: {
+      description:
+        'The caller has the most streams open that the settings allow (`inboxStream.perUser`), or the process does (`inboxStream.global`). Retry-After says when to try again.',
+    },
+  },
+});
+
 // ---- the preferences' category list ---------------------------------------------------------------
 
 const categorySchema = z.object({
@@ -261,6 +278,22 @@ export function registerNotificationRoutes(r: RouteRegistrar, service: Notificat
     await inbox.remove(c.get('actor'), c.req.valid('param').id);
     return c.body(null, 204);
   }) satisfies RouteHandler<typeof deleteInboxItemRoute, AppEnv>);
+
+  r.internal(inboxStreamRoute, (async (c) => {
+    const body = await service.inboxStream.open(c.get('actor'), {
+      recheck: c.get('recheckActor'),
+    });
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        // Tells a reverse proxy in front (nginx) not to hold the response back.
+        'x-accel-buffering': 'no',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }) satisfies RouteHandler<typeof inboxStreamRoute, AppEnv>);
 
   r.internal(listCategoriesRoute, ((c) => {
     const query = c.req.valid('query');

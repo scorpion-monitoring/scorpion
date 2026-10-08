@@ -5,6 +5,7 @@
 // the table is the source of truth and a cron sweep covers a lost listener.
 import type { Logger } from '@scorpion/kernel';
 import pg from 'pg';
+import { INBOX_CHANNEL } from './inbox-channel.ts';
 
 export const WAKE_CHANNEL = 'notify_delivery';
 
@@ -13,6 +14,8 @@ export interface WakeListenerOptions {
   log: Logger;
   /** Called at most once per `coalesceMs`, however many messages were committed meanwhile. */
   onWake: () => void | Promise<void>;
+  /** Called for every change of an inbox, with the id of its owner (no coalescing: the stream does that). */
+  onInbox?: (userId: string) => void;
   coalesceMs?: number;
   reconnectMs?: number;
 }
@@ -70,6 +73,9 @@ export function createWakeListener(options: WakeListenerOptions): WakeListener {
     });
     next.on('notification', (message) => {
       if (message.channel === WAKE_CHANNEL) wake();
+      else if (message.channel === INBOX_CHANNEL && message.payload) {
+        options.onInbox?.(message.payload);
+      }
     });
     try {
       await next.connect();
@@ -78,6 +84,7 @@ export function createWakeListener(options: WakeListenerOptions): WakeListener {
         next as unknown as { connection?: { stream?: { unref?: () => void } } }
       ).connection?.stream?.unref?.();
       await next.query(`listen ${WAKE_CHANNEL}`);
+      await next.query(`listen ${INBOX_CHANNEL}`);
       if (stopped) {
         next.removeAllListeners();
         await next.end().catch(() => undefined);

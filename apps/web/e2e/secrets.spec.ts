@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { unique } from './support/admin.ts';
+import { activeUser, adminApi, newPerson, unique } from './support/admin.ts';
 import { admin, expect, person, signIn, signInThroughPage, test } from './support/fixtures.ts';
 import { linkIn, mailTo } from './support/db.ts';
 import { readTrace, whereIs } from './support/trace.ts';
@@ -329,3 +329,50 @@ async function adminApiFor(
     },
   };
 }
+
+// The inbox (M5 sprint 4): a mail whose link is a credential never becomes an inbox item. A person with a
+// reset link waiting signs in, opens the bell, the inbox page and the live stream, and the token is on none of
+// those pages or answers; the password is in the one request that sends it.
+test('the inbox, the bell and the live stream never carry the token of a reset mail', async ({
+  browser,
+  playwright,
+  baseURL,
+  at,
+  basePath,
+}, testInfo) => {
+  test.slow();
+  const api = await adminApi(playwright, baseURL, at);
+  const who = newPerson('inboxsec');
+  await activeUser(api, at, who);
+  const email = `${who.username}@example.org`;
+  expect(
+    (await api.request.post(at('/api/internal/auth/password-reset'), { data: { email } })).status(),
+  ).toBe(202);
+  await api.dispose();
+  const reset = linkIn(await mailTo(basePath, email, 'identity.password-reset'));
+
+  const context = await browser.newContext({ baseURL });
+  await context.tracing.start({ snapshots: true, screenshots: false, sources: false });
+  const page = await context.newPage();
+  await signInThroughPage(page, at, who);
+  await page.getByRole('button', { name: /^Inbox/ }).click();
+  await expect(page.getByRole('region', { name: 'Inbox' })).toBeVisible();
+  await page.goto(at('/inbox'));
+  await expect(page.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+  const html = await page.content();
+  await page.waitForTimeout(500);
+  const zip = testInfo.outputPath('inbox-trace.zip');
+  await context.tracing.stop({ path: zip });
+  await context.close();
+
+  const exchanges = readTrace(zip);
+  expect(exchanges.some((exchange) => exchange.path.endsWith('/inbox/stream'))).toBe(true);
+  expect(whereIs(exchanges, reset.token, basePath)).toEqual([]);
+  expect(html).not.toContain(reset.token);
+  expect(whereIs(exchanges, who.password, basePath)).toEqual(['POST /auth/login requestBody']);
+  const log = readFileSync(
+    resolve(import.meta.dirname, `../test-results/stack-${testInfo.project.name}.log`),
+    'utf8',
+  );
+  expect(log).not.toContain(reset.token);
+});

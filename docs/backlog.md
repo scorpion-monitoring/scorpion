@@ -52,11 +52,11 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Unsubscribe links, digests and quiet hours.** Non-mandatory mail still has no unsubscribe link (it needs a public route and a token); no digest or
   batching; no quiet hours. The preference switches are the only control (M4 plan §9).
 - **Per-user webhooks** (a webhook for a person's own notifications) and per-event transport routing.
-- **The UI** for the inbox bell, the preference form and the delivery list is M5; the routes are ready. The preference form should read
-  `GET /notifications/preferences/categories` and write `PUT /preferences/notifications.preferences` (which replaces the whole object).
-- **`inApp` is not switched on in `core.identity`.** The flag works for any recipient with a user id, and identity passes one for the administrators'
+- ~~**The UI**~~ Done in M5 sprint 4: the inbox bell, the inbox page, the preference form (it reads `GET /notifications/preferences/categories` and writes `PUT /preferences/notifications.preferences`) and the delivery list. (was: for the inbox bell, the preference form and the delivery list is M5; the routes are ready. The preference form should read
+  `GET /notifications/preferences/categories` and write `PUT /preferences/notifications.preferences` (which replaces the whole object).)
+- ~~**`inApp` is not switched on in `core.identity`.**~~ Done in M5 sprint 4: three templates earn an inbox item (README of `core.identity`). (was: The flag works for any recipient with a user id, and identity passes one for the administrators'
   registration request and for the person's own mails. Turning it on (a registration request and an approval in the inbox) is a small change in
-  `identity-mail.ts` that needs a decision on which mails earn an inbox item; leave it for M5 together with the bell.
+  `identity-mail.ts` that needs a decision on which mails earn an inbox item; leave it for M5 together with the bell.)
 - **Inbox size per user is not capped.** Only read items are deleted (after `inboxRetentionDays`). A sender that floods one user can grow the table;
   a per-user cap (oldest read first) or a rate on `inApp` writes is the answer if it happens.
 - **Delivery rows keep the address of a purged account until `retentionDays`.** `recipient_user_id` has no foreign key (ADR-0019) and the address
@@ -161,6 +161,17 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Permission descriptions are English.** `GET /permissions` returns the text a module declares (`description`); a German administrator reads English under the roles page and the token form. A catalogue key per permission would fix it (like the labels of settings forms).
 - **The API proxy timeout is one number** for every route. A route that is slow on purpose (a large CSV) is protected by the "silence, not total time" rule; a per-route value would need the route table in the web process.
 - **Server-side page calls and the browser share `API_TIMEOUT_MS`.** The browser's own `fetch` has no timeout of its own; a hung request there waits for the proxy's 504.
+
+## Inbox and dashboard follow-ups (M5 sprint 4, second half)
+
+- **The live count has no content and no history.** A person who reads mail in another client gets no "new item" toast; the bell only shows a number. A stream of item ids (not content) would let the page add the new row without asking.
+- **The stream is per process.** Caps are per server process (`inboxStream.global`); with several API processes the total is their sum. A cap across processes needs the database or a counter in Postgres.
+- **A revoked session ends the stream within a heartbeat plus the session cache** (5 s, per process). A cross-process invalidation channel (see "Sessions follow-ups") would make it immediate.
+- **The bell's menu shows five items** and has no keyboard roving between them (Tab moves through the buttons and links). A listbox pattern is a later refinement.
+- **Widgets load in the browser only** (no server rendering), so the bell and the cards appear a moment after the page. A widget that needs data on first paint would need a `load` like a page has.
+- **The dashboard has two cards.** KPI cards are M13; a card needs only a `ui.widget` entry and a component in a module's `ui` entry.
+- **The inbox has no cap per person** (see "Notifications follow-ups (M4 sprint 3)"); now that a registration request lands there for every administrator, a flood of registrations grows every administrator's inbox. Read items are deleted after `inboxRetentionDays`.
+- **The "vocabularies" journey is flaky on its first attempt in a full e2e run** (`admin-settings.spec.ts`, "an Admin adds a term, relabels it, deactivates it and removes it"); alone it passes. The cause is not found.
 
 ## Administration screen follow-ups (M5 sprint 3)
 

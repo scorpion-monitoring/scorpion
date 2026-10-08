@@ -34,7 +34,7 @@ import {
 } from './service/transports/types.ts';
 import { webhookTransportEntry, type WebhookDeps } from './service/transports/webhook.ts';
 import { createWakeListener } from './service/wake.ts';
-import { NOTIFICATION_NAV, NOTIFICATION_ROUTES } from './ui/routes.ts';
+import { NOTIFICATION_NAV, NOTIFICATION_ROUTES, NOTIFICATION_WIDGETS } from './ui/routes.ts';
 
 export {
   settingsSchema,
@@ -72,6 +72,8 @@ export interface NotificationsModuleOptions {
   webhook?: WebhookDeps;
   /** For tests: more registry entries (a stub transport). */
   extraTransports?: TransportEntry[];
+  /** For tests: the heartbeat and the gathering time of the live inbox count (ADR-0028). */
+  inboxStream?: { heartbeatMs?: number; coalesceMs?: number };
   /** For tests: false keeps the wake-up listener off, so only a direct pass or the job delivers. */
   listen?: boolean;
 }
@@ -211,6 +213,8 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
       // peer: a profile without it skips them.
       'ui.routes': NOTIFICATION_ROUTES,
       'ui.nav': NOTIFICATION_NAV,
+      // The bell in the header and a card of the dashboard.
+      'ui.widget': NOTIFICATION_WIDGETS,
       // The templates of modules that do not exist yet ship here, registered and tested.
       [TEMPLATE_REGISTRY]: [...SHIPPED_TEMPLATES, ...SYSTEM_TEMPLATES],
       'authz.defaultRole': [{ role: 'user', permissions: USER_PERMISSIONS }],
@@ -255,6 +259,7 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
         settingsService,
         transports,
         templates: buildTemplateIndex(ctx.registry(TEMPLATE_REGISTRY)),
+        inboxStream: options.inboxStream,
       });
       const listener = createWakeListener({
         connectionString: ctx.config.DATABASE_URL,
@@ -262,6 +267,8 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
         onWake: async () => {
           await ctx.jobs.enqueue(DELIVER_JOB);
         },
+        // A change of somebody's inbox, from this process or another: the open streams look at the count.
+        onInbox: (userId) => service.inboxStream.changed(userId),
       });
       startListener = () => listener.start();
       stopListener = () => listener.stop();

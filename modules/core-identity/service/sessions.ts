@@ -61,9 +61,14 @@ export interface SessionService {
   create(userId: string, tx?: Pick<DbTx, 'insert'>, now?: Date): Promise<CreatedSession>;
   /**
    * The session behind a cookie value, or `undefined` when it is unknown, malformed, expired,
-   * revoked, or its user is no longer active.
+   * revoked, or its user is no longer active. `touch: false` is a check that is not activity (the
+   * re-check of an open event stream): it moves no inactivity end and writes nothing.
    */
-  resolve(id: string, now?: Date): Promise<ResolvedSession | undefined>;
+  resolve(
+    id: string,
+    now?: Date,
+    options?: { touch?: boolean },
+  ): Promise<ResolvedSession | undefined>;
   /** Revokes one session; unknown ids are ignored. */
   revoke(id: string): Promise<void>;
   /**
@@ -168,7 +173,7 @@ export function createSessionService(
       return { id, sessionId, expiresAt };
     },
 
-    async resolve(id, now = new Date()) {
+    async resolve(id, now = new Date(), { touch = true } = {}) {
       if (!isSessionIdFormat(id)) return undefined;
       const hash = hashSessionId(id);
 
@@ -207,7 +212,7 @@ export function createSessionService(
 
       let renewed = false;
       let expiresAt: Date | undefined;
-      if (now.getTime() - row.lastSeenAt.getTime() > SLIDE_AFTER_MS) {
+      if (touch && now.getTime() - row.lastSeenAt.getTime() > SLIDE_AFTER_MS) {
         // The inactivity end moves, but never past the absolute end (ADR 0025).
         const { sessions } = await settings.get();
         expiresAt = new Date(

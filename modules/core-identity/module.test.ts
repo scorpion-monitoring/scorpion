@@ -76,6 +76,7 @@ describe('the module', () => {
       'notify.template',
       'ui.nav',
       'ui.routes',
+      'ui.widget',
     ]);
     expect(manifest.routes).toBeDefined();
     expect(manifest.commands?.map((command) => command.name)).toEqual(['create-admin']);

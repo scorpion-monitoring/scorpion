@@ -55,7 +55,7 @@ requirements:
       - test: ASVS-7.3.1
       - doc: docs/security/sessions.md
       - code: modules/core-identity/service/sessions.ts
-    note: 'The inactivity timeout is enforced in sessions.resolve (a session unused for inactivityDays is refused) and is a setting; sessions.md records the risk analysis it rests on. The test shows the 7-day default; the choice of 7 days rests on the document.'
+    note: 'The inactivity timeout is enforced in sessions.resolve (a session unused for inactivityDays is refused) and is a setting; sessions.md records the risk analysis it rests on. The re-check of an open event stream is passive (`resolve(..., { touch: false })`): it validates but moves no timer, so an open tab is not activity (sessions.test.ts, inbox-stream-routes.test.ts). The test shows the 7-day default; the choice of 7 days rests on the document.'
   - id: v5.0.0-7.3.2
     status: pass
     evidence:
@@ -68,7 +68,7 @@ requirements:
     evidence:
       - test: ASVS-7.4.1
       - code: modules/core-identity/service/sessions.ts
-    note: 'Logout, log out everywhere and expiry delete or stop the row; other server processes may accept a revoked session for at most the 5 s cache TTL (ADR-0007).'
+    note: 'Logout, log out everywhere and expiry delete or stop the row; other server processes may accept a revoked session for at most the 5 s cache TTL (ADR-0007). M5 sprint 4 (ADR-0028): a response that outlives the check at its start, the live inbox count `GET /inbox/stream`, ends within one heartbeat (25 s) of the session or token becoming bad: the pipeline offers `recheckActor` (the same authenticator, with the credentials of the request) and the stream re-checks at every heartbeat. The tagged tests apps/server/src/inbox-stream-routes.test.ts end a stream by a logout, by an administrator ending the sessions of the person, by an expired session and by a revoked token, and apps/server/src/pipeline/authenticate.test.ts covers the re-check.'
   - id: v5.0.0-7.4.2
     status: pass
     evidence:
