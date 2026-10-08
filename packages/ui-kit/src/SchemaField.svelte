@@ -86,14 +86,16 @@
     removing = undefined;
     if (index === undefined) return;
     // Let the dialog close and give focus back first; `remove` then moves it to the item that took the place.
-    await tick();
-    await remove(index);
+    // The dialog gives focus back to the button that opened it once it has closed; the focus that follows
+    // the removal must come after that.
+    await remove(index, true);
   }
-  async function remove(index: number) {
+  async function remove(index: number, afterDialog = false) {
     const remaining = list.length - 1;
     value = list.filter((_, position) => position !== index);
     announcement = t('kit.form.itemRemoved', { label: node.label, index: index + 1 });
     await tick();
+    if (afterDialog) await new Promise((resolve) => setTimeout(resolve, 50));
     // Focus goes to the item that took its place, or the one before it, or the Add button when none is left.
     (remaining > 0
       ? firstControl(Math.min(index, remaining - 1))
