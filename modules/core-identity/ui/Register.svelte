@@ -51,6 +51,12 @@
       <h1 id="check-mail-title" class="text-2xl font-bold">{t('register.done.title')}</h1>
       <p>{t('register.done.body')}</p>
       <p>{t('register.done.approval')}</p>
+      <!-- Said to everybody alike: it must not tell a declined registration from a new one. -->
+      <p>
+        {branding().contactEmail
+          ? t('register.done.help', { contact: branding().contactEmail! })
+          : t('register.done.helpNone', { instance: branding().instanceName })}
+      </p>
       <a class="btn btn-primary" href={href('/login')}>{t('register.done.login')}</a>
     </section>
   {:else}

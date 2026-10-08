@@ -2,6 +2,7 @@
   // One field of a `SchemaForm`, and, for an object, an array or a choice, the fields inside it (the
   // component draws itself). What it draws comes from `describeField`; what is typed goes into `value`.
   import { tick, type Component } from 'svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
   import { getShell } from './context.ts';
   import FieldShell from './FieldShell.svelte';
   import type { WidgetProps } from './kit-types.ts';
@@ -69,6 +70,24 @@
     announcement = t('kit.form.itemAdded', { label: node.label, index: index + 1 });
     await tick();
     firstControl(index)?.focus();
+  }
+  // Removing an item asks first (an item can hold a lot that is typed again slowly); a text item nothing was
+  // typed in is removed at once. The dialog traps focus and Escape cancels; the form is not saved by it.
+  let removing = $state<number>();
+  function askToRemove(index: number) {
+    if (node.kind === 'scalarArray' && (list[index] === '' || list[index] === undefined)) {
+      void remove(index);
+    } else {
+      removing = index;
+    }
+  }
+  async function confirmRemove() {
+    const index = removing;
+    removing = undefined;
+    if (index === undefined) return;
+    // Let the dialog close and give focus back first; `remove` then moves it to the item that took the place.
+    await tick();
+    await remove(index);
   }
   async function remove(index: number) {
     const remaining = list.length - 1;
@@ -362,7 +381,7 @@
           class="btn btn-ghost btn-sm"
           {disabled}
           aria-label={t('kit.form.removeItem', { label: node.label, index: index + 1 })}
-          onclick={() => remove(index)}
+          onclick={() => askToRemove(index)}
         >
           {t('kit.form.remove')}
         </button>
@@ -425,7 +444,7 @@
               class="btn btn-ghost btn-xs"
               {disabled}
               aria-label={t('kit.form.removeItem', { label: node.label, index: index + 1 })}
-              onclick={() => remove(index)}
+              onclick={() => askToRemove(index)}
             >
               {t('kit.form.remove')}
             </button>
@@ -488,4 +507,15 @@
     <code class="bg-base-200 rounded p-2 text-xs break-all">{JSON.stringify(value) ?? ''}</code>
     {#if own.length > 0}<p class="text-error text-sm">{own.join(' ')}</p>{/if}
   </div>
+{/if}
+
+{#if node.kind === 'scalarArray' || node.kind === 'objectArray'}
+  <ConfirmDialog
+    open={removing !== undefined}
+    title={t('kit.form.removeTitle')}
+    message={t('kit.form.removeMessage', { label: node.label, index: (removing ?? 0) + 1 })}
+    confirmLabel={t('kit.form.remove')}
+    onconfirm={confirmRemove}
+    oncancel={() => (removing = undefined)}
+  />
 {/if}

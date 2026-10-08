@@ -93,7 +93,17 @@
         {:else if failure.type === LOCAL_ACCOUNTS_OFF}
           <Alert kind="error">{t('login.localOff')}</Alert>
         {:else if failure.status === 401}
-          <Alert kind="error">{t('login.failed')}</Alert>
+          <Alert kind="error">
+            <div class="flex flex-col gap-1">
+              <span>{t('login.failed')}</span>
+              <!-- The same for every failure: a declined registration looks like a wrong password. -->
+              <span>
+                {branding().contactEmail
+                  ? t('login.failedHelp', { contact: branding().contactEmail! })
+                  : t('login.failedHelpNone', { instance: branding().instanceName })}
+              </span>
+            </div>
+          </Alert>
         {:else if failure.status === 0}
           <Alert kind="error">{t('login.network')}</Alert>
         {:else}

@@ -7,13 +7,20 @@ import {
   type Session,
 } from '@scorpion/contracts/client';
 import { negotiateLocale, type Locale } from '@scorpion/ui-kit';
-import { apiOrigin, basePath } from './env.ts';
+import { apiOrigin, apiTimeoutMs, basePath } from './env.ts';
 
 /** The client for one request: it forwards the caller's cookie and the chain of client addresses. */
 export function clientFor(request: Request): ApiClient {
   return createApiClient({
     basePath,
     origin: apiOrigin,
+    // A call that is silent for too long fails (a page then shows the error page) instead of hanging.
+    fetch: (input, init) => {
+      if (apiTimeoutMs === 0) return fetch(input, init);
+      const own = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      const timeout = AbortSignal.timeout(apiTimeoutMs);
+      return fetch(input, { ...init, signal: own ? AbortSignal.any([own, timeout]) : timeout });
+    },
     cookie: () => request.headers.get('cookie') ?? undefined,
     headers: (): Record<string, string> => {
       const chain = request.headers.get('x-forwarded-for');

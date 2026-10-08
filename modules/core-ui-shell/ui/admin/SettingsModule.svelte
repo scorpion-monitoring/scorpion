@@ -1,13 +1,15 @@
 <script lang="ts">
   // Administration, the settings of one module: a form drawn from the module's own schema. A save sends the
-  // whole object with the version that was read; if somebody saved in between, nothing is written and the
+  // values that differ from the defaults, with the version that was read; if somebody saved in between, nothing is written and the
   // person is asked to load the current values. The server judges the values, and its messages show on
   // the fields they name.
   import {
     Breadcrumb,
     failureMessage,
+    describeRoot,
     failureOf,
     getShell,
+    omitDefaults,
     SchemaForm,
     type FormFailure,
     type JsonSchema,
@@ -45,11 +47,13 @@
       const merged = own
         ? overlay(data.values, values as Record<string, unknown>)
         : (values as Record<string, unknown>);
+      // Only what differs from the default is stored, so a later change of a default reaches this instance.
+      const stored = omitDefaults(merged, describeRoot(data.schema)) as Record<string, unknown>;
       await withReauth(() =>
         unwrap(
           api.PUT('/settings/{module}', {
             params: { path: { module: data.module } },
-            body: { version: data.version, values: merged },
+            body: { version: data.version, values: stored },
           }),
         ),
       );

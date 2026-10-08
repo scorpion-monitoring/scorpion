@@ -42,6 +42,9 @@ export const componentMessages: MessageBundles = {
     'kit.form.item': 'Item {index}',
     'kit.form.itemOf': '{label}, item {index}',
     'kit.form.removeItem': 'Remove {label}, item {index}',
+    'kit.form.removeTitle': 'Remove this item?',
+    'kit.form.removeMessage':
+      '{label}, item {index}, is taken out of the form. Nothing is saved until you save the form.',
     'kit.form.moveUp': 'Move {label}, item {index}, up',
     'kit.form.moveDown': 'Move {label}, item {index}, down',
     'kit.form.itemAdded': '{label}: item {index} added.',
@@ -118,6 +121,9 @@ export const componentMessages: MessageBundles = {
     'kit.form.item': 'Eintrag {index}',
     'kit.form.itemOf': '{label}, Eintrag {index}',
     'kit.form.removeItem': '{label}, Eintrag {index} entfernen',
+    'kit.form.removeTitle': 'Diesen Eintrag entfernen?',
+    'kit.form.removeMessage':
+      '{label}, Eintrag {index}, wird aus dem Formular genommen. Gespeichert wird erst, wenn Sie das Formular speichern.',
     'kit.form.moveUp': '{label}, Eintrag {index} nach oben',
     'kit.form.moveDown': '{label}, Eintrag {index} nach unten',
     'kit.form.itemAdded': '{label}: Eintrag {index} hinzugefügt.',

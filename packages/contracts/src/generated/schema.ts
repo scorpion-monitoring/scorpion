@@ -4907,21 +4907,21 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026). */
+                /** @description A browser (it asks for `text/html`) is redirected when the sign-in failed too: to the sign-in page with `?error=<code>`, a fixed code (`account-pending`, `state-invalid`, `provider-denied`, `provider-unavailable`, `verification-failed`, `not-allowed`, `already-linked`), never text of the provider (ADR 0029). Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026). */
                 302: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description The state is unknown, expired, used or from another browser, or the provider refused. */
+                /** @description The state is unknown, expired, used or from another browser, or the provider refused. Answered to a client that does not ask for `text/html`; a browser is redirected (see 302). */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description The id_token did not pass validation, or the account may not sign in. */
+                /** @description The id_token did not pass validation, or the account may not sign in. Not for a browser (see 302). */
                 401: {
                     headers: {
                         [name: string]: unknown;

@@ -20,6 +20,24 @@ export interface FrontOptions {
   apiOrigin: string;
   /** The SvelteKit handler (adapter-node's `handler`), or the dev server's middleware. */
   next: NextHandler;
+  /**
+   * How long an API request may be silent before the front gives up on it (`API_TIMEOUT_MS`): no answer
+   * yet, or a pause in the body. A server-sent event stream is exempt, as the API sends it a heartbeat
+   * of its own. Default 30 s; 0 turns it off.
+   */
+  apiTimeoutMs?: number;
+}
+
+/** The default of `apiTimeoutMs`. */
+export const DEFAULT_API_TIMEOUT_MS = 30_000;
+
+/** `API_TIMEOUT_MS` as the environment holds it: a whole number of milliseconds, 0 for none; anything else is refused at start. */
+export function parseApiTimeout(value: string | undefined): number {
+  if (value === undefined || value === '') return DEFAULT_API_TIMEOUT_MS;
+  if (!/^\d{1,9}$/.test(value)) {
+    throw new Error('API_TIMEOUT_MS must be a whole number of milliseconds (0 turns it off).');
+  }
+  return Number(value);
 }
 
 /** Hop-by-hop headers (RFC 9110 §7.6.1): meaningful for one connection only, never forwarded. */
@@ -77,6 +95,7 @@ function plain(response: ServerResponse, status: number, text: string): void {
 export function createFront(options: FrontOptions): http.RequestListener {
   const api = new URL(options.apiOrigin);
   const agent = new http.Agent({ keepAlive: true });
+  const timeoutMs = options.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
 
   function proxy(request: IncomingMessage, response: ServerResponse): void {
     const upstream = http.request(
@@ -95,11 +114,27 @@ export function createFront(options: FrontOptions): http.RequestListener {
           if (!HOP_BY_HOP.has(name) && value !== undefined) headers[name] = value;
         }
         response.writeHead(answer.statusCode ?? 502, answer.statusMessage, headers as never);
+        if (String(answer.headers['content-type'] ?? '').startsWith('text/event-stream')) {
+          upstream.setTimeout(0);
+        }
         answer.pipe(response);
         answer.on('error', () => response.destroy());
       },
     );
-    upstream.on('error', () => plain(response, 502, 'The API did not answer.'));
+    let timedOut = false;
+    // Silence on the connection (the socket's own idle timer), not a total time: a long download that keeps
+    // flowing is fine. An event stream is exempt once its headers say so (below).
+    if (timeoutMs > 0) {
+      upstream.setTimeout(timeoutMs, () => {
+        timedOut = true;
+        upstream.destroy();
+      });
+    }
+    upstream.on('error', () =>
+      timedOut
+        ? plain(response, 504, 'The API did not answer in time.')
+        : plain(response, 502, 'The API did not answer.'),
+    );
     // The caller went away: stop the upstream request too (an event stream must not outlive it), and
     // do not leave the API waiting for the rest of a body that is never coming.
     response.on('close', () => {

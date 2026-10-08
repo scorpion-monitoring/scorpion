@@ -95,7 +95,9 @@ export {
   describeRoot,
   errorsByPointer,
   humanize,
+  omitDefaults,
   prune,
+  sameJson,
   type FieldNode,
   type JsonSchema,
 } from './schema-form.ts';
