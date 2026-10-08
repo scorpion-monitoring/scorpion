@@ -41,7 +41,7 @@ describe('GET /inbox/stream', () => {
     expect(counts(stream.text())).toEqual([0]);
     await item(s, me.user.id);
     await stream.until((text) => counts(text).at(-1) === 1);
-    stream.close();
+    void stream.close();
   });
 
   it('is refused to anonymous (401), to a stale cookie (401), and to a caller without the permission (403)', async () => {
@@ -66,7 +66,7 @@ describe('GET /inbox/stream', () => {
     await item(s, ann.user.id);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(counts(bobStream.text())).toEqual([0]);
-    bobStream.close();
+    void bobStream.close();
   });
 
   it('ends within a heartbeat after a logout, and nothing more is sent [defect 4] [ASVS-7.4.1]', async () => {
@@ -112,7 +112,7 @@ describe('GET /inbox/stream', () => {
     ]);
     const stream = await s.stream('/inbox/stream', me);
     await stream.until((text) => text.split(': heartbeat').length > 3);
-    stream.close();
+    void stream.close();
     const { rows } = await s.kernel.pool.query<{ last_seen_at: Date }>(
       `select last_seen_at from identity_session where user_id = $1`,
       [me.user.id],
@@ -121,7 +121,7 @@ describe('GET /inbox/stream', () => {
     const first = rows[0]!.last_seen_at.getTime();
     const again = await s.stream('/inbox/stream', me);
     await again.until((text) => text.split(': heartbeat').length > 3);
-    again.close();
+    void again.close();
     const second = (
       await s.kernel.pool.query<{ last_seen_at: Date }>(
         `select last_seen_at from identity_session where user_id = $1`,
@@ -167,10 +167,10 @@ describe('GET /inbox/stream', () => {
     expect(second.status).toBe(429);
     expect(second.res.headers.get('retry-after')).toBe('30');
     expect(second.res.headers.get('content-type')).toContain('application/problem+json');
-    first.close();
+    void first.close();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const third = await s.stream('/inbox/stream', me);
     expect(third.status).toBe(200);
-    third.close();
+    void third.close();
   });
 });

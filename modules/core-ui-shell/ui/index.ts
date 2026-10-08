@@ -13,6 +13,7 @@ import { loadDocs } from './docs.ts';
 import { loadLegal } from './legal.ts';
 
 export { messages } from './messages.ts';
+export { widgets } from './widgets.ts';
 
 const routes: UiRoute[] = [
   { path: '/', component: () => import('./Home.svelte') },

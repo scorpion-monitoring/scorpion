@@ -8,8 +8,8 @@ import { catalogueProblems } from '@scorpion/ui-kit/i18n';
 import { describe, expect, it } from 'vitest';
 import manifest from '../module.ts';
 import { MAX_AVATAR_BYTES } from './limits.ts';
-import routes, { messages } from './index.ts';
-import { IDENTITY_NAV, IDENTITY_ROUTES } from './routes.ts';
+import routes, { messages, widgets } from './index.ts';
+import { IDENTITY_NAV, IDENTITY_ROUTES, IDENTITY_WIDGETS } from './routes.ts';
 
 describe('the pages of core.identity', () => {
   it('are the same paths in the server half and the browser half', () => {
@@ -21,6 +21,7 @@ describe('the pages of core.identity', () => {
   it('are contributed to the registries of the shell, as the manifest says', () => {
     expect(manifest.contributes?.['ui.routes']).toEqual(IDENTITY_ROUTES);
     expect(manifest.contributes?.['ui.nav']).toEqual(IDENTITY_NAV);
+    expect(manifest.contributes?.['ui.widget']).toEqual(IDENTITY_WIDGETS);
     expect(typeof manifest.ui).toBe('function');
   });
 
@@ -33,6 +34,13 @@ describe('the pages of core.identity', () => {
         expect(declared.has(route.permission!), route.path).toBe(true);
       }
     }
+  });
+
+  it('have a widget in the browser half for every widget entry, behind a permission the module declares', () => {
+    expect(Object.keys(widgets).sort()).toEqual(IDENTITY_WIDGETS.map((w) => w.component).sort());
+    const declared = new Set(Object.keys(manifest.permissions ?? {}));
+    for (const widget of IDENTITY_WIDGETS)
+      expect(declared.has(widget.permission!), widget.id).toBe(true);
   });
 
   it('make public exactly the pages that the shell lists as public for this module', () => {
@@ -87,7 +95,7 @@ describe('the pages of core.identity', () => {
       Object.keys(messages.en!).map((key) => key.replace(/\.(one|other)$/, '')),
     );
     const own = [...used].filter((key) =>
-      /^(login|pending|register|forgot|reset|verify|link|first|profile|nav|admin)\./.test(key),
+      /^(login|pending|register|forgot|reset|verify|link|first|profile|nav|admin|dash)\./.test(key),
     );
     // `nav.section.admin` is the shell's text (it owns the sections of the navigation).
     expect(own.filter((key) => !known.has(key) && key !== 'nav.section.admin')).toEqual([]);

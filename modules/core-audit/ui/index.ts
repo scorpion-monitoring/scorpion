@@ -4,6 +4,7 @@ import type { UiRoute } from '@scorpion/contracts';
 import { loadLogEntry, loadLogs, loadSystem } from './loaders.ts';
 
 export { messages } from './messages.ts';
+export { widgets } from './widgets.ts';
 
 const routes: UiRoute[] = [
   { path: '/admin/logs', load: loadLogs, component: () => import('./Logs.svelte') },

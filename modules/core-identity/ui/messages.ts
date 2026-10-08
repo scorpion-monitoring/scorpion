@@ -52,6 +52,14 @@ const accountMessages: UiMessages = {
     'pending.contact': 'Questions? Write to {contact}.',
     'pending.home': 'Go to the start page',
 
+    'dash.pending.title': 'Registrations waiting for approval',
+    'dash.pending.loading': 'Loading…',
+    'dash.pending.failed': 'This could not be loaded.',
+    'dash.pending.none': 'Nobody is waiting.',
+    'dash.pending.some.one': '{count} account waits for your decision.',
+    'dash.pending.some.other': '{count} accounts wait for your decision.',
+    'dash.pending.link': 'Review the registrations',
+
     'register.title': 'Create an account',
     'register.lead': 'An administrator approves new accounts. You can sign in after they have.',
     'register.username': 'Username',
@@ -307,6 +315,14 @@ const accountMessages: UiMessages = {
       'Das Passwort ist richtig, aber ein Administrator hat Ihr Konto noch nicht freigegeben. Sie können sich anmelden, sobald das geschehen ist; Sie erfahren es per E-Mail.',
     'pending.contact': 'Fragen? Schreiben Sie an {contact}.',
     'pending.home': 'Zur Startseite',
+
+    'dash.pending.title': 'Registrierungen, die auf Freigabe warten',
+    'dash.pending.loading': 'Lädt …',
+    'dash.pending.failed': 'Das konnte nicht geladen werden.',
+    'dash.pending.none': 'Niemand wartet.',
+    'dash.pending.some.one': '{count} Konto wartet auf Ihre Entscheidung.',
+    'dash.pending.some.other': '{count} Konten warten auf Ihre Entscheidung.',
+    'dash.pending.link': 'Registrierungen prüfen',
 
     'register.title': 'Konto erstellen',
     'register.lead':

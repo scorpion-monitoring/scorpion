@@ -97,7 +97,7 @@ describe('what the stream says', () => {
     expect(said).not.toMatch(/^id:/m);
     expect(said).toMatch(/^retry: \d+$/m);
     expect(said).toContain(': heartbeat');
-    stream.close();
+    void stream.close();
   });
 
   it('does not send the same count twice, and a burst of items is one event', async () => {
@@ -110,7 +110,7 @@ describe('what the stream says', () => {
     await Promise.all([send(t, me.userId), send(t, me.userId), send(t, me.userId)]);
     await stream.until(() => stream.counts().at(-1) === 3);
     expect(stream.counts()).toEqual([0, 3]);
-    stream.close();
+    void stream.close();
   });
 
   it('tells a person only about their own inbox', async () => {
@@ -126,8 +126,8 @@ describe('what the stream says', () => {
     // Give a wrong delivery every chance to happen.
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(bobStream.counts()).toEqual([0]);
-    annStream.close();
-    bobStream.close();
+    void annStream.close();
+    void bobStream.close();
   });
 
   it('starts from the current count after a reconnect, with no replay and no event ids', async () => {
@@ -137,13 +137,13 @@ describe('what the stream says', () => {
     await first.until(() => first.counts().length === 1);
     await send(t, me.userId);
     await first.until(() => first.counts().at(-1) === 1);
-    first.close();
+    void first.close();
     await send(t, me.userId);
     const second = reader(await t.notifications.inboxStream.open(me, { recheck: alwaysGood }));
     await second.until(() => second.counts().length >= 1);
     expect(second.counts()).toEqual([2]);
     expect(second.text()).not.toMatch(/^id:/m);
-    second.close();
+    void second.close();
   });
 
   it('does not announce a change that was rolled back', async () => {
@@ -164,7 +164,7 @@ describe('what the stream says', () => {
       .catch(() => undefined);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(stream.counts()).toEqual([0]);
-    stream.close();
+    void stream.close();
   });
 });
 
@@ -184,7 +184,7 @@ describe('a change in another process', () => {
     // And back: reading the item on the other kernel lowers it.
     await a.notifications.inbox.markAllRead(me);
     await stream.until(() => stream.counts().at(-1) === 0);
-    stream.close();
+    void stream.close();
   });
 });
 
@@ -206,12 +206,12 @@ describe('the caps', () => {
     expect(refused).toMatchObject({ status: 429, retryAfterSeconds: 30 });
     // Another person is not affected.
     const other = await actorFor(t);
-    reader(await t.notifications.inboxStream.open(other, { recheck: alwaysGood })).close();
+    void reader(await t.notifications.inboxStream.open(other, { recheck: alwaysGood })).close();
 
-    await one.cancel();
+    void (await one.cancel());
     expect(t.notifications.inboxStream.streams).toBe(1);
-    reader(await t.notifications.inboxStream.open(me, { recheck: alwaysGood })).close();
-    await two.cancel();
+    void reader(await t.notifications.inboxStream.open(me, { recheck: alwaysGood })).close();
+    void (await two.cancel());
   });
 
   it('refuses a stream over the cap of the process, whoever asks', async () => {
@@ -222,8 +222,8 @@ describe('the caps', () => {
     await expect(
       t.notifications.inboxStream.open(c, { recheck: alwaysGood }),
     ).rejects.toBeInstanceOf(TooManyStreams);
-    await one.cancel();
-    await two.cancel();
+    void (await one.cancel());
+    void (await two.cancel());
     expect(t.notifications.inboxStream.streams).toBe(0);
   });
 
@@ -296,7 +296,7 @@ describe('when the caller is no longer good', () => {
     const me = await actorFor(t);
     const stream = reader(await t.notifications.inboxStream.open(me, { recheck: alwaysGood }));
     await stream.until(() => stream.counts().length === 1);
-    await t.notifications.close();
+    void (await t.notifications.close());
     expect(await stream.ends()).toBe(true);
   });
 });

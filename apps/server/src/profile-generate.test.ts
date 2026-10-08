@@ -166,6 +166,7 @@ describe('generateProfile', () => {
       expect(ui).toContain("import * as ui1 from '@scorpion/pages/ui';");
       expect(ui).not.toContain('plain');
       expect(ui).toContain('messages: ui1.messages');
+      expect(ui).toContain('widgets: ui1.widgets');
       expect(webDevDeps()).toEqual({
         '@scorpion/core-ui-shell': 'workspace:*',
         '@scorpion/pages': 'workspace:*',

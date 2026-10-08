@@ -1,4 +1,5 @@
 <script lang="ts">
+  import NoWidgets from './NoWidgets.svelte';
   // A stand-in for the layout of the web app: it gives the scene the same context (`getShell()`) and shows the
   // toasts, with a translator over the texts of the components and of the scenes.
   import {
@@ -51,6 +52,7 @@
     withReauth: (action) => action(),
     takeIntent: () => undefined,
     toaster,
+    Widgets: NoWidgets,
     guardLeave: (isDirty) => {
       guards.add(isDirty);
       return () => void guards.delete(isDirty);

@@ -1,4 +1,4 @@
-import { admin, expect, person, signIn, test } from './support/fixtures.ts';
+import { admin, expect, person, signInThroughPage, test } from './support/fixtures.ts';
 
 // The acceptance journey of M5 (implementation.md): register → pending → an administrator approves →
 // the person signs in → creates an access token → the token works against the API. Then they log out and
@@ -8,6 +8,7 @@ test('register → pending → approved → sign in → access token → the tok
   page,
   playwright,
   baseURL,
+  browser,
   at,
   context,
 }) => {
@@ -35,22 +36,22 @@ test('register → pending → approved → sign in → access token → the tok
     page.getByRole('heading', { name: 'Your account is waiting for approval' }),
   ).toBeVisible();
 
-  // 3. An administrator approves (in another browser context, through the API: the screen is sprint 3).
-  const approver = await playwright.request.newContext({ baseURL });
-  const csrf = await signIn(approver, at, admin);
-  const waiting = (await (await approver.get(at('/api/internal/users/pending'))).json()) as {
-    result: { id: string; username: string }[];
-  };
-  const id = waiting.result.find((user) => user.username === eve.username)!.id;
-  expect(
-    (
-      await approver.post(at(`/api/internal/users/${id}/approve`), {
-        headers: { 'x-csrf-token': csrf },
-        data: {},
-      })
-    ).status(),
-  ).toBe(200);
-  await approver.dispose();
+  // 3. An administrator approves, on the page: the dashboard card counts the waiting accounts and leads to
+  // the list (another browser context).
+  const boss = await browser.newContext({ baseURL });
+  const adminPage = await boss.newPage();
+  await signInThroughPage(adminPage, at, admin);
+  await adminPage.goto(at('/'));
+  const card = adminPage.getByRole('region', { name: 'Registrations waiting for approval' });
+  await expect(card).toContainText(/waits? for your decision/);
+  await card.getByRole('link', { name: 'Review the registrations' }).click();
+  await adminPage.getByRole('button', { name: `Approve ${eve.username}` }).click();
+  await expect(
+    adminPage
+      .getByRole('region', { name: 'Notifications' })
+      .getByText(`${eve.username} was approved.`),
+  ).toBeVisible();
+  await boss.close();
 
   // 4. Signs in, and the profile is in the navigation.
   await page.goto(at('/login'));
@@ -58,6 +59,13 @@ test('register → pending → approved → sign in → access token → the tok
   await page.getByLabel('Password', { exact: true }).fill(eve.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
+  // The approval is the first message in the inbox, and the bell says so.
+  const bell = page.getByRole('button', { name: 'Inbox, 1 unread item' });
+  await expect(bell).toBeVisible();
+  await bell.click();
+  await expect(page.getByRole('heading', { name: 'Inbox', level: 2 })).toBeVisible();
+  await expect(page.getByText('Your account is approved').first()).toBeVisible();
+  await page.keyboard.press('Escape');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Profile' })

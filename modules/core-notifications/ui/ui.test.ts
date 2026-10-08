@@ -5,9 +5,9 @@ import { ApiError } from '@scorpion/contracts/client';
 import { catalogueProblems } from '@scorpion/ui-kit/i18n';
 import { describe, expect, it } from 'vitest';
 import manifest from '../module.ts';
-import routes, { messages } from './index.ts';
+import routes, { messages, widgets } from './index.ts';
 import { loadStatus } from './loaders.ts';
-import { NOTIFICATION_NAV, NOTIFICATION_ROUTES } from './routes.ts';
+import { NOTIFICATION_NAV, NOTIFICATION_ROUTES, NOTIFICATION_WIDGETS } from './routes.ts';
 
 describe('the pages of core.notifications', () => {
   it('are the same paths in the server half and the browser half', () => {
@@ -19,6 +19,7 @@ describe('the pages of core.notifications', () => {
   it('are contributed to the registries of the shell, as the manifest says', () => {
     expect(manifest.contributes?.['ui.routes']).toEqual(NOTIFICATION_ROUTES);
     expect(manifest.contributes?.['ui.nav']).toEqual(NOTIFICATION_NAV);
+    expect(manifest.contributes?.['ui.widget']).toEqual(NOTIFICATION_WIDGETS);
     expect(typeof manifest.ui).toBe('function');
   });
 
@@ -34,10 +35,21 @@ describe('the pages of core.notifications', () => {
     const byPath = new Map(NOTIFICATION_ROUTES.map((route) => [route.path, route.permission]));
     for (const entry of NOTIFICATION_NAV) {
       expect(byPath.get(entry.path), entry.id).toBe(entry.permission);
-      expect(entry.section).toBe('admin');
+      // The sections `admin` and `account` are labelled by the shell and by core.identity.
+      expect(['admin', 'account']).toContain(entry.section);
       for (const locale of ['en', 'de']) {
         expect(messages[locale]?.[entry.label], `${locale} ${entry.label}`).toBeTruthy();
       }
+    }
+  });
+
+  it('have a widget in the browser half for every widget entry, and need a permission the module declares', () => {
+    expect(Object.keys(widgets).sort()).toEqual(
+      NOTIFICATION_WIDGETS.map((widget) => widget.component).sort(),
+    );
+    const declared = new Set(Object.keys(manifest.permissions ?? {}));
+    for (const widget of NOTIFICATION_WIDGETS) {
+      expect(declared.has(widget.permission!), widget.id).toBe(true);
     }
   });
 
@@ -64,9 +76,13 @@ describe('the pages of core.notifications', () => {
     const known = new Set(
       Object.keys(messages.en!).map((key) => key.replace(/\.(one|other)$/, '')),
     );
-    const own = [...used].filter((key) => /^(admin\.notifications|nav\.admin)\./.test(key));
+    const own = [...used].filter((key) =>
+      /^(admin\.notifications|nav\.(admin|inbox|notificationSettings)|inbox|prefs|dash)\./.test(
+        key,
+      ),
+    );
     expect(own.filter((key) => !known.has(key))).toEqual([]);
-    expect(own.length).toBeGreaterThan(30);
+    expect(own.length).toBeGreaterThan(60);
   });
 });
 
@@ -114,5 +130,75 @@ describe('the loader', () => {
   it('shows the counts without a list when the caller may not list deliveries, and fails for any other error', async () => {
     expect((await loadStatus(context(apiOf(403)))).deliveries).toBeNull();
     await expect(loadStatus(context(apiOf(500)))).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('the loaders of the inbox and the preferences', () => {
+  const answer = (data: unknown, status = 200) =>
+    Promise.resolve(
+      status < 400
+        ? { data, response: new Response(null, { status }) }
+        : { error: { title: 'x', status }, response: new Response(null, { status }) },
+    );
+  const list = (result: unknown[]) => ({
+    metadata: { currentPage: 0, pageSize: 20, totalCount: result.length, totalPages: 1 },
+    result,
+  });
+  const apiOf = (answers: Record<string, unknown>) =>
+    ({
+      GET: (path: string) => {
+        const value = answers[path];
+        return typeof value === 'number' ? answer(undefined, value) : answer(value);
+      },
+    }) as never;
+  const context = (api: never, query = '') =>
+    ({ api, params: {}, url: new URL(`https://x.test/inbox?${query}`) }) as never;
+
+  it('read the page and the size of the address, with limits, and the unread count of all pages', async () => {
+    const { loadInbox } = await import('./loaders.ts');
+    const api = apiOf({
+      '/notifications/inbox': list([{ id: 'a' }]),
+      '/notifications/inbox/unread-count': { count: 4 },
+    });
+    expect(await loadInbox(context(api, 'page=2&pageSize=50'))).toMatchObject({
+      page: 2,
+      pageSize: 50,
+      unread: 4,
+      total: 1,
+    });
+    expect(await loadInbox(context(api, 'page=-1&pageSize=7'))).toMatchObject({
+      page: 0,
+      pageSize: 20,
+    });
+  });
+
+  it('start the preference form from what is stored, from nothing without the permission, and fail for another error', async () => {
+    const { loadPreferences } = await import('./loaders.ts');
+    const categories = list([
+      { category: 'account', description: null, mandatory: false, templates: [] },
+    ]);
+    const stored = await loadPreferences(
+      context(
+        apiOf({
+          '/notifications/preferences/categories': categories,
+          '/preferences': list([
+            { key: 'notifications.preferences', value: { account: { email: false } } },
+            { key: 'notifications.locale', value: 'de' },
+          ]),
+        }),
+      ),
+    );
+    expect(stored.stored).toEqual({ account: { email: false } });
+    const without = await loadPreferences(
+      context(apiOf({ '/notifications/preferences/categories': categories, '/preferences': 403 })),
+    );
+    expect(without.stored).toEqual({});
+    await expect(
+      loadPreferences(
+        context(
+          apiOf({ '/notifications/preferences/categories': categories, '/preferences': 500 }),
+        ),
+      ),
+    ).rejects.toBeInstanceOf(ApiError);
   });
 });

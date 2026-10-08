@@ -34,7 +34,7 @@ import {
 } from './service/transports/types.ts';
 import { webhookTransportEntry, type WebhookDeps } from './service/transports/webhook.ts';
 import { createWakeListener } from './service/wake.ts';
-import { NOTIFICATION_NAV, NOTIFICATION_ROUTES } from './ui/routes.ts';
+import { NOTIFICATION_NAV, NOTIFICATION_ROUTES, NOTIFICATION_WIDGETS } from './ui/routes.ts';
 
 export {
   settingsSchema,
@@ -213,6 +213,8 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
       // peer: a profile without it skips them.
       'ui.routes': NOTIFICATION_ROUTES,
       'ui.nav': NOTIFICATION_NAV,
+      // The bell in the header and a card of the dashboard.
+      'ui.widget': NOTIFICATION_WIDGETS,
       // The templates of modules that do not exist yet ship here, registered and tested.
       [TEMPLATE_REGISTRY]: [...SHIPPED_TEMPLATES, ...SYSTEM_TEMPLATES],
       'authz.defaultRole': [{ role: 'user', permissions: USER_PERMISSIONS }],

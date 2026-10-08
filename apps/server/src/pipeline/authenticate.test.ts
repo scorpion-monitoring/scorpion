@@ -1,5 +1,5 @@
 import { Writable } from 'node:stream';
-import { ANONYMOUS, Unauthorized, type Actor } from '@scorpion/contracts';
+import { ANONYMOUS, Unauthorized, type Actor, type AppEnv } from '@scorpion/contracts';
 import { createLogger, loadConfig, type Authenticator, type Authorizer } from '@scorpion/kernel';
 import { describe, expect, it } from 'vitest';
 import { useKernels } from '../../../../packages/kernel/test/helpers.ts';
@@ -147,12 +147,10 @@ describe('recheckActor (ADR-0028: a stream that outlives the check at its start)
   async function ask(authenticator: Authenticator, route: { public?: true } = {}) {
     const { Hono } = await import('hono');
     const { authenticate } = await import('./authenticate.ts');
-    const hono = new Hono();
+    const hono = new Hono<AppEnv>();
     hono.use('*', authenticate(authenticator, route));
     hono.get('/', async (c) => {
-      const recheck = (c as unknown as { get: (k: string) => () => Promise<boolean> }).get(
-        'recheckActor',
-      );
+      const recheck = c.get('recheckActor');
       return c.json({ first: await recheck(), second: await recheck() });
     });
     const reply = await hono.request('/');
@@ -178,7 +176,7 @@ describe('recheckActor (ADR-0028: a stream that outlives the check at its start)
     ['the credentials vanished', () => undefined],
     ['it is another session', () => ({ ...sessionActor, sessionId: 's2' })],
     ['it is another person', () => ({ ...sessionActor, userId: 'u2' })],
-    ['it is a token now', () => ({ ...sessionActor, via: 'token' as const, sessionId: undefined })],
+    ['it is a token now', () => ({ ...sessionActor, via: 'token', sessionId: undefined })],
     ['the authenticator fails', () => Promise.reject(new Error('database down'))],
   ])('is false when %s', async (_name, again) => {
     let n = 0;

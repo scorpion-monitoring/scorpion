@@ -71,7 +71,7 @@ export function renderUiModule({ profileName, hasShell, uiPackages }: UiModuleIn
       ? `export const uiModules: UiModule[] = [\n${used
           .map(
             (name, index) =>
-              `  { package: ${JSON.stringify(name)}, routes: ui${index}.default, messages: ui${index}.messages },`,
+              `  { package: ${JSON.stringify(name)}, routes: ui${index}.default, messages: ui${index}.messages, widgets: ui${index}.widgets },`,
           )
           .join('\n')}\n];`
       : 'export const uiModules: UiModule[] = [];',

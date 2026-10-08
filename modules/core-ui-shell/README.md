@@ -58,6 +58,14 @@ A page has two halves that must list the same path. The test `ui/ui.test.ts` of 
    call the API with `getShell().api`; ESLint refuses a literal `href="/…"` and a `fetch` with a written URL. `pnpm scorpion profile:generate`
    lists the modules of a profile that export `./ui` in `apps/web/src/generated/ui.ts`.
 
+3. **A widget** (the bell in the header, a card of the dashboard) is a third part with the same two halves. The server half is an entry of
+   `ui.widget`: `{ id, slot, component, order, permission }` (`slot` is `header` or `dashboard`, `component` a name that is unique across the
+   modules of the profile). The browser half is `export const widgets: UiWidgets = { 'inbox-bell': () => import('./Bell.svelte') }` in the
+   `ui` entry; **every `ui` entry exports `widgets`** (an empty object when it has none), and the generated list of the web app imports it.
+   A widget takes no props: it reads what it needs with `getShell()` and the typed client, loads its data in the browser when it appears, and
+   draws nothing the caller's permission would not give. `GET /ui/navigation` lists the widgets the caller may see; the header draws the `header`
+   slot, and the start page draws the `dashboard` slot as cards under "What needs your attention" (nothing for a visitor or for a caller who has none).
+
 Never add a SvelteKit route in `apps/web` for a module.
 
 ## `GET /ui/navigation`

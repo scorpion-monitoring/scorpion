@@ -1,7 +1,7 @@
 // What the shell hands to every page and component through Svelte's context, so a module's page needs
 // no import from the web app: the translator, the typed client, `href()` (the only way to build a link,
 // ADR-0027), who is signed in, and the few things a page has to ask of the application around it.
-import { getContext, setContext } from 'svelte';
+import { getContext, setContext, type Component } from 'svelte';
 import type { ApiClient, Branding, Navigation, Session } from '@scorpion/contracts/client';
 import type { Translate } from './i18n.ts';
 import type { Intent } from './reauth.ts';
@@ -42,6 +42,8 @@ export interface Shell {
   guardLeave: (isDirty: () => boolean) => () => void;
   /** The action the person asked for before they left for a provider, once; `undefined` if there is none for `id`. */
   takeIntent: (id: string) => { payload: unknown } | undefined;
+  /** Draws the widgets the caller may see in one slot of the page (`dashboard`): the modules' cards. */
+  Widgets: Component<{ slot: string }>;
 }
 
 const KEY = Symbol('scorpion.shell');

@@ -126,7 +126,7 @@ export function createInboxStreamHub(deps: {
 
   async function beat(stream: Stream, actor: Actor, recheck: OpenOptions['recheck']) {
     if (stream.closed) return;
-    let good = false;
+    let good: boolean;
     try {
       good = (await recheck()) && (await authz.can(actor, PERMISSION_INBOX_READ));
     } catch {
