@@ -68,7 +68,9 @@ test.describe('roles', () => {
       // Taking it away works the same way.
       await pending.uncheck();
       await page.getByRole('button', { name: 'Save the permissions' }).click();
-      await expect(toast(page).getByText('The permissions of Reviewer were saved.')).toBeVisible();
+      await expect(
+        toast(page).getByText('The permissions of Reviewer were saved.').last(),
+      ).toBeVisible();
       expect((await reviewer.goto(at('/admin/users/pending')))?.status()).toBe(403);
     } finally {
       await api.send('PUT', '/roles/reviewer/permissions', { permissions: before });
