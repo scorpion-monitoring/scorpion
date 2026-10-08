@@ -30,6 +30,7 @@ import {
   PERMISSION_INBOX_WRITE,
   type InboxService,
 } from './inbox.ts';
+import { createInboxStreamHub, type InboxStreamHub } from './inbox-stream.ts';
 import { PREFERENCES_KEY, resolveChannels } from './preferences.ts';
 import { RECIPIENT_ADDRESS_REGISTRY, recipientAddressEntrySchema } from './recipient-address.ts';
 import type { NotificationSettings } from '../settings-schema.ts';
@@ -83,6 +84,8 @@ export interface DeliveryPassReport {
 export interface NotificationsInternals extends NotificationsService {
   /** The caller's own inbox (routes call these). */
   inbox: InboxService;
+  /** The live unread count of the caller's inbox (`GET /inbox/stream`, ADR-0028). */
+  inboxStream: InboxStreamHub;
   /** Delivery list, requeue, test mail and the retention pass (routes and the job call these). */
   admin: AdminService;
   /** The template index, for the category list of the preferences. */
@@ -100,6 +103,8 @@ export interface NotificationsDeps {
   settingsService: Pick<SettingsService, 'getBranding' | 'getUserPreference'>;
   transports: TransportCache;
   templates: TemplateIndex;
+  /** Tuning of the live inbox count, for tests. */
+  inboxStream?: { heartbeatMs?: number; coalesceMs?: number };
 }
 
 export function createNotificationsService(
@@ -264,6 +269,13 @@ export function createNotificationsService(
   }
 
   const inbox = createInboxService({ db, authz });
+  const inboxStream = createInboxStreamHub({
+    db,
+    authz,
+    log,
+    limits: async () => (await ctx.settings.get()).inboxStream,
+    ...deps.inboxStream,
+  });
   const admin = createAdminService({
     db,
     authz,
@@ -278,6 +290,7 @@ export function createNotificationsService(
 
   const internals: NotificationsInternals = {
     inbox,
+    inboxStream,
     admin,
     templates,
 
@@ -453,7 +466,10 @@ export function createNotificationsService(
     },
 
     invalidateTransports: () => transports.invalidate(),
-    close: () => Promise.resolve(transports.close()),
+    close: () => {
+      inboxStream.closeAll();
+      return Promise.resolve(transports.close());
+    },
   };
   return internals;
 }

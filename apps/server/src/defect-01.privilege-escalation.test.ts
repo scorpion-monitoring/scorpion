@@ -38,6 +38,8 @@ const SAMPLES: Record<
     kind: Kind;
     /** A self-service route on one of the caller's own items: the "plain User can use it" case needs the id of an item of theirs. */
     own?: boolean;
+    /** An event stream: a plain User's success is read as the start of a stream and closed, not read to the end. */
+    streaming?: boolean;
     sample: (ids: { id: string }) => Sample;
   }
 > = {
@@ -315,6 +317,12 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: ({ id }) => ({ method: 'POST', path: `/system/outbox/deliveries/${id}/requeue` }),
   },
+  // M5 sprint 4 (ADR-0028): the caller's own unread count as a server-sent event stream.
+  'GET /inbox/stream': {
+    kind: 'self',
+    streaming: true,
+    sample: () => ({ method: 'GET', path: '/inbox/stream' }),
+  },
   'GET /account/permissions': {
     kind: 'self',
     sample: () => ({ method: 'GET', path: '/account/permissions' }),
@@ -440,9 +448,15 @@ describe('defect 1: the route table', () => {
   it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
     const s = await start();
     let n = 0;
-    for (const [key, { kind, own, sample }] of Object.entries(SAMPLES)) {
+    for (const [key, { kind, own, streaming, sample }] of Object.entries(SAMPLES)) {
       if (kind !== 'self') continue;
       const who = await s.signedIn(`selfservice${n++}`);
+      if (streaming) {
+        const opened = await s.stream(sample({ id: FOREIGN }).path, session(who));
+        expect(opened.status, key).toBe(200);
+        await opened.close();
+        continue;
+      }
       // An item id is the caller's own, or the answer is 403 by design (see notification-routes.test.ts).
       const id = own ? (await makeInboxItem(s.kernel.pool, { userId: who.user.id })).id : FOREIGN;
       const reply = await send(s, sample({ id }), session(who));

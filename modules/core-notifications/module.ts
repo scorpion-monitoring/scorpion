@@ -72,6 +72,8 @@ export interface NotificationsModuleOptions {
   webhook?: WebhookDeps;
   /** For tests: more registry entries (a stub transport). */
   extraTransports?: TransportEntry[];
+  /** For tests: the heartbeat and the gathering time of the live inbox count (ADR-0028). */
+  inboxStream?: { heartbeatMs?: number; coalesceMs?: number };
   /** For tests: false keeps the wake-up listener off, so only a direct pass or the job delivers. */
   listen?: boolean;
 }
@@ -255,6 +257,7 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
         settingsService,
         transports,
         templates: buildTemplateIndex(ctx.registry(TEMPLATE_REGISTRY)),
+        inboxStream: options.inboxStream,
       });
       const listener = createWakeListener({
         connectionString: ctx.config.DATABASE_URL,
@@ -262,6 +265,8 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
         onWake: async () => {
           await ctx.jobs.enqueue(DELIVER_JOB);
         },
+        // A change of somebody's inbox, from this process or another: the open streams look at the count.
+        onInbox: (userId) => service.inboxStream.changed(userId),
       });
       startListener = () => listener.start();
       stopListener = () => listener.stop();

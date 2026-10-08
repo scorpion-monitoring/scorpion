@@ -9,6 +9,8 @@ export const WEBHOOK_SECRET = 'notifications.webhook.secret';
 export const DEFAULT_MAX_ATTEMPTS = 8;
 export const DEFAULT_RETENTION_DAYS = 90;
 export const DEFAULT_INBOX_RETENTION_DAYS = 90;
+export const DEFAULT_STREAMS_PER_USER = 3;
+export const DEFAULT_STREAMS_GLOBAL = 200;
 
 /** `en`, `de`, `pt-BR`: a language tag as the templates (sprint 2) and the user preference use it. */
 export const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/;
@@ -29,6 +31,20 @@ const webhookSettings = z.strictObject({
   url: z.string().trim().max(2048).default(''),
   /** Lifts the check for private and loopback targets (an internal relay), and allows `http://`. */
   allowPrivateTargets: z.boolean().default(false),
+});
+
+const inboxStreamSettings = z.strictObject({
+  /** Open streams one person may have (one per browser tab). */
+  perUser: z.number().int().min(1).max(20).default(DEFAULT_STREAMS_PER_USER).meta({
+    title: 'Live inbox streams per person',
+    description: 'One is open for each browser tab. More are refused until one closes.',
+  }),
+  /** Open streams one server process holds. Each is an open connection. */
+  global: z.number().int().min(1).max(10_000).default(DEFAULT_STREAMS_GLOBAL).meta({
+    title: 'Live inbox streams per server process',
+    description:
+      'Each is an open connection. More are refused (the page then checks every minute instead).',
+  }),
 });
 
 export const settingsSchema = z
@@ -77,6 +93,14 @@ export const settingsSchema = z
       .meta({
         title: 'Keep read inbox items for (days)',
         description: 'Counted from the moment an item was read. Unread items are kept.',
+      }),
+    /** The limits of the live count of the inbox (`GET /inbox/stream`, ADR-0028). */
+    inboxStream: inboxStreamSettings
+      .default(() => inboxStreamSettings.parse({}))
+      .meta({
+        title: 'Live inbox count',
+        description:
+          'Limits for the open connections that keep the unread count in the header up to date.',
       }),
   })
   .superRefine((value, ctx) => {

@@ -42,6 +42,16 @@ async function withAdmins(
   return { ...started, admins: made };
 }
 
+/** The inbox items of the whole instance, as (template, owner): what core.notifications wrote next to the mails. */
+const inbox = async (kernel: { pool: { query: (sql: string) => Promise<{ rows: unknown[] }> } }) =>
+  (
+    (await kernel.pool.query(
+      'select template, user_id, link, read_at from notify_inbox_item order by template, user_id',
+    )) as {
+      rows: { template: string; user_id: string; link: string | null; read_at: Date | null }[];
+    }
+  ).rows;
+
 const kinds = async (mail: Mailbox) => (await mail.all()).map((m) => [m.template, m.to]);
 
 describe('registering: the new address', () => {
@@ -428,5 +438,78 @@ describe('changing the address in the profile', () => {
     expect(await started.mail.all()).toMatchObject([
       { template: 'identity.email-verification', to: 'new@example.org', locale: 'de' },
     ]);
+  });
+});
+
+describe('which mails also earn an inbox item (M5 sprint 4)', () => {
+  it('registering: the administrators get an item with the link to the review page; the new person gets none (the welcome mail and the confirmation link are mail only)', async () => {
+    const {
+      identity: id,
+      kernel,
+      admins,
+    } = await withAdmins(
+      { username: 'root', email: 'root@example.org' },
+      { username: 'second', email: 'second@example.org' },
+    );
+    await id.accounts.register(input);
+    const items = await inbox(kernel);
+    expect(items.map((item) => [item.template, item.user_id]).sort()).toEqual(
+      admins.map((admin) => ['identity.registration-request', admin.id]).sort(),
+    );
+    for (const item of items) expect(item.link).toContain('/admin/users/pending');
+  });
+
+  it('approving gives the person an item; rejecting gives none (the account is gone)', async () => {
+    const started = await identity.start();
+    const admin = await makeUser(started.kernel.pool, { status: 'active' });
+    await makeRoleAssignment(started.kernel.pool, admin, 'admin');
+    const yes = await makeUser(started.kernel.pool, {
+      username: 'yesman',
+      email: 'yes@example.org',
+      status: 'pending',
+    });
+    const no = await makeUser(started.kernel.pool, {
+      username: 'noway',
+      email: 'no@example.org',
+      status: 'pending',
+    });
+    await started.identity.approval.approve(actorOf(admin), yes.id);
+    await started.identity.approval.reject(actorOf(admin), no.id);
+    expect(await inbox(started.kernel)).toMatchObject([
+      { template: 'identity.approved', user_id: yes.id, read_at: null },
+    ]);
+  });
+
+  it('a registration with a taken address gives the holder a security notice in the inbox', async () => {
+    const started = await withAdmins({ username: 'root', email: 'root@example.org' });
+    const holder = await makeUser(started.kernel.pool, {
+      username: 'holder',
+      email: 'alice@example.org',
+      status: 'active',
+    });
+    await makeRoleAssignment(started.kernel.pool, holder, 'user');
+    await started.kernel.pool.query(
+      `update identity_user set email_verified_at = now() where id = $1`,
+      [holder.id],
+    );
+    await started.identity.accounts.register(input);
+    expect(
+      (await inbox(started.kernel)).filter((item) => item.template === 'identity.register-attempt'),
+    ).toMatchObject([{ user_id: holder.id }]);
+  });
+
+  it('a mail that carries a credential never goes to an inbox', async () => {
+    const started = await withAdmins({ username: 'root', email: 'root@example.org' });
+    await started.identity.accounts.register(input);
+    const templates = (await inbox(started.kernel)).map((item) => item.template);
+    for (const template of [
+      'identity.welcome',
+      'identity.email-verification',
+      'identity.password-reset',
+      'identity.oidc-link',
+      'identity.rejected',
+    ]) {
+      expect(templates).not.toContain(template);
+    }
   });
 });

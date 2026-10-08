@@ -314,6 +314,49 @@ export function useIdentityApp() {
       }
 
       /**
+       * A GET that is not read to the end: the response with its body left open, for an event stream.
+       * `next()` waits for the next chunk as text (`undefined` when the stream has ended).
+       */
+      async function stream(path: string, options: RequestOptions = {}) {
+        const headers: Record<string, string> = { ...options.headers };
+        if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
+        const res = await app.request(
+          `${mountPath(kernel.config)}${API}${path}`,
+          { method: 'GET', headers },
+          { incoming: { socket: { remoteAddress: options.peer ?? '203.0.113.7' } } },
+        );
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let seen = '';
+        let ended = reader === undefined;
+        return {
+          res,
+          status: res.status,
+          text: () => seen,
+          /** Reads until `predicate` holds for everything seen (or the stream ends, or `ms` pass). */
+          async until(predicate: (all: string) => boolean, ms = 5000): Promise<string> {
+            const deadline = Date.now() + ms;
+            while (!predicate(seen) && !ended && Date.now() < deadline) {
+              const next = await Promise.race([
+                reader!.read(),
+                new Promise<'late'>((resolve) => setTimeout(() => resolve('late'), 100)),
+              ]);
+              if (next === 'late') continue;
+              if (next.done) ended = true;
+              else seen += decoder.decode(next.value, { stream: true });
+            }
+            return seen;
+          },
+          /** True once the stream has ended (waits up to `ms`). */
+          async ends(ms = 5000): Promise<boolean> {
+            await this.until(() => false, ms);
+            return ended;
+          },
+          close: () => reader?.cancel(),
+        };
+      }
+
+      /**
        * An active account (made through the service, so no approval step), the roles it holds
        * (default: `user`, as an approved account has) and a session for it.
        */
@@ -351,6 +394,7 @@ export function useIdentityApp() {
         secretsKey,
         lines,
         call,
+        stream,
         signedIn,
         get: (path: string, options?: RequestOptions) => call('GET', path, options),
         post: (path: string, options?: RequestOptions) => call('POST', path, options),
