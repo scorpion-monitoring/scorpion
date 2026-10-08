@@ -24,6 +24,7 @@ import type { ApprovalService } from './service/approval.ts';
 import type { BootstrapService } from './service/bootstrap.ts';
 import type { OidcLinkService } from './service/oidc-link.ts';
 import type { OidcService } from './service/oidc.ts';
+import { loginErrorCode } from './service/oidc-errors.ts';
 import type { ProfileService } from './service/profile.ts';
 import type { RecoveryService } from './service/recovery.ts';
 import type { RoleService } from './service/roles.ts';
@@ -357,13 +358,16 @@ export const oidcCallbackRoute = createRoute({
   responses: {
     302: {
       description:
-        'Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026).',
+        'A browser (it asks for `text/html`) is redirected when the sign-in failed too: to the sign-in page with `?error=<code>`, a fixed code (`account-pending`, `state-invalid`, `provider-denied`, `provider-unavailable`, `verification-failed`, `not-allowed`, `already-linked`), never text of the provider (ADR 0029). Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026).',
     },
     400: {
       description:
-        'The state is unknown, expired, used or from another browser, or the provider refused.',
+        'The state is unknown, expired, used or from another browser, or the provider refused. Answered to a client that does not ask for `text/html`; a browser is redirected (see 302).',
     },
-    401: { description: 'The id_token did not pass validation, or the account may not sign in.' },
+    401: {
+      description:
+        'The id_token did not pass validation, or the account may not sign in. Not for a browser (see 302).',
+    },
     403: { description: 'The account is waiting for approval.' },
     404: { description: 'No such sign-in provider.' },
     409: { description: 'The sign-in is already linked to an account.' },
@@ -1041,14 +1045,23 @@ export function registerIdentityRoutes(
     clearLoginCookie(c);
     c.header('cache-control', 'no-store');
     c.header('referrer-policy', 'no-referrer');
-    const done = await oidc.complete({
-      providerId: c.req.valid('param').provider,
-      state: query.state,
-      code: query.code,
-      error: query.error,
-      verifier,
-      previousSessionId: readSessionCookie(c),
-    });
+    let done;
+    try {
+      done = await oidc.complete({
+        providerId: c.req.valid('param').provider,
+        state: query.state,
+        code: query.code,
+        error: query.error,
+        verifier,
+        previousSessionId: readSessionCookie(c),
+      });
+    } catch (error) {
+      // A browser that came from the provider is sent to the sign-in page with a fixed code (ADR 0029);
+      // anything else (a script, a test client) keeps the problem answer. Nothing but the code leaves.
+      const code = loginErrorCode(error, query.error !== undefined);
+      if (code === undefined || !(c.req.header('accept') ?? '').includes('text/html')) throw error;
+      return c.redirect(oidc.loginErrorLanding(code), 302);
+    }
     // A re-authentication changes the session in the database; the browser keeps its cookie.
     if (done.kind === 'login') writeSessionCookie(c, done.sessionId, done.expiresAt);
     // Always a fixed page: no caller-supplied target, so no open redirect. A sign-in that found an

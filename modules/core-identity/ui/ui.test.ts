@@ -143,7 +143,18 @@ describe('the loaders', () => {
       providers: providers.result,
       returnTo: '/profile',
       notice: 'check-mail',
+      error: null,
     });
+    // The code of a failed provider sign-in: only a code of the fixed list is taken (ADR-0029).
+    expect((await loadLogin(context(api, '?error=provider-denied'))).error).toBe('provider-denied');
+    for (const bad of [
+      '?error=<script>',
+      '?error=Secret+reason',
+      '?error=',
+      '?error=constructor',
+    ]) {
+      expect((await loadLogin(context(api, bad))).error, bad).toBeNull();
+    }
     expect(await loadLogin(context(api, '?notice=<script>'))).toMatchObject({
       returnTo: null,
       notice: null,

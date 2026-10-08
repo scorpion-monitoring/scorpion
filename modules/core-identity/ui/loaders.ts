@@ -2,6 +2,7 @@
 // **throw** when they cannot get their data (defect 12): an `ApiError` becomes the error page.
 import type { UiLoadContext } from '@scorpion/contracts';
 import { ApiError, unwrap, type ApiClient } from '@scorpion/contracts/client';
+import { LOGIN_ERROR_CODES, type LoginErrorCode } from '../problem-types.ts';
 import { PAGE_SIZE, RETURN_TO_MAX } from './limits.ts';
 
 export interface PublicProvider {
@@ -17,6 +18,8 @@ export interface LoginData {
   /** The raw `returnTo` of the address; the page checks it against the base path before it goes there. */
   returnTo: string | null;
   notice: LoginNotice | null;
+  /** Why a sign-in at a provider failed, from the fixed list the callback redirects with (ADR 0029); anything else is ignored. */
+  error: LoginErrorCode | null;
 }
 
 const NOTICES: readonly LoginNotice[] = ['check-mail', 'password-changed', 'signed-out'];
@@ -33,6 +36,7 @@ export async function loadLogin({ api, url }: UiLoadContext): Promise<LoginData>
     providers: await providersOf(api),
     returnTo: returnTo !== null && returnTo.length <= RETURN_TO_MAX ? returnTo : null,
     notice: NOTICES.find((known) => known === notice) ?? null,
+    error: LOGIN_ERROR_CODES.find((known) => known === url.searchParams.get('error')) ?? null,
   };
 }
 

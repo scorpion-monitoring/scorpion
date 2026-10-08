@@ -222,6 +222,71 @@ describe('GET /auth/oidc/{provider}/callback', () => {
     });
   });
 
+  describe('sends a browser that failed to the sign-in page with a fixed code (ADR-0029)', () => {
+    const html = { headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' } };
+    const location = (reply: { res: Response }) => reply.res.headers.get('location');
+
+    it('uses state-invalid for an old or foreign link, and provider-denied without ever repeating the provider’s text', async () => {
+      const { web } = await startApp();
+      const forged = await web.provider(await web.start(), person());
+      const foreign = await web.callback(forged, undefined, html);
+      expect(foreign.status).toBe(302);
+      expect(location(foreign)).toBe('/login?error=state-invalid');
+      expect(foreign.setCookie).toBeUndefined();
+
+      const started = await web.start();
+      const back = await web.provider(started, person());
+      const denied = await web.callback(
+        {
+          ...back,
+          path: `/auth/oidc/${PROVIDER}/callback?state=${back.state}&error=access_denied&error_description=Secret+reason`,
+        },
+        started,
+        html,
+      );
+      expect(denied.status).toBe(302);
+      expect(location(denied)).toBe('/login?error=provider-denied');
+      expect(JSON.stringify([...denied.res.headers])).not.toMatch(/Secret|access_denied/);
+    });
+
+    it('uses account-pending for an account that waits for approval, and sets no session', async () => {
+      const { web, kernel } = await startApp();
+      const { reply } = await web.login(person(), html);
+      expect(reply.status).toBe(302);
+      expect(location(reply)).toBe('/login?error=account-pending');
+      expect(reply.cookie).toBeUndefined();
+      expect(await count(kernel, 'identity_session')).toBe(0);
+    });
+
+    it('uses provider-unavailable when the provider cannot be reached for the code', async () => {
+      const { web } = await startApp();
+      const started = await web.start();
+      const back = await web.provider(started, person());
+      idp.fail.token = true;
+      try {
+        const reply = await web.callback(back, started, html);
+        expect(reply.status).toBe(302);
+        expect(location(reply)).toBe('/login?error=provider-unavailable');
+      } finally {
+        idp.fail.token = false;
+      }
+    });
+
+    it('keeps the problem answer for a client that does not ask for HTML, and for an unknown provider', async () => {
+      const { get, web } = await startApp();
+      const json = await get(`/auth/oidc/${PROVIDER}/callback?state=${'x'.repeat(43)}&code=abc`, {
+        headers: { accept: 'application/json' },
+      });
+      expect(json.status).toBe(400);
+      expect(isProblem(json)).toBe(true);
+      const pending = await web.login(person(), { headers: { accept: 'application/json' } });
+      expect(pending.reply.status).toBe(403);
+      expect(isProblem(pending.reply)).toBe(true);
+      const unknown = await get('/auth/oidc/nope/callback?state=a&code=b', html);
+      expect(unknown.status).toBe(404);
+    });
+  });
+
   it('uses the strict rate-limit bucket', async () => {
     const { get } = await startApp({
       rateLimits: { strict: { capacity: 2, refillPerSecond: 0.001 } },

@@ -31,6 +31,16 @@ const accountMessages: UiMessages = {
       'If an account already uses the address your provider gave us, its owner has been sent a message with a link. Nobody was signed in.',
     'login.notice.passwordChanged': 'Your password was changed. Sign in again with the new one.',
     'login.notice.signedOut': 'You were signed out.',
+    'login.oidcError.account-pending':
+      'Your account is waiting for approval. You are told by mail when an administrator has looked at it.',
+    'login.oidcError.state-invalid': 'This sign-in link is not valid or has expired. Start again.',
+    'login.oidcError.provider-denied': 'The sign-in at the provider was not completed. Try again.',
+    'login.oidcError.provider-unavailable':
+      'The sign-in provider could not be reached or answered unexpectedly. Try again later.',
+    'login.oidcError.verification-failed':
+      'The answer of the sign-in provider could not be verified. Try again.',
+    'login.oidcError.not-allowed': 'This account may not sign in.',
+    'login.oidcError.already-linked': 'This sign-in is already linked to an account.',
 
     'pending.title': 'Your account is waiting for approval',
     'pending.body':
@@ -267,6 +277,18 @@ const accountMessages: UiMessages = {
     'login.notice.passwordChanged':
       'Ihr Passwort wurde geändert. Melden Sie sich mit dem neuen Passwort erneut an.',
     'login.notice.signedOut': 'Sie wurden abgemeldet.',
+    'login.oidcError.account-pending':
+      'Ihr Konto wartet auf Freigabe. Sie erfahren per E-Mail, wenn eine Administratorin oder ein Administrator es geprüft hat.',
+    'login.oidcError.state-invalid':
+      'Dieser Anmeldelink ist ungültig oder abgelaufen. Beginnen Sie von vorn.',
+    'login.oidcError.provider-denied':
+      'Die Anmeldung beim Anbieter wurde nicht abgeschlossen. Bitte versuchen Sie es erneut.',
+    'login.oidcError.provider-unavailable':
+      'Der Anmeldeanbieter war nicht erreichbar oder hat unerwartet geantwortet. Bitte versuchen Sie es später erneut.',
+    'login.oidcError.verification-failed':
+      'Die Antwort des Anmeldeanbieters konnte nicht geprüft werden. Bitte versuchen Sie es erneut.',
+    'login.oidcError.not-allowed': 'Dieses Konto darf sich nicht anmelden.',
+    'login.oidcError.already-linked': 'Diese Anmeldung ist bereits mit einem Konto verknüpft.',
 
     'pending.title': 'Ihr Konto wartet auf Freigabe',
     'pending.body':

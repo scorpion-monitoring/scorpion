@@ -19,7 +19,8 @@
   let password = $state('');
   let busy = $state(false);
   let failure = $state<FormFailure>();
-  let pending = $state(false);
+  // A sign-in at a provider that waits for approval ends here with `?error=account-pending`, like a password one.
+  let pending = $derived(data.error === 'account-pending');
   let providerFailed = $state(false);
   const who = $derived(session());
 
@@ -65,6 +66,10 @@
     <PendingApproval />
   {:else}
     <h1 class="text-2xl font-bold">{t('login.title')}</h1>
+
+    {#if data.error}
+      <Alert kind="error">{t(`login.oidcError.${data.error}`)}</Alert>
+    {/if}
 
     {#if data.notice === 'check-mail'}
       <Alert kind="info">{t('login.notice.checkMail')}</Alert>
