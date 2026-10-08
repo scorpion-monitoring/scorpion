@@ -15,6 +15,8 @@ const EDIT = 'fix.notes.edit';
 const ROLE_READ = 'core.authz.role.read';
 const ROLE_ASSIGN = 'core.authz.role.assign';
 const ROLE_MANAGE = 'core.authz.role.manage';
+/** What core.authz itself gives the role `user`. */
+const OWN_PERMISSIONS = 'core.authz.account.read';
 
 const anonymous: Actor = { kind: 'anonymous' };
 const actorFor = (userId: string): UserActor => ({
@@ -102,7 +104,7 @@ describe('the seed', () => {
       contributes: { 'authz.defaultRole': [{ role: 'user', permissions: [READ] }] },
     });
     const second = await harness.start({ databaseUrl: first.databaseUrl, modules: [later] });
-    expect(await stored(second.kernel.pool, 'user')).toEqual([READ]);
+    expect(await stored(second.kernel.pool, 'user')).toEqual([OWN_PERMISSIONS, READ].sort());
   });
 
   it('ignores, and logs, a default that names an undeclared permission or a missing role', async () => {
@@ -132,7 +134,9 @@ describe('the seed', () => {
       harness.start({ databaseUrl: first.databaseUrl, modules: [notesModule({ contributes })] }),
     ).rejects.toThrow();
     // APPROVE was granted before READ failed: nothing of it may stay.
-    expect(await rows(first.kernel.pool, 'select * from authz_default_grant')).toEqual([]);
+    expect(
+      (await rows(first.kernel.pool, 'select * from authz_default_grant')).map((r) => r.permission),
+    ).toEqual([OWN_PERMISSIONS]);
     expect(await stored(first.kernel.pool, 'reviewer')).toEqual([]);
   });
 });
@@ -561,6 +565,65 @@ describe('assignRole and removeRole', () => {
       `select conname from pg_constraint where conrelid = 'authz_role_assignment'::regclass and contype = 'f'`,
     );
     expect(fks.map((r) => r.conname)).toEqual(['authz_role_assignment_role_id_authz_role_id_fk']);
+  });
+});
+
+describe('listPermissions', () => {
+  it('lists every declared permission with its module and description, by id', async () => {
+    const { authz, kernel } = await start();
+    const admin = await userWith(kernel.pool, 'admin');
+    const all = await authz.listPermissions(admin);
+    expect(all.map((p) => p.id)).toEqual([...all.map((p) => p.id)].sort());
+    expect(all).toContainEqual({ id: READ, module: 'fix.notes', description: 'Read notes' });
+    expect(all).toContainEqual({
+      id: ROLE_MANAGE,
+      module: 'core.authz',
+      description: 'Change which permissions a role holds',
+    });
+  });
+
+  it('is denied without core.authz.role.read, also to a plain user, and to anonymous', async () => {
+    const { authz, kernel } = await start();
+    const reader = await userWith(kernel.pool, { permissions: [ROLE_READ] });
+    await expect(authz.listPermissions(reader)).resolves.toBeInstanceOf(Array);
+    const plain = await userWith(kernel.pool, 'user');
+    await expect(authz.listPermissions(plain)).rejects.toBeInstanceOf(Forbidden);
+    await expect(authz.listPermissions(anonymous)).rejects.toBeInstanceOf(Unauthorized);
+  });
+});
+
+describe('permissionsHeldBy', () => {
+  it('lists what the caller holds now, and Admin holds every declared permission', async () => {
+    const { authz, kernel } = await start();
+    const user = await userWith(kernel.pool, { permissions: [READ, 'made.up.permission'] });
+    // A stored permission no module declares grants nothing and is not listed.
+    expect((await authz.permissionsHeldBy(user)).map((p) => p.id)).toEqual([READ]);
+    const admin = await userWith(kernel.pool, 'admin');
+    const everything = (await authz.listPermissions(admin)).map((p) => p.id);
+    expect((await authz.permissionsHeldBy(admin)).map((p) => p.id)).toEqual(everything);
+  });
+
+  it('follows a change at once (it does not use the cache)', async () => {
+    const { authz, kernel } = await start();
+    const admin = await userWith(kernel.pool, 'admin');
+    const user = await userWith(kernel.pool, 'reviewer');
+    expect(await authz.permissionsHeldBy(user)).toEqual([]);
+    await authz.setRolePermissions(admin, 'reviewer', [APPROVE]);
+    expect((await authz.permissionsHeldBy(user)).map((p) => p.id)).toEqual([APPROVE]);
+  });
+
+  it('limits an access token to the scopes it names, and gives anonymous nothing but a refusal', async () => {
+    const { authz, kernel } = await start();
+    const owner = await userWith(kernel.pool, { permissions: [READ, APPROVE] });
+    const token: UserActor = { ...owner, via: 'token', scopes: [READ, EDIT] };
+    // READ is held and scoped; EDIT is scoped but not held; APPROVE is held but not scoped.
+    expect((await authz.permissionsHeldBy(token)).map((p) => p.id)).toEqual([READ]);
+    await expect(authz.permissionsHeldBy(anonymous)).rejects.toBeInstanceOf(Unauthorized);
+  });
+
+  it('a user without any role holds nothing', async () => {
+    const { authz } = await start();
+    expect(await authz.permissionsHeldBy(actorFor(randomUUID()))).toEqual([]);
   });
 });
 

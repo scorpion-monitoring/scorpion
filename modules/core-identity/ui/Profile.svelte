@@ -24,6 +24,6 @@
   <Preferences locale={data.locale} />
   <Password />
   <Providers providers={data.providers} />
-  {#if data.tokens}<Tokens tokens={data.tokens} />{/if}
+  {#if data.tokens}<Tokens tokens={data.tokens} permissions={data.permissions ?? []} />{/if}
   {#if data.sessions}<Sessions sessions={data.sessions} />{/if}
 </div>

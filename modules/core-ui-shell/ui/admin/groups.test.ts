@@ -1,39 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { groupPermissions, moduleOf, sameSet, setGroup, togglePermission } from './groups.ts';
+import { groupPermissions, sameSet, setGroup, togglePermission } from './groups.ts';
 
-describe('moduleOf', () => {
-  it.each([
-    ['core.identity.user.read', 'core.identity'],
-    ['core.blob.manage', 'core.blob'],
-    ['core.authz.role.manage', 'core.authz'],
-    ['registry.services.service.create', 'registry.services'],
-    ['kpi.ingestion.measurement.write', 'kpi.ingestion'],
-    ['maturity.assess.read', 'maturity'],
-    ['backup.run', 'backup'],
-    ['core', 'core'],
-    ['nothing', 'nothing'],
-  ])('puts %s in %s', (permission, module) => {
-    expect(moduleOf(permission)).toBe(module);
-  });
+const info = (id: string, module: string, description = `About ${id}`) => ({
+  id,
+  module,
+  description,
 });
 
 describe('groupPermissions', () => {
-  it('groups by module, sorted, and each group sorted without repeats', () => {
+  it('groups by the declaring module, sorted, each group sorted by id without repeats', () => {
     expect(
       groupPermissions([
-        'core.settings.read',
-        'core.identity.user.read',
-        'core.identity.me.read',
-        'backup.run',
-        'core.identity.me.read',
+        info('core.settings.read', 'core.settings'),
+        info('core.identity.user.read', 'core.identity'),
+        info('core.identity.me.read', 'core.identity'),
+        info('backup.run', 'backup'),
+        info('core.identity.me.read', 'core.identity'),
       ]),
     ).toEqual([
-      { module: 'backup', permissions: ['backup.run'] },
+      { module: 'backup', permissions: [info('backup.run', 'backup')] },
       {
         module: 'core.identity',
-        permissions: ['core.identity.me.read', 'core.identity.user.read'],
+        permissions: [
+          info('core.identity.me.read', 'core.identity'),
+          info('core.identity.user.read', 'core.identity'),
+        ],
       },
-      { module: 'core.settings', permissions: ['core.settings.read'] },
+      { module: 'core.settings', permissions: [info('core.settings.read', 'core.settings')] },
+    ]);
+  });
+
+  it('trusts the module the API names, not the shape of the id', () => {
+    // An id that does not start with its module's id (a module may name its permissions as it likes).
+    expect(groupPermissions([info('odd.name.read', 'kpi.framework')])).toEqual([
+      { module: 'kpi.framework', permissions: [info('odd.name.read', 'kpi.framework')] },
     ]);
   });
 

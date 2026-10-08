@@ -9,6 +9,7 @@ const UNKNOWN = '019a0000-0000-7000-8000-000000000000';
 type Started = Awaited<ReturnType<typeof app.start>>;
 type Who = { cookie: string; csrf: string };
 const as = (who: Who) => ({ cookie: who.cookie, csrf: who.csrf });
+const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 const start = () => app.start({ sessionCacheTtlMs: 0, tokenCacheTtlMs: 0 });
 const dispatch = async (s: Started) => {
   while ((await s.kernel.dispatcher.dispatchOnce()) > 0) {
@@ -303,5 +304,91 @@ describe('PUT /roles/{key}/permissions', () => {
       body: { permissions: [] },
     });
     expect(viaToken.status).toBe(403);
+  });
+});
+
+describe('GET /permissions', () => {
+  it('lists every declared permission with its module and a description, in the list envelope', async () => {
+    const s = await start();
+    const admin = await s.signedIn('root', { roles: ['admin'] });
+    const reply = await s.get('/permissions?pageSize=500', as(admin));
+    expect(reply.status).toBe(200);
+    const all = list(reply).result as { id: string; module: string; description: string }[];
+    expect(list(reply).metadata).toMatchObject({ currentPage: 0, totalCount: all.length });
+    expect(all.map((p) => p.id)).toEqual([...all.map((p) => p.id)].sort());
+    expect(all).toContainEqual({
+      id: 'core.authz.role.manage',
+      module: 'core.authz',
+      description: 'Change which permissions a role holds',
+    });
+    for (const permission of all) {
+      expect(permission.description.length, permission.id).toBeGreaterThan(5);
+      expect(permission.id.startsWith(permission.module), permission.id).toBe(true);
+    }
+    const second = await s.get('/permissions?pageSize=5&page=1', as(admin));
+    expect(list(second).result.map((p) => p.id)).toEqual(all.slice(5, 10).map((p) => p.id));
+  });
+
+  it('is refused to a plain User (403) and to anonymous (401), and validates the paging', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const admin = await s.signedIn('root', { roles: ['admin'] });
+    expect((await s.get('/permissions', as(plain))).status).toBe(403);
+    expect((await s.get('/permissions')).status).toBe(401);
+    expect((await s.get('/permissions?pageSize=0', as(admin))).status).toBe(422);
+  });
+});
+
+describe('GET /account/permissions', () => {
+  it('lists what the caller holds: a plain User their own few, an administrator everything', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const admin = await s.signedIn('root', { roles: ['admin'] });
+    const own = list(await s.get('/account/permissions?pageSize=500', as(plain)));
+    const ids = own.result.map((p) => p.id as string);
+    expect(ids).toContain('core.authz.account.read');
+    expect(ids).toContain('core.identity.me.read');
+    expect(ids).not.toContain('core.authz.role.manage');
+    for (const permission of own.result) {
+      expect(typeof permission.module).toBe('string');
+      expect(typeof permission.description).toBe('string');
+    }
+    const all = list(await s.get('/permissions?pageSize=500', as(admin))).metadata.totalCount;
+    expect(
+      list(await s.get('/account/permissions?pageSize=500', as(admin))).metadata,
+    ).toMatchObject({ totalCount: all });
+  });
+
+  it('shows an access token only the scopes it names that its owner holds (scope ∩ owner), and needs the scope itself', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain');
+    const made = await s.post('/tokens', {
+      ...as(plain),
+      body: {
+        name: 'narrow',
+        scopes: ['core.authz.account.read', 'core.identity.me.read', 'core.authz.role.manage'],
+      },
+    });
+    const { token } = made.body as { token: string };
+    const viaToken = await s.get('/account/permissions', { headers: bearer(token) });
+    expect(list(viaToken).result.map((p) => p.id)).toEqual([
+      'core.authz.account.read',
+      'core.identity.me.read',
+    ]);
+    const without = await s.post('/tokens', {
+      ...as(plain),
+      body: { name: 'blind', scopes: ['core.identity.me.read'] },
+    });
+    const blind = (without.body as { token: string }).token;
+    expect((await s.get('/account/permissions', { headers: bearer(blind) })).status).toBe(403);
+  });
+
+  it('is refused to anonymous (401) and to a user whose role was emptied (403)', async () => {
+    const s = await start();
+    const admin = await s.signedIn('root', { roles: ['admin'] });
+    const plain = await s.signedIn('plain');
+    expect((await s.get('/account/permissions')).status).toBe(401);
+    await s.call('PUT', '/roles/user/permissions', { ...as(admin), body: { permissions: [] } });
+    expect((await s.get('/account/permissions', as(plain))).status).toBe(403);
   });
 });

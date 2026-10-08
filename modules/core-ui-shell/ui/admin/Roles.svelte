@@ -98,9 +98,8 @@
           }}
         >
           {#each groups as group (group.module)}
-            {@const inGroup = group.permissions.filter((permission) =>
-              current.includes(permission),
-            ).length}
+            {@const ids = group.permissions.map((permission) => permission.id)}
+            {@const inGroup = ids.filter((id) => current.includes(id)).length}
             <fieldset class="border-base-300 rounded-box border p-4">
               <legend class="px-1 font-semibold">{group.module}</legend>
               {#if editable}
@@ -108,8 +107,8 @@
                   <button
                     type="button"
                     class="btn btn-ghost btn-xs"
-                    disabled={inGroup === group.permissions.length}
-                    onclick={() => edit(setGroup(current, group.permissions, true))}
+                    disabled={inGroup === ids.length}
+                    onclick={() => edit(setGroup(current, ids, true))}
                   >
                     {t('admin.roles.selectAll', { module: group.module })}
                   </button>
@@ -117,25 +116,30 @@
                     type="button"
                     class="btn btn-ghost btn-xs"
                     disabled={inGroup === 0}
-                    onclick={() => edit(setGroup(current, group.permissions, false))}
+                    onclick={() => edit(setGroup(current, ids, false))}
                   >
                     {t('admin.roles.selectNone', { module: group.module })}
                   </button>
                 </div>
               {/if}
               <ul class="grid gap-1 sm:grid-cols-2">
-                {#each group.permissions as permission (permission)}
+                {#each group.permissions as permission (permission.id)}
                   <li>
-                    <label class="flex items-center gap-2">
+                    <label class="flex items-start gap-2">
                       <input
                         type="checkbox"
-                        class="checkbox checkbox-sm"
-                        checked={current.includes(permission)}
+                        class="checkbox checkbox-sm mt-1"
+                        checked={current.includes(permission.id)}
                         disabled={!editable || busy}
                         onchange={(event) =>
-                          edit(togglePermission(current, permission, event.currentTarget.checked))}
+                          edit(
+                            togglePermission(current, permission.id, event.currentTarget.checked),
+                          )}
                       />
-                      <code class="text-sm break-all">{permission}</code>
+                      <span class="flex flex-col">
+                        <code class="text-sm break-all">{permission.id}</code>
+                        <span class="text-sm opacity-80">{permission.description}</span>
+                      </span>
                     </label>
                   </li>
                 {/each}

@@ -79,6 +79,8 @@ export interface ProfileData {
       }[]
     | null;
   sessions: { id: string; createdAt: string; lastSeenAt: string; current: boolean }[] | null;
+  /** What the caller holds now (the scopes a new token may name), or `null` when the caller may not list them. */
+  permissions: { id: string; module: string; description: string }[] | null;
   providers: PublicProvider[];
   /** The stored language preference (`en`, `de`), or `null` for "as the browser says". */
   locale: string | null;
@@ -88,12 +90,13 @@ export const LOCALE_PREFERENCE = 'notifications.locale';
 
 export async function loadProfile({ api }: UiLoadContext): Promise<ProfileData> {
   const query = { pageSize: PAGE_SIZE };
-  const [profile, tokens, sessions, providers, preferences] = await Promise.all([
+  const [profile, tokens, sessions, providers, preferences, permissions] = await Promise.all([
     unwrap(api.GET('/account/profile')),
     allowed(unwrap(api.GET('/tokens', { params: { query } }))),
     allowed(unwrap(api.GET('/account/sessions', { params: { query } }))),
     providersOf(api),
     allowed(unwrap(api.GET('/preferences', { params: { query } }))),
+    allowed(unwrap(api.GET('/account/permissions', { params: { query: { pageSize: '500' } } }))),
   ]);
   const stored = preferences?.result.find((preference) => preference.key === LOCALE_PREFERENCE);
   return {
@@ -101,6 +104,7 @@ export async function loadProfile({ api }: UiLoadContext): Promise<ProfileData> 
     tokens: tokens?.result ?? null,
     sessions: sessions?.result ?? null,
     providers,
+    permissions: permissions?.result ?? null,
     locale: typeof stored?.value === 'string' ? stored.value : null,
   };
 }

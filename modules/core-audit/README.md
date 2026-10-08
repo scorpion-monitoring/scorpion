@@ -16,6 +16,7 @@ Status: M4 sprint 4. The viewer screens are M5; the routes below are what they u
 | table prefix   | `audit_` (set in the manifest; ADR-0004): one table, `audit_event`                                                                                 |
 | dependencies   | `core.authz`, `core.settings`, `core.identity`; `core.notifications` as an optional peer (its three events are recorded when it is in the profile) |
 | routes         | internal API: the viewer, one entry, the CSV export, the outbox page and its requeue, see "Routes"                                                 |
+| ui             | `ui` entry and optional peer `core.ui-shell`: contributes `ui.routes` and `ui.nav` for the pages in "Pages"                                        |
 | jobs           | `core.audit.retention`, `core.audit.system.outbox-retention`, `core.audit.system.job-run-retention`, see "Jobs"                                    |
 | events         | emits none; subscribes to every logged event, see "What is logged"                                                                                 |
 | registries     | contributes the one entry of the kernel registry `kernel.auditSink`                                                                                |
@@ -110,6 +111,22 @@ content scan).
 
 **Failure.** The pipeline writes the entry after the handler has returned; if that fails, the failure is logged by request id and
 SQLSTATE and the response is unchanged. A `ctx.audit` in a service joins the caller's transaction and fails it.
+
+## Pages
+
+Contributed to the registries of `core.ui-shell` (an optional peer: a profile without the shell skips them). `ui/routes.ts` is the server
+half, `ui/` the browser half; `ui/ui.test.ts` checks that they agree.
+
+| Path              | Permission               | Shows                                                                                                                                                                                                                   |
+| ----------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin/logs`     | `core.audit.read`        | The filters of `GET /audit`, the entries newest first with "Load more" (the API pages by offset, rows are kept once per id), the CSV export of the same filters (the download is an entry itself, and the page says so) |
+| `/admin/logs/:id` | `core.audit.read`        | One entry with the query, body and payload as stored (redacted when written)                                                                                                                                            |
+| `/admin/system`   | `core.audit.system.read` | The outbox counts and dead deliveries with a requeue button, the retention numbers (changed in the settings of this module) and the job runs with their result counts                                                   |
+
+The entries carry ids, never usernames (a purge could not erase an append-only table). `GET /audit` and `GET /audit/{id}` join the name
+the account has **now** as `userName`; it is `null` for an account that was purged, and the page shows "deleted account" and the first
+characters of the id. A privacy text should say that the id of a deleted account stays in the trail until the retention period ends (the
+description of the legal texts in the settings of `core.settings` says so).
 
 ## Routes
 

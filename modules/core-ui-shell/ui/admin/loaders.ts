@@ -2,6 +2,7 @@
 // the permission check, and **throw** when they cannot get their data (defect 12).
 import type { UiLoadContext } from '@scorpion/contracts';
 import { ApiError, unwrap } from '@scorpion/contracts/client';
+import type { PermissionInfo } from './groups.ts';
 
 /** The API's largest page: every list here is short enough to read whole. */
 const ALL = '100';
@@ -16,14 +17,16 @@ export interface RoleView {
 
 export interface RolesData {
   roles: RoleView[];
-  /** Every permission a loaded module declares (what Admin holds). */
-  all: string[];
+  /** Every permission a loaded module declares (what Admin holds), with its module and description. */
+  all: PermissionInfo[];
 }
 
 export async function loadRoles({ api }: UiLoadContext): Promise<RolesData> {
-  const { result } = await unwrap(api.GET('/roles', { params: { query: { pageSize: ALL } } }));
-  const admin = result.find((role) => role.key === 'admin');
-  return { roles: result, all: admin?.permissions ?? [] };
+  const [roles, permissions] = await Promise.all([
+    unwrap(api.GET('/roles', { params: { query: { pageSize: ALL } } })),
+    unwrap(api.GET('/permissions', { params: { query: { pageSize: '500' } } })),
+  ]);
+  return { roles: roles.result, all: permissions.result };
 }
 
 export interface SettingsModuleRow {

@@ -18,12 +18,22 @@ deliveries, requeue and a test mail ([ADR-0023](../../docs/adr/0023-inbox-prefer
 | id             | `core.notifications`                                                                                                                                                                                                              |
 | table prefix   | `notify_` (set in the manifest; ADR-0004)                                                                                                                                                                                         |
 | dependencies   | `core.authz`, `core.settings` (a module that mails depends on this one, not the other way round)                                                                                                                                  |
+| ui             | `ui` entry and optional peer `core.ui-shell`: contributes `ui.routes` and `ui.nav` for the page `/admin/notifications` (permission `core.notifications.status.read`), see "Pages"                                                 |
 | routes         | internal API: the caller's inbox, the category list, status, delivery list, requeue and test mail, see "Routes"                                                                                                                   |
 | CLI            | `scorpion seed-dev-mail`, development only, see "Development setup"                                                                                                                                                               |
 | jobs           | `core.notifications.deliver` and `core.notifications.retention`, see "Jobs"                                                                                                                                                       |
 | events         | emits `notifications.delivery.dead@1`, `.requeued@1` and `notifications.settings.tested@1`; subscribes to `settings.changed@1` and `settings.secret.changed@1`, see "Events"                                                      |
 | registries     | declares `notify.transport`, `notify.template` and `notify.recipientAddress`; contributes the preferences `notifications.locale` and `notifications.preferences` to `settings.userPreference`, see "Registries"                   |
 | public service | `ctx.deps['core.notifications']`: `enqueue(tx, message)`, `enqueueTemplate(tx, message)`, `removeInboxOfUser(tx, userId)` and `status(actor)`; `public.ts` also exports `defineTemplate` and the locale helpers, see "Public API" |
+
+### Pages
+
+Contributed to the registries of `core.ui-shell` (an optional peer: a profile without the shell skips them, and the module still starts).
+`ui/` is the browser half, `ui/routes.ts` the server half; `ui/ui.test.ts` checks that they agree.
+
+| Path                   | Permission                       | Shows                                                                                                                                                                                                                              |
+| ---------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin/notifications` | `core.notifications.status.read` | The counts, a banner when the transport is `none`, the error codes of the last 7 days, a test-mail button, and (with `core.notifications.deliveries.read`) the delivery list without bodies, with the requeue of one dead delivery |
 
 ### Permissions
 

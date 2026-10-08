@@ -9,10 +9,15 @@
     type FormFailure,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
-  import { USER_PERMISSIONS } from '../../permissions.ts';
   import type { ProfileData } from '../loaders.ts';
 
-  let { tokens }: { tokens: NonNullable<ProfileData['tokens']> } = $props();
+  let {
+    tokens,
+    permissions,
+  }: {
+    tokens: NonNullable<ProfileData['tokens']>;
+    permissions: NonNullable<ProfileData['permissions']>;
+  } = $props();
   const { t, api, refresh } = getShell();
 
   let name = $state('');
@@ -218,10 +223,18 @@
       <fieldset class="flex flex-col gap-1">
         <legend class="text-sm font-medium">{t('profile.tokens.scopes')}</legend>
         <p class="text-sm opacity-70">{t('profile.tokens.scopesHint')}</p>
-        {#each USER_PERMISSIONS as scope (scope)}
-          <label class="flex items-center gap-2">
-            <input type="checkbox" class="checkbox checkbox-sm" value={scope} bind:group={scopes} />
-            <code class="text-sm">{scope}</code>
+        {#each permissions as permission (permission.id)}
+          <label class="flex items-start gap-2">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm mt-1"
+              value={permission.id}
+              bind:group={scopes}
+            />
+            <span class="flex flex-col">
+              <code class="text-sm">{permission.id}</code>
+              <span class="text-sm opacity-80">{permission.description}</span>
+            </span>
           </label>
         {/each}
         {#if failure?.fields.scopes}

@@ -1,7 +1,16 @@
 // The HTTP routes of core.authz. Thin: Zod parses, one service call, the result is mapped. They are
 // internal routes (`/api/internal/...`) for the administration screens. Listing roles and giving or
 // taking a role stay with core.identity, which owns the users those routes name (ADR 0015).
-import { createRoute, z, type AppEnv, type RouteHandler } from '@scorpion/contracts';
+import {
+  createRoute,
+  listEnvelope,
+  pageOffset,
+  paginate,
+  paginationQuery,
+  z,
+  type AppEnv,
+  type RouteHandler,
+} from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import type { AuthzService } from './public.ts';
 
@@ -44,6 +53,40 @@ export const setRolePermissionsRoute = createRoute({
   },
 });
 
+const permissionSchema = z.object({
+  id: z.string(),
+  module: z.string().describe('The id of the module that declares the permission.'),
+  description: z.string(),
+});
+
+export const listPermissionsRoute = createRoute({
+  method: 'get',
+  path: '/permissions',
+  permission: 'core.authz.role.read',
+  request: { query: paginationQuery({ defaultPageSize: 100, maxPageSize: 500 }) },
+  responses: {
+    200: {
+      description:
+        'Every permission a loaded module declares, by id, with the module and a description. What a role editor offers.',
+      content: { 'application/json': { schema: listEnvelope(permissionSchema) } },
+    },
+  },
+});
+
+export const accountPermissionsRoute = createRoute({
+  method: 'get',
+  path: '/account/permissions',
+  permission: 'core.authz.account.read',
+  request: { query: paginationQuery({ defaultPageSize: 100, maxPageSize: 500 }) },
+  responses: {
+    200: {
+      description:
+        'The permissions the caller holds now, by id. For an access token only those its scopes name as well. What a token form offers as scopes.',
+      content: { 'application/json': { schema: listEnvelope(permissionSchema) } },
+    },
+  },
+});
+
 export function registerAuthzRoutes(r: RouteRegistrar, authz: AuthzService) {
   r.internal(setRolePermissionsRoute, (async (c) => {
     const updated = await authz.setRolePermissions(
@@ -53,4 +96,18 @@ export function registerAuthzRoutes(r: RouteRegistrar, authz: AuthzService) {
     );
     return c.json(updated, 200);
   }) satisfies RouteHandler<typeof setRolePermissionsRoute, AppEnv>);
+
+  r.internal(listPermissionsRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const all = await authz.listPermissions(c.get('actor'));
+    const from = pageOffset(query);
+    return c.json(paginate(query, all.length, all.slice(from, from + query.pageSize)), 200);
+  }) satisfies RouteHandler<typeof listPermissionsRoute, AppEnv>);
+
+  r.internal(accountPermissionsRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const all = await authz.permissionsHeldBy(c.get('actor'));
+    const from = pageOffset(query);
+    return c.json(paginate(query, all.length, all.slice(from, from + query.pageSize)), 200);
+  }) satisfies RouteHandler<typeof accountPermissionsRoute, AppEnv>);
 }

@@ -17,6 +17,15 @@ export interface RoleInfo {
   permissions: string[];
 }
 
+/** A permission a loaded module declares, as a screen shows it. */
+export interface PermissionInfo {
+  /** The id, for example `core.authz.role.read`; also what a token scope is. */
+  id: string;
+  /** The id of the module that declares it. */
+  module: string;
+  description: string;
+}
+
 export interface AuthzService {
   /**
    * Resolves when `actor` holds `permission`, else throws `Unauthorized` (anonymous) or `Forbidden`.
@@ -31,6 +40,14 @@ export interface AuthzService {
 
   /** Needs `core.authz.role.read`. Roles by key. */
   listRoles(actor: Actor): Promise<RoleInfo[]>;
+  /** Needs `core.authz.role.read`. Every permission a loaded module declares, by id. */
+  listPermissions(actor: Actor): Promise<PermissionInfo[]>;
+  /**
+   * The permissions the caller holds right now, by id: what their roles grant, and for an access
+   * token only what its scopes name as well (scope ∩ owner). `Unauthorized` for an anonymous caller;
+   * no other permission is needed (it is the caller's own).
+   */
+  permissionsHeldBy(actor: Actor): Promise<PermissionInfo[]>;
   /** The role keys a user holds. Your own are always readable; others need `core.authz.role.read`. */
   rolesOf(actor: Actor, userId: string): Promise<string[]>;
   /**

@@ -62,6 +62,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /system/job-runs`                          | core.audit         | `core.audit.system.read`               | default    | no             |
 | `GET /system/outbox`                            | core.audit         | `core.audit.system.read`               | default    | no             |
 | `POST /system/outbox/deliveries/{id}/requeue`   | core.audit         | `core.audit.system.manage`             | default    | yes            |
+| `GET /account/permissions`                      | core.authz         | `core.authz.account.read`              | default    | no             |
+| `GET /permissions`                              | core.authz         | `core.authz.role.read`                 | default    | no             |
 | `PUT /roles/{key}/permissions`                  | core.authz         | `core.authz.role.manage`               | default    | yes, with body |
 | `GET /files/{hash}`                             | core.blob          | **public**                             | default    | no             |
 | `POST /files`                                   | core.blob          | `core.blob.manage`                     | strict     | yes            |
