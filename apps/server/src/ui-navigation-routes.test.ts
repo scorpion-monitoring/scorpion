@@ -129,6 +129,11 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/admin/settings/branding',
         '/admin/settings/secrets',
         '/admin/settings/vocabularies',
+        // M5 sprint 4: the logs, the system page (core.audit) and the notification status (core.notifications).
+        '/admin/logs',
+        '/admin/logs/:id',
+        '/admin/system',
+        '/admin/notifications',
       ),
     );
     expect(body.nav.map((entry) => entry.id)).toEqual([
@@ -139,6 +144,9 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
       'admin.users.pending',
       'admin.roles',
       'admin.settings',
+      'admin.logs',
+      'admin.notifications',
+      'admin.system',
       'fixture.admin',
       'fixture.open',
     ]);
