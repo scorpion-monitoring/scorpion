@@ -56,9 +56,10 @@ the same file answers 401 and 403 on every non-public route.
 
 | Route                                           | Module             | Permission                             | Rate limit | Audited        |
 | ----------------------------------------------- | ------------------ | -------------------------------------- | ---------- | -------------- |
-| `GET /audit`                                    | core.audit         | `core.audit.read`                      | default    | yes            |
+| `GET /audit`                                    | core.audit         | `core.audit.read`                      | default    | no             |
 | `GET /audit/{id}`                               | core.audit         | `core.audit.read`                      | default    | yes            |
 | `GET /audit/export.csv`                         | core.audit         | `core.audit.export`                    | default    | yes, with body |
+| `GET /system/job-runs`                          | core.audit         | `core.audit.system.read`               | default    | no             |
 | `GET /system/outbox`                            | core.audit         | `core.audit.system.read`               | default    | no             |
 | `POST /system/outbox/deliveries/{id}/requeue`   | core.audit         | `core.audit.system.manage`             | default    | yes            |
 | `PUT /roles/{key}/permissions`                  | core.authz         | `core.authz.role.manage`               | default    | yes, with body |

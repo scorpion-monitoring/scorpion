@@ -100,7 +100,8 @@ outcome, **also when the caller was turned away** (401, 403, 429) **or the input
 `audit: { body: true, redact: [...] }` adds the body and the query. A route under `/auth/` can never store a body: registration fails.
 Routes that have `audit` today: approve and reject, assigning and removing a role, creating, revoking and rotating a token, ending one of your sessions, re-authenticating (password and OIDC), and the administrators' session termination (one user, all),
 saving settings (with the body), setting and removing a secret (without it: the value is never read), vocabulary changes, uploading a file,
-requeueing a delivery and sending a test mail, and the three read routes of this module.
+requeueing a delivery and sending a test mail, opening one entry (`GET /audit/{id}`) and the CSV export.
+**The list (`GET /audit`) is not audited** (M5 sprint 4): the Logs screen pages and refreshes it, and an entry per page would fill the table it reads. Who opened an entry or exported is still on record; a refused read of the list (403) is not.
 
 **Redaction.** A key whose name (lower case, letters and digits only) equals or ends with `password`, `token`, `secret`, `authorization`,
 `apikey`, `code` or `value`, or one of the route's `redact` names, has its value replaced by `[redacted]` at any depth. A body that is
@@ -119,6 +120,7 @@ All under `/api/internal`. Every list uses the standard envelope with 0-based pa
 | `GET /audit`                                  | `core.audit.read`          | Filters `method`, `user`, `endpoint` (route-template prefix, matched literally), `action`, `outcome`, `source`, `from`, `to`. Order: `occurred_at` desc, then id. |
 | `GET /audit/{id}`                             | `core.audit.read`          | One entry; 404 for an unknown or malformed id.                                                                                                                    |
 | `GET /audit/export.csv`                       | `core.audit.export`        | The same filters, no paging. Streamed. Headers `X-Row-Count`, `X-Row-Cap`, `X-Truncated`. The export is itself an entry (`audit.exported`).                       |
+| `GET /system/job-runs`                        | `core.audit.system.read`   | Job runs, newest first: status, duration, the counts the handler returned (`result`), the masked failure. Filters `jobName`, `status`. List envelope.             |
 | `GET /system/outbox`                          | `core.audit.system.read`   | Counts (pending, dead, lag) and the dead deliveries (names, attempts, a masked error; never a payload).                                                           |
 | `POST /system/outbox/deliveries/{id}/requeue` | `core.audit.system.manage` | A `dead` delivery only; 404 unknown, 409 not dead. Audited in the same transaction (`system.outbox.requeued`).                                                    |
 

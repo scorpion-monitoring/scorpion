@@ -303,6 +303,10 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: () => ({ method: 'GET', path: '/system/outbox' }),
   },
+  'GET /system/job-runs': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/system/job-runs' }),
+  },
   'POST /system/outbox/deliveries/{id}/requeue': {
     kind: 'admin',
     sample: ({ id }) => ({ method: 'POST', path: `/system/outbox/deliveries/${id}/requeue` }),
@@ -896,6 +900,7 @@ describe('defect 1: log reads', () => {
     { method: 'GET', path: '/audit/export.csv' },
     { method: 'GET', path: `/audit/${FOREIGN}` },
     { method: 'GET', path: '/system/outbox' },
+    { method: 'GET', path: '/system/job-runs' },
   ];
 
   it('keeps the trail from a plain User, by session and by token, and from a token scoped to it whose owner lacks the permission', async () => {
