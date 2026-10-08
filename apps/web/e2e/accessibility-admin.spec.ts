@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
+import { makeAuditEvent, makeDelivery } from '@scorpion/testing';
 import { violations } from './support/a11y.ts';
 import {
   activeUser,
@@ -8,6 +10,7 @@ import {
   unique,
   userId,
 } from './support/admin.ts';
+import { withDb } from './support/db.ts';
 import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
 
 // M5 sprint 3: no serious or critical axe violation on any administration screen, in both themes, with the
@@ -118,6 +121,14 @@ for (const scheme of ['light', 'dark'] as const) {
           await clean('the settings of core.identity');
           await page.getByRole('button', { name: 'Add' }).last().click();
           await clean('the settings of core.identity with a provider item');
+          // Removing an item asks first (sprint 4); the question is a dialog and is checked as one.
+          await page
+            .getByRole('button', { name: /^Remove / })
+            .last()
+            .click();
+          await expect(page.getByRole('dialog', { name: 'Remove this item?' })).toBeVisible();
+          await clean('the settings of core.identity with the question about removing an item');
+          await page.keyboard.press('Escape');
           await page.goto(at('/admin/settings/core.audit'));
           await page.getByLabel('Keep audit entries for (days)').fill('0');
           await page.getByRole('button', { name: 'Save' }).click();
@@ -145,6 +156,94 @@ for (const scheme of ['light', 'dark'] as const) {
       } finally {
         await api.send('DELETE', `/secrets/${secret}`);
         await api.dispose();
+      }
+    });
+
+    test('has no serious violation on the screens of the logs, the system and the notification status', async ({
+      page,
+      at,
+      basePath,
+    }) => {
+      test.slow();
+      const tag = `/e2e/${unique('axe')}`;
+      const subscriber = 'core.audit';
+      const failure = `an error for the axe check ${unique('f')}`;
+      const eventId = randomUUID();
+      const deliveryId = randomUUID();
+      const template = `e2e.axe.${unique('t')}`;
+      const mail = await withDb(basePath, async (client) => {
+        for (let i = 0; i < 55; i += 1) {
+          await makeAuditEvent(client, { path: `${tag}/n${i}`, userId: randomUUID() });
+        }
+        await client.query(
+          `insert into kernel_outbox (id, name, emitter, payload) values ($1, 'settings.changed@1', 'core.settings', $2::jsonb)`,
+          [
+            eventId,
+            JSON.stringify({ module: 'core.audit', keys: ['x'], version: 1, actorId: null }),
+          ],
+        );
+        await client.query(
+          `insert into kernel_outbox_delivery (id, event_id, subscriber, status, attempts, last_error)
+           values ($1, $2, $3, 'dead', 8, $4)`,
+          [deliveryId, eventId, subscriber, failure],
+        );
+        return makeDelivery(client, {
+          template,
+          status: 'dead',
+          attempts: 8,
+          lastError: 'smtp-timeout',
+        });
+      });
+      try {
+        await walk(page, at, async (clean, heading) => {
+          await page.goto(at(`/admin/logs?endpoint=${encodeURIComponent(tag)}`));
+          await heading('Logs');
+          await clean('/admin/logs');
+          await page.getByRole('button', { name: 'Load more' }).click();
+          await expect(page.getByRole('status').filter({ hasText: 'Showing' })).toHaveText(
+            'Showing 55 of 55',
+          );
+          await clean('/admin/logs after "Load more"');
+          await page.getByLabel('Outcome').selectOption('error');
+          await page.getByLabel('From (day, UTC)').fill('2026-10-02');
+          await page.getByLabel('To (day, UTC)').fill('2026-10-01');
+          await expect(page.getByRole('alert')).toBeVisible();
+          await clean('/admin/logs with a message about the days');
+          await page.goto(at(`/admin/logs?endpoint=${encodeURIComponent(tag)}`));
+          await page.getByRole('table', { name: 'Logs' }).getByRole('link').first().click();
+          await heading('Log entry');
+          await clean('one log entry');
+
+          await page.goto(at('/admin/system'));
+          await heading('System');
+          await clean('/admin/system');
+          const dead = page.getByRole('table', { name: 'Dead deliveries' });
+          await dead
+            .getByRole('row')
+            .filter({ hasText: failure })
+            .getByRole('button', { name: /^Requeue/ })
+            .click();
+          await expect(page.getByRole('dialog', { name: 'Requeue this delivery?' })).toBeVisible();
+          await clean('/admin/system with the dialog');
+          await page.keyboard.press('Escape');
+
+          await page.goto(
+            at(`/admin/notifications?status=dead&template=${encodeURIComponent(template)}`),
+          );
+          await heading('Notification status');
+          await clean('/admin/notifications');
+          await page.getByRole('button', { name: /^Requeue the delivery/ }).click();
+          await expect(page.getByRole('dialog', { name: 'Requeue this delivery?' })).toBeVisible();
+          await clean('/admin/notifications with the dialog');
+          await page.keyboard.press('Escape');
+        });
+      } finally {
+        await withDb(basePath, async (client) => {
+          await client.query(`delete from audit_event where path like $1`, [`${tag}/%`]);
+          await client.query(`delete from kernel_outbox_delivery where id = $1`, [deliveryId]);
+          await client.query(`delete from kernel_outbox where id = $1`, [eventId]);
+          await client.query(`delete from notify_delivery where id = $1`, [mail.id]);
+        }).catch(() => undefined);
       }
     });
   });
@@ -217,6 +316,40 @@ test.describe('the keyboard', () => {
         values: before.values,
       });
       await api.dispose();
+    }
+  });
+  test('filters the logs and opens an entry with the keyboard alone', async ({
+    page,
+    at,
+    basePath,
+  }) => {
+    const tag = `/e2e/${unique('kbd')}`;
+    await withDb(basePath, async (client) => {
+      for (let i = 0; i < 3; i += 1) {
+        await makeAuditEvent(client, { path: `${tag}/n${i}`, method: 'PUT', userId: randomUUID() });
+      }
+    });
+    try {
+      await signInThroughPage(page, at, admin);
+      await page.goto(at('/admin/logs'));
+      await expect(page.getByRole('heading', { name: 'Logs', level: 1 })).toBeVisible();
+      const field = page.getByLabel('Endpoint starts with');
+      await tabTo(page, field);
+      await page.keyboard.type(tag);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/endpoint=/);
+      await expect(page.getByRole('status').filter({ hasText: 'Showing' })).toHaveText(
+        'Showing 3 of 3',
+      );
+      // The first entry is a link in the table: Tab reaches it, Enter opens it.
+      const first = page.getByRole('table', { name: 'Logs' }).getByRole('link').first();
+      await tabTo(page, first);
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { name: 'Log entry', level: 1 })).toBeVisible();
+    } finally {
+      await withDb(basePath, (client) =>
+        client.query(`delete from audit_event where path like $1`, [`${tag}/%`]),
+      ).catch(() => undefined);
     }
   });
 });

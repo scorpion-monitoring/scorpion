@@ -74,7 +74,8 @@
   }
 
   // "Load more": the rows after the first page, tied to the data they were loaded for.
-  let more = $state<{ base: LogsData; rows: LogEntry[]; next: number }>();
+  // `$state.raw`: the data it is tied to is compared by identity, which a deep proxy would break.
+  let more = $state.raw<{ base: LogsData; rows: LogEntry[]; next: number }>();
   let loading = $state(false);
   let failed = $state<string>();
 

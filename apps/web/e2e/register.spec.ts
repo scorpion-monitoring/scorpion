@@ -33,6 +33,8 @@ test.describe('registering', () => {
     const second = await page.getByRole('main').innerText();
 
     expect(second).toBe(first);
+    // A person whose earlier registration was declined is told whom to ask, without the page saying who that is.
+    expect(second).toContain('declined earlier');
     // Nothing of an account is in the page: not the address, not the name.
     expect(second).not.toContain('shared@example.org');
     expect(second).not.toContain('newcomer');
@@ -95,6 +97,6 @@ test.describe('registering', () => {
     await page.getByLabel('Username').fill(waiting.username);
     await page.getByLabel('Password', { exact: true }).fill('not the right password');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByRole('alert')).toHaveText('The username or password is wrong.');
+    await expect(page.getByRole('alert')).toContainText('The username or password is wrong.');
   });
 });

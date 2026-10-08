@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { admin, expect, person, signIn, test } from './support/fixtures.ts';
+import { unique } from './support/admin.ts';
+import { admin, expect, person, signIn, signInThroughPage, test } from './support/fixtures.ts';
 import { linkIn, mailTo } from './support/db.ts';
 import { readTrace, whereIs } from './support/trace.ts';
 
@@ -250,3 +251,81 @@ test('a secret stored on the settings page is only in the request that sends it'
   );
   expect(log).not.toContain(value);
 });
+
+const toast = (page: import('@playwright/test').Page) =>
+  page.getByRole('region', { name: 'Notifications' });
+
+// The logs screen (M5 sprint 4) shows the request that stored a secret. The value must not be on that page
+// or in any answer behind it: it is in the one request that sends it, as on the settings screen above.
+test('a secret stored on the settings page stays out of the logs page and the wire behind it', async ({
+  browser,
+  baseURL,
+  at,
+  basePath,
+}, testInfo) => {
+  test.slow();
+  const context = await browser.newContext({ baseURL });
+  await context.tracing.start({ snapshots: true, screenshots: false, sources: false });
+  const page = await context.newPage();
+  const visited: string[] = [];
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) visited.push(frame.url());
+  });
+  const name = `e2e.logs.${unique('s')}`;
+  const value = `a-logged-secret-${unique('v')}-${unique('w')}`;
+  await signInThroughPage(page, at, admin);
+  await page.goto(at('/admin/settings/secrets'));
+  await page.getByLabel('Name', { exact: false }).first().fill(name);
+  await page.getByLabel('Value', { exact: false }).fill(value);
+  await page.getByRole('button', { name: 'Store the secret' }).click();
+  await expect(toast(page).getByText(`The secret ${name} was stored.`)).toBeVisible();
+
+  // The trail has the request; it must not have the value, on the page or in the answers behind it.
+  await page.goto(
+    at(`/admin/logs?endpoint=${encodeURIComponent('/api/internal/secrets')}&method=PUT`),
+  );
+  const newest = page.getByRole('table', { name: 'Logs' }).getByRole('row').nth(1);
+  await newest.getByRole('link').first().click();
+  await expect(page.getByRole('heading', { name: 'Log entry', level: 1 })).toBeVisible();
+  const html = await page.content();
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+
+  const zip = testInfo.outputPath('logs-trace.zip');
+  await context.tracing.stop({ path: zip });
+  await context.close();
+  const exchanges = readTrace(zip);
+  expect(exchanges.length).toBeGreaterThan(10);
+  expect(whereIs(exchanges, value, basePath)).toEqual([`PUT /secrets/${name} requestBody`]);
+  expect(html).not.toContain(value);
+  for (const address of visited) expect(decodeURIComponent(address)).not.toContain(value);
+  const log = readFileSync(
+    resolve(import.meta.dirname, `../test-results/stack-${testInfo.project.name}.log`),
+    'utf8',
+  );
+  expect(log).not.toContain(value);
+
+  // Put the stack back.
+  const cleanup = await adminApiFor(browser, baseURL, at);
+  await cleanup.delete(name);
+});
+
+/** Deletes a secret the test stored (a small helper: the page of the test is signed out by then). */
+async function adminApiFor(
+  browser: import('@playwright/test').Browser,
+  baseURL: string | undefined,
+  at: (path: string) => string,
+) {
+  const context = await browser.newContext({ baseURL });
+  const login = await context.request.post(at('/api/internal/auth/login'), { data: admin });
+  const csrf = ((await login.json()) as { csrfToken: string }).csrfToken;
+  return {
+    async delete(name: string) {
+      await context.request.delete(at(`/api/internal/secrets/${encodeURIComponent(name)}`), {
+        headers: { 'x-csrf-token': csrf },
+      });
+      await context.close();
+    },
+  };
+}

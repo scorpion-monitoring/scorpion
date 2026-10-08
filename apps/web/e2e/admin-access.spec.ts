@@ -14,6 +14,10 @@ const PAGES = [
   '/admin/settings/secrets',
   '/admin/settings/vocabularies',
   '/admin/settings/core.identity',
+  '/admin/logs',
+  '/admin/logs/019a0000-0000-7000-8000-000000000000',
+  '/admin/system',
+  '/admin/notifications',
 ];
 
 test.describe('who may open the administration', () => {
@@ -44,7 +48,9 @@ test.describe('who may open the administration', () => {
       const response = await page.goto(at(path));
       expect(response?.status(), path).toBe(403);
       await expect(page.getByText('You are not allowed to open this page.'), path).toBeVisible();
-      await expect(page.getByRole('heading', { name: /Users|Roles|Settings/ })).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: /Users|Roles|Settings|Logs|System|Notification status/ }),
+      ).toHaveCount(0);
     }
   });
 
@@ -79,6 +85,17 @@ test.describe('who may open the administration', () => {
       ['GET', '/secrets'],
       ['PUT', '/secrets/e2e.plain', { value: 'nope' }],
       ['POST', '/vocabularies/stage/terms', { key: 'PLAIN', labels: { en: 'x' } }],
+      ['GET', '/permissions'],
+      ['GET', '/audit'],
+      ['GET', `/audit/${otherId}`],
+      ['GET', '/audit/export.csv'],
+      ['GET', '/system/outbox'],
+      ['GET', '/system/job-runs'],
+      ['POST', `/system/outbox/deliveries/${otherId}/requeue`, {}],
+      ['GET', '/notifications/status'],
+      ['GET', '/notifications/deliveries'],
+      ['POST', `/notifications/deliveries/${otherId}/requeue`, {}],
+      ['POST', '/notifications/test', {}],
     ];
     for (const [method, path, data] of calls) {
       const response = await page.request.fetch(at(`/api/internal${path}`), {
