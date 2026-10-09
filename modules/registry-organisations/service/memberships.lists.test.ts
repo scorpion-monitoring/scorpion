@@ -13,7 +13,7 @@ const PAGE = { page: 0, pageSize: 50 };
 const ABSENT = '018f3b7e-0000-7000-8000-000000000000';
 
 describe('listMembers', () => {
-  it('shows an approved member the usernames and join dates of the other approved members, and nothing else [ASVS-8.2.3]', async () => {
+  it('shows an approved member the usernames and join dates of the other approved members, and nothing else', async () => {
     const w = await startWorld(h);
     const viewer = await w.member();
     const manager = await w.manager();
@@ -168,7 +168,26 @@ describe('listPending and listForOrganisation', () => {
     await expect(w.memberships.listPending(manager, {}, PAGE)).rejects.toBeInstanceOf(Forbidden);
   });
 
-  it('draws the buttons from data: allowedActions per row, none on the caller’s own row, and never an email address [ASVS-8.2.3]', async () => {
+  it('answers a manager’s token without the decide scope with 403 and not with an empty list [ASVS-8.2.1]', async () => {
+    const w = await startWorld(h);
+    const manager = await w.manager();
+    await w.requester();
+    const token = (scopes: string[]) => ({ ...manager, via: 'token' as const, scopes });
+    const read = 'registry.organisations.organisation.read';
+    await expect(w.memberships.listPending(token([read]), {}, PAGE)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(
+      w.memberships.listForOrganisation(token([read]), w.org.id, {}, PAGE),
+    ).rejects.toBeInstanceOf(Forbidden);
+    expect(await w.memberships.summary(token([read]))).toEqual({ pending: 0, manages: true });
+    const decide = 'registry.organisations.membership.decide';
+    expect(
+      (await w.memberships.listPending(token([read, decide]), { state: 'requested' }, PAGE)).total,
+    ).toBe(1);
+  });
+
+  it('draws the buttons from data: allowedActions per row, none on the caller’s own row, and never an email address', async () => {
     const w = await startWorld(h);
     const manager = await w.manager();
     const peer = await w.manager();

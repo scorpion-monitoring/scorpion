@@ -617,12 +617,13 @@ export function createMembershipsService(
           page,
         );
       }
-      await requireDecider(actor, user);
       const scope = await decidable(actor, user);
+      // Neither an Admin nor a manager the caller may act as (a token without the scope is not): 403,
+      // not an empty list, so the answer is the same as for a person who manages nothing.
+      if (!scope.admin && scope.ids.length === 0) throw new Forbidden();
       const conditions = filterConditions(filter);
       if (!scope.admin) {
         // Only the organisations the caller manages; nothing else is even counted.
-        if (scope.ids.length === 0) return { items: [], total: 0 };
         conditions.push(inArray(membership.organisationId, scope.ids));
       }
       return managedPage(conditions, page, {
