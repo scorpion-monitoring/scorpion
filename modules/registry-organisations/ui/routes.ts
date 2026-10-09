@@ -18,7 +18,7 @@ export const ORGANISATION_NAV: NavEntry[] = [
     path: '/admin/organisations',
     icon: 'users',
     section: 'admin',
-    order: 40,
+    order: 45,
     permission: 'registry.organisations.organisation.manage',
   },
 ];

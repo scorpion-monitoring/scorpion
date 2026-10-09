@@ -23,7 +23,7 @@
     data:
       AdminOrganisationData | { organisation: undefined; types: AdminOrganisationData['types'] };
   } = $props();
-  const { t, href, goto, api, toaster, locale } = getShell();
+  const { t, href, goto, api, toaster, locale, refresh } = getShell();
 
   const creating = $derived(data.organisation === undefined);
   const stored = $derived(data.organisation);
@@ -100,6 +100,7 @@
         {stored}
         onsaved={async (saved: { id: string }) => {
           if (creating) await goto(href(`/admin/organisations/${saved.id}`));
+          else await refresh();
         }}
       />
     </div>

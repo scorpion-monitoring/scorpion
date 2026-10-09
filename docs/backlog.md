@@ -230,8 +230,7 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-
 - **Reactivation** of a purged person's memberships (there is none: the rows are deleted), and a history view of one membership beyond the audit trail
   (the row keeps only the last decision; a reopened row forgets the old one).
 - **A slot in the identity profile page for module sections** (Decision 10) and a notification preference per organisation.
-- **Editing by managers (sprint 4, Decision 19).** No review step for manager edits in M6. Backlog: a review queue for manager edits, an inbox item to the
-  administrators when a manager changes the contact point or the ROR id, and an instance switch that turns manager editing off.
+- ~~**Editing by managers (sprint 4, Decision 19).**~~ Built in M6 sprint 4; the follow-ups (a review queue, an inbox item, an instance switch) are in "Editing and screens follow-ups" below.
 - **An anonymous caller gets 422 before 401 on a route with a required body.** `POST /organisations`, `POST /tokens` and the membership routes
   answer 422 (a problem that names the body fields) to a caller who is not signed in and sends no body, because validation runs before the
   authorization in the pipeline. Nothing is changed by it, but the answer names the schema to somebody who may not read it. Found while writing the
