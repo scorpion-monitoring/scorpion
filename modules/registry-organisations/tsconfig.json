@@ -5,7 +5,7 @@
     "outDir": "dist",
     "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
-  "include": ["*.ts", "package.json", "db", "service", "test", "ui"],
+  "include": ["*.ts", "package.json", "db", "service", "templates", "test", "ui"],
   "references": [
     {
       "path": "../../packages/kernel"

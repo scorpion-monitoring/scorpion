@@ -66,7 +66,9 @@ const fixture = {
         },
       ],
     },
-    services: (ctx) => ({ authz: ctx.deps['core.authz'] as AuthzService }),
+    services: (ctx) => ({
+      authz: (ctx.deps as Record<string, unknown>)['core.authz'] as AuthzService,
+    }),
     routes: (r) => {
       const service = r.service<{ authz: AuthzService }>();
       // A: the service is the authorization.

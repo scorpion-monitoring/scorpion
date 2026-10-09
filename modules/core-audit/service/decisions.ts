@@ -13,8 +13,13 @@ export interface Subject {
 
 export interface LoggedEvent {
   decision: 'log';
-  /** Role, approval, token, settings and secret changes (and the other security events): logged whatever `channels` says. */
-  critical: boolean;
+  /**
+   * Role, approval, token, settings and secret changes (and the other security events): logged whatever
+   * `channels` says. A function decides from the payload, for an event that is critical only for some
+   * of its causes (a membership that ends: critical when an Admin or a manager did it, not when the
+   * person left).
+   */
+  critical: boolean | ((payload: Payload) => boolean);
   /** Who caused it. Read from the payload; ids are kept as written. */
   actor: (payload: Payload) => AuditActor;
   subject: (payload: Payload) => Subject | undefined;
@@ -44,7 +49,7 @@ const subjectOf =
   (payload: Payload): Subject => ({ type, id: text(payload, key) });
 
 const log = (
-  critical: boolean,
+  critical: LoggedEvent['critical'],
   actor: LoggedEvent['actor'],
   subject: LoggedEvent['subject'],
 ): LoggedEvent => ({ decision: 'log', critical, actor, subject });
@@ -124,6 +129,30 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
     false,
     userBy('actorId'),
     subjectOf('organisation', 'organisationId'),
+  ),
+  // Membership (M6 sprint 3). An approval or a role change is a permission-relevant act, like an approved
+  // account and a role assignment, so `decided` and `roleChanged` are critical; so is a membership that an
+  // Admin or a manager ended (`by`), while a person who leaves or withdraws follows `channels.admin`. A purge
+  // (`by: system`) is the identity module's act, already logged. The payloads hold ids, states and roles.
+  'registry.membership.requested@1': log(
+    false,
+    userBy('userId'),
+    subjectOf('membership', 'membershipId'),
+  ),
+  'registry.membership.decided@1': log(
+    true,
+    userBy('actorId'),
+    subjectOf('membership', 'membershipId'),
+  ),
+  'registry.membership.left@1': log(
+    (payload) => payload.by === 'admin' || payload.by === 'manager',
+    userBy('actorId'),
+    subjectOf('membership', 'membershipId'),
+  ),
+  'registry.membership.roleChanged@1': log(
+    true,
+    userBy('actorId'),
+    subjectOf('membership', 'membershipId'),
   ),
 };
 

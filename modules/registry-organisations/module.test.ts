@@ -91,8 +91,12 @@ describe('the manifest', () => {
     );
   });
 
-  it('emits the three organisation events, each strict, with names and ids only', () => {
+  it('emits the three organisation events and the four membership events, each strict, with names and ids only', () => {
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'registry.membership.decided@1',
+      'registry.membership.left@1',
+      'registry.membership.requested@1',
+      'registry.membership.roleChanged@1',
       'registry.organisation.created@1',
       'registry.organisation.deleted@1',
       'registry.organisation.updated@1',
@@ -193,13 +197,21 @@ describe('in a profile', () => {
     expect(paths).toContain('/organisation-types');
   });
 
-  it('gives every route a permission and none is public', async () => {
+  it('gives every route a plain permission of the module and none is public; no route names a scoped one (ADR-0034)', async () => {
     const s = await h.start();
-    const own = s.kernel.routes.filter((r) => r.route.path.startsWith('/organisation'));
-    expect(own).toHaveLength(9);
+    const own = s.kernel.routes.filter((r) =>
+      String(r.route.permission).startsWith('registry.organisations.'),
+    );
+    // Nine for the record, the logo and the types; nine for membership.
+    expect(own).toHaveLength(18);
+    const plain = new Set(
+      Object.entries(manifest.permissions ?? {})
+        .filter(([, def]) => def.scope === undefined)
+        .map(([id]) => id),
+    );
     for (const { route } of own) {
-      expect(route.permission, `${route.method} ${route.path}`).toMatch(
-        /^registry\.organisations\./,
+      expect(plain, `${route.method} ${route.path}: ${route.permission}`).toContain(
+        route.permission,
       );
       expect(route.public).not.toBe(true);
     }

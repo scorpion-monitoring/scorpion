@@ -4,7 +4,8 @@
 // The reads check no permission and name no caller (ADR-0015, hence the `AsSystem` suffix): a route
 // that uses one must check its own permission first. They return the descriptive fields only, never
 // the contact point or the audit columns. `toSchemaOrgAsSystem` leaves the contact point out unless
-// the caller asks for it.
+// the caller asks for it. The membership reads answer from ids and name nobody: M7's `service.member`
+// asks `isApprovedMemberAsSystem` and `listApprovedOrganisationIdsAsSystem`.
 export {
   ORG_TYPE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -17,6 +18,7 @@ export {
 export type { SchemaOrgProfile } from './service/schema-org.ts';
 export type { OrganisationRecord, TypeView } from './service/organisations.ts';
 
+import type { MembershipsService } from './service/memberships.ts';
 import type { OrganisationsService } from './service/organisations.ts';
 
 export type OrganisationsPublic = Pick<
@@ -26,7 +28,14 @@ export type OrganisationsPublic = Pick<
   | 'existsAsSystem'
   | 'listTypesAsSystem'
   | 'toSchemaOrgAsSystem'
->;
+> &
+  Pick<
+    MembershipsService,
+    | 'isApprovedMemberAsSystem'
+    | 'listApprovedOrganisationIdsAsSystem'
+    | 'countApprovedMembersAsSystem'
+    | 'isManagerAsSystem'
+  >;
 
 declare module '@scorpion/kernel' {
   interface ModuleServices {

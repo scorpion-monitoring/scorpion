@@ -6,9 +6,11 @@ import type { AuthzService } from '@scorpion/core-authz/public';
 import type { BlobService } from '@scorpion/core-blob/public';
 import { ids, mountPath, type Db, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
-import { organisation } from '../db/schema.ts';
+import { membership, organisation } from '../db/schema.ts';
 import { OrganisationInUse } from './errors.ts';
 import { escapeLike } from './fields.ts';
+import { approvedCounts, ownRows } from './membership-queries.ts';
+import type { Role, State } from './membership-state.ts';
 import { fieldsOfBody, fieldsOfInput, requiredAccess, type Access } from './field-rules.ts';
 import {
   createOrganisationSchema,
@@ -54,7 +56,10 @@ export interface OrganisationSummary {
   typeKnown: boolean;
   abbreviation: string;
   name: string;
+  /** Approved members, managers included. */
   memberCount: number;
+  /** The caller's own row in any state, for a badge; `null` without one. */
+  myMembership: { state: State; role: Role } | null;
 }
 
 export interface OrganisationView extends OrganisationSummary {
@@ -90,7 +95,7 @@ export interface TypeView {
  * What a trusted caller (M7, M8) gets: the descriptive fields. No contact point, no audit columns, no
  * logo hash: a trusted read cannot leak what an organisation keeps from other readers.
  */
-export interface OrganisationRecord extends OrganisationSummary {
+export interface OrganisationRecord extends Omit<OrganisationSummary, 'myMembership'> {
   description: string | null;
   website: string | null;
   rorId: string | null;
@@ -188,13 +193,17 @@ export function createOrganisationsService(
 
   const base = mountPath(ctx.config);
   const logoPath = (hash: string) => `${base}/api/internal/files/${hash}`;
-  const record = (row: Row): OrganisationRecord => ({
-    ...summary(row),
-    description: row.description,
-    website: row.website,
-    rorId: row.rorId,
-    sameAs: row.sameAs,
-  });
+  /** A trusted read: the descriptive fields and the member count, never the caller's own row (there is no caller). */
+  const record = (row: Row, memberCount: number): OrganisationRecord => {
+    const { myMembership: _mine, ...rest } = summary(row, { memberCount, mine: undefined });
+    return {
+      ...rest,
+      description: row.description,
+      website: row.website,
+      rorId: row.rorId,
+      sameAs: row.sameAs,
+    };
+  };
 
   /**
    * Who sees the contact point (plan §6 item 6): whoever holds `…read-contact` on the organisation
@@ -208,17 +217,31 @@ export function createOrganisationsService(
     return settingsSchema.parse(await ctx.settings.get()).exposeContactPoint;
   }
 
-  const summary = (row: Row): OrganisationSummary => ({
+  const summary = (
+    row: Row,
+    extras: { memberCount: number; mine: { state: State; role: Role } | undefined },
+  ): OrganisationSummary => ({
     id: row.id,
     type: row.type,
     typeKnown: types.has(row.type),
     abbreviation: row.abbreviation,
     name: row.name,
-    // The count comes from org_membership in sprint 3; until then nobody can be a member.
-    memberCount: 0,
+    memberCount: extras.memberCount,
+    myMembership: extras.mine ?? null,
   });
 
+  /** The member counts and the caller's own rows of a page of organisations: two grouped queries. */
+  async function extrasOf(actor: Actor, rows: readonly Row[]) {
+    const wanted = rows.map((row) => row.id);
+    const [counts, mine] = await Promise.all([
+      approvedCounts(db, wanted),
+      actor.kind === 'user' ? ownRows(db, actor.userId, wanted) : Promise.resolve(new Map()),
+    ]);
+    return (row: Row) => ({ memberCount: counts.get(row.id) ?? 0, mine: mine.get(row.id) });
+  }
+
   async function view(actor: Actor, row: Row): Promise<OrganisationView> {
+    const extras = (await extrasOf(actor, [row]))(row);
     // The audit columns are for administrators; the contact point follows `canSeeContact`
     // (ADR-0033, field table).
     const [admin, contact] = await Promise.all([
@@ -226,7 +249,7 @@ export function createOrganisationsService(
       canSeeContact(actor, row.id),
     ]);
     return {
-      ...summary(row),
+      ...summary(row, extras),
       description: row.description,
       website: row.website,
       rorId: row.rorId,
@@ -352,7 +375,11 @@ export function createOrganisationsService(
           .from(organisation)
           .where(where),
       ]);
-      return { organisations: rows.map(summary), total: count?.total ?? 0 };
+      const extras = await extrasOf(actor, rows);
+      return {
+        organisations: rows.map((row) => summary(row, extras(row))),
+        total: count?.total ?? 0,
+      };
     },
 
     async get(actor, id) {
@@ -469,8 +496,9 @@ export function createOrganisationsService(
         const current = await load(tx, id, true);
         const used = await usedBy(tx, id);
         if (used.length > 0) throw new OrganisationInUse(used);
-        // By id and nothing else. The logo is released here, so a rollback keeps it; sprint 3 removes
-        // the memberships in this transaction too.
+        // By id and nothing else. The memberships of the organisation go first (the key restricts), and
+        // the logo is released here, so a rollback keeps both.
+        await tx.delete(membership).where(eq(membership.organisationId, id));
         await tx.delete(organisation).where(eq(organisation.id, id));
         if (current.logoBlobId) await deps.blob.setReference(logoReference(id), null);
         await ctx.events.emit('registry.organisation.deleted@1', {
@@ -562,7 +590,11 @@ export function createOrganisationsService(
         .from(organisation)
         .where(inArray(organisation.id, valid))
         .orderBy(asc(organisation.id));
-      return rows.map(record);
+      const counts = await approvedCounts(
+        db,
+        rows.map((row) => row.id),
+      );
+      return rows.map((row) => record(row, counts.get(row.id) ?? 0));
     },
 
     async findByAbbreviationAsSystem(type, abbreviation) {
@@ -575,7 +607,8 @@ export function createOrganisationsService(
             sql`lower(${organisation.abbreviation}) = lower(${abbreviation})`,
           ),
         );
-      return row && record(row);
+      if (!row) return undefined;
+      return record(row, (await approvedCounts(db, [row.id])).get(row.id) ?? 0);
     },
 
     async existsAsSystem(id) {

@@ -128,7 +128,7 @@ the administrators, de-duplicated, the requester left out; the decision goes to 
 `membership`). A role change and "an organisation has no manager" are inbox items only. A removed person is not mailed (backlog). A
 mail names the organisation and the requester's username and never an address beyond the recipient's own.
 
-**Events** carry ids, states and roles: never a username or an address. `registry.membership.decided@1`, `…role-changed@1` and
+**Events** carry ids, states and roles: never a username or an address. `registry.membership.decided@1`, `…roleChanged@1` and
 `…left@1` are `critical` for `by: admin | manager` in the audit trail.
 
 **Purge.** The module subscribes to `identity.user.purged@1` and deletes the person's memberships (managers' too) in one transaction;

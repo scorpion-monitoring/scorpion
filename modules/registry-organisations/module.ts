@@ -5,7 +5,9 @@ import type { IdentityService } from '@scorpion/core-identity/public';
 import type { NotificationsService } from '@scorpion/core-notifications/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import { defineModule } from '@scorpion/kernel';
+import { registerMembershipRoutes } from './routes-membership.ts';
 import { registerOrganisationRoutes } from './routes.ts';
+import { createMembershipsService, type MembershipsService } from './service/memberships.ts';
 import { createOrganisationsService, type OrganisationsService } from './service/organisations.ts';
 import {
   PERMISSION_DECIDE,
@@ -31,8 +33,12 @@ import { settingsSchema, type OrganisationsSettings } from './settings-schema.ts
 
 export { settingsSchema, type OrganisationsSettings } from './settings-schema.ts';
 export type { OrganisationsService } from './service/organisations.ts';
+export type { MembershipsService } from './service/memberships.ts';
 
-// The service types of the dependencies shape `ctx.deps`; sprint 1 uses core.authz only.
+/** What the module registers as its service: the organisation record and the memberships (one object, no name clashes). */
+export type RegistryOrganisationsService = OrganisationsService & MembershipsService;
+
+// The service types of the dependencies shape `ctx.deps`.
 export type OrganisationsDependencies = [
   AuthzService,
   SettingsService,
@@ -42,6 +48,14 @@ export type OrganisationsDependencies = [
 ];
 
 const actorId = z.uuid().nullable();
+const uuid = z.uuid();
+/** The membership events carry ids, states and roles: never a username or an address. */
+const membershipEvent = {
+  membershipId: uuid,
+  organisationId: uuid,
+  userId: uuid,
+};
+const role = z.enum(['member', 'manager']);
 
 /**
  * Builds the manifest. The default export is the one a profile uses. The service reaches the routes
@@ -51,6 +65,12 @@ export function createOrganisationsModule() {
   // The policy needs the database and the settings, which exist only once the module starts; the
   // manifest's contribution reaches it through this closure (the pattern of core.audit's sink).
   let policy: MemberPolicy | undefined;
+  // The purge subscriber reaches the service the same way.
+  let current: RegistryOrganisationsService | undefined;
+  const serviceOrThrow = () => {
+    if (!current) throw new Error('registry.organisations: the service was asked before start');
+    return current;
+  };
   const policyOrThrow = () => {
     if (!policy)
       throw new Error('registry.organisations: the member policy was asked before start');
@@ -58,7 +78,7 @@ export function createOrganisationsModule() {
   };
 
   return defineModule<
-    OrganisationsService,
+    RegistryOrganisationsService,
     'core.authz' | 'core.settings' | 'core.identity' | 'core.notifications' | 'core.blob',
     never, // core.ui-shell is an optional peer in package.json; the module uses no service of it
     OrganisationsSettings
@@ -127,6 +147,36 @@ export function createOrganisationsModule() {
           type: z.string(),
           actorId,
         }),
+        'registry.membership.requested@1': z.strictObject({ ...membershipEvent }),
+        'registry.membership.decided@1': z.strictObject({
+          ...membershipEvent,
+          state: z.enum(['approved', 'rejected']),
+          by: z.enum(['admin', 'manager']),
+          actorId: uuid,
+        }),
+        // From a leave, a withdrawal, a removal and a purge (`by: 'system'`, no actor). A flag says
+        // whether the organisation still has an approved manager afterwards.
+        'registry.membership.left@1': z.strictObject({
+          ...membershipEvent,
+          by: z.enum(['member', 'admin', 'manager', 'system']),
+          actorId,
+          organisationHasManager: z.boolean(),
+        }),
+        'registry.membership.roleChanged@1': z.strictObject({
+          ...membershipEvent,
+          from: role,
+          to: role,
+          by: z.enum(['admin', 'manager']),
+          actorId: uuid,
+          organisationHasManager: z.boolean(),
+        }),
+      },
+      // A purged person's memberships go with them (ADR 0013); core.identity emits the event.
+      on: {
+        'identity.user.purged@1': async (event) => {
+          const userId = (event.payload as { userId?: unknown }).userId;
+          if (typeof userId === 'string') await serviceOrThrow().purgeUserAsSystem(userId);
+        },
       },
     },
 
@@ -165,14 +215,24 @@ export function createOrganisationsModule() {
         db: ctx.db,
         settings: async () => settingsSchema.parse(await ctx.settings.get()),
       });
-      return createOrganisationsService(ctx, {
+      const organisations = createOrganisationsService(ctx, {
         authz: ctx.deps['core.authz'],
         blob: ctx.deps['core.blob'],
       });
+      const memberships = createMembershipsService(ctx, {
+        authz: ctx.deps['core.authz'],
+        identity: ctx.deps['core.identity'],
+        notifications: ctx.deps['core.notifications'],
+        settings: ctx.deps['core.settings'],
+      });
+      current = { ...organisations, ...memberships };
+      return current;
     },
 
     routes: (r) => {
-      registerOrganisationRoutes(r, r.service<OrganisationsService>());
+      const service = r.service<RegistryOrganisationsService>();
+      registerOrganisationRoutes(r, service);
+      registerMembershipRoutes(r, service);
     },
   });
 }
