@@ -104,14 +104,14 @@ The `CI` workflow runs its work as parallel jobs, so a run takes as long as its 
 | ---------------------------- | --------------------------------------------------------------------------------------- |
 | `Static checks`              | branch policy, changeset check, `pnpm check`                                            |
 | `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                       |
-| `End-to-end tests`           | Playwright (the browser download is cached)                                             |
+| `End-to-end tests (n/3)`     | Playwright, one JUnit file per shard (the browser download is cached)                   |
 | `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                      |
 | **`Lint, type check, test`** | the gate: succeeds only when the four jobs above did; this is the required check        |
 | `Image (...)`                | builds and smoke-tests each profile image beside the tests (needs only `Static checks`) |
 
 Branch protection requires the gate by name, so the jobs behind it can be split, renamed or
 added without a change to the ruleset. When the unit tests near the 20-minute limit of a job,
-raise the shard count in `.github/workflows/ci.yml` (the matrix and the `/4` in the command);
+raise the shard count in `.github/workflows/ci.yml` (the matrix and the `/4` or `/3` in the command);
 do not raise the limit. `pnpm test` without `--shard` still runs everything, as before.
 
 ## Images in the registry

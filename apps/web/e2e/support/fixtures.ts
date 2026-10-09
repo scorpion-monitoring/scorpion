@@ -11,7 +11,28 @@ interface Fixtures {
   at: (path: string) => string;
 }
 
+/**
+ * Waits until the shell has hydrated the page. `goto` returns at the `load` event, which comes before
+ * Svelte attaches its handlers: input typed earlier is lost to bound state and a submit finds nothing
+ * changed. A page without the marker (the component harness, a JSON answer) is ready at once.
+ */
+export async function hydrated(page: Page): Promise<void> {
+  await page.waitForFunction(() => document.body?.dataset.hydrated !== 'false', undefined, {
+    timeout: 15_000,
+  });
+}
+
 export const test = base.extend<Fixtures>({
+  // Every `page.goto` of a test returns once the page has hydrated.
+  page: async ({ page }, use) => {
+    const goto = page.goto.bind(page);
+    page.goto = async (target, options) => {
+      const response = await goto(target, options);
+      await hydrated(page);
+      return response;
+    };
+    await use(page);
+  },
   basePath: ['/', { option: true }],
   at: async ({ basePath }, use) => {
     await use((path) => url(basePath, path));
@@ -48,6 +69,8 @@ export async function createUser(
   const register = await request.post(at('/api/internal/auth/register'), {
     data: { ...credentials, email: `${credentials.username}@example.org` },
   });
+  // A retry of a failed test finds the account its first attempt made (and approved).
+  if (register.status() === 409 && test.info().retry > 0) return;
   expect(register.status(), await register.text()).toBe(202);
   const csrf = await signIn(request, at, admin);
   const pending = await request.get(at('/api/internal/users/pending'));

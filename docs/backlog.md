@@ -152,6 +152,11 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   without a restart would help operators.
 - **A private window cannot resume a re-authentication at a provider.** Without `sessionStorage` the intended action is lost and the person lands on the start page; the dialog does not warn of it.
 
+## End-to-end test follow-ups (0.7.0 release)
+
+- **Only `page.goto` waits for hydration.** A click that loads another page with a full reload, or a form that redirects, is not covered by the wait (`hydrated(page)` in `apps/web/e2e/support/fixtures.ts` can be called by hand). Look at the first failure of any E2E test that types or presses a key right after a navigation before looking elsewhere.
+- **A retry is only as good as its fixtures.** `createUser` now accepts the account of a failed first attempt (409 on a retry), but a test that changes the account before it fails (password, email) leaves a different state for the retry. Prefer tests that create what they change.
+
 ## Operations screen follow-ups (M5 sprint 4)
 
 - **The audit list pages by offset, so "Load more" can repeat or skip a row** when entries arrive while the page is open (the page keeps each id once, so it never repeats, but a skipped row is possible). A cursor (`before=<occurredAt>,<id>`) on `GET /audit` would make it exact; the CSV export already reads by keyset.
@@ -171,7 +176,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Widgets load in the browser only** (no server rendering), so the bell and the cards appear a moment after the page. A widget that needs data on first paint would need a `load` like a page has.
 - **The dashboard has two cards.** KPI cards are M13; a card needs only a `ui.widget` entry and a component in a module's `ui` entry.
 - **The inbox has no cap per person** (see "Notifications follow-ups (M4 sprint 3)"); now that a registration request lands there for every administrator, a flood of registrations grows every administrator's inbox. Read items are deleted after `inboxRetentionDays`.
-- **The "vocabularies" journey is flaky on its first attempt in a full e2e run** (`admin-settings.spec.ts`, "an Admin adds a term, relabels it, deactivates it and removes it"); alone it passes. The cause is not found.
+- **The "vocabularies" journey is flaky on its first attempt in a full e2e run** (`admin-settings.spec.ts`, "an Admin adds a term, relabels it, deactivates it and removes it"); alone it passes. The cause is not found; it may be the hydration race of `accessibility-auth.spec.ts` (see below), which `page.goto` now waits out, so check whether it still happens.
 
 ## Administration screen follow-ups (M5 sprint 3)
 

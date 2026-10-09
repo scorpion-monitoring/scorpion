@@ -85,6 +85,10 @@
     }
     if (unsaved() && !window.confirm(t('kit.wizard.leave'))) navigation.cancel();
   });
+  // The page is interactive from here on (the children have mounted): handlers exist and bound state follows input.
+  onMount(() => {
+    document.body.dataset.hydrated = 'true';
+  });
   onMount(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (!unsaved()) return;
