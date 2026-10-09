@@ -6914,6 +6914,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
+                            logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
                             contactEmail?: string | null;
                             /** @description Present only with `contactEmail`. */
@@ -7109,6 +7111,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
+                            logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
                             contactEmail?: string | null;
                             /** @description Present only with `contactEmail`. */
@@ -7287,6 +7291,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
+                            logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
                             contactEmail?: string | null;
                             /** @description Present only with `contactEmail`. */
@@ -7352,6 +7358,327 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/organisations/{id}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The organisation as a Schema.org `Organization` (JSON-LD). `Cache-Control: private, no-cache`: what it holds depends on the reader. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @description The `schemaType` of the organisation type. */
+                            "@type": string;
+                            /** @description The absolute URL of the organisation page. */
+                            "@id": string;
+                            name: string;
+                            /** @description The abbreviation. */
+                            alternateName?: string;
+                            description?: string;
+                            /** @description The organisation's website, else its own page. */
+                            url: string;
+                            identifier?: {
+                                /** @enum {string} */
+                                "@type": "PropertyValue";
+                                /** @enum {string} */
+                                propertyID: "ROR";
+                                value: string;
+                            };
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                            /** @description Only for a reader who may see the contact point: the organisation's role address, not a user's. */
+                            contactPoint?: {
+                                /** @enum {string} */
+                                "@type": "ContactPoint";
+                                email: string;
+                                contactType: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such organisation. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisations/{id}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description The image as the request body (PNG, JPEG, WebP, GIF or SVG). Its `Content-Type` is ignored: the type is determined from the content, and the file is checked and rewritten before it is stored. */
+            requestBody: {
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            responses: {
+                /** @description The organisation with its new logo. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            type: string;
+                            /** @description False when the type is no longer registered; the organisation cannot be changed then. */
+                            typeKnown: boolean;
+                            abbreviation: string;
+                            name: string;
+                            memberCount: number;
+                            description: string | null;
+                            website: string | null;
+                            /** @description The bare ROR id, for example `02skbsp27`. */
+                            rorId: string | null;
+                            sameAs: string[];
+                            /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
+                            logoUrl?: string;
+                            /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such organisation. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The body is larger than the upload ceiling. */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The file is empty, too big, not a supported image, or damaged. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The organisation without its logo. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            type: string;
+                            /** @description False when the type is no longer registered; the organisation cannot be changed then. */
+                            typeKnown: boolean;
+                            abbreviation: string;
+                            name: string;
+                            memberCount: number;
+                            description: string | null;
+                            website: string | null;
+                            /** @description The bare ROR id, for example `02skbsp27`. */
+                            rorId: string | null;
+                            sameAs: string[];
+                            /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
+                            logoUrl?: string;
+                            /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such organisation, or it has no logo. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }

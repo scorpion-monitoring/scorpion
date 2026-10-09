@@ -139,11 +139,14 @@ the same file answers 401 and 403 on every non-public route.
 | `PUT /settings/{module}`                        | core.settings          | `core.settings.write`                        | default    | yes, with body |
 | `GET /ui/navigation`                            | core.ui-shell          | **public**                                   | default    | no             |
 | `DELETE /organisations/{id}`                    | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
+| `DELETE /organisations/{id}/logo`               | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
 | `GET /organisation-types`                       | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /organisations`                            | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /organisations/{id}`                       | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
+| `GET /organisations/{id}/schema-org`            | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `PATCH /organisations/{id}`                     | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
 | `POST /organisations`                           | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
+| `PUT /organisations/{id}/logo`                  | registry.organisations | `registry.organisations.organisation.manage` | strict     | yes            |
 
 <!-- routes:end -->
 

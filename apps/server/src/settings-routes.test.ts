@@ -41,14 +41,16 @@ describe('GET /settings', () => {
       metadata: Record<string, number>;
       result: { module: string; version: number; values: Record<string, unknown> }[];
     };
-    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 5, totalPages: 1 });
+    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 6, totalPages: 1 });
     expect(body.result.map((entry) => entry.module)).toEqual([
       'core.audit',
       'core.blob',
       'core.identity',
       'core.notifications',
       'core.settings',
+      'registry.organisations',
     ]);
+    expect(body.result[5]).toMatchObject({ values: { exposeContactPoint: true } });
     expect(body.result[2]).toMatchObject({
       version: 0,
       values: { localAccounts: true, approvalPolicy: 'manual', oidcProviders: [] },
