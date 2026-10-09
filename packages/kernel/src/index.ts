@@ -36,7 +36,12 @@ export {
   type PermissionDef,
   type RouteRegistrar,
 } from './manifest.ts';
-export { renderProfileModule, type ProfileModuleInput } from './codegen.ts';
+export {
+  renderProfileModule,
+  renderUiModule,
+  type ProfileModuleInput,
+  type UiModuleInput,
+} from './codegen.ts';
 export { computeModuleDependencies, packageNameForModule } from './package-deps.ts';
 export type { ModuleDependencyNames, PackageDeps } from './package-deps.ts';
 export {
@@ -107,7 +112,7 @@ export {
   type JobRunReport,
 } from './jobs.ts';
 export type { JobResult } from './manifest.ts';
-export { listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';
+export { countJobRuns, listJobRuns, type JobRunFilter, type JobRunRow } from './queries.ts';
 export {
   AUTHORIZER_REGISTRY,
   denyByDefault,

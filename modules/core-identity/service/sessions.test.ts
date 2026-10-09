@@ -115,6 +115,28 @@ describe('resolve', () => {
     );
   });
 
+  it('does not slide for a passive check (the re-check of an open event stream), but still ends with the session', async () => {
+    const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 0 });
+    const user = await makeUser(kernel.pool);
+    const created = await id.sessions.create(user.id);
+    const [before] = await rows(kernel);
+    const later = new Date(Date.now() + 3 * 24 * 3600 * 1000);
+    expect(await id.sessions.resolve(created.id, later, { touch: false })).toMatchObject({
+      renewed: false,
+    });
+    const [after] = await rows(kernel);
+    expect(after!.expires_at).toEqual(before!.expires_at);
+    expect(after!.last_seen_at).toEqual(before!.last_seen_at);
+    // It is a real check: a revoked session fails it, and a session past its end too.
+    expect(
+      await id.sessions.resolve(created.id, new Date(Date.now() + 30 * 24 * 3600 * 1000), {
+        touch: false,
+      }),
+    ).toBeUndefined();
+    await id.sessions.revoke(created.id);
+    expect(await id.sessions.resolve(created.id, undefined, { touch: false })).toBeUndefined();
+  });
+
   it('does not slide a session that is revoked', async () => {
     const { kernel, identity: id } = await identity.start({ sessionCacheTtlMs: 0 });
     const user = await makeUser(kernel.pool);

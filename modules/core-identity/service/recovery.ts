@@ -40,6 +40,7 @@ import type { LoginThrottle } from './login-throttle.ts';
 import { requireSession } from './require-user.ts';
 import type { SessionService } from './sessions.ts';
 import { budgetLimit, type IdentitySettings } from './settings.ts';
+import { LOCAL_ACCOUNTS_OFF } from '../problem-types.ts';
 
 export interface RecoveryService {
   /**
@@ -146,7 +147,8 @@ export function createRecoveryService(
 
   async function requireLocalAccounts(what: string) {
     const { localAccounts } = await settings.get();
-    if (!localAccounts) throw new Forbidden(`${what} with a password is turned off.`);
+    if (!localAccounts)
+      throw new Forbidden(`${what} with a password is turned off.`, LOCAL_ACCOUNTS_OFF);
   }
 
   async function startVerificationIn(
@@ -379,7 +381,9 @@ export function createRecoveryService(
             .from(user)
             .where(and(eq(user.id, claimed.userId), isNull(user.deletedAt)))
             .limit(1);
-          if (!account || account.status === 'rejected') throw new BadRequest(LINK_PROBLEM);
+          if (!account || account.status === 'rejected' || account.status === 'deactivated') {
+            throw new BadRequest(LINK_PROBLEM);
+          }
           // The address may have been taken by another account since the mail went out.
           const [taken] = await tx
             .select({ id: user.id })

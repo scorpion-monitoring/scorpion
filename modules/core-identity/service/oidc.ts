@@ -2,7 +2,7 @@
 // signed-in account. Everything that changes data goes through here.
 import { and, eq, sql } from 'drizzle-orm';
 import { CodeChallengeMethod, OAuth2Client, OAuth2RequestError } from 'arctic';
-import { Conflict, Forbidden, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
+import { Conflict, Forbidden, NotFound, Unauthorized, url, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
@@ -17,6 +17,7 @@ import {
   type LoginStateService,
 } from './login-state.ts';
 import { BadRequest, InvalidIdToken, ProviderUnavailable } from './oidc-errors.ts';
+import type { LoginErrorCode } from '../problem-types.ts';
 import type { ClientSecretLookup } from './oidc-secret.ts';
 import type { ProviderClient } from './oidc-provider.ts';
 import { CLOCK_SKEW_SECONDS, verifyIdToken, type IdentityClaims } from './oidc-token.ts';
@@ -25,6 +26,7 @@ import { grantDefaultRole } from './roles.ts';
 import type { SessionService } from './sessions.ts';
 import type { IdentitySettings, OidcProvider } from './settings.ts';
 import { usernameBase, usernameCandidates } from './username.ts';
+import { ACCOUNT_PENDING } from '../problem-types.ts';
 
 /** Where the internal API is mounted; the callback URL registered at the provider ends in `/auth/oidc/<id>/callback`. */
 const INTERNAL_PREFIX = '/api/internal';
@@ -61,11 +63,22 @@ export interface CompleteInput {
   previousSessionId: string | undefined;
 }
 
+/** What the sign-in page may know of a provider: no issuer, no client id. */
+export interface PublicProvider {
+  id: string;
+  displayName: string;
+  iconHash?: string;
+}
+
 export interface OidcService {
+  /** The providers people may sign in with, in the order of the setting. Nothing but what a button needs. */
+  listProviders(): Promise<PublicProvider[]>;
   /** Where the browser goes after the callback: the application root under `BASE_PATH`. Fixed, so there is no open redirect. */
   readonly landing: string;
   /** Where it goes when a link mail was sent instead of a sign-in: the sign-in page with a notice. Fixed as well. */
   readonly checkMailLanding: string;
+  /** Where a browser goes when the sign-in failed: the sign-in page with a fixed `error` code (ADR 0029). */
+  loginErrorLanding(code: LoginErrorCode): string;
   /** Starts a login for anyone. 404 for a provider that is not configured, 502 when it cannot be reached. */
   start(providerId: string): Promise<StartedLogin>;
   /** Starts the flow that adds a provider to the signed-in caller's account. Session only. */
@@ -110,8 +123,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
   const exchangeTimeoutMs = deps.exchangeTimeoutMs ?? TOKEN_EXCHANGE_TIMEOUT_MS;
 
   const redirectUri = (providerId: string): string => {
-    const base = ctx.config.BASE_PATH === '/' ? '' : ctx.config.BASE_PATH;
-    return `${ctx.config.ORIGIN}${base}${INTERNAL_PREFIX}/auth/oidc/${providerId}/callback`;
+    return `${ctx.config.ORIGIN}${url(ctx.config.BASE_PATH, `${INTERNAL_PREFIX}/auth/oidc/${providerId}/callback`)}`;
   };
 
   async function providerOrThrow(id: string): Promise<OidcProvider> {
@@ -171,10 +183,11 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
 
   /** The same refusals as a password login: a pending account waits, a rejected or deleted one is simply refused. */
   function assertMaySignIn(found: User): void {
-    if (found.deletedAt !== null || found.status === 'rejected') {
+    if (found.deletedAt !== null || found.status === 'rejected' || found.status === 'deactivated') {
       throw new Unauthorized(GENERIC_REFUSAL);
     }
-    if (found.status === 'pending') throw new Forbidden('Your account is waiting for approval.');
+    if (found.status === 'pending')
+      throw new Forbidden('Your account is waiting for approval.', ACCOUNT_PENDING);
   }
 
   async function startSession(userId: string, provider: string, previous: string | undefined) {
@@ -326,8 +339,18 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
   }
 
   return {
-    landing: ctx.config.BASE_PATH === '/' ? '/' : `${ctx.config.BASE_PATH}/`,
-    checkMailLanding: `${ctx.config.BASE_PATH === '/' ? '' : ctx.config.BASE_PATH}/login?notice=check-mail`,
+    landing: url(ctx.config.BASE_PATH, '/'),
+    checkMailLanding: url(ctx.config.BASE_PATH, '/login?notice=check-mail'),
+    loginErrorLanding: (code) => url(ctx.config.BASE_PATH, `/login?error=${code}`),
+
+    async listProviders() {
+      const { oidcProviders } = await settings.get();
+      return oidcProviders.map(({ id, displayName, iconHash }) => ({
+        id,
+        displayName,
+        ...(iconHash ? { iconHash } : {}),
+      }));
+    },
 
     start: (providerId) => begin(providerId),
 

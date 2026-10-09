@@ -1,10 +1,10 @@
 asvs_version: 5.0.0
 level: 2
 chapter: V10
-assessment_type: null
-assessed_commit: null
-assessed_on: null
-assessor: null
+assessment_type: self
+assessed_commit: a622186c88f87edbdf8af9e64648a8ab410c8d46
+assessed_on: 2026-10-09
+assessor: feserm
 second_pass: null
 reviewer: null
 requirements:
@@ -13,7 +13,7 @@ requirements:
     evidence:
       - test: ASVS-10.1.1
       - code: modules/core-identity/service/oidc.ts
-    note: 'Server-side code flow: only the id_token is read from the token response, verified and discarded; the access token and any refresh token are never stored, forwarded or logged, and the browser gets only the opaque session cookie. The client secret goes only to the token endpoint.'
+    note: 'Server-side code flow: only the id_token is read from the token response, verified and discarded; the access token and any refresh token are never stored, forwarded or logged, and the browser gets only the opaque session cookie. The client secret goes only to the token endpoint. M5 sprint 4: the flow is unchanged; the session a provider login creates is an ordinary session, which the live inbox stream re-checks like any other (ADR-0028).'
   - id: v5.0.0-10.1.2
     status: pass
     evidence:
@@ -25,7 +25,7 @@ requirements:
     evidence:
       - test: ASVS-10.2.1
       - code: modules/core-identity/service/oidc.ts
-    note: 'The client sends a PKCE S256 challenge and checks a single-use state bound to the browser. The first test asserts the challenge, state and nonce in the authorization URL, not that the verifier reaches the token endpoint (the test provider does not check it; backlog); the state checks are what the tests prove.'
+    note: "The client sends a PKCE S256 challenge and checks a single-use state bound to the browser. The first test asserts the challenge, state and nonce in the authorization URL, not that the verifier reaches the token endpoint (the test provider does not check it; backlog); the state checks are what the tests prove. The browser journey apps/web/e2e/oidc.spec.ts runs the whole flow through the web app against a provider on a local port whose token endpoint checks the code verifier against the S256 challenge it was given and answers invalid_grant otherwise: the sign-in, the sign-in again for a change that needs a recent authentication, and the start of a link all succeed, so the verifier does reach the token endpoint, and the test reads the last authorization request (S256, a nonce, a state, prompt=login and max_age=0 for the re-authentication). M5 sprint 4 (ADR-0029): a failed callback sends a browser to the sign-in page with one code of a fixed list and never repeats text of the provider (the provider's error_description is not in the redirect: apps/server/src/oidc-routes.test.ts and apps/web/e2e/oidc.spec.ts, both tagged), and a client that does not ask for HTML keeps the problem answer."
   - id: v5.0.0-10.2.2
     status: pass
     evidence:
@@ -83,7 +83,7 @@ requirements:
     evidence:
       - test: ASVS-10.5.1
       - code: modules/core-identity/service/oidc-token.ts
-    note: 'The id_token must carry the nonce of this login (compared as a hash, per login, single use); a wrong or missing nonce is a 401 with no user and no session. The Keycloak test runs against a real provider.'
+    note: 'M5 sprint 3: an account deactivated by an administrator is refused after a valid provider login too (oidc.ts assertMaySignIn, same answer as a rejected one). The id_token must carry the nonce of this login (compared as a hash, per login, single use); a wrong or missing nonce is a 401 with no user and no session. The Keycloak test runs against a real provider.'
   - id: v5.0.0-10.5.2
     status: pass
     evidence:

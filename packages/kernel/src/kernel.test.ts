@@ -226,6 +226,27 @@ describe('ctx.settings', () => {
     expect(() => kernel.settingsOf('nobody')).toThrowError(/not in the profile/);
   });
 
+  it('gives a module its dependencies even when its context was made before start()', async () => {
+    // The server reads the stored rate limits through `settingsOf()` before it starts the kernel. That
+    // made the context of core.settings early, and a snapshot of `ctx.deps` kept `undefined` for the
+    // module's dependencies: every settings route then failed with a 500 in a running server.
+    let seen: unknown;
+    const base = defineModule({ id: 'base', version: '1.0.0', services: () => ({ name: 'base' }) });
+    const above = defineModule({
+      id: 'above',
+      version: '1.0.0',
+      settings: z.strictObject({}),
+      services: (ctx) => {
+        seen = (ctx.deps as Record<string, unknown>).base;
+        return {};
+      },
+    });
+    const kernel = await inlineKernel([base, above], { above: ['base'] });
+    kernel.settingsOf('above'); // creates the context of `above` before any service exists
+    await kernel.start();
+    expect(seen).toEqual({ name: 'base' });
+  });
+
   it('shows modules the settings schemas of every loaded module, and no values', async () => {
     let seen: ReadonlyMap<string, unknown> | undefined;
     const looker = defineModule({

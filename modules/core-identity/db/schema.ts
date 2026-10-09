@@ -30,7 +30,10 @@ export const user = pgTable(
     email: text(),
     /** Set when the address was confirmed (by mail link, or by the OIDC provider). */
     emailVerifiedAt: timestamptz('email_verified_at'),
-    /** `pending` (waiting for approval), `active` or `rejected`. A text column checked in the service (architecture: state machines as columns). */
+    /**
+     * `pending` (waiting for approval), `active`, `rejected` (soft-deleted, purged later) or `deactivated` (an administrator
+     * closed the account: it cannot sign in and keeps its data). A text column checked in the service (architecture: state machines as columns).
+     */
     status: text().notNull().default('pending'),
     /** Soft delete: the row stays, the account cannot sign in. */
     deletedAt: timestamptz('deleted_at'),
@@ -52,7 +55,10 @@ export const user = pgTable(
       .where(sql`${table.email} is not null and ${table.emailVerifiedAt} is not null`),
     index('identity_user_email_idx').on(sql`lower(${table.email})`),
     check('identity_user_username_format', sql`${table.username} ~ '^[a-z0-9_-]{3,31}$'`),
-    check('identity_user_status_known', sql`${table.status} in ('pending', 'active', 'rejected')`),
+    check(
+      'identity_user_status_known',
+      sql`${table.status} in ('pending', 'active', 'rejected', 'deactivated')`,
+    ),
     check('identity_user_display_name_length', sql`char_length(${table.displayName}) <= 100`),
     check('identity_user_bio_length', sql`char_length(${table.bio}) <= 2000`),
     check(

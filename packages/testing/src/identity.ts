@@ -35,7 +35,7 @@ export interface MakeUser {
   email?: string | null;
   emailVerified?: boolean;
   /** Default `active`. */
-  status?: 'pending' | 'active' | 'rejected';
+  status?: 'pending' | 'active' | 'rejected' | 'deactivated';
   deleted?: boolean;
 }
 

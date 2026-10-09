@@ -14,9 +14,8 @@ Scorpion is a service registry and KPI tracker for research infrastructures (de.
 This repository is the rebuild as a **modular monolith**: one server, one PostgreSQL database,
 many modules. A deployment **profile** selects the modules at build time.
 
-Status: milestone **M1** (the kernel). Modules can be declared, resolved, migrated and wired
-together, but no real module exists yet, so the server serves only its probes (`/healthz`,
-`/readyz`, `/metrics`) and the web app shows a placeholder page. See
+Status: milestone **M5** (the web app) is under way: the `core.*` modules exist, and the web app has its
+shell (layout, navigation, themes, legal pages, API documentation); sign-in and the admin screens follow. See
 [docs/implementation.md](docs/implementation.md) for the milestone plan and
 [packages/kernel/README.md](packages/kernel/README.md) for the module-author guide.
 
@@ -30,12 +29,13 @@ together, but no real module exists yet, so the server serves only its probes (`
 
 ```bash
 pnpm i
-pnpm dev          # Postgres + Mailpit (Docker), server on :3000, web on :5173
-curl localhost:3000/readyz
+pnpm dev          # Postgres + Mailpit (Docker), web app on :3000, API behind it on :3001
+curl localhost:3000/readyz   # the web app passes /readyz on to the API
 ```
 
 `pnpm dev` creates `.env` from `.env.example` when it is missing, starts Postgres and Mailpit,
-and runs the server (which applies pending migrations on start) and the web app.
+and runs the server (which applies pending migrations on start) and the web app. As in an image, the web
+app is the public origin on `PORT`; the API listens on `API_PORT` (default `PORT` + 1) behind it.
 
 Mailpit's web UI runs on <http://localhost:8025> (SMTP on port 1025). `pnpm dev` also runs `scorpion seed-dev-mail`, which
 points the instance's mail settings at that Mailpit when none are stored yet (development only: the command refuses with
@@ -47,7 +47,7 @@ pnpm check        # ESLint (incl. module boundaries), Prettier, tsc -b, svelte-c
 pnpm test         # Vitest over all packages (Testcontainers tests need Docker)
 pnpm test --filter @scorpion/server   # one package
 pnpm test:e2e     # Playwright smoke test (first: pnpm --filter @scorpion/web exec playwright install chromium)
-pnpm build --profile kpi-tracker      # image scorpion:dev-kpi-tracker
+pnpm build --profile core-only      # image scorpion:dev-core-only
 ```
 
 ## Profiles
@@ -56,20 +56,21 @@ A profile (`profiles/<name>.ts`) lists the modules one deployment contains. Each
 gets its own image. To add or remove a plugin, rebuild the image and restart; modules are
 never loaded at runtime ([ADR-0001](docs/adr/0001-modular-monolith-build-time-composition.md)).
 
-| Profile           | Purpose                                                            |
-| ----------------- | ------------------------------------------------------------------ |
-| `full`            | Every module                                                       |
-| `denbi-registry`  | de.NBI service registry with KPIs, bibliometrics and network graph |
-| `nfdi-onboarding` | NFDI service onboarding with maturity assessment                   |
-| `kpi-tracker`     | KPI collection and analytics                                       |
+| Profile     | Purpose                                                       |
+| ----------- | ------------------------------------------------------------- |
+| `full`      | Every module                                                  |
+| `core-only` | The core modules only (identity, authz, settings, shell, ...) |
 
 The module lists for each profile are in the comments of the profile files, and the full
 matrix is in [docs/architecture.md](docs/architecture.md). Until M2 every profile's module list is
 still empty.
 
+CI publishes the images of `full` and `core-only` to `ghcr.io/scorpion-monitoring/scorpion`: `dev-<profile>` follows
+`dev`, and `<x.y.z>-<profile>` is built for every release tag (see [CONTRIBUTING.md](CONTRIBUTING.md#images-in-the-registry)).
+
 ```bash
-PROFILE=kpi-tracker pnpm dev
-docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
+PROFILE=core-only pnpm dev
+docker build -f docker/Dockerfile --build-arg PROFILE=core-only -t scorpion:dev-core-only .
 ```
 
 ## Running it
@@ -82,7 +83,8 @@ what is wrong, and secrets never appear in logs.
 | ------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`     | none, required                      | PostgreSQL 16 connection URL                                                                                                                                                                             |
 | `PROFILE`          | the profile of the build            | Must match the build; an image refuses another profile                                                                                                                                                   |
-| `PORT`             | `3000`                              | Port to listen on                                                                                                                                                                                        |
+| `PORT`             | `3000`                              | The port you publish: the web server's in a profile with `core.ui-shell` (it serves the pages and passes `/api`, `/healthz` and `/readyz` on), else the API's                                            |
+| `API_PORT`         | `3001`                              | Only with `core.ui-shell`: the API's port behind the web server, which also serves `/metrics`. Never publish it                                                                                          |
 | `BASE_PATH`        | `/`                                 | Path prefix, `/` or `/a/b` (any depth, no trailing slash)                                                                                                                                                |
 | `LOG_LEVEL`        | `info`                              | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                                                                           |
 | `WORKER_MODE`      | `inline`                            | `inline`: this process also runs jobs and events; `separate`: use a worker                                                                                                                               |
@@ -102,7 +104,8 @@ what is wrong, and secrets never appear in logs.
 `GET /healthz` says the process is alive and never touches the database. `GET /readyz` answers 503
 until the database answers and every migration is applied, and again while shutting down.
 `GET /metrics` serves Prometheus metrics (process, HTTP duration by route, outbox lag, job
-durations); restrict it at the proxy if the network is not trusted. On SIGTERM the server stops
+durations) on the API's port: `PORT` for a profile without `core.ui-shell`, `API_PORT` for one with it (the web server does not
+proxy it); restrict it at the proxy if the network is not trusted. On SIGTERM the server stops
 accepting requests, lets running requests, jobs and event handlers finish (up to 30 s), and closes
 its connections.
 

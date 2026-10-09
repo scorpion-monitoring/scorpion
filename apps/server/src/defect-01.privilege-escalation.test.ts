@@ -38,6 +38,8 @@ const SAMPLES: Record<
     kind: Kind;
     /** A self-service route on one of the caller's own items: the "plain User can use it" case needs the id of an item of theirs. */
     own?: boolean;
+    /** An event stream: a plain User's success is read as the start of a stream and closed, not read to the end. */
+    streaming?: boolean;
     sample: (ids: { id: string }) => Sample;
   }
 > = {
@@ -139,6 +141,36 @@ const SAMPLES: Record<
     sample: ({ id }) => ({ method: 'POST', path: `/tokens/${id}/rotate`, body: {} }),
   },
   'GET /roles': { kind: 'admin', sample: () => ({ method: 'GET', path: '/roles' }) },
+  // M5 sprint 3: the administrator's view of accounts, and the permissions of a role.
+  'GET /users': { kind: 'admin', sample: () => ({ method: 'GET', path: '/users' }) },
+  'GET /users/{id}': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/users/${id}` }),
+  },
+  'GET /users/{id}/roles': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/users/${id}/roles` }),
+  },
+  'GET /users/{id}/tokens': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/users/${id}/tokens` }),
+  },
+  'POST /users/{id}/deactivate': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/deactivate`, body: {} }),
+  },
+  'GET /permissions': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/permissions' }),
+  },
+  'PUT /roles/{key}/permissions': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'PUT',
+      path: '/roles/user/permissions',
+      body: { permissions: ['core.identity.me.read'] },
+    }),
+  },
   'POST /users/{id}/roles': {
     kind: 'admin',
     sample: ({ id }) => ({ method: 'POST', path: `/users/${id}/roles`, body: { role: 'admin' } }),
@@ -277,9 +309,23 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: () => ({ method: 'GET', path: '/system/outbox' }),
   },
+  'GET /system/job-runs': {
+    kind: 'admin',
+    sample: () => ({ method: 'GET', path: '/system/job-runs' }),
+  },
   'POST /system/outbox/deliveries/{id}/requeue': {
     kind: 'admin',
     sample: ({ id }) => ({ method: 'POST', path: `/system/outbox/deliveries/${id}/requeue` }),
+  },
+  // M5 sprint 4 (ADR-0028): the caller's own unread count as a server-sent event stream.
+  'GET /inbox/stream': {
+    kind: 'self',
+    streaming: true,
+    sample: () => ({ method: 'GET', path: '/inbox/stream' }),
+  },
+  'GET /account/permissions': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/account/permissions' }),
   },
   'GET /preferences': { kind: 'self', sample: () => ({ method: 'GET', path: '/preferences' }) },
   'PUT /preferences/{key}': {
@@ -402,9 +448,15 @@ describe('defect 1: the route table', () => {
   it('lets a plain User use the self-service routes (so the 403s above are about the role, not a broken route)', async () => {
     const s = await start();
     let n = 0;
-    for (const [key, { kind, own, sample }] of Object.entries(SAMPLES)) {
+    for (const [key, { kind, own, streaming, sample }] of Object.entries(SAMPLES)) {
       if (kind !== 'self') continue;
       const who = await s.signedIn(`selfservice${n++}`);
+      if (streaming) {
+        const opened = await s.stream(sample({ id: FOREIGN }).path, session(who));
+        expect(opened.status, key).toBe(200);
+        await opened.close();
+        continue;
+      }
       // An item id is the caller's own, or the answer is 403 by design (see notification-routes.test.ts).
       const id = own ? (await makeInboxItem(s.kernel.pool, { userId: who.user.id })).id : FOREIGN;
       const reply = await send(s, sample({ id }), session(who));
@@ -419,6 +471,8 @@ describe('defect 1: the route table', () => {
       'core.identity.user.approve',
       'core.identity.user.reject',
       'core.identity.user.list-pending',
+      'core.identity.user.read',
+      'core.identity.user.deactivate',
       'core.identity.role.read',
       'core.identity.role.assign',
       'core.authz.role.read',
@@ -868,6 +922,7 @@ describe('defect 1: log reads', () => {
     { method: 'GET', path: '/audit/export.csv' },
     { method: 'GET', path: `/audit/${FOREIGN}` },
     { method: 'GET', path: '/system/outbox' },
+    { method: 'GET', path: '/system/job-runs' },
   ];
 
   it('keeps the trail from a plain User, by session and by token, and from a token scoped to it whose owner lacks the permission', async () => {

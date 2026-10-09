@@ -52,6 +52,8 @@ export interface AuditEventView {
   subjectType: string | null;
   subjectId: string | null;
   payload: unknown;
+  /** The username of `userId` now, or `null` when there is no user id or the account no longer exists (purged). */
+  userName: string | null;
 }
 
 export interface ExportResult {
@@ -160,9 +162,23 @@ export interface ViewerDeps {
   authz: Pick<AuthzService, 'require'>;
   settings: () => Promise<AuditSettings>;
   store: Store;
+  /** Usernames by id for the ids that still have an account; an id without one is left out. */
+  usernames: (ids: string[]) => Promise<Map<string, string>>;
 }
 
-export function createViewer({ db, authz, settings, store }: ViewerDeps): ViewerService {
+type Row = Omit<AuditEventView, 'userName'>;
+
+export function createViewer({ db, authz, settings, store, usernames }: ViewerDeps): ViewerService {
+  /** The events carry ids, never names (a purge cannot erase an append-only table); the name is joined when read. */
+  async function named(rows: Row[]): Promise<AuditEventView[]> {
+    const ids = [...new Set(rows.map((row) => row.userId).filter((id): id is string => !!id))];
+    const names = ids.length > 0 ? await usernames(ids) : new Map<string, string>();
+    return rows.map((row) => ({
+      ...row,
+      userName: row.userId ? (names.get(row.userId) ?? null) : null,
+    }));
+  }
+
   return {
     async list(actor, filter, page) {
       await authz.require(actor, PERMISSION_READ);
@@ -180,7 +196,7 @@ export function createViewer({ db, authz, settings, store }: ViewerDeps): Viewer
           .from(auditEvent)
           .where(where),
       ]);
-      return { events: events as AuditEventView[], total: counted!.n };
+      return { events: await named(events as Row[]), total: counted!.n };
     },
 
     async get(actor, id) {
@@ -192,7 +208,7 @@ export function createViewer({ db, authz, settings, store }: ViewerDeps): Viewer
         .from(auditEvent)
         .where(eq(auditEvent.id, id.toLowerCase()));
       if (!found) throw new NotFound('There is no such audit entry.');
-      return found as AuditEventView;
+      return (await named([found as Row]))[0]!;
     },
 
     async exportCsv(actor, filter) {

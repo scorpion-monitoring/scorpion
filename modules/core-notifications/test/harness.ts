@@ -296,6 +296,8 @@ export function useNotifications(): NotificationsHarness {
           'core.authz': '@scorpion/core-authz',
           'core.settings': '@scorpion/core-settings',
           'core.notifications': '@scorpion/core-notifications',
+          // An optional peer (its pages): known, so that its absence is not a mistake.
+          'core.ui-shell': '@scorpion/core-ui-shell',
           'fix.mailer': '@scorpion/fix-mailer',
         },
         config: loadConfig({
@@ -410,6 +412,7 @@ export async function startKernelWithTemplates(
       'core.authz': '@scorpion/core-authz',
       'core.settings': '@scorpion/core-settings',
       'core.notifications': '@scorpion/core-notifications',
+      'core.ui-shell': '@scorpion/core-ui-shell',
       'fix.templates': '@scorpion/fix-templates',
     },
     config: loadConfig({

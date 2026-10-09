@@ -16,13 +16,13 @@ Status: M4 sprint 4. The viewer screens are M5; the routes below are what they u
 | table prefix   | `audit_` (set in the manifest; ADR-0004): one table, `audit_event`                                                                                 |
 | dependencies   | `core.authz`, `core.settings`, `core.identity`; `core.notifications` as an optional peer (its three events are recorded when it is in the profile) |
 | routes         | internal API: the viewer, one entry, the CSV export, the outbox page and its requeue, see "Routes"                                                 |
+| ui             | `ui` entry and optional peer `core.ui-shell`: contributes `ui.routes` and `ui.nav` for the pages in "Pages"                                        |
 | jobs           | `core.audit.retention`, `core.audit.system.outbox-retention`, `core.audit.system.job-run-retention`, see "Jobs"                                    |
 | events         | emits none; subscribes to every logged event, see "What is logged"                                                                                 |
 | registries     | contributes the one entry of the kernel registry `kernel.auditSink`                                                                                |
 | public service | none. `public.ts` declares an empty service; nobody calls the trail directly. Write through `ctx.audit(entry)`.                                    |
 
-Profiles: `full` and `kpi-tracker` list it. `denbi-registry` and `nfdi-onboarding` have no modules yet; add it when they get
-`core.identity`. A profile without `core.audit` starts: the sink is a function that does nothing, no table is created and the routes
+Profiles: `full` and `core-only` list it. A new profile that lists `core.identity` adds it too. A profile without `core.audit` starts: the sink is a function that does nothing, no table is created and the routes
 do not exist (tested).
 
 ### Permissions
@@ -100,7 +100,8 @@ outcome, **also when the caller was turned away** (401, 403, 429) **or the input
 `audit: { body: true, redact: [...] }` adds the body and the query. A route under `/auth/` can never store a body: registration fails.
 Routes that have `audit` today: approve and reject, assigning and removing a role, creating, revoking and rotating a token, ending one of your sessions, re-authenticating (password and OIDC), and the administrators' session termination (one user, all),
 saving settings (with the body), setting and removing a secret (without it: the value is never read), vocabulary changes, uploading a file,
-requeueing a delivery and sending a test mail, and the three read routes of this module.
+requeueing a delivery and sending a test mail, opening one entry (`GET /audit/{id}`) and the CSV export.
+**The list (`GET /audit`) is not audited** (M5 sprint 4): the Logs screen pages and refreshes it, and an entry per page would fill the table it reads. Who opened an entry or exported is still on record; a refused read of the list (403) is not.
 
 **Redaction.** A key whose name (lower case, letters and digits only) equals or ends with `password`, `token`, `secret`, `authorization`,
 `apikey`, `code` or `value`, or one of the route's `redact` names, has its value replaced by `[redacted]` at any depth. A body that is
@@ -109,6 +110,22 @@ content scan).
 
 **Failure.** The pipeline writes the entry after the handler has returned; if that fails, the failure is logged by request id and
 SQLSTATE and the response is unchanged. A `ctx.audit` in a service joins the caller's transaction and fails it.
+
+## Pages
+
+Contributed to the registries of `core.ui-shell` (an optional peer: a profile without the shell skips them). `ui/routes.ts` is the server
+half, `ui/` the browser half; `ui/ui.test.ts` checks that they agree.
+
+| Path              | Permission               | Shows                                                                                                                                                                                                                   |
+| ----------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin/logs`     | `core.audit.read`        | The filters of `GET /audit`, the entries newest first with "Load more" (the API pages by offset, rows are kept once per id), the CSV export of the same filters (the download is an entry itself, and the page says so) |
+| `/admin/logs/:id` | `core.audit.read`        | One entry with the query, body and payload as stored (redacted when written)                                                                                                                                            |
+| `/admin/system`   | `core.audit.system.read` | The outbox counts and dead deliveries with a requeue button, the retention numbers (changed in the settings of this module) and the job runs with their result counts                                                   |
+
+The entries carry ids, never usernames (a purge could not erase an append-only table). `GET /audit` and `GET /audit/{id}` join the name
+the account has **now** as `userName`; it is `null` for an account that was purged, and the page shows "deleted account" and the first
+characters of the id. A privacy text should say that the id of a deleted account stays in the trail until the retention period ends (the
+description of the legal texts in the settings of `core.settings` says so).
 
 ## Routes
 
@@ -119,6 +136,7 @@ All under `/api/internal`. Every list uses the standard envelope with 0-based pa
 | `GET /audit`                                  | `core.audit.read`          | Filters `method`, `user`, `endpoint` (route-template prefix, matched literally), `action`, `outcome`, `source`, `from`, `to`. Order: `occurred_at` desc, then id. |
 | `GET /audit/{id}`                             | `core.audit.read`          | One entry; 404 for an unknown or malformed id.                                                                                                                    |
 | `GET /audit/export.csv`                       | `core.audit.export`        | The same filters, no paging. Streamed. Headers `X-Row-Count`, `X-Row-Cap`, `X-Truncated`. The export is itself an entry (`audit.exported`).                       |
+| `GET /system/job-runs`                        | `core.audit.system.read`   | Job runs, newest first: status, duration, the counts the handler returned (`result`), the masked failure. Filters `jobName`, `status`. List envelope.             |
 | `GET /system/outbox`                          | `core.audit.system.read`   | Counts (pending, dead, lag) and the dead deliveries (names, attempts, a masked error; never a payload).                                                           |
 | `POST /system/outbox/deliveries/{id}/requeue` | `core.audit.system.manage` | A `dead` delivery only; 404 unknown, 409 not dead. Audited in the same transaction (`system.outbox.requeued`).                                                    |
 

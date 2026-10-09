@@ -1,5 +1,5 @@
 import { Writable } from 'node:stream';
-import { ANONYMOUS, Unauthorized, type Actor } from '@scorpion/contracts';
+import { ANONYMOUS, Unauthorized, type Actor, type AppEnv } from '@scorpion/contracts';
 import { createLogger, loadConfig, type Authenticator, type Authorizer } from '@scorpion/kernel';
 import { describe, expect, it } from 'vitest';
 import { useKernels } from '../../../../packages/kernel/test/helpers.ts';
@@ -130,5 +130,67 @@ describe('step 4: authentication', () => {
     expect(calls).toBe(0);
     await request(things);
     expect(calls).toBe(1);
+  });
+});
+
+describe('recheckActor (ADR-0028: a stream that outlives the check at its start)', () => {
+  const sessionActor: Actor = {
+    kind: 'user',
+    userId: 'u1',
+    username: 'alice',
+    roles: [],
+    via: 'session',
+    sessionId: 's1',
+  };
+
+  /** One request through only this step, then the re-check as the handler of a stream would ask it. */
+  async function ask(authenticator: Authenticator, route: { public?: true } = {}) {
+    const { Hono } = await import('hono');
+    const { authenticate } = await import('./authenticate.ts');
+    const hono = new Hono<AppEnv>();
+    hono.use('*', authenticate(authenticator, route));
+    hono.get('/', async (c) => {
+      const recheck = c.get('recheckActor');
+      return c.json({ first: await recheck(), second: await recheck() });
+    });
+    const reply = await hono.request('/');
+    return {
+      status: reply.status,
+      body: (await reply.json()) as { first: boolean; second: boolean },
+    };
+  }
+
+  it('is true while the same session is still good, and the re-check is passive', async () => {
+    const calls: { passive?: boolean }[] = [];
+    const { body } = await ask((request) => {
+      calls.push({ passive: request.passive });
+      return sessionActor;
+    });
+    expect(body).toEqual({ first: true, second: true });
+    // The first call is the request's own; the others are re-checks and must not count as activity.
+    expect(calls.map((call) => call.passive)).toEqual([undefined, true, true]);
+  });
+
+  it.each([
+    ['the session ended', () => Promise.reject(new Unauthorized('gone'))],
+    ['the credentials vanished', () => undefined],
+    ['it is another session', () => ({ ...sessionActor, sessionId: 's2' })],
+    ['it is another person', () => ({ ...sessionActor, userId: 'u2' })],
+    ['it is a token now', () => ({ ...sessionActor, via: 'token', sessionId: undefined })],
+    ['the authenticator fails', () => Promise.reject(new Error('database down'))],
+  ])('is false when %s', async (_name, again) => {
+    let n = 0;
+    const { body } = await ask(() => (n++ === 0 ? sessionActor : (again() as never)));
+    expect(body.first).toBe(false);
+  });
+
+  it('is false for an anonymous caller, and on a public route whose credentials were bad', async () => {
+    expect((await ask(() => undefined, { public: true })).body).toEqual({
+      first: false,
+      second: false,
+    });
+    expect(
+      (await ask(() => Promise.reject(new Unauthorized('stale')), { public: true })).body.first,
+    ).toBe(false);
   });
 });

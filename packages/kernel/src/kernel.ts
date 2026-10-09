@@ -145,26 +145,27 @@ const KERNEL_MIGRATIONS = new URL('../migrations', import.meta.url);
 
 /** Nothing outside `deps` is reachable through the proxy: an undeclared module id throws. */
 function dependencyView(module: ResolvedModule, services: ReadonlyMap<string, unknown>) {
-  const visible = new Map<string, unknown>();
-  for (const id of [...module.dependsOn, ...module.presentOptional])
-    visible.set(id, services.get(id));
+  // The services are looked up when they are read, not when the view is made: a context can be made
+  // before the services exist (`kernel.settingsOf()` is called before `start()`), and a snapshot would
+  // then keep `undefined` for every dependency of the module for good.
+  const visible = new Set([...module.dependsOn, ...module.presentOptional]);
   const absentOptional = new Set(
     module.optionalDependsOn.filter((id) => !module.presentOptional.includes(id)),
   );
   return new Proxy(Object.create(null) as Record<string, unknown>, {
     get(_target, key) {
       if (typeof key !== 'string') return undefined;
-      if (visible.has(key)) return visible.get(key);
+      if (visible.has(key)) return services.get(key);
       if (absentOptional.has(key)) return undefined;
       throw new KernelStartupError(`Module "${module.id}" cannot reach "${key}":`, [
         `"${key}" is not a dependency of "${module.id}" (declare it in package.json)`,
       ]);
     },
     has: (_target, key) => typeof key === 'string' && visible.has(key),
-    ownKeys: () => [...visible.keys()],
+    ownKeys: () => [...visible],
     getOwnPropertyDescriptor: (_target, key) =>
       typeof key === 'string' && visible.has(key)
-        ? { enumerable: true, configurable: true, value: visible.get(key) }
+        ? { enumerable: true, configurable: true, value: services.get(key) }
         : undefined,
     set() {
       throw new TypeError('ctx.deps is read-only');

@@ -172,5 +172,13 @@ export interface AppEnv {
     actor: Actor;
     /** The client's address as the pipeline resolves it (trusted proxies); `undefined` without a socket. */
     clientIp: string | undefined;
+    /**
+     * Asks the authentication step again, with the credentials this request carried, whether the same
+     * caller is still good: `false` once the session ended or expired, or the token was revoked or ran
+     * out, or the account may not sign in any more. It is **passive**: it does not count as activity, so
+     * it never slides the inactivity end of a session. For a response that outlives the check made at the
+     * start (an event stream, ADR-0028); an anonymous caller gets `false`.
+     */
+    recheckActor: () => Promise<boolean>;
   };
 }

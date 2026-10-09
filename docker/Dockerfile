@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1
 #
 # One image per deployment profile, holding only that profile's modules:
-#   docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
+#   docker build -f docker/Dockerfile --build-arg PROFILE=core-only -t scorpion:dev-core-only .
 #
-# The image runs the API server (`scorpion start`). The web UI (M5) is added to this build later.
+# A profile with core.ui-shell runs two processes (ADR-0027): the web server, which is the public origin on
+# PORT (default 3000) and streams `/api`, `/healthz` and `/readyz` to the API, and the API (`scorpion start`)
+# on API_PORT (default 3001), which only the web server talks to. `/metrics` is served by the API and is
+# not proxied: publish PORT, never API_PORT. A profile without the shell runs the API alone on PORT.
 # DATABASE_URL is required at run time, and SECRETS_KEY for profiles that include core.settings (see
 # modules/core-settings/README.md); see .env.example for the other variables.
 #
@@ -38,15 +41,34 @@ RUN set -eu; \
     node apps/server/src/cli.ts profile:generate "${PROFILE}" ${PROFILE_FILE:+--profile-file "$PROFILE_FILE"} $args
 
 # 3. Install again for the new dependency set. The lockfile is updated first (its versions are all
-#    reused; only the server's workspace links change), then a frozen, filtered install fills the
-#    virtual store with the server's closure only. Optional module dependencies (optional peer
-#    dependencies) are not installed unless the profile lists them.
+#    reused; only the workspace links of the server and the web app change).
+RUN find . -name node_modules -prune -exec rm -rf {} + \
+    && pnpm install --lockfile-only --no-frozen-lockfile --prefer-offline
+
+# 3b. The web app's documentation page lists the public API of the profile, so its OpenAPI document is made
+#    from the profile's own modules, which need the server's closure installed (the same install as step 5).
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --prod --filter "@scorpion/server..." \
+    && node apps/server/src/openapi-generate.ts --web-only
+
+# 4. The web app, when the profile has core.ui-shell (the generator says so in apps/web/src/generated/ui.ts).
+#    Its development dependencies are installed, because Vite bundles the pages of the profile's modules
+#    into the build; the build is kept in apps/web/build and everything installed is removed again. A
+#    profile without the shell skips the step and the image has no web app.
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    if grep -q '^export const hasShell = true' apps/web/src/generated/ui.ts; then \
+      pnpm install --frozen-lockfile --filter "@scorpion/web..." \
+      && pnpm --filter @scorpion/web exec vite build \
+      && find . -name node_modules -prune -exec rm -rf {} + ; \
+    fi
+
+# 5. The run-time packages: the server's closure, and what the web front imports. Optional module
+#    dependencies (optional peer dependencies) are not installed unless the profile lists them.
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     find . -name node_modules -prune -exec rm -rf {} + \
-    && pnpm install --lockfile-only --no-frozen-lockfile --prefer-offline \
-    && pnpm install --frozen-lockfile --prod --filter "@scorpion/server..."
+    && pnpm install --frozen-lockfile --prod --filter "@scorpion/server..." --filter "@scorpion/web"
 
-# 4. Assemble the run-time tree: the server's closure and nothing else.
+# 6. Assemble the run-time tree: the server's closure, and the web build when there is one.
 RUN node scripts/image-tree.ts /out
 
 FROM node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
@@ -65,5 +87,7 @@ EXPOSE 3000
 # not listen, override the command and disable this check.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD ["node", "-e", "const base = (process.env.BASE_PATH || '/').replace(/\\/$/, ''); fetch('http://127.0.0.1:' + process.env.PORT + base + '/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-# `start` applies pending migrations, then serves. `worker` runs jobs and events without HTTP.
-CMD ["node", "apps/server/src/cli.ts", "start"]
+# scripts/image-run.ts starts the API, and the web server too when the image has one, and stops both
+# together. The API applies pending migrations when it starts. `scorpion worker` (jobs and events, no
+# HTTP) overrides the command and disables the health check.
+CMD ["node", "scripts/image-run.ts"]

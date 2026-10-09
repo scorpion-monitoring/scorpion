@@ -1,0 +1,212 @@
+// The real thing, for the browser tests: a PostgreSQL container, the API server and the web server as
+// separate processes (as an image runs them), once per base path. Nothing is faked. A test never calls
+// a third party: the password breach check is switched off in the stored settings (as `cli.test.ts`
+// does), and no mail relay is configured.
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { resolve } from 'node:path';
+import { startPostgres, type StartedPostgres } from '@scorpion/testing';
+import pg from 'pg';
+
+const repo = resolve(import.meta.dirname, '../../../..');
+export const ADMIN = {
+  username: 'root',
+  email: 'root@example.org',
+  password: 'a long password for the admin',
+};
+
+export interface StackSpec {
+  name: string;
+  basePath: string;
+  webPort: number;
+  apiPort: number;
+  /**
+   * `false`: a fresh install with no administrator, for the first-admin form (the one-time token is
+   * printed on the API's standard error, which the log of the stack keeps). Default `true`: the
+   * administrator `ADMIN` exists, as for every other journey.
+   */
+  admin?: boolean;
+  /** The spec files of the project (default: every spec except those that need a fresh install). */
+  testMatch?: string;
+}
+
+export interface Stack extends StackSpec {
+  origin: string;
+  /** The connection string of the stack's own database, for a test that reads a mail or ages a session. */
+  databaseUrl: string;
+  /** Everything the two processes wrote, for a failing test. */
+  logs: () => string;
+  stop: () => Promise<void>;
+}
+
+/** The stacks the projects of `playwright.config.ts` use. */
+export const SPECS: StackSpec[] = [
+  { name: 'root', basePath: '/', webPort: 4173, apiPort: 4183 },
+  { name: 'nested', basePath: '/a/b', webPort: 4174, apiPort: 4184 },
+  // Fresh installs, with no administrator: only the bootstrap journey runs on them.
+  { name: 'fresh-root', basePath: '/', webPort: 4175, apiPort: 4185, admin: false },
+  { name: 'fresh-nested', basePath: '/a/b', webPort: 4176, apiPort: 4186, admin: false },
+];
+
+/** The spec that needs a fresh install; every other spec runs on the stacks that have an administrator. */
+export const FRESH_SPEC = 'bootstrap.spec.ts';
+
+const prefix = (basePath: string) => (basePath === '/' ? '' : basePath);
+
+function run(args: string[], env: NodeJS.ProcessEnv, input?: string) {
+  const result = spawnSync('node', args, { cwd: repo, env, input, encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(`node ${args.join(' ')} failed:\n${result.stdout}\n${result.stderr}`);
+  }
+}
+
+async function until(check: () => Promise<boolean>, what: string, logs: () => string) {
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    try {
+      if (await check()) return;
+    } catch {
+      // Not up yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`${what} did not come up in time.\n${logs()}`);
+}
+
+export async function startStack(spec: StackSpec, database: StartedPostgres): Promise<Stack> {
+  const url = await database.createDatabase();
+  const origin = `http://localhost:${spec.webPort}`;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    DATABASE_URL: url,
+    PROFILE: 'full',
+    BASE_PATH: spec.basePath,
+    ORIGIN: origin,
+    LOG_LEVEL: 'warn',
+    SECRETS_KEY: randomBytes(32).toString('base64'),
+    // The web process is the API's only peer; its X-Forwarded-For tells who the caller was.
+    TRUSTED_PROXIES: '127.0.0.1,::1',
+  };
+  delete env.NODE_ENV;
+
+  run(['apps/server/src/cli.ts', 'migrate'], env);
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query(
+      `insert into settings_setting (module_id, value, version) values ('core.identity', $1, 1)`,
+      [JSON.stringify({ passwordBreachCheck: false })],
+    );
+    // The journeys sign in many times a minute from one address; the limits have their own tests.
+    await client.query(
+      `insert into settings_setting (module_id, value, version) values ('core.settings', $1, 1)`,
+      [
+        JSON.stringify({
+          rateLimits: {
+            default: { burst: 10_000, perMinute: 10_000 },
+            strict: { burst: 10_000, perMinute: 10_000 },
+          },
+        }),
+      ],
+    );
+    // The relay does not exist, so every delivery fails and is retried later with its body kept. With the
+    // default transport `none` the delivery job records a mail as sent and wipes the body of a sensitive
+    // one, and a journey that reads the link from the table would race that job.
+    await client.query(
+      `insert into settings_setting (module_id, value, version) values ('core.notifications', $1, 1)`,
+      [
+        JSON.stringify({
+          emailTransport: 'smtp',
+          smtp: { host: 'relay.invalid' },
+          maxAttempts: 20,
+        }),
+      ],
+    );
+  } finally {
+    await client.end();
+  }
+  if (spec.admin !== false) {
+    run(
+      [
+        'apps/server/src/cli.ts',
+        'create-admin',
+        '--username',
+        ADMIN.username,
+        '--email',
+        ADMIN.email,
+      ],
+      env,
+      `${ADMIN.password}\n`,
+    );
+  }
+
+  let log = '';
+  // Also on disk, for a test that fails in a worker (which cannot see this process's memory).
+  mkdirSync(resolve(import.meta.dirname, '../../test-results'), { recursive: true });
+  const logFile = resolve(import.meta.dirname, `../../test-results/stack-${spec.name}.log`);
+  writeFileSync(logFile, '');
+  const children: ChildProcess[] = [];
+  const start = (label: string, args: string[], extra: NodeJS.ProcessEnv) => {
+    const child = spawn('node', args, { cwd: repo, env: { ...env, ...extra }, stdio: 'pipe' });
+    for (const stream of [child.stdout, child.stderr]) {
+      stream.on('data', (chunk: Buffer) => {
+        const text = `[${spec.name} ${label}] ${chunk.toString()}`;
+        log += text;
+        appendFileSync(logFile, text);
+      });
+    }
+    children.push(child);
+  };
+  start('api', ['apps/server/src/cli.ts', 'start'], { PORT: String(spec.apiPort) });
+  start('web', ['apps/web/src/front/main.ts'], {
+    PORT: String(spec.webPort),
+    API_ORIGIN: `http://127.0.0.1:${spec.apiPort}`,
+  });
+
+  const logs = () => log;
+  // Ready through the public origin: this also proves the proxy passes /readyz.
+  await until(
+    async () => (await fetch(`${origin}${prefix(spec.basePath)}/readyz`)).ok,
+    `the ${spec.name} stack`,
+    logs,
+  );
+
+  return {
+    ...spec,
+    origin,
+    databaseUrl: url,
+    logs,
+    stop: async () => {
+      await Promise.all(
+        children.map(
+          (child) =>
+            new Promise<void>((done) => {
+              child.once('exit', () => done());
+              child.kill('SIGTERM');
+              setTimeout(() => child.kill('SIGKILL'), 15_000).unref();
+            }),
+        ),
+      );
+    },
+  };
+}
+
+export async function startAll(): Promise<{ stacks: Stack[]; stop: () => Promise<void> }> {
+  const database = await startPostgres();
+  const stacks: Stack[] = [];
+  try {
+    for (const spec of SPECS) stacks.push(await startStack(spec, database));
+  } catch (error) {
+    await Promise.all(stacks.map((stack) => stack.stop()));
+    await database.stop();
+    throw error;
+  }
+  return {
+    stacks,
+    stop: async () => {
+      await Promise.all(stacks.map((stack) => stack.stop()));
+      await database.stop();
+    },
+  };
+}

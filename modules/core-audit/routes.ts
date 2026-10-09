@@ -47,6 +47,12 @@ const eventSchema = z.object({
   subjectType: z.string().nullable(),
   subjectId: z.string().nullable(),
   payload: z.unknown().nullable(),
+  userName: z
+    .string()
+    .nullable()
+    .describe(
+      'The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only).',
+    ),
 });
 
 const filterShape = {
@@ -74,8 +80,8 @@ export const listAuditRoute = createRoute({
   method: 'get',
   path: '/audit',
   permission: PERMISSION_READ,
-  // Reading the trail leaves a trace of its own (who looked), without the filters.
-  audit: true,
+  // Not audited (M5 sprint 4): the admin screen pages and refreshes this list, and an entry per page
+  // would fill the table it reads. Opening one entry and the CSV export stay audited.
   request: { query: paginationQuery().extend(filterShape) },
   responses: {
     200: ok('Entries, newest first (`occurredAt`, then id).', listEnvelope(eventSchema)),
@@ -153,6 +159,37 @@ export const requeueOutboxRoute = createRoute({
   },
 });
 
+const jobRunSchema = z.object({
+  id: z.string(),
+  jobName: z.string(),
+  module: z.string(),
+  attempt: z.number().int(),
+  status: z.enum(['running', 'succeeded', 'failed']),
+  startedAt: z.iso.datetime(),
+  finishedAt: z.iso.datetime().nullable(),
+  durationMs: z.number().int().nullable(),
+  error: z.string().nullable().describe('The failure, masked and cut short. Never a stack.'),
+  result: z
+    .record(z.string(), z.union([z.number(), z.boolean(), z.string()]))
+    .nullable()
+    .describe('The counts and flags the handler returned, for example `{ removed: 12 }`.'),
+});
+
+export const jobRunsRoute = createRoute({
+  method: 'get',
+  path: '/system/job-runs',
+  permission: PERMISSION_SYSTEM_READ,
+  request: {
+    query: paginationQuery().extend({
+      jobName: z.string().min(1).max(200).optional().describe('The exact job name.'),
+      status: z.enum(['running', 'succeeded', 'failed']).optional(),
+    }),
+  },
+  responses: {
+    200: ok('Job runs, newest first (`startedAt`, then id).', listEnvelope(jobRunSchema)),
+  },
+});
+
 /** Field by field on purpose: a column added to the table later is not exposed by accident. */
 const eventView = (e: AuditEventView) => ({
   id: e.id,
@@ -174,6 +211,7 @@ const eventView = (e: AuditEventView) => ({
   subjectType: e.subjectType,
   subjectId: e.subjectId,
   payload: e.payload ?? null,
+  userName: e.userName,
 });
 
 export function registerAuditRoutes(r: RouteRegistrar, service: AuditInternals) {
@@ -229,6 +267,30 @@ export function registerAuditRoutes(r: RouteRegistrar, service: AuditInternals) 
       200,
     );
   }) satisfies RouteHandler<typeof outboxRoute, AppEnv>);
+
+  r.internal(jobRunsRoute, (async (c) => {
+    const { page, pageSize, ...query } = c.req.valid('query');
+    const { runs, total } = await system.jobRuns(c.get('actor'), query, { page, pageSize });
+    return c.json(
+      paginate(
+        { page, pageSize },
+        total,
+        runs.map((run) => ({
+          id: run.id,
+          jobName: run.jobName,
+          module: run.module,
+          attempt: run.attempt,
+          status: run.status,
+          startedAt: run.startedAt.toISOString(),
+          finishedAt: run.finishedAt?.toISOString() ?? null,
+          durationMs: run.durationMs,
+          error: run.error,
+          result: run.result,
+        })),
+      ),
+      200,
+    );
+  }) satisfies RouteHandler<typeof jobRunsRoute, AppEnv>);
 
   r.internal(requeueOutboxRoute, (async (c) => {
     return c.json(await system.requeue(c.get('actor'), c.req.valid('param').id), 200);

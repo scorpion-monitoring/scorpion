@@ -28,6 +28,7 @@ import { csrfTokenFor } from './session-id.ts';
 import type { RecoveryService } from './recovery.ts';
 import type { SessionService, SessionSummary } from './sessions.ts';
 import type { IdentitySettings } from './settings.ts';
+import { ACCOUNT_PENDING, LOCAL_ACCOUNTS_OFF } from '../problem-types.ts';
 
 export interface LoginResult {
   user: User;
@@ -162,6 +163,7 @@ export function createAccountService(
     if (
       holder.deletedAt !== null ||
       holder.status === 'rejected' ||
+      holder.status === 'deactivated' ||
       !holder.email ||
       !mayMailOwner
     ) {
@@ -207,7 +209,8 @@ export function createAccountService(
   return {
     async register(input) {
       const { localAccounts, approvalPolicy } = await settings.get();
-      if (!localAccounts) throw new Forbidden('Registering with a password is turned off.');
+      if (!localAccounts)
+        throw new Forbidden('Registering with a password is turned off.', LOCAL_ACCOUNTS_OFF);
       const parsed = registerInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       const { username, email, password, locale } = parsed.data;
@@ -291,7 +294,8 @@ export function createAccountService(
 
     async login(input, previousSessionId, options = {}) {
       const { localAccounts } = await settings.get();
-      if (!localAccounts) throw new Forbidden('Signing in with a password is turned off.');
+      if (!localAccounts)
+        throw new Forbidden('Signing in with a password is turned off.', LOCAL_ACCOUNTS_OFF);
       const parsed = loginInput.safeParse(input);
       if (!parsed.success) throw invalid(parsed.error);
       const { username, password } = parsed.data;
@@ -318,9 +322,15 @@ export function createAccountService(
         throw new Unauthorized('The username or password is wrong.');
       };
       if (found === undefined || storedHash === undefined || !passwordOk) return refuse();
-      if (found.deletedAt !== null || found.status === 'rejected') return refuse();
+      if (
+        found.deletedAt !== null ||
+        found.status === 'rejected' ||
+        found.status === 'deactivated'
+      ) {
+        return refuse();
+      }
       if (found.status === 'pending') {
-        throw new Forbidden('Your account is waiting for approval.');
+        throw new Forbidden('Your account is waiting for approval.', ACCOUNT_PENDING);
       }
 
       const session = await ctx.db.tx(async (tx) => {

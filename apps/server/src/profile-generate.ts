@@ -8,6 +8,7 @@ import {
   KernelStartupError,
   packagesForProfile,
   renderProfileModule,
+  renderUiModule,
   scanModulePackages,
   type Profile,
 } from '@scorpion/kernel';
@@ -32,6 +33,17 @@ export interface GenerateResult {
 
 const GENERATED = 'apps/server/src/generated/profile.ts';
 const SERVER_PACKAGE = 'apps/server/package.json';
+const WEB_GENERATED = 'apps/web/src/generated/ui.ts';
+const WEB_PACKAGE = 'apps/web/package.json';
+const SHELL = 'core.ui-shell';
+
+/** Whether a module package exports a `./ui` entry (the browser half of its pages). */
+function exportsUi(dir: string): boolean {
+  const { exports } = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as {
+    exports?: Record<string, unknown>;
+  };
+  return exports !== undefined && './ui' in exports;
+}
 
 function writeIfChanged(
   root: string,
@@ -102,6 +114,38 @@ export async function generateProfile(options: GenerateOptions): Promise<Generat
     root,
     SERVER_PACKAGE,
     `${JSON.stringify({ ...server, dependencies }, null, 2)}\n`,
+    check,
+    changed,
+  );
+
+  // The web app: the table of pages comes from the modules that export `./ui`, and the app depends on
+  // exactly those modules (a development dependency: Vite bundles them). A profile without the shell
+  // has no web app and an empty table.
+  const hasShell = profile.modules.includes(SHELL);
+  const uiPackages = hasShell
+    ? packages.filter((pkg) => exportsUi(resolve(root, pkg.dir))).map((pkg) => pkg.name)
+    : [];
+  writeIfChanged(
+    root,
+    WEB_GENERATED,
+    renderUiModule({ profileName, hasShell, uiPackages }),
+    check,
+    changed,
+  );
+  const webPath = resolve(root, WEB_PACKAGE);
+  const web = JSON.parse(readFileSync(webPath, 'utf8')) as {
+    devDependencies?: Record<string, string>;
+  };
+  const devDependencies = Object.fromEntries(
+    [
+      ...Object.entries(web.devDependencies ?? {}).filter(([name]) => !moduleNames.has(name)),
+      ...uiPackages.map((name) => [name, 'workspace:*'] as const),
+    ].sort(([a], [b]) => a.localeCompare(b)),
+  );
+  writeIfChanged(
+    root,
+    WEB_PACKAGE,
+    `${JSON.stringify({ ...web, devDependencies }, null, 2)}\n`,
     check,
     changed,
   );

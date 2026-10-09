@@ -35,7 +35,7 @@ export function createAuthenticator(deps: {
   tokens: () => TokenAuthenticator;
 }): Authenticator {
   const { sessions, tokens } = deps;
-  return async ({ context: c }): Promise<Actor | undefined> => {
+  return async ({ context: c, passive }): Promise<Actor | undefined> => {
     const presented = presentedToken(c);
     if (presented !== undefined) {
       const verified = await tokens().authenticate(presented);
@@ -54,7 +54,7 @@ export function createAuthenticator(deps: {
     const id = readSessionCookie(c);
     if (id === undefined) return undefined;
 
-    const resolved = await sessions().resolve(id);
+    const resolved = await sessions().resolve(id, undefined, { touch: passive !== true });
     if (!resolved) throw new Unauthorized('The session is not valid. Sign in again.');
 
     // A cookie is sent by the browser without being asked, so a request that changes something

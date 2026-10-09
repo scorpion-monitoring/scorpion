@@ -10,6 +10,11 @@
 // profile's modules; it ignores dev dependencies and optional peer dependencies, which is how
 // the loader sees a module's dependencies too (ADR 0002).
 //
+// A profile with `core.ui-shell` also has the web app (`apps/web/build`, made by `vite build`): its build
+// output, the small front that wraps it (`apps/web/src/front`) and the links to the packages the front
+// needs (`@scorpion/contracts`) are copied too, and so is `scripts/image-run.ts`, which starts both
+// processes (ADR-0027). Nothing else of the web app is: the source of its pages is in the build.
+//
 // Workspace packages stay real directories with symlinks to them rather than being copied into
 // node_modules by `pnpm deploy`: Node runs the TypeScript sources by type stripping, which it
 // refuses for files inside node_modules.
@@ -71,6 +76,32 @@ function workspaceProjects(root: string): Project[] {
   });
 }
 
+/** Whether the web app was built (the profile has `core.ui-shell`). */
+export function hasWebBuild(root: string): boolean {
+  return existsSync(join(root, 'apps/web/build/handler.js'));
+}
+
+/** What of the web app the image needs: the build, the front, and the links to the packages it imports. */
+export function copyWeb(root: string, out: string): void {
+  const web = join(root, 'apps/web');
+  const target = join(out, 'apps/web');
+  mkdirSync(target, { recursive: true });
+  cpSync(join(web, 'package.json'), join(target, 'package.json'));
+  cpSync(join(web, 'build'), join(target, 'build'), { recursive: true, verbatimSymlinks: true });
+  cpSync(join(web, 'src/front'), join(target, 'src/front'), {
+    recursive: true,
+    filter: (source) => keep(web, source),
+  });
+  if (existsSync(join(web, 'node_modules'))) {
+    cpSync(join(web, 'node_modules'), join(target, 'node_modules'), {
+      recursive: true,
+      verbatimSymlinks: true,
+    });
+  }
+  mkdirSync(join(out, 'scripts'), { recursive: true });
+  cpSync(join(root, 'scripts/image-run.ts'), join(out, 'scripts/image-run.ts'));
+}
+
 /** Removes `node_modules/@scorpion/<name>` links to projects that are not in the image. */
 function dropForeignLinks(dir: string, allowed: ReadonlySet<string>): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -112,5 +143,15 @@ if (import.meta.main) {
     });
     console.log(`image: ${project.name} → ${relative(root, project.path)}`);
   }
-  dropForeignLinks(out, new Set(closure.map((project) => project.name)));
+  const allowed = new Set(closure.map((project) => project.name));
+  if (hasWebBuild(root)) {
+    copyWeb(root, out);
+    allowed.add('@scorpion/web');
+    console.log('image: @scorpion/web → apps/web (build and front)');
+  } else {
+    // Nothing starts the API through image-run.ts without a web app, but the CMD is the same.
+    mkdirSync(join(out, 'scripts'), { recursive: true });
+    cpSync(join(root, 'scripts/image-run.ts'), join(out, 'scripts/image-run.ts'));
+  }
+  dropForeignLinks(out, allowed);
 }

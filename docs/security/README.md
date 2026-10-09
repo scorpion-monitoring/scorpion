@@ -23,8 +23,8 @@ on every request (ADR-0007, ADR-0008). No JWT is used for a session. Other chapt
 ## Where things stand
 
 The four chapters are **in progress**. The entries are filled in from what the code and tests of M2 to M4b show; the human fields
-(`assessor`, `assessed_commit`, `assessed_on`, `second_pass`, `assessment_type`) are empty until the maintainer makes the first pass at Gate 1, so
-the badges cannot turn green before then. M4b closed the gaps in identity, authorization and the pipeline. Three `fail` entries remain, all of them for M5 because they need a browser (the [M5 plan](../m5-sprint-plan.md) schedules each): 6.2.6 and 6.2.7 (password fields, paste and password managers) and 7.4.4 (a logout control on every page).
+(`assessor`, `assessed_commit`, `assessed_on`, `second_pass`, `assessment_type`) are the maintainer's: the first pass was recorded on 2026-10-09 and `second_pass` stays empty until it is made on 2026-10-16 or later (ADR-0031), so
+the badges cannot turn green before then. M4b closed the gaps in identity, authorization and the pipeline. Two `fail` entries remain, both for M5 because they need a browser (the [M5 plan](../m5-sprint-plan.md) schedules each): 6.2.6 and 6.2.7 (password fields, paste and password managers). M5 sprint 1 closed 7.4.4 (a logout control on every page) with a Playwright test.
 
 Policies the assessments point to: [sessions.md](sessions.md) (lifetimes, concurrent sessions, the provider's session, recent authentication) and [authentication.md](authentication.md) (every pathway with its controls and strength, the password rules and the words they refuse, the throttle and the lockout stance, why there is no second factor of our own) and [authorization.md](authorization.md) (who may call each route, the checks in the service, and the fields each reader may see and change per object; its route table is generated from the live registry and tested).
 

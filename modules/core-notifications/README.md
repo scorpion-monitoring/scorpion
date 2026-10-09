@@ -18,12 +18,45 @@ deliveries, requeue and a test mail ([ADR-0023](../../docs/adr/0023-inbox-prefer
 | id             | `core.notifications`                                                                                                                                                                                                              |
 | table prefix   | `notify_` (set in the manifest; ADR-0004)                                                                                                                                                                                         |
 | dependencies   | `core.authz`, `core.settings` (a module that mails depends on this one, not the other way round)                                                                                                                                  |
+| live count     | `GET /inbox/stream`: a server-sent event stream of the caller's unread count, see "The live inbox count" and [ADR-0028](../../docs/adr/0028-inbox-live-count-by-server-sent-events.md)                                            |
+| ui             | `ui` entry and optional peer `core.ui-shell`: contributes `ui.routes` and `ui.nav` for the page `/admin/notifications` (permission `core.notifications.status.read`), see "Pages"                                                 |
 | routes         | internal API: the caller's inbox, the category list, status, delivery list, requeue and test mail, see "Routes"                                                                                                                   |
 | CLI            | `scorpion seed-dev-mail`, development only, see "Development setup"                                                                                                                                                               |
 | jobs           | `core.notifications.deliver` and `core.notifications.retention`, see "Jobs"                                                                                                                                                       |
 | events         | emits `notifications.delivery.dead@1`, `.requeued@1` and `notifications.settings.tested@1`; subscribes to `settings.changed@1` and `settings.secret.changed@1`, see "Events"                                                      |
 | registries     | declares `notify.transport`, `notify.template` and `notify.recipientAddress`; contributes the preferences `notifications.locale` and `notifications.preferences` to `settings.userPreference`, see "Registries"                   |
 | public service | `ctx.deps['core.notifications']`: `enqueue(tx, message)`, `enqueueTemplate(tx, message)`, `removeInboxOfUser(tx, userId)` and `status(actor)`; `public.ts` also exports `defineTemplate` and the locale helpers, see "Public API" |
+
+### Pages
+
+Contributed to the registries of `core.ui-shell` (an optional peer: a profile without the shell skips them, and the module still starts).
+`ui/` is the browser half, `ui/routes.ts` the server half; `ui/ui.test.ts` checks that they agree.
+
+| Path                     | Permission                           | Shows                                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/inbox`                 | `core.notifications.inbox.read`      | The caller's items, newest first, with "Mark read", "Mark all read" and delete; the text is shown as text, never as HTML                                                                                                                                |
+| `/profile/notifications` | `core.notifications.preference.read` | The switches per category (mail and in-app), read from `GET /notifications/preferences/categories` and saved with `PUT /preferences/notifications.preferences` (which replaces the whole object); a mandatory category is shown locked, with the reason |
+| `/admin/notifications`   | `core.notifications.status.read`     | The counts, a banner when the transport is `none`, the error codes of the last 7 days, a test-mail button, and (with `core.notifications.deliveries.read`) the delivery list without bodies, with the requeue of one dead delivery                      |
+
+Widgets (registry `ui.widget` of `core.ui-shell`): the bell `inbox-bell` (slot `header`, `core.notifications.inbox.read`): the unread count, a
+dropdown with the latest items, "Mark all read" and a link to the inbox, kept up to date by the stream with a 60 s polling fallback; and the card
+`dead-deliveries` (slot `dashboard`, `core.notifications.status.read`).
+
+### Which mails earn an inbox item
+
+A template earns an item when the caller of `enqueueTemplate` passes `inApp: true`, the template is not `sensitive` and the person has not
+switched the category off in-app. `core.identity` passes it for three of its mails (decided in M5 sprint 4): `identity.registration-request`
+(to each administrator, with the link to the pending page), `identity.approved` (the first thing a person finds after signing in) and
+`identity.register-attempt` (a security notice for the holder of an address that somebody tried to register). It does not for the welcome
+mail (the person cannot sign in yet), `identity.rejected` (the account is gone) and the three mails whose link is a credential (reset,
+verification, provider link), which are `sensitive`.
+
+### The live inbox count
+
+`GET /inbox/stream` ([ADR-0028](../../docs/adr/0028-inbox-live-count-by-server-sent-events.md)): `event: unread` with `{"count": n}` and a `: heartbeat`
+comment every 25 s, nothing else. Settings `inboxStream.perUser` (3) and `inboxStream.global` (200) cap the open streams (429, `Retry-After: 30`).
+Every heartbeat re-checks the session or token (passively) and the permission, and the stream ends when either is gone. A change of an inbox calls
+`pg_notify('notify_inbox', <user id>)` in its transaction; each process hears it on the connection it holds for delivery wake-ups.
 
 ### Permissions
 
@@ -61,6 +94,8 @@ another server process within 5 seconds (ADR-0017).
 | `maxAttempts`                 | `8`        | Attempts before a delivery is `dead` (1 to 20).                                                                              |
 | `retentionDays`               | `90`       | How long `sent` and `dead` delivery rows are kept (from the last status change); the daily retention job deletes older ones. |
 | `inboxRetentionDays`          | `90`       | How long a **read** inbox item is kept, counted from when it was read. Unread items are kept.                                |
+| `inboxStream.perUser`         | `3`        | Open live-count streams one person may have (one per tab); more get 429 (1 to 20).                                           |
+| `inboxStream.global`          | `200`      | Open live-count streams one server process holds; more get 429 (1 to 10 000).                                                |
 
 The sender address and the instance name come from the branding settings of `core.settings` (`mailFrom`), read at send time.
 

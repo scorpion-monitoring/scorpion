@@ -9,6 +9,7 @@ import { EVENT_DECISIONS } from './service/decisions.ts';
 import { PERMISSION_EXPORT, PERMISSION_READ } from './service/viewer.ts';
 import { PERMISSION_SYSTEM_MANAGE, PERMISSION_SYSTEM_READ } from './service/system.ts';
 import { settingsSchema, type AuditSettings } from './settings-schema.ts';
+import { AUDIT_NAV, AUDIT_ROUTES } from './ui/routes.ts';
 
 export { settingsSchema, type AuditSettings } from './settings-schema.ts';
 export type { AuditInternals } from './service/audit.ts';
@@ -114,13 +115,23 @@ export function createAuditModule() {
     // and, when the profile has it, of core.notifications.
     events: { on: subscriptions },
 
+    // The pages themselves (Svelte) are loaded by the web app only; the manifest just names the entry.
+    ui: () => import('./ui/index.ts'),
+
     contributes: {
+      // The Logs and System pages and their links. Entries for registries of core.ui-shell, which is an
+      // optional peer: a profile without it skips them.
+      'ui.routes': AUDIT_ROUTES,
+      'ui.nav': AUDIT_NAV,
       // ADR 0021: the pipeline's entry for a route with `audit`, and `ctx.audit(entry)`.
       'kernel.auditSink': [{ record: (entry: AuditEntry) => serviceOrThrow().store.record(entry) }],
     },
 
     services: (ctx) => {
-      current = createAuditService(ctx, { authz: ctx.deps['core.authz'] });
+      current = createAuditService(ctx, {
+        authz: ctx.deps['core.authz'],
+        identity: ctx.deps['core.identity'],
+      });
       return current;
     },
 

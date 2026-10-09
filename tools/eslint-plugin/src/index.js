@@ -9,3 +9,5 @@ const plugin = {
 };
 
 export default plugin;
+
+export { LOADER_FILES, loaderSelectors, UI_FILES, uiSelectors } from './ui-rules.js';

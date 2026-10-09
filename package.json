@@ -1,6 +1,6 @@
 {
   "name": "scorpion",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "ISC",
   "private": true,
   "type": "module",
@@ -27,11 +27,13 @@
     "pinned:check": "node scripts/pinned-dependencies.ts",
     "security:asvs": "node tools/asvs-report/cli.ts",
     "modules:sync": "node scripts/sync-workspace-modules.ts",
-    "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check"
+    "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check && node apps/server/src/openapi-generate.ts --check",
+    "openapi:generate": "node apps/server/src/openapi-generate.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
+    "@scorpion/contracts": "workspace:*",
     "@scorpion/eslint-plugin": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "@types/node": "^24.19.1",
@@ -40,6 +42,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.23.0",
     "globals": "^17.13.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.9",
     "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.57.1",

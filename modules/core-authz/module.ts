@@ -1,6 +1,7 @@
 import { z } from '@scorpion/contracts';
 import { defineModule, type AuthorizationRequest } from '@scorpion/kernel';
 import type { AuthzService } from './public.ts';
+import { registerAuthzRoutes } from './routes.ts';
 import { createAuthzService, type AuthzInternals } from './service/authz.ts';
 import {
   DEFAULT_ROLE_REGISTRY,
@@ -45,6 +46,7 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
       'core.authz.role.read': { description: 'List roles and the roles of other users' },
       'core.authz.role.assign': { description: 'Give a role to a user and take it away' },
       'core.authz.role.manage': { description: 'Change which permissions a role holds' },
+      'core.authz.account.read': { description: 'List the permissions you hold' },
     },
 
     schema: () => import('./db/schema.ts'),
@@ -70,6 +72,8 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
       [RESOURCE_POLICY_REGISTRY]: resourcePolicyEntrySchema,
     },
     contributes: {
+      // Every signed-in person may see what they hold (the token form offers it as scopes).
+      [DEFAULT_ROLE_REGISTRY]: [{ role: 'user', permissions: ['core.authz.account.read'] }],
       'kernel.authorizer': [
         {
           // ADR 0005, 0014 and 0015. A token passes only for scope ∩ owner (see service/authz.ts).
@@ -85,6 +89,8 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
       await service.seed();
       return service;
     },
+
+    routes: (r) => registerAuthzRoutes(r, r.service<AuthzInternals & AuthzService>()),
   });
 }
 

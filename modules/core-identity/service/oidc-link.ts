@@ -73,7 +73,8 @@ export function createOidcLinkService(
         !mayMail ||
         !existing.email ||
         existing.deletedAt !== null ||
-        existing.status === 'rejected'
+        existing.status === 'rejected' ||
+        existing.status === 'deactivated'
       ) {
         return;
       }

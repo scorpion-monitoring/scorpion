@@ -195,10 +195,10 @@ describe('scorpion start', () => {
   it('refuses a PROFILE that this build does not contain, and says how to fix it', () => {
     const result = run(['start'], {
       DATABASE_URL: 'postgres://x:y@127.0.0.1:1/z',
-      PROFILE: 'kpi-tracker',
+      PROFILE: 'core-only',
     });
     expect(result.code).toBe(1);
-    expect(result.stderr).toMatch(/built for profile "full" but PROFILE is "kpi-tracker"/);
+    expect(result.stderr).toMatch(/built for profile "full" but PROFILE is "core-only"/);
   });
 
   it('needs DATABASE_URL', () => {

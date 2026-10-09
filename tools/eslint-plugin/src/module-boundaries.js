@@ -2,8 +2,8 @@
 //
 // - No relative import may reach into another module's directory.
 // - A module is imported only as `@scorpion/<name>/public`; any other subpath is internal. The one
-//   exception is the generated profile file (option `manifestImporters`), which imports each
-//   module's `/module` manifest and `/package.json`.
+//   exception is the generated profile files (option `manifestImporters`), which import each
+//   module's `/module` manifest, `/ui` entry (the web app's generated file) and `/package.json`.
 // - The importing package must declare the module as a dependency, computed by the kernel's
 //   `computeModuleDependencies()` from package.json: `dependencies`, or optional `peerDependencies`.
 //   The loader uses the same function, so lint and startup agree (ADR 0002).
@@ -17,7 +17,7 @@ import { computeModuleDependencies } from '@scorpion/kernel/package-deps';
 
 const SCOPE = '@scorpion/';
 const PUBLIC_ENTRY = '/public';
-const MANIFEST_ENTRIES = ['/module', '/package.json'];
+const MANIFEST_ENTRIES = ['/module', '/ui', '/package.json'];
 
 /**
  * @typedef {{ dir: string, name: string }} ModuleInfo

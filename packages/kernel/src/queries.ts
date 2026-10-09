@@ -127,3 +127,16 @@ export async function listJobRuns(db: Db, filter: JobRunFilter = {}): Promise<Jo
     result: row.result,
   }));
 }
+
+/** How many runs `listJobRuns` would find for this filter (limit and offset ignored). */
+export async function countJobRuns(
+  db: Db,
+  filter: Pick<JobRunFilter, 'jobName' | 'status'> = {},
+): Promise<number> {
+  const { rows } = await db.execute<{ n: string }>(sql`
+    select count(*)::text as n
+      from kernel_job_run
+     where (${filter.jobName ?? null}::text is null or job_name = ${filter.jobName ?? null})
+       and (${filter.status ?? null}::text is null or status = ${filter.status ?? null})`);
+  return Number(rows[0]?.n ?? 0);
+}

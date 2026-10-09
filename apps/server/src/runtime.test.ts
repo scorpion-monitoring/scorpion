@@ -358,8 +358,8 @@ describe('start-up refusals', () => {
 
   it('explains a PROFILE that differs from the build', () => {
     expect(profileMismatch({ PROFILE: 'full' }, { name: 'full', modules: [] })).toBeUndefined();
-    expect(profileMismatch({ PROFILE: 'kpi-tracker' }, { name: 'full', modules: [] })).toMatch(
-      /built for profile "full" but PROFILE is "kpi-tracker".*pnpm build --profile kpi-tracker/,
+    expect(profileMismatch({ PROFILE: 'core-only' }, { name: 'full', modules: [] })).toMatch(
+      /built for profile "full" but PROFILE is "core-only".*pnpm build --profile core-only/,
     );
   });
 });

@@ -48,7 +48,7 @@ describe('the manifest', () => {
     expect(sql).not.toMatch(/REFERENCES/i);
   });
 
-  it('depends on authz, settings and identity, with notifications as an optional peer', () => {
+  it('depends on authz, settings and identity, with notifications and the shell as optional peers', () => {
     const own = (names: string[]) =>
       names.filter((n) => n.startsWith('@scorpion/') && n.includes('core-'));
     expect(own(Object.keys(packageJson.dependencies)).sort()).toEqual([
@@ -56,10 +56,13 @@ describe('the manifest', () => {
       '@scorpion/core-identity',
       '@scorpion/core-settings',
     ]);
-    expect(Object.keys(packageJson.peerDependencies)).toEqual(['@scorpion/core-notifications']);
-    expect(packageJson.peerDependenciesMeta['@scorpion/core-notifications']).toEqual({
-      optional: true,
-    });
+    expect(Object.keys(packageJson.peerDependencies).sort()).toEqual([
+      '@scorpion/core-notifications',
+      '@scorpion/core-ui-shell',
+    ]);
+    for (const peer of ['@scorpion/core-notifications', '@scorpion/core-ui-shell'] as const) {
+      expect(packageJson.peerDependenciesMeta[peer]).toEqual({ optional: true });
+    }
   });
 });
 

@@ -8,6 +8,7 @@ import type { AuthzService } from '@scorpion/core-authz/public';
 import { ids, type Db, type DbTx } from '@scorpion/kernel';
 import { and, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { inboxItem } from '../db/schema.ts';
+import { announceInboxChange } from './inbox-channel.ts';
 import type { InAppContent } from './templates/layout.ts';
 
 export const PERMISSION_INBOX_READ = 'core.notifications.inbox.read';
@@ -55,6 +56,8 @@ export async function insertInboxItem(
     text: item.text,
     link: item.link,
   });
+  // Delivered when the transaction commits: an open stream of this person gets the new count.
+  await announceInboxChange(tx, item.userId);
   return id;
 }
 
@@ -156,6 +159,7 @@ export function createInboxService(deps: {
         .where(and(eq(inboxItem.id, id.toLowerCase()), eq(inboxItem.userId, userId)))
         .returning();
       if (!row) throw notYours();
+      await announceInboxChange(db, userId);
       return view(row);
     },
 
@@ -166,6 +170,7 @@ export function createInboxService(deps: {
         .set({ readAt: sql`now()` })
         .where(and(eq(inboxItem.userId, owner(actor)), isNull(inboxItem.readAt)))
         .returning({ id: inboxItem.id });
+      if (changed.length > 0) await announceInboxChange(db, owner(actor));
       return changed.length;
     },
 
@@ -178,6 +183,7 @@ export function createInboxService(deps: {
         .where(and(eq(inboxItem.id, id.toLowerCase()), eq(inboxItem.userId, userId)))
         .returning({ id: inboxItem.id });
       if (removed.length === 0) throw notYours();
+      await announceInboxChange(db, userId);
     },
   };
 }

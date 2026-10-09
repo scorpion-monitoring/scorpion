@@ -17,9 +17,6 @@ export const FORBIDDEN = /Scorpion|de\.NBI|NFDI|Powered by/;
 const ALLOWED: Record<string, string> = {
   'modules/core-settings/settings-schema.ts':
     'DEFAULT_PRODUCT_NAME: the one place that says what the software is called when nothing is configured',
-  'apps/web/src/routes/+page.svelte':
-    'the placeholder landing page of the web shell, replaced by the branded shell in M5',
-  'apps/web/e2e/smoke.spec.ts': 'the smoke test of that placeholder page',
   'modules/core-identity/service/password-words.ts':
     'PROJECT_WORDS: the documented list of words a password may not contain (ASVS 6.1.2). It is a security list, not branding that anybody is shown; the instance and product name of an installation come from getBranding',
 };

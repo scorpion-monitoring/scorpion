@@ -29,10 +29,13 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
+import uiShellModule from '@scorpion/core-ui-shell/module';
+import uiShellPackage from '@scorpion/core-ui-shell/package.json' with { type: 'json' };
 import {
   createKernel,
   createLogger,
   loadConfig,
+  mountPath,
   type Kernel,
   type ModuleManifest,
 } from '@scorpion/kernel';
@@ -80,7 +83,16 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   /** Start over a database that another app already uses (a second server process). */
   databaseUrl?: string;
   /** Fixture modules that depend on core.settings, for example one that registers user preferences. */
-  extraModules?: { id: string; manifest: ModuleManifest }[];
+  extraModules?: {
+    id: string;
+    manifest: ModuleManifest;
+    /** Package names of other modules it depends on (core.settings is always one). */
+    requires?: string[];
+  }[];
+  /** false: the profile has no core.ui-shell (it depends on core.authz only; default: it is there). */
+  uiShell?: boolean;
+  /** `BASE_PATH` of the application; the routes are mounted under it. Default `/`. */
+  basePath?: string;
   /** Use the limits stored in core.settings (as the server does) instead of the constants. */
   storedRateLimits?: boolean;
   /**
@@ -157,6 +169,7 @@ export function useIdentityApp() {
             'core.notifications',
             'core.identity',
             ...(options.audit === false ? [] : ['core.audit']),
+            ...(options.uiShell === false ? [] : ['core.ui-shell']),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -181,11 +194,17 @@ export function useIdentityApp() {
           ...(options.audit === false
             ? []
             : [{ manifest: createAuditModule(), packageJson: auditPackage }]),
+          ...(options.uiShell === false
+            ? []
+            : [{ manifest: uiShellModule, packageJson: uiShellPackage }]),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
               name: `@scorpion/${extra.id.replaceAll('.', '-')}`,
-              dependencies: { '@scorpion/core-settings': 'workspace:*' },
+              dependencies: {
+                '@scorpion/core-settings': 'workspace:*',
+                ...Object.fromEntries((extra.requires ?? []).map((name) => [name, 'workspace:*'])),
+              },
             },
           })),
         ],
@@ -196,6 +215,7 @@ export function useIdentityApp() {
           'core.notifications': '@scorpion/core-notifications',
           'core.identity': '@scorpion/core-identity',
           'core.audit': '@scorpion/core-audit',
+          'core.ui-shell': '@scorpion/core-ui-shell',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,
@@ -206,6 +226,7 @@ export function useIdentityApp() {
         config: loadConfig({
           DATABASE_URL: databaseUrl,
           PROFILE: 'identity-http',
+          BASE_PATH: options.basePath ?? '/',
         }),
         log,
         jobs: options.jobs,
@@ -263,7 +284,7 @@ export function useIdentityApp() {
         if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
         if (options.csrf !== undefined) headers['x-csrf-token'] = options.csrf;
         const res = await app.request(
-          `${API}${path}`,
+          `${mountPath(kernel.config)}${API}${path}`,
           {
             method,
             headers,
@@ -289,6 +310,49 @@ export function useIdentityApp() {
           bytes,
           cookie: setCookie ? setCookie.slice(COOKIE.length + 1).split(';')[0] : undefined,
           setCookie,
+        };
+      }
+
+      /**
+       * A GET that is not read to the end: the response with its body left open, for an event stream.
+       * `next()` waits for the next chunk as text (`undefined` when the stream has ended).
+       */
+      async function stream(path: string, options: RequestOptions = {}) {
+        const headers: Record<string, string> = { ...options.headers };
+        if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
+        const res = await app.request(
+          `${mountPath(kernel.config)}${API}${path}`,
+          { method: 'GET', headers },
+          { incoming: { socket: { remoteAddress: options.peer ?? '203.0.113.7' } } },
+        );
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let seen = '';
+        let ended = reader === undefined;
+        return {
+          res,
+          status: res.status,
+          text: () => seen,
+          /** Reads until `predicate` holds for everything seen (or the stream ends, or `ms` pass). */
+          async until(predicate: (all: string) => boolean, ms = 5000): Promise<string> {
+            const deadline = Date.now() + ms;
+            while (!predicate(seen) && !ended && Date.now() < deadline) {
+              const next = await Promise.race([
+                reader!.read(),
+                new Promise<'late'>((resolve) => setTimeout(() => resolve('late'), 100)),
+              ]);
+              if (next === 'late') continue;
+              if (next.done) ended = true;
+              else seen += decoder.decode(next.value, { stream: true });
+            }
+            return seen;
+          },
+          /** True once the stream has ended (waits up to `ms`). */
+          async ends(ms = 5000): Promise<boolean> {
+            await this.until(() => false, ms);
+            return ended;
+          },
+          close: () => reader?.cancel(),
         };
       }
 
@@ -330,6 +394,7 @@ export function useIdentityApp() {
         secretsKey,
         lines,
         call,
+        stream,
         signedIn,
         get: (path: string, options?: RequestOptions) => call('GET', path, options),
         post: (path: string, options?: RequestOptions) => call('POST', path, options),

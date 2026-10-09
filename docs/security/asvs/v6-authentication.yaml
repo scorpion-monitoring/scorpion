@@ -1,10 +1,10 @@
 asvs_version: 5.0.0
 level: 2
 chapter: V6
-assessment_type: null
-assessed_commit: null
-assessed_on: null
-assessor: null
+assessment_type: self
+assessed_commit: a622186c88f87edbdf8af9e64648a8ab410c8d46
+assessed_on: 2026-10-09
+assessor: feserm
 second_pass: null
 reviewer: null
 requirements:
@@ -59,11 +59,19 @@ requirements:
       - code: modules/core-identity/validation.ts
     note: 'The password schema is z.string().min(8).max(255) with no composition rule; the table-driven cases accept spaces, symbols and non-ASCII.'
   - id: v5.0.0-6.2.6
-    status: fail
-    note: 'Not demonstrable yet. apps/web has only a placeholder page and no password field exists; re-assess when the M5 login and registration screens land. Fix planned in docs/m5-sprint-plan.md#5-sprint-2-i18n-sign-in-register-profile.'
+    status: pass
+    evidence:
+      - test: ASVS-6.2.6
+      - code: packages/ui-kit/src/TextField.svelte
+      - code: modules/core-identity/ui/Login.svelte
+    note: 'Every password the web app asks for is a `TextField` with `type="password"`: sign-in, registration, the new password of a reset, the current and new password of a change, the first administrator, and the dialog that confirms the identity. The Playwright test apps/web/e2e/password-fields.spec.ts opens the first four forms and the dialog, under BASE_PATH / and /a/b, and fails for any input named like a password that is not type=password, for a password input whose autocomplete is anything but current-password or new-password, and for one that is read-only or disabled; it also types into each and checks the text is not echoed into the page. The component offers no "show the password" toggle, so the entry is masked at all times. Not covered by the test: a screen that a later sprint adds is covered only if the test lists its form, and the form of the first administrator is checked by the bootstrap journey (apps/web/e2e/bootstrap.spec.ts) for type, autocomplete and the username field, not for paste.'
   - id: v5.0.0-6.2.7
-    status: fail
-    note: 'Not demonstrable yet, for the same reason as 6.2.6: no form exists that could allow or block pasting and password managers. Fix planned in docs/m5-sprint-plan.md#5-sprint-2-i18n-sign-in-register-profile.'
+    status: pass
+    evidence:
+      - test: ASVS-6.2.7
+      - code: packages/ui-kit/src/TextField.svelte
+      - code: modules/core-identity/ui/profile/Password.svelte
+    note: 'No password field sets an attribute or handler that blocks pasting, dropping or the help of the browser: apps/web/e2e/password-fields.spec.ts fails for onpaste, oncopy, ondrop, readonly or disabled on the field and for autocomplete off or none, dispatches a paste event that the page must not cancel, and pastes from the real clipboard (Control or Command and V) into the field of the sign-in, registration, reset and change forms and checks that the value arrives. For password managers the test requires each password field to sit in a form, with an input marked autocomplete="username" in the same form on the sign-in, registration and change forms (the change form carries the account name in a visually hidden read-only field so that a manager updates the right entry); the reset form has none, because the person is not signed in and the page does not know the name. The test does not drive a real password manager extension, which a headless browser does not have; it proves the markup such a manager relies on (a form, autocomplete tokens, a username field) and that nothing blocks it.'
   - id: v5.0.0-6.2.8
     status: pass
     evidence:
@@ -102,13 +110,13 @@ requirements:
       - test: ASVS-6.3.1
       - code: modules/core-identity/service/login-throttle.ts
       - doc: docs/security/authentication.md
-    note: 'Failed password logins are throttled per account and network and per account alone, with delays that double up to a ceiling and no lockout: over the limit the answer is 429 with Retry-After, before the password is looked at. A name that does not exist is counted and answered the same (the tagged tests compare the answers; a further test compares the time), a success resets the counters, and the person can log in once the delay is over. The per-address strict bucket applies as well (defect 1 and the rate-limit tests). Argon2id and uniform errors are as before.'
+    note: 'Failed password logins are throttled per account and network and per account alone, with delays that double up to a ceiling and no lockout: over the limit the answer is 429 with Retry-After, before the password is looked at. A name that does not exist is counted and answered the same (the tagged tests compare the answers; a further test compares the time), a success resets the counters, and the person can log in once the delay is over. The per-address strict bucket applies as well (defect 1 and the rate-limit tests). Argon2id and uniform errors are as before. M5 sprint 4: the sign-in page adds the same help line (whom to ask, from the branding settings) under every refusal of a password, so a declined registration and a wrong password still look alike (apps/web/e2e/login.spec.ts compares the refusals). Sprint 4 also writes an inbox item for three identity mails (a registration request to the administrators, an approval, the notice to the holder of an address that somebody tried to register); none of them carries a credential, and the mails whose link is one (reset, verification, provider link) are `sensitive` and never reach an inbox (modules/core-identity/service/mail.test.ts, apps/web/e2e/secrets.spec.ts).'
   - id: v5.0.0-6.3.2
     status: pass
     evidence:
       - code: modules/core-identity/service/bootstrap.ts
       - doc: docs/adr/0010-first-run-token-and-bootstrap-admin.md
-    note: 'No migration creates an account. The first administrator is created by the create-admin command or by a one-time first-run token, with a name the operator chooses (ADR-0010). No test asserts that a fresh install has zero users.'
+    note: 'M5 sprint 3 added the account status deactivated: login, OIDC sign-in, reset and verification links and the register notice treat it like a rejected account (accounts.ts, oidc.ts, oidc-link.ts, recovery.ts; the sign-in answer is the one for a wrong password, tested in admin-users-routes.test.ts). No migration creates an account. The first administrator is created by the create-admin command or by a one-time first-run token, with a name the operator chooses (ADR-0010). No test asserts that a fresh install has zero users.'
   - id: v5.0.0-6.3.3
     status: pass
     evidence:

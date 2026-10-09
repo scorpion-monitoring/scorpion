@@ -4,7 +4,7 @@ Roles as data, the permission registry and the authoriser of the request pipelin
 do what and knows nothing about users: it stores an opaque user id with no foreign key and imports
 nothing from `core.identity` (ADR-0014). It has no dependencies, so every other module may depend on it.
 
-Status: M3 sprint 2. The module is in the `full` and `kpi-tracker` profiles and `core.identity` depends on it
+Status: M3 sprint 2. The module is in the `full` and `core-only` profiles and `core.identity` depends on it
 ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)): identity contributes the permissions of the role `user`, gives
 the role at approval, owns the role routes and asks this module for every decision. An anonymous caller of a
 non-public route gets 401, a signed-in user without a role 403. `core.settings` (sprint 3) depends on it too: it uses
@@ -14,24 +14,25 @@ no settings (ADR-0014).
 
 ## Manifest
 
-| Part           | Value                                                                                                      |
-| -------------- | ---------------------------------------------------------------------------------------------------------- |
-| id             | `core.authz`                                                                                               |
-| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                                   |
-| dependencies   | none (ADR-0014)                                                                                            |
-| routes         | none; the role routes are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md))         |
-| jobs, CLI      | none                                                                                                       |
-| events         | emits `authz.role.assigned@1`, `authz.role.removed@1` and `authz.role.permissions.changed@1`, see "Events" |
-| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005)                                      |
-| public service | `ctx.deps['core.authz']`, see "Public API"                                                                 |
+| Part           | Value                                                                                                                                                                                        |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id             | `core.authz`                                                                                                                                                                                 |
+| table prefix   | `authz_` (set in the manifest; ADR-0004)                                                                                                                                                     |
+| dependencies   | none (ADR-0014)                                                                                                                                                                              |
+| routes         | `PUT /roles/{key}/permissions`, `GET /permissions` and `GET /account/permissions`; listing roles and giving one are `core.identity`'s ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)) |
+| jobs, CLI      | none                                                                                                                                                                                         |
+| events         | emits `authz.role.assigned@1`, `authz.role.removed@1` and `authz.role.permissions.changed@1`, see "Events"                                                                                   |
+| contributes    | `kernel.authorizer`: the one entry of the route authoriser (ADR-0005); `authz.defaultRole`: `core.authz.account.read` for the role `user`                                                    |
+| public service | `ctx.deps['core.authz']`, see "Public API"                                                                                                                                                   |
 
 ### Permissions
 
-| Permission               | Allows                                       | Held by default by |
-| ------------------------ | -------------------------------------------- | ------------------ |
-| `core.authz.role.read`   | List roles and read the roles of other users | Admin              |
-| `core.authz.role.assign` | Give a role to a user and take it away       | Admin              |
-| `core.authz.role.manage` | Change which permissions a role holds        | Admin              |
+| Permission                | Allows                                       | Held by default by |
+| ------------------------- | -------------------------------------------- | ------------------ |
+| `core.authz.role.read`    | List roles and read the roles of other users | Admin              |
+| `core.authz.role.assign`  | Give a role to a user and take it away       | Admin              |
+| `core.authz.role.manage`  | Change which permissions a role holds        | Admin              |
+| `core.authz.account.read` | List the permissions you hold                | User               |
 
 Admin holds every permission that a loaded manifest declares, so the table shows what the module adds, not a
 list that has to be kept up to date.
@@ -101,6 +102,8 @@ Tests cover the bound with two kernels over one database.
 | ------------------------------------------- | ------------------------ | -------------------------------------------------------------------------- |
 | `require(actor, permission, resource?)`     |                          | Resolves, or 401 (anonymous) / 403. `can(...)` is the boolean form.        |
 | `listRoles(actor)`                          | `core.authz.role.read`   | Declared permissions only; Admin lists all.                                |
+| `listPermissions(actor)`                    | `core.authz.role.read`   | Every declared permission with its module and description.                 |
+| `permissionsHeldBy(actor)`                  | signed in                | What the caller holds now (scope ∩ owner for a token); 401 for anonymous.  |
 | `rolesOf(actor, userId)`                    | own, or `role.read`      | Role keys.                                                                 |
 | `assignRole(actor, { userId, roleKey })`    | `core.authz.role.assign` | Idempotent (`false` when already held). 404 unknown role, 422 bad user id. |
 | `removeRole(actor, { userId, roleKey })`    | `core.authz.role.assign` | `false` when not held. 409 for the last Admin.                             |
@@ -131,6 +134,18 @@ no secret). A repeat of a change (the role was held already, or not) emits nothi
 `authz.role.permissions.changed@1`, emitted by `setRolePermissions` in the transaction that replaces the set:
 `{ roleKey, added, removed, actorId }`, where `added` and `removed` are sorted permission strings (never user data) and
 `actorId` is the caller. Saving the set a role already has emits nothing. `core.audit` subscribes to all three (ADR-0021).
+
+## Routes
+
+Three internal routes (the screens of roles and of the token form, M5):
+
+| Route                          | Permission                | Notes                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /roles/{key}/permissions` | `core.authz.role.manage`  | `{ permissions: [...] }` (at most 1000 ids) replaces what the role holds and answers the role. 403 for Admin (it holds everything and cannot be edited), 404 unknown role, 422 for a permission no loaded module declares (nothing is stored). Audited with its body; the event `authz.role.permissions.changed@1` is emitted only when the set changed. Takes effect at once in this process |
+| `GET /permissions`             | `core.authz.role.read`    | Every permission a loaded module declares: `{ id, module, description }`, by id, in the list envelope (default page size 100, at most 500). What the roles page groups by module and describes. The description is the module's own English text.                                                                                                                                             |
+| `GET /account/permissions`     | `core.authz.account.read` | What the caller holds now, same shape. For an access token only the scopes it names as well (scope ∩ owner). Read from the database, never the cache. What the token form offers as scopes.                                                                                                                                                                                                   |
+
+The system methods above are not reachable from them: a test (`module.test.ts`) registers the routes against a stand-in that fails when one is touched.
 
 ## Tables
 

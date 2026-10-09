@@ -1,10 +1,10 @@
 asvs_version: 5.0.0
 level: 2
 chapter: V8
-assessment_type: null
-assessed_commit: null
-assessed_on: null
-assessor: null
+assessment_type: self
+assessed_commit: a622186c88f87edbdf8af9e64648a8ab410c8d46
+assessed_on: 2026-10-09
+assessor: feserm
 second_pass: null
 reviewer: null
 requirements:
@@ -16,21 +16,21 @@ requirements:
       - doc: modules/core-authz/README.md
       - doc: docs/adr/0014-authorisation-model-and-dependency-direction.md
       - doc: docs/adr/0005-deny-by-default-before-authz.md
-    note: 'docs/security/authorization.md is the single place: the two checks (route permission, then the service with the resource), one table of every route with its permission, the rules on one resource (own sessions, tokens, inbox items, pending accounts, role assignment) and the rules that hold for Admin too. The route table is generated from the live registry and a tagged test fails when the page differs from it. The mechanics of a decision stay in the core.authz README and the two ADRs, which the page links. Resource policies exist as a mechanism and are tested with a fixture module; the page gets their rows when the registry modules add real ones (M7).'
+    note: "docs/security/authorization.md is the single place: the two checks (route permission, then the service with the resource), one table of every route with its permission, the rules on one resource (own sessions, tokens, inbox items, pending accounts, role assignment) and the rules that hold for Admin too. The route table is generated from the live registry and a tagged test fails when the page differs from it. The mechanics of a decision stay in the core.authz README and the two ADRs, which the page links. Resource policies exist as a mechanism and are tested with a fixture module; the page gets their rows when the registry modules add real ones (M7). M5 sprint 3 added six routes (the administrator's user list, one user, the roles and tokens of a user, deactivation, and the permissions of a role); they are in the generated table and the same test fails for any that is missing. M5 sprint 4 added GET /permissions (core.authz.role.read) and GET /account/permissions (core.authz.account.read, the caller's own permissions, limited to the scopes of an access token); both are in the generated table and in the walker. `GET /inbox/stream` (sprint 4, ADR-0028) is a self-service route in the walker: it has no id in the request, so there is no other person's stream to open (apps/server/src/inbox-stream-routes.test.ts: a user id in the address changes nothing), it needs `core.notifications.inbox.read` on the route and again in the service, an access token needs the scope, and every heartbeat re-checks the permission and the credentials."
   - id: v5.0.0-8.1.2
     status: pass
     evidence:
       - doc: docs/security/authorization.md
       - code: modules/core-identity/validation.ts
       - code: apps/server/src/response-fields.test.ts
-    note: 'The section "Fields, per object" of docs/security/authorization.md gives, for user, role, token, session, inbox item, setting, secret, vocabulary, preference, file, audit entry, delivery and the mail and login tokens: who reads which fields, who writes which, which fields only a dedicated route changes (status, roles, the password) and which are never returned. It also states the state-dependent rules (a pending account, a revoked token). A page is a description and not a test: the tests that enforce each rule are named in the page, and the second pass should read the tables against the response schemas.'
+    note: 'The section "Fields, per object" of docs/security/authorization.md gives, for user, role, token, session, inbox item, setting, secret, vocabulary, preference, file, audit entry, delivery and the mail and login tokens: who reads which fields, who writes which, which fields only a dedicated route changes (status, roles, the password) and which are never returned. It also states the state-dependent rules (a pending account, a revoked token). The user, role and token tables name the administrator''s reads and writes of M5 sprint 3 (what `GET /users` shows and leaves out, who edits the permissions of a role, which tokens an administrator may list). A page is a description and not a test: the tests that enforce each rule are named in the page, and the second pass should read the tables against the response schemas.'
   - id: v5.0.0-8.2.1
     status: pass
     evidence:
       - test: ASVS-8.2.1
       - code: apps/server/src/pipeline/authorize.ts
       - code: packages/contracts/src/route.ts
-    note: 'Every route declares a permission (or public: true with a reason) or fails at registration; the pipeline denies by default.'
+    note: "Every route declares a permission (or public: true with a reason) or fails at registration; the pipeline denies by default. The walker in defect-01 fails for a route without a decision in its matrix; the six routes of M5 sprint 3 and GET /permissions, GET /system/job-runs of sprint 4 are in it as admin routes (GET /account/permissions as a self-service route), so a plain User, a user without roles, anonymous and a token whose owner is a plain User are refused on each, and apps/server/src/admin-users-routes.test.ts repeats the refusals with the handler's own side effects checked (nothing changes)."
   - id: v5.0.0-8.2.2
     status: pass
     evidence:
@@ -51,7 +51,7 @@ requirements:
       - test: ASVS-8.3.1
       - code: apps/server/src/pipeline/authorize.ts
       - code: modules/core-authz/service/authz.ts
-    note: 'Authorization runs on the server in the pipeline and again in the service (ctx.authz.require); roles sent by a client are ignored (ADR-0014). Navigation hiding in the UI is cosmetic.'
+    note: 'Authorization runs on the server in the pipeline and again in the service (ctx.authz.require); roles sent by a client are ignored (ADR-0014). Navigation hiding in the UI is cosmetic: the catch-all route of the web app opens a page only when the server lists it for the caller (GET /ui/navigation), and a public page must be named in PUBLIC_PAGES with a reason (apps/server/src/ui-routes.test.ts). M5 sprint 2 added two public routes, GET /auth/oidc/providers (id, display name and icon hash only) and GET /bootstrap/status (one boolean), each with its reason and in the generated route table of docs/security/authorization.md, and the sign-in, registration, recovery and first-admin pages; the profile page needs core.identity.profile.read. The page walker in apps/server/src/ui-navigation-routes.test.ts shows a plain User only the profile and public pages, and apps/web/e2e/navigation.spec.ts finds nothing of the administration in their navigation. The administration pages of M5 sprint 3 (users, pending approvals, roles, settings) are registered with a permission, so the same list gives a plain User none of them and the catch-all route answers their paths with 403 (apps/web/e2e/admin.spec.ts).'
   - id: v5.0.0-8.4.1
     status: n/a
     reason: 'Scorpion is single-tenant by design: one instance per deployment (docs/architecture.md, assumption A3), and no tenant concept exists in the code or the schema, so there are no cross-tenant operations to control.'

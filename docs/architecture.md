@@ -275,7 +275,7 @@ Security is enforced by the kernel's request pipeline, so no module can opt out 
 
 ## Deployment profiles and operations
 
-A deployment profile is a small file (`profiles/<name>.ts`) that lists the modules to include. The build bundles only those modules, and the startup refuses to run if a dependency is missing. The three example deployments from FEATURES.md map to profiles as follows (● = included, ○ = optional):
+A deployment profile is a small file (`profiles/<name>.ts`) that lists the modules to include. The build bundles only those modules, and the startup refuses to run if a dependency is missing. The repository has two profiles, `full` and `core-only` ([ADR-0030](adr/0030-core-only-profile.md)). The columns for the three example deployments from FEATURES.md are kept as the plan for profiles that return when their milestones need them (● = included, ○ = optional):
 
 | Module | `full` | `denbi-registry` | `nfdi-onboarding` | `kpi-tracker` |
 | --- | --- | --- | --- | --- |
@@ -291,7 +291,7 @@ A deployment profile is a small file (`profiles/<name>.ts`) that lists the modul
 | backup | ● | ● | ● | ● |
 | public-api | ● | ● | ○ | ● |
 
-The `kpi-tracker` profile needs `registry.services` because KPIs attach to services. It can hide the catalogue UI through a setting.
+A KPI-only profile needs `registry.services` because KPIs attach to services. It can hide the catalogue UI through a setting.
 
 **Runtime shape.** One container image per profile (`scorpion:<version>-<profile>`) with the API and UI, plus a worker mode (`scorpion worker`) that runs jobs. Small instances run the worker inside the web process. Only PostgreSQL is required; S3 and SMTP are optional.
 
@@ -326,7 +326,7 @@ scorpion/
     kpi-framework/  kpi-ingestion/  kpi-analytics/  kpi-impact/
     maturity/  onboarding/  bibliometrics/  network-graph/  announcements/  backup/  public-api/
   profiles/
-    full.ts  denbi-registry.ts  nfdi-onboarding.ts  kpi-tracker.ts
+    full.ts  core-only.ts
   tools/
     migrate-legacy/      # one-time import from the current Scorpion database
   docker/  .github/workflows/

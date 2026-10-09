@@ -50,7 +50,7 @@ This file summarises how work gets into `main`.
 The README badges for ASVS 5.0 (chapters V6, V7, V8 and V10), OpenSSF Best Practices and OpenSSF Scorecard are claims that CI keeps true; see
 [docs/security/README.md](docs/security/README.md).
 
-- `pnpm security:asvs` runs in the **Lint, type check, test** job after the tests. It checks the assessment files in `docs/security/asvs/` against the
+- `pnpm security:asvs` runs in the **ASVS assessments** job after the unit and end-to-end tests, which hand it their JUnit reports. It checks the assessment files in `docs/security/asvs/` against the
   pinned ASVS source and the test reports, and fails if a generated report or the README badge block was edited by hand. Regenerate them with
   `pnpm security:asvs --write`; never edit them.
 - The **ASVS impact** check fails a pull request that changes a security-scoped path (`modules/core-identity/**`, `modules/core-authz/**`,
@@ -95,6 +95,42 @@ edit it by hand.
 
 The internal `@scorpion/*` packages are not versioned separately. The root package
 `scorpion` carries the one product version, which the image tags use.
+
+## Continuous integration
+
+The `CI` workflow runs its work as parallel jobs, so a run takes as long as its slowest job:
+
+| Job                          | Does                                                                                    |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| `Static checks`              | branch policy, changeset check, `pnpm check`                                            |
+| `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                       |
+| `End-to-end tests`           | Playwright (the browser download is cached)                                             |
+| `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                      |
+| **`Lint, type check, test`** | the gate: succeeds only when the four jobs above did; this is the required check        |
+| `Image (...)`                | builds and smoke-tests each profile image beside the tests (needs only `Static checks`) |
+
+Branch protection requires the gate by name, so the jobs behind it can be split, renamed or
+added without a change to the ruleset. When the unit tests near the 20-minute limit of a job,
+raise the shard count in `.github/workflows/ci.yml` (the matrix and the `/4` in the command);
+do not raise the limit. `pnpm test` without `--shard` still runs everything, as before.
+
+## Images in the registry
+
+The `Publish (<profile>)` jobs of the `CI` workflow push the images of `full` and `core-only` to the
+GitHub container registry, as `ghcr.io/scorpion-monitoring/scorpion:<tag>`. They run only after the gate and the
+`Image (...)` smoke tests passed, never for a pull request, and the job has `packages: write` as the only widening
+of the workflow's read-only permissions.
+
+| Event                  | Tags                                                     |
+| ---------------------- | -------------------------------------------------------- |
+| push to `dev`          | `dev-<profile>` (newest) and `dev-<short sha>-<profile>` |
+| tag `v<x.y.z>` on main | `<x.y.z>-<profile>`                                      |
+
+To run one, log in once with a personal access token that has `read:packages`
+(`docker login ghcr.io -u <user>`), then
+`docker pull ghcr.io/scorpion-monitoring/scorpion:dev-core-only`. A new package is private; in the
+package settings on GitHub, link it to the repository and set its visibility. Use the fixed
+`dev-<short sha>-<profile>` tag to deploy or roll back to one build.
 
 ## Dependency audit
 
@@ -141,8 +177,9 @@ Each milestone ends with a release. Before `v1.0.0` (M18), a milestone is a `min
    (`release: v<x.y.z>`).
 3. Open a pull request into `main`. CI skips the changeset check for it because it changes
    `CHANGELOG.md`.
-4. After the merge, tag the merge commit on `main` with an annotated tag `v<x.y.z>` and build
-   the profile images as `scorpion:<x.y.z>-<profile>`.
+4. After the merge, tag the merge commit on `main` with an annotated tag `v<x.y.z>`. The tag
+   push builds the profile images and publishes them as `ghcr.io/<owner>/scorpion:<x.y.z>-<profile>`
+   (see "Images in the registry").
 5. Merge `main` back into `dev`, so `dev` has the new version and changelog.
 
 A hotfix follows the same steps, but starts from `main` as `hotfix/<x.y.z>`: commit the fix

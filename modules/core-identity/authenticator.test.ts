@@ -68,7 +68,7 @@ describe('the session authenticator', () => {
         sessionId: 's1',
       },
     });
-    expect(resolve).toHaveBeenCalledWith(id);
+    expect(resolve).toHaveBeenCalledWith(id, undefined, { touch: true });
   });
 
   it('throws Unauthorized, and nothing else, for a cookie the session service refuses', async () => {

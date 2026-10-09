@@ -1,5 +1,6 @@
 // Input rules for accounts. The service applies them to every caller (routes, CLI, OIDC
 // provisioning), so no entry point can skip one. Size limits are part of the rules.
+import { paginationQuery } from '@scorpion/contracts';
 import { z } from 'zod';
 import { SCOPE, SCOPE_MAX_LENGTH, SCOPES_MAX } from './service/token-format.ts';
 
@@ -228,6 +229,15 @@ export type UpdateProfileInput = z.input<typeof updateProfileInput>;
 export const roleKey = z
   .string()
   .regex(/^[a-z][a-z0-9-]{0,62}$/, 'must be a role key like "reviewer"');
+
+/** The query of `GET /users`: a page, a status, a search text and a sort. Every value is bounded. */
+export const USER_SORT_KEYS = ['username', 'email', 'status', 'createdAt'] as const;
+export const userListQuery = paginationQuery().extend({
+  status: z.enum(['pending', 'active', 'rejected', 'deactivated']).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+  sort: z.enum(USER_SORT_KEYS).optional(),
+  dir: z.enum(['asc', 'desc']).optional(),
+});
 
 /** The body of `POST /users/{id}/approve`: the role to give, `user` when it is left out. */
 export const approveInput = z.strictObject({ role: roleKey.optional() });

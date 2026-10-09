@@ -24,12 +24,14 @@ import type { ApprovalService } from './service/approval.ts';
 import type { BootstrapService } from './service/bootstrap.ts';
 import type { OidcLinkService } from './service/oidc-link.ts';
 import type { OidcService } from './service/oidc.ts';
+import { loginErrorCode } from './service/oidc-errors.ts';
 import type { ProfileService } from './service/profile.ts';
 import type { RecoveryService } from './service/recovery.ts';
 import type { RoleService } from './service/roles.ts';
 import type { SessionAdminService } from './service/session-admin.ts';
 import type { SessionSummary } from './service/sessions.ts';
 import type { CreatedToken, TokenInfo, TokenService } from './service/tokens.ts';
+import type { AdminUser, UserAdminService } from './service/user-admin.ts';
 import {
   approveInput,
   assignRoleInput,
@@ -47,6 +49,7 @@ import {
   roleParam,
   rotateTokenInput,
   updateProfileInput,
+  userListQuery,
   verifyEmailInput,
 } from './validation.ts';
 
@@ -61,6 +64,7 @@ export interface IdentityRoutesServices {
   roles: RoleService;
   sessionAdmin: SessionAdminService;
   tokens: TokenService;
+  userAdmin: UserAdminService;
 }
 
 const userSchema = z.object({
@@ -68,7 +72,7 @@ const userSchema = z.object({
   username: z.string(),
   email: z.string().nullable(),
   emailVerified: z.boolean(),
-  status: z.enum(['pending', 'active', 'rejected']),
+  status: z.enum(['pending', 'active', 'rejected', 'deactivated']),
 });
 
 const idParam = z.object({ id: z.uuid() });
@@ -162,6 +166,66 @@ export const listPendingRoute = createRoute({
   responses: { 200: ok('Accounts waiting for approval.', listEnvelope(pendingUserSchema)) },
 });
 
+const adminUserSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  emailVerified: z.boolean(),
+  status: z.enum(['pending', 'active', 'rejected', 'deactivated']),
+  createdAt: z.iso.datetime(),
+});
+
+export const listUsersRoute = createRoute({
+  method: 'get',
+  path: '/users',
+  permission: 'core.identity.user.read',
+  request: { query: userListQuery },
+  responses: {
+    200: ok(
+      'The accounts, sorted by the chosen column and then by id. Without `status`: pending, active and deactivated ones; `rejected` lists the rejected (soft-deleted) ones.',
+      listEnvelope(adminUserSchema),
+    ),
+  },
+});
+
+export const getUserRoute = createRoute({
+  method: 'get',
+  path: '/users/{id}',
+  permission: 'core.identity.user.read',
+  request: { params: idParam },
+  responses: {
+    200: ok('One account.', adminUserSchema),
+    404: { description: 'No such user.' },
+  },
+});
+
+export const listUserRolesRoute = createRoute({
+  method: 'get',
+  path: '/users/{id}/roles',
+  permission: 'core.identity.user.read',
+  request: { params: idParam, query: paginationQuery() },
+  responses: {
+    200: ok('The role keys the user holds, by key.', listEnvelope(z.object({ key: z.string() }))),
+    403: { description: 'Needs `core.authz.role.read` too.' },
+    404: { description: 'No such user.' },
+  },
+});
+
+export const deactivateUserRoute = createRoute({
+  method: 'post',
+  path: '/users/{id}/deactivate',
+  permission: 'core.identity.user.deactivate',
+  audit: true,
+  request: { params: idParam },
+  responses: {
+    200: ok('The account is deactivated and every one of its sessions has ended.', adminUserSchema),
+    403: { description: 'Your own account.' },
+    404: { description: 'No such user.' },
+    409: { description: 'The account is not active, or it is the last Admin who can sign in.' },
+  },
+});
+
 const decision = z.object({ id: z.string(), status: z.enum(['pending', 'active', 'rejected']) });
 
 export const approveRoute = createRoute({
@@ -218,6 +282,42 @@ export const firstAdminRoute = createRoute({
 
 const startedSchema = z.object({ authorizationUrl: z.url() });
 
+export const bootstrapStatusRoute = createRoute({
+  method: 'get',
+  path: '/bootstrap/status',
+  public: true,
+  publicReason:
+    'The start page of a fresh install must know, before anybody can sign in, whether to offer the first-admin form. It answers one boolean, which is false for ever once an administrator exists; the form still needs the single-use token from the server console.',
+  responses: {
+    200: ok(
+      'Whether the instance has no administrator yet.',
+      z.object({ needsFirstAdmin: z.boolean() }),
+    ),
+  },
+});
+
+const publicProviderSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  /** SHA-256 of the icon file, shown at `GET /files/{hash}`; absent without an icon. */
+  iconHash: z.string().optional(),
+});
+
+export const listOidcProvidersRoute = createRoute({
+  method: 'get',
+  path: '/auth/oidc/providers',
+  public: true,
+  publicReason:
+    'The sign-in page lists the providers before anybody is signed in. It returns the id, the display name and the icon hash of each, which are what a button shows; the issuer and the client id stay private.',
+  request: { query: paginationQuery() },
+  responses: {
+    200: ok(
+      'The providers a person may sign in with, in the order of the setting.',
+      listEnvelope(publicProviderSchema),
+    ),
+  },
+});
+
 export const oidcStartRoute = createRoute({
   method: 'post',
   path: '/auth/oidc/{provider}/start',
@@ -258,13 +358,16 @@ export const oidcCallbackRoute = createRoute({
   responses: {
     302: {
       description:
-        'Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026).',
+        'A browser (it asks for `text/html`) is redirected when the sign-in failed too: to the sign-in page with `?error=<code>`, a fixed code (`account-pending`, `state-invalid`, `provider-denied`, `provider-unavailable`, `verification-failed`, `not-allowed`, `already-linked`), never text of the provider (ADR 0029). Signed in (or linked), with the session cookie set when signing in. When an account already holds the verified address the provider asserted, nothing is linked and nobody is signed in: the account holder is mailed a link, and the redirect goes to the sign-in page with `?notice=check-mail`, the same whether or not a mail was sent (ADR 0026).',
     },
     400: {
       description:
-        'The state is unknown, expired, used or from another browser, or the provider refused.',
+        'The state is unknown, expired, used or from another browser, or the provider refused. Answered to a client that does not ask for `text/html`; a browser is redirected (see 302).',
     },
-    401: { description: 'The id_token did not pass validation, or the account may not sign in.' },
+    401: {
+      description:
+        'The id_token did not pass validation, or the account may not sign in. Not for a browser (see 302).',
+    },
     403: { description: 'The account is waiting for approval.' },
     404: { description: 'No such sign-in provider.' },
     409: { description: 'The sign-in is already linked to an account.' },
@@ -672,6 +775,31 @@ export const rotateTokenRoute = createRoute({
   },
 });
 
+export const listUserTokensRoute = createRoute({
+  method: 'get',
+  path: '/users/{id}/tokens',
+  permission: 'core.identity.token.manage-any',
+  request: { params: idParam, query: paginationQuery() },
+  responses: {
+    200: ok(
+      "The user's open access tokens, without their secrets. A token is revoked with `DELETE /tokens/{id}`.",
+      listEnvelope(tokenSchema),
+    ),
+    403: { description: 'The caller is using an access token, not a session.' },
+    404: { description: 'No such user.' },
+  },
+});
+
+const adminUserView = (found: AdminUser) => ({
+  id: found.id,
+  username: found.username,
+  displayName: found.displayName,
+  email: found.email,
+  emailVerified: found.emailVerified,
+  status: found.status,
+  createdAt: found.createdAt.toISOString(),
+});
+
 const tokenView = (token: TokenInfo) => ({
   id: token.id,
   name: token.name,
@@ -698,7 +826,7 @@ const view = (user: {
   username: string;
   email: string | null;
   emailVerified: boolean;
-  status: 'pending' | 'active' | 'rejected';
+  status: 'pending' | 'active' | 'rejected' | 'deactivated';
 }) => ({
   id: user.id,
   username: user.username,
@@ -720,6 +848,7 @@ export function registerIdentityRoutes(
     roles,
     sessionAdmin,
     tokens,
+    userAdmin,
   }: IdentityRoutesServices,
 ) {
   r.internal(registerRoute, (async (c) => {
@@ -805,6 +934,44 @@ export function registerIdentityRoutes(
     );
   }) satisfies RouteHandler<typeof listPendingRoute, AppEnv>);
 
+  r.internal(listUsersRoute, (async (c) => {
+    const { dir, ...query } = c.req.valid('query');
+    const { users, total } = await userAdmin.list(c.get('actor'), { ...query, direction: dir });
+    return c.json(paginate(query, total, users.map(adminUserView)), 200);
+  }) satisfies RouteHandler<typeof listUsersRoute, AppEnv>);
+
+  // After `/users/pending` above: that path is not an id.
+  r.internal(getUserRoute, (async (c) => {
+    const found = await userAdmin.get(c.get('actor'), c.req.valid('param').id);
+    return c.json(adminUserView(found), 200);
+  }) satisfies RouteHandler<typeof getUserRoute, AppEnv>);
+
+  r.internal(listUserRolesRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const keys = await roles.rolesOf(c.get('actor'), c.req.valid('param').id);
+    const page = keys.slice(query.page * query.pageSize, (query.page + 1) * query.pageSize);
+    return c.json(
+      paginate(
+        query,
+        keys.length,
+        page.map((key) => ({ key })),
+      ),
+      200,
+    );
+  }) satisfies RouteHandler<typeof listUserRolesRoute, AppEnv>);
+
+  r.internal(listUserTokensRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const result = await tokens.listFor(c.get('actor'), c.req.valid('param').id, query);
+    c.header('cache-control', 'no-store');
+    return c.json(paginate(query, result.total, result.tokens.map(tokenView)), 200);
+  }) satisfies RouteHandler<typeof listUserTokensRoute, AppEnv>);
+
+  r.internal(deactivateUserRoute, (async (c) => {
+    const deactivated = await userAdmin.deactivate(c.get('actor'), c.req.valid('param').id);
+    return c.json(adminUserView(deactivated), 200);
+  }) satisfies RouteHandler<typeof deactivateUserRoute, AppEnv>);
+
   r.internal(approveRoute, (async (c) => {
     const { id } = c.req.valid('param');
     // The body is optional; `valid('json')` is `{}` for none.
@@ -844,6 +1011,19 @@ export function registerIdentityRoutes(
     return c.json({ user: view(admin) }, 201);
   }) satisfies RouteHandler<typeof firstAdminRoute, AppEnv>);
 
+  r.internal(bootstrapStatusRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json({ needsFirstAdmin: await bootstrap.needsFirstAdmin() }, 200);
+  }) satisfies RouteHandler<typeof bootstrapStatusRoute, AppEnv>);
+
+  r.internal(listOidcProvidersRoute, (async (c) => {
+    const query = c.req.valid('query');
+    const all = await oidc.listProviders();
+    const page = all.slice(query.page * query.pageSize, (query.page + 1) * query.pageSize);
+    c.header('cache-control', 'no-store');
+    return c.json(paginate(query, all.length, page), 200);
+  }) satisfies RouteHandler<typeof listOidcProvidersRoute, AppEnv>);
+
   r.internal(oidcStartRoute, (async (c) => {
     const started = await oidc.start(c.req.valid('param').provider);
     writeLoginCookie(c, started.cookie.value, started.cookie.maxAgeSeconds);
@@ -865,14 +1045,23 @@ export function registerIdentityRoutes(
     clearLoginCookie(c);
     c.header('cache-control', 'no-store');
     c.header('referrer-policy', 'no-referrer');
-    const done = await oidc.complete({
-      providerId: c.req.valid('param').provider,
-      state: query.state,
-      code: query.code,
-      error: query.error,
-      verifier,
-      previousSessionId: readSessionCookie(c),
-    });
+    let done;
+    try {
+      done = await oidc.complete({
+        providerId: c.req.valid('param').provider,
+        state: query.state,
+        code: query.code,
+        error: query.error,
+        verifier,
+        previousSessionId: readSessionCookie(c),
+      });
+    } catch (error) {
+      // A browser that came from the provider is sent to the sign-in page with a fixed code (ADR 0029);
+      // anything else (a script, a test client) keeps the problem answer. Nothing but the code leaves.
+      const code = loginErrorCode(error, query.error !== undefined);
+      if (code === undefined || !(c.req.header('accept') ?? '').includes('text/html')) throw error;
+      return c.redirect(oidc.loginErrorLanding(code), 302);
+    }
     // A re-authentication changes the session in the database; the browser keeps its cookie.
     if (done.kind === 'login') writeSessionCookie(c, done.sessionId, done.expiresAt);
     // Always a fixed page: no caller-supplied target, so no open redirect. A sign-in that found an

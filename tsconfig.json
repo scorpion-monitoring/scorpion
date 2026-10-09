@@ -26,6 +26,9 @@
       "path": "./modules/core-settings"
     },
     {
+      "path": "./modules/core-ui-shell"
+    },
+    {
       "path": "./packages/contracts"
     },
     {

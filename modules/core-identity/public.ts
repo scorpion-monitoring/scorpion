@@ -2,7 +2,7 @@
 import type { Actor } from '@scorpion/contracts';
 import type { CreateUserInput } from './validation.ts';
 
-export type UserStatus = 'pending' | 'active' | 'rejected';
+export type UserStatus = 'pending' | 'active' | 'rejected' | 'deactivated';
 
 /** A user as other modules see them. Never holds a password hash, a secret or an internal flag. */
 export interface User {
