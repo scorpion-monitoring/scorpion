@@ -114,7 +114,11 @@ describe('the full journey of M4', () => {
     });
     expect(byAction.get('authz.role.permissions.changed@1')).toMatchObject({
       subjectId: 'reviewer',
-      payload: { added: ['core.audit.read', 'core.identity.me.read'], removed: [] },
+      payload: {
+        added: ['core.audit.read', 'core.identity.me.read'],
+        // The default grant of registry.organisations (the test profile has it) is not in the list.
+        removed: ['registry.organisations.organisation.read'],
+      },
     });
     expect(byAction.get('settings.changed@1')).toMatchObject({
       subjectId: 'core.notifications',

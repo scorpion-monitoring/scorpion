@@ -89,7 +89,7 @@ describe('list', () => {
 });
 
 describe('get', () => {
-  it('shows a plain user the descriptive fields and hides the contact point and the audit columns', async () => {
+  it('shows a plain user the descriptive fields and the contact point (setting on) but not the audit columns', async () => {
     const { organisations, pool, user } = await setup();
     const row = await makeOrganisation(pool, {
       description: 'text',
@@ -109,7 +109,8 @@ describe('get', () => {
       typeKnown: true,
       memberCount: 0,
     });
-    for (const hidden of ['contactEmail', 'contactType', 'createdBy', 'updatedBy']) {
+    expect(got).toMatchObject({ contactEmail: 'info@example.org', contactType: 'support' });
+    for (const hidden of ['createdBy', 'updatedBy', 'logoUrl']) {
       expect(got).not.toHaveProperty(hidden);
     }
   });
@@ -521,11 +522,11 @@ describe('the table', () => {
 });
 
 describe('the contributed permissions', () => {
-  it('gives the role user read and keeps manage with Admin; the role reviewer gets nothing from this module', async () => {
+  it('gives the role user read and keeps manage with Admin; the role reviewer reads too but cannot manage', async () => {
     const { authz, user, admin, actor } = await setup();
     const reviewer = await actor('reviewer');
     expect(await authz.can(user, 'registry.organisations.organisation.read')).toBe(true);
-    expect(await authz.can(reviewer, 'registry.organisations.organisation.read')).toBe(false);
+    expect(await authz.can(reviewer, 'registry.organisations.organisation.read')).toBe(true);
     expect(await authz.can(user, 'registry.organisations.organisation.manage')).toBe(false);
     expect(await authz.can(reviewer, 'registry.organisations.organisation.manage')).toBe(false);
     expect(await authz.can(admin, 'registry.organisations.organisation.manage')).toBe(true);

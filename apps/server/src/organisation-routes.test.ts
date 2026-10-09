@@ -2,9 +2,10 @@
 // mapping) over real Postgres. The denied cases of every route are in
 // defect-01.privilege-escalation.test.ts. Each answer is also parsed with the response schema of its
 // route, so the generated OpenAPI document and the real answer cannot differ.
+import { createApiClient, unwrap, type ApiClient } from '@scorpion/contracts/client';
 import { generateOpenApiDocument, type AppRoute } from '@scorpion/contracts';
 import { defineModule } from '@scorpion/kernel';
-import { makeOrganisation } from '@scorpion/testing';
+import { JPEG_EXIF_MARK, makeJpegWithExif, makeOrganisation, makePng } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { SURFACE_PREFIX } from './app.ts';
 import { useIdentityApp, type Reply } from './testing/identity-app.ts';
@@ -102,8 +103,24 @@ describe('GET /organisations', () => {
   });
 });
 
+/** Saves `organisation.exposeContactPoint` through the generic settings route, as an administrator would. */
+async function setExposeContactPoint(
+  s: Started,
+  root: { cookie: string; csrf: string },
+  value: boolean,
+) {
+  const current = (await s.get('/settings/registry.organisations', as(root))).body as {
+    version: number;
+  };
+  const saved = await s.call('PUT', '/settings/registry.organisations', {
+    ...as(root),
+    body: { version: current.version, values: { exposeContactPoint: value } },
+  });
+  expect(saved.status).toBe(200);
+}
+
 describe('GET /organisations/{id}', () => {
-  it('shows a plain user the record without the contact point, and an administrator all of it', async () => {
+  it('shows a plain user the record with the contact point while the setting is on, and without it when it is off; an administrator always sees all of it', async () => {
     const s = await start();
     const root = await admin(s);
     const user = await s.signedIn('plain');
@@ -120,9 +137,14 @@ describe('GET /organisations/{id}', () => {
       id: row.id,
       rorId: '02skbsp27',
       sameAs: ['https://a.org'],
+      contactEmail: 'info@example.org',
     });
-    expect(JSON.stringify(asUser.body)).not.toMatch(/info@example\.org|contactEmail|createdBy/);
+    expect(JSON.stringify(asUser.body)).not.toMatch(/createdBy|logoUrl/);
     conforms(s, asUser, 'GET', '/organisations/{id}');
+    await setExposeContactPoint(s, root, false);
+    const hidden = await s.get(`/organisations/${row.id}`, as(user));
+    expect(JSON.stringify(hidden.body)).not.toMatch(/info@example\.org|contactEmail|createdBy/);
+    conforms(s, hidden, 'GET', '/organisations/{id}');
     const asAdmin = await s.get(`/organisations/${row.id}`, as(root));
     expect(asAdmin.body).toMatchObject({
       contactEmail: 'info@example.org',
@@ -382,6 +404,238 @@ describe('a module that contributes to the registries, through the whole app', (
   });
 });
 
+describe('GET /organisations/{id}/schema-org', () => {
+  it('answers JSON-LD with the right media type, a private cache header and the shape of the OpenAPI route', async () => {
+    const s = await start();
+    const user = await s.signedIn('plain');
+    const row = await makeOrganisation(s.kernel.pool, {
+      abbreviation: 'IPK',
+      name: 'Leibniz </script> Institute',
+      website: 'https://ipk.example.org',
+      rorId: '02skbsp27',
+    });
+    const reply = await s.get(`/organisations/${row.id}/schema-org`, as(user));
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('content-type')).toBe('application/ld+json; charset=utf-8');
+    expect(reply.res.headers.get('cache-control')).toBe('private, no-cache');
+    expect(reply.bytes.toString()).not.toContain('<'); // serializeJsonLd, also for the API
+    expect(reply.body).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      '@id': `${s.kernel.config.ORIGIN}/organisations/${row.id}`,
+      name: 'Leibniz </script> Institute',
+      alternateName: 'IPK',
+      url: 'https://ipk.example.org',
+    });
+    // The route's own schema accepts the answer, and the answer holds no property outside it.
+    const found = s.kernel.routes.find(
+      ({ route }) => route.path === '/organisations/{id}/schema-org',
+    )!;
+    const schema = (
+      found.route.responses as Record<
+        number,
+        { content: Record<string, { schema: { safeParse(v: unknown): { success: boolean } } }> }
+      >
+    )[200]!.content['application/ld+json']!.schema;
+    expect(schema.safeParse(reply.body).success).toBe(true);
+  });
+
+  it('builds the URLs below the base path of the instance', async () => {
+    const s = await start({ basePath: '/a/b' });
+    const user = await s.signedIn('plain');
+    const row = await makeOrganisation(s.kernel.pool, { logoBlobId: null, logoHash: null });
+    const reply = await s.get(`/organisations/${row.id}/schema-org`, as(user));
+    expect((reply.body as { '@id': string })['@id']).toBe(
+      `${s.kernel.config.ORIGIN}/a/b/organisations/${row.id}`,
+    );
+  });
+
+  it('shows the contact point to an administrator, to a plain user while the setting is on, and hides it when it is off', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const user = await s.signedIn('plain');
+    const row = await makeOrganisation(s.kernel.pool, {
+      contactEmail: 'info@example.org',
+      contactType: 'support',
+    });
+    const path = `/organisations/${row.id}/schema-org`;
+    const contactOf = async (who: { cookie: string; csrf: string }) =>
+      (await s.get(path, as(who))).body as { contactPoint?: unknown };
+    expect((await contactOf(user)).contactPoint).toEqual({
+      '@type': 'ContactPoint',
+      email: 'info@example.org',
+      contactType: 'support',
+    });
+    await setExposeContactPoint(s, root, false);
+    const plain = await s.get(path, as(user));
+    expect(plain.bytes.toString()).not.toContain('info@example.org');
+    expect(plain.body).not.toHaveProperty('contactPoint');
+    expect((await contactOf(root)).contactPoint).toBeDefined();
+    await setExposeContactPoint(s, root, true);
+    expect((await contactOf(user)).contactPoint).toBeDefined();
+  });
+
+  it('answers 404 for an unknown id, 422 for a malformed one and 401 without a session', async () => {
+    const s = await start();
+    const user = await s.signedIn('plain');
+    const missing = await s.get(
+      '/organisations/018f3b7e-0000-7000-8000-000000000000/schema-org',
+      as(user),
+    );
+    expect(missing.status).toBe(404);
+    expect(missing.res.headers.get('content-type')).toMatch(/application\/problem\+json/);
+    expect((await s.get('/organisations/nope/schema-org', as(user))).status).toBe(422);
+    const row = await makeOrganisation(s.kernel.pool);
+    expect((await s.get(`/organisations/${row.id}/schema-org`)).status).toBe(401);
+  });
+
+  it('is readable through the typed client, which returns the parsed JSON', async () => {
+    const s = await start();
+    const user = await s.signedIn('plain');
+    const row = await makeOrganisation(s.kernel.pool, { abbreviation: 'IPK', name: 'Leibniz' });
+    const api: ApiClient = createApiClient({
+      basePath: '/',
+      origin: 'http://api.test',
+      fetch: async (input, init) => {
+        const request = new Request(input, init);
+        const reply = await s.get(
+          new URL(request.url).pathname.replace('/api/internal', ''),
+          as(user),
+        );
+        return new Response(new Uint8Array(reply.bytes), {
+          status: reply.status,
+          headers: reply.res.headers,
+        });
+      },
+    });
+    const profile = await unwrap(
+      api.GET('/organisations/{id}/schema-org', { params: { path: { id: row.id } } }),
+    );
+    expect(profile).toMatchObject({
+      '@type': 'Organization',
+      name: 'Leibniz',
+      alternateName: 'IPK',
+    });
+  });
+});
+
+describe('PUT and DELETE /organisations/{id}/logo', () => {
+  const MiB = 1024 * 1024;
+  const upload = (
+    s: Started,
+    who: { cookie: string; csrf: string },
+    id: string,
+    body: Uint8Array,
+  ) => s.call('PUT', `/organisations/${id}/logo`, { ...as(who), body });
+  const stored = async (s: Started) =>
+    (
+      await s.kernel.pool.query<{ hash: string; data: Buffer; held: boolean }>(
+        'select hash, data, unreferenced_since is null as held from blob_blob order by created_at',
+      )
+    ).rows;
+
+  it('lets an administrator upload, replace and remove a logo, and serves the file', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const row = await makeOrganisation(s.kernel.pool);
+    const first = await upload(s, root, row.id, makePng(24));
+    expect(first.status).toBe(200);
+    const { logoUrl } = first.body as { logoUrl: string };
+    expect(logoUrl).toMatch(/^\/api\/internal\/files\/[0-9a-f]{64}$/);
+    conforms(s, first, 'PUT', '/organisations/{id}/logo');
+    const file = await s.get(logoUrl.replace('/api/internal', ''));
+    expect(file.status).toBe(200);
+    expect(file.res.headers.get('content-type')).toBe('image/png');
+    // It shows in the record and in the profile, below the base path.
+    expect((await s.get(`/organisations/${row.id}`, as(root))).body).toMatchObject({ logoUrl });
+    const profile = (await s.get(`/organisations/${row.id}/schema-org`, as(root))).body as {
+      logo: { url: string };
+    };
+    expect(profile.logo.url).toBe(`${s.kernel.config.ORIGIN}${logoUrl}`);
+
+    const second = await upload(s, root, row.id, makePng(32));
+    expect((second.body as { logoUrl: string }).logoUrl).not.toBe(logoUrl);
+    expect((await stored(s)).map((blob) => blob.held)).toEqual([false, true]);
+
+    const removed = await s.call('DELETE', `/organisations/${row.id}/logo`, as(root));
+    expect(removed.status).toBe(200);
+    expect(removed.body).not.toHaveProperty('logoUrl');
+    conforms(s, removed, 'DELETE', '/organisations/{id}/logo');
+    expect((await stored(s)).every((blob) => !blob.held)).toBe(true);
+    expect((await s.call('DELETE', `/organisations/${row.id}/logo`, as(root))).status).toBe(404);
+  });
+
+  it('strips the EXIF of a JPEG and sanitises an SVG with a script', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const row = await makeOrganisation(s.kernel.pool);
+    expect((await upload(s, root, row.id, makeJpegWithExif())).status).toBe(200);
+    expect((await stored(s))[0]!.data.toString('latin1')).not.toContain(JPEG_EXIF_MARK);
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><rect width="4" height="4"/></svg>',
+    );
+    expect((await upload(s, root, row.id, svg)).status).toBe(200);
+    expect((await stored(s))[1]!.data.toString()).not.toMatch(/script|alert|onload/);
+  });
+
+  it('refuses a text file named .png (422) and keeps the old logo', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const row = await makeOrganisation(s.kernel.pool);
+    const first = await upload(s, root, row.id, makePng(24));
+    const bad = await s.call('PUT', `/organisations/${row.id}/logo`, {
+      ...as(root),
+      headers: { 'content-type': 'image/png' },
+      body: Buffer.from('<html>logo.png</html>'),
+    });
+    expect(bad.status).toBe(422);
+    expect(bad.res.headers.get('content-type')).toMatch(/problem\+json/);
+    expect((await s.get(`/organisations/${row.id}`, as(root))).body).toMatchObject({
+      logoUrl: (first.body as { logoUrl: string }).logoUrl,
+    });
+  });
+
+  it('refuses a body above the upload ceiling (413) and stores nothing', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const row = await makeOrganisation(s.kernel.pool);
+    expect((await upload(s, root, row.id, new Uint8Array(8 * MiB + 1))).status).toBe(413);
+    expect(await stored(s)).toEqual([]);
+  });
+
+  it('answers 404 for an unknown organisation and 422 for a malformed id', async () => {
+    const s = await start();
+    const root = await admin(s);
+    expect((await upload(s, root, '018f3b7e-0000-7000-8000-000000000000', makePng())).status).toBe(
+      404,
+    );
+    expect((await upload(s, root, 'nope', makePng())).status).toBe(422);
+    expect(await stored(s)).toEqual([]);
+  });
+
+  it('is denied to a plain user (403, no file stored) and to nobody signed in (401)', async () => {
+    const s = await start();
+    const user = await s.signedIn('plain');
+    const row = await makeOrganisation(s.kernel.pool);
+    expect((await upload(s, user, row.id, makePng())).status).toBe(403);
+    expect((await s.call('DELETE', `/organisations/${row.id}/logo`, as(user))).status).toBe(403);
+    expect(await stored(s)).toEqual([]);
+    expect((await s.call('PUT', `/organisations/${row.id}/logo`, { body: makePng() })).status).toBe(
+      401,
+    );
+  });
+
+  it('releases the logo when the organisation is deleted', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const row = await makeOrganisation(s.kernel.pool);
+    await upload(s, root, row.id, makePng(24));
+    expect((await s.call('DELETE', `/organisations/${row.id}`, as(root))).status).toBe(204);
+    expect((await stored(s)).every((blob) => !blob.held)).toBe(true);
+    expect((await s.kernel.pool.query('select 1 from blob_reference')).rows).toEqual([]);
+  });
+});
+
 describe('the OpenAPI document', () => {
   it('lists the organisation routes under the internal prefix with their permissions', async () => {
     const s = await start();
@@ -393,7 +647,11 @@ describe('the OpenAPI document', () => {
       '/api/internal/organisation-types',
       '/api/internal/organisations',
       '/api/internal/organisations/{id}',
+      '/api/internal/organisations/{id}/logo',
+      '/api/internal/organisations/{id}/schema-org',
     ]);
+    const profile = document.paths?.['/api/internal/organisations/{id}/schema-org']?.get;
+    expect(JSON.stringify(profile)).toContain('application/ld+json');
     expect(document.paths?.['/api/internal/organisations']?.post).toMatchObject({
       'x-permission': 'registry.organisations.organisation.manage',
     });

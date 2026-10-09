@@ -3,8 +3,9 @@
 // jobs and the migration tool. Every method takes the `actor` and checks the permission first.
 import { Conflict, DomainError, Invalid, NotFound, z, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import { ids, type Db, type DbTx, type ModuleContext } from '@scorpion/kernel';
-import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
+import type { BlobService } from '@scorpion/core-blob/public';
+import { ids, mountPath, type Db, type DbTx, type ModuleContext } from '@scorpion/kernel';
+import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { organisation } from '../db/schema.ts';
 import { OrganisationInUse } from './errors.ts';
 import { escapeLike } from './fields.ts';
@@ -16,6 +17,8 @@ import {
   type CreateOrganisationInput,
   type UpdateOrganisationInput,
 } from './input.ts';
+import { settingsSchema } from '../settings-schema.ts';
+import { toSchemaOrg, type SchemaOrgProfile } from './schema-org.ts';
 import {
   ORG_TYPE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -25,6 +28,14 @@ import {
 
 export const PERMISSION_READ = 'registry.organisations.organisation.read';
 export const PERMISSION_MANAGE = 'registry.organisations.organisation.manage';
+/** Scoped to `organisation`: Admin everywhere; sprint 3 adds the managers of the organisation. */
+export const PERMISSION_READ_CONTACT = 'registry.organisations.organisation.read-contact';
+/** The resource type of the scoped permissions of this module. */
+export const RESOURCE_TYPE = 'organisation';
+
+/** The reference that keeps a logo alive in `core.blob`: owner, purpose, organisation. */
+export const logoReference = (organisationId: string) =>
+  `registry.organisations:logo:${organisationId}`;
 
 type Row = typeof organisation.$inferSelect;
 
@@ -44,7 +55,12 @@ export interface OrganisationView extends OrganisationSummary {
   website: string | null;
   rorId: string | null;
   sameAs: string[];
-  /** Only for a reader who may see the contact point (sprint 1: an Admin; sprint 2 widens it). */
+  /**
+   * The logo as a path below the base path (`/api/internal/files/{hash}`); absent without a logo.
+   * The file is public by its hash.
+   */
+  logoUrl?: string;
+  /** Only for a reader who may see the contact point (see `canSeeContact`). */
   contactEmail?: string | null;
   contactType?: string | null;
   createdAt: Date;
@@ -63,6 +79,17 @@ export interface TypeView {
   order: number;
 }
 
+/**
+ * What a trusted caller (M7, M8) gets: the descriptive fields. No contact point, no audit columns, no
+ * logo hash: a trusted read cannot leak what an organisation keeps from other readers.
+ */
+export interface OrganisationRecord extends OrganisationSummary {
+  description: string | null;
+  website: string | null;
+  rorId: string | null;
+  sameAs: string[];
+}
+
 export interface ListFilter {
   q?: string | undefined;
   type?: string | undefined;
@@ -79,6 +106,30 @@ export interface OrganisationsService {
   update: (actor: Actor, id: string, input: UpdateOrganisationInput) => Promise<OrganisationView>;
   delete: (actor: Actor, id: string) => Promise<void>;
   listTypes: (actor: Actor, locale?: string) => Promise<TypeView[]>;
+  /**
+   * The Schema.org profile of an organisation for a reader: the contact point only when
+   * `canSeeContact` says so. Needs `…organisation.read`.
+   */
+  schemaOrg: (actor: Actor, id: string) => Promise<SchemaOrgProfile>;
+  /** Needs `…organisation.manage` (sprint 4: or `…organisation.edit`). `bytes` is the raw image. */
+  setLogo: (actor: Actor, id: string, bytes: Uint8Array) => Promise<OrganisationView>;
+  /** Needs `…organisation.manage`. `NotFound` when there is no logo. */
+  clearLogo: (actor: Actor, id: string) => Promise<OrganisationView>;
+
+  // Trusted reads for other modules (ADR-0015): no permission check, no caller named. A route that
+  // uses one must check the permission itself.
+  findByIdsAsSystem: (ids: readonly string[]) => Promise<OrganisationRecord[]>;
+  findByAbbreviationAsSystem: (
+    type: string,
+    abbreviation: string,
+  ) => Promise<OrganisationRecord | undefined>;
+  existsAsSystem: (id: string) => Promise<boolean>;
+  listTypesAsSystem: () => Promise<TypeView[]>;
+  /** `undefined` for an unknown id. `includeContact` defaults to `false`: a trusted caller leaks nothing. */
+  toSchemaOrgAsSystem: (
+    id: string,
+    options?: { includeContact?: boolean },
+  ) => Promise<SchemaOrgProfile | undefined>;
 }
 
 const CONSTRAINT_FIELDS: Record<string, string> = {
@@ -107,6 +158,7 @@ class Duplicate extends DomainError {
 
 export interface OrganisationsDeps {
   authz: Pick<AuthzService, 'require' | 'can'>;
+  blob: Pick<BlobService, 'put' | 'setReference'>;
 }
 
 export function createOrganisationsService(
@@ -127,6 +179,28 @@ export function createOrganisationsService(
   }
   const usages = ctx.registry(ORG_USAGE_REGISTRY) as readonly OrgUsageEntry[];
 
+  const base = mountPath(ctx.config);
+  const logoPath = (hash: string) => `${base}/api/internal/files/${hash}`;
+  const record = (row: Row): OrganisationRecord => ({
+    ...summary(row),
+    description: row.description,
+    website: row.website,
+    rorId: row.rorId,
+    sameAs: row.sameAs,
+  });
+
+  /**
+   * Who sees the contact point (plan §6 item 6): whoever holds `…read-contact` on the organisation
+   * (Admin now; sprint 3's policy adds its managers), and every other signed-in person while the
+   * setting `organisation.exposeContactPoint` is on. The caller has passed `…organisation.read`.
+   */
+  async function canSeeContact(actor: Actor, id: string): Promise<boolean> {
+    if (await deps.authz.can(actor, PERMISSION_READ_CONTACT, { type: RESOURCE_TYPE, id })) {
+      return true;
+    }
+    return settingsSchema.parse(await ctx.settings.get()).exposeContactPoint;
+  }
+
   const summary = (row: Row): OrganisationSummary => ({
     id: row.id,
     type: row.type,
@@ -138,20 +212,23 @@ export function createOrganisationsService(
   });
 
   async function view(actor: Actor, row: Row): Promise<OrganisationView> {
-    // Sprint 1: the contact point and the audit columns are for administrators. Sprint 2 widens the
-    // contact point (setting and managers); the columns stay Admin only (ADR-0033, field table).
-    const admin = await deps.authz.can(actor, PERMISSION_MANAGE);
+    // The audit columns are for administrators; the contact point follows `canSeeContact`
+    // (ADR-0033, field table).
+    const [admin, contact] = await Promise.all([
+      deps.authz.can(actor, PERMISSION_MANAGE),
+      canSeeContact(actor, row.id),
+    ]);
     return {
       ...summary(row),
       description: row.description,
       website: row.website,
       rorId: row.rorId,
       sameAs: row.sameAs,
+      ...(row.logoHash && { logoUrl: logoPath(row.logoHash) }),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      ...(contact && { contactEmail: row.contactEmail, contactType: row.contactType }),
       ...(admin && {
-        contactEmail: row.contactEmail,
-        contactType: row.contactType,
         createdBy: row.createdBy,
         updatedBy: row.updatedBy,
       }),
@@ -178,6 +255,39 @@ export function createOrganisationsService(
     for (const entry of usages)
       if ((await entry.count(tx, organisationId)) > 0) used.push(entry.id);
     return used;
+  }
+
+  function typeViews(locale: string): TypeView[] {
+    return [...types.values()]
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+      .map((entry) => ({
+        id: entry.id,
+        label: (entry.labels as Record<string, string | undefined>)[locale] ?? entry.labels.en,
+        labels: entry.labels,
+        membership: entry.membership,
+        schemaType: entry.schemaType,
+        order: entry.order,
+      }));
+  }
+
+  /** The profile of a row. A type that is no longer registered falls back to `Organization`. */
+  function profile(row: Row, includeContact: boolean): SchemaOrgProfile {
+    return toSchemaOrg(
+      {
+        id: row.id,
+        schemaType: types.get(row.type)?.schemaType ?? 'Organization',
+        abbreviation: row.abbreviation,
+        name: row.name,
+        description: row.description,
+        website: row.website,
+        rorId: row.rorId,
+        sameAs: row.sameAs,
+        logoHash: row.logoHash,
+        contactEmail: row.contactEmail,
+        contactType: row.contactType,
+      },
+      { origin: ctx.config.ORIGIN, basePath: base, includeContact },
+    );
   }
 
   /** In sprints 1 to 3 both kinds of access need `manage`; sprint 4 lets the managers pass `edit`. */
@@ -352,8 +462,10 @@ export function createOrganisationsService(
         const current = await load(tx, id, true);
         const used = await usedBy(tx, id);
         if (used.length > 0) throw new OrganisationInUse(used);
-        // By id and nothing else. Sprint 2 releases the logo here and sprint 3 removes the memberships.
+        // By id and nothing else. The logo is released here, so a rollback keeps it; sprint 3 removes
+        // the memberships in this transaction too.
         await tx.delete(organisation).where(eq(organisation.id, id));
+        if (current.logoBlobId) await deps.blob.setReference(logoReference(id), null);
         await ctx.events.emit('registry.organisation.deleted@1', {
           organisationId: id,
           type: current.type,
@@ -364,16 +476,118 @@ export function createOrganisationsService(
 
     async listTypes(actor, locale = 'en') {
       await deps.authz.require(actor, PERMISSION_READ);
-      return [...types.values()]
-        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
-        .map((entry) => ({
-          id: entry.id,
-          label: (entry.labels as Record<string, string | undefined>)[locale] ?? entry.labels.en,
-          labels: entry.labels,
-          membership: entry.membership,
-          schemaType: entry.schemaType,
-          order: entry.order,
-        }));
+      return typeViews(locale);
+    },
+
+    async schemaOrg(actor, id) {
+      await deps.authz.require(actor, PERMISSION_READ);
+      requireId(id);
+      const row = await load(db, id);
+      return profile(row, await canSeeContact(actor, id));
+    },
+
+    async setLogo(actor, id, bytes) {
+      // The permission first, so a caller without it leaves no file behind.
+      await requireAccess(actor, 'edit');
+      requireId(id);
+      await load(db, id); // an unknown organisation stores no file either
+      const stored = await deps.blob.put(actor, bytes);
+      const row = await db.tx(async (tx) => {
+        const current = await load(tx, id, true);
+        if (current.logoBlobId === stored.id) return current; // the same image: nothing changes
+        const [updated] = await tx
+          .update(organisation)
+          .set({
+            logoBlobId: stored.id,
+            logoHash: stored.hash,
+            updatedAt: new Date(),
+            updatedBy: actorId(actor),
+          })
+          .where(eq(organisation.id, id))
+          .returning();
+        // Releases the old file and holds the new one, inside this transaction: if the event cannot
+        // be stored the reference and the columns roll back together.
+        await deps.blob.setReference(logoReference(id), stored.id);
+        await ctx.events.emit('registry.organisation.updated@1', {
+          organisationId: id,
+          fields: ['logo'],
+          by: 'admin',
+          actorId: actorId(actor),
+        });
+        return updated!;
+      });
+      return view(actor, row);
+    },
+
+    async clearLogo(actor, id) {
+      await requireAccess(actor, 'edit');
+      requireId(id);
+      const row = await db.tx(async (tx) => {
+        const current = await load(tx, id, true);
+        if (!current.logoBlobId) throw new NotFound('The organisation has no logo.');
+        const [updated] = await tx
+          .update(organisation)
+          .set({
+            logoBlobId: null,
+            logoHash: null,
+            updatedAt: new Date(),
+            updatedBy: actorId(actor),
+          })
+          .where(eq(organisation.id, id))
+          .returning();
+        await deps.blob.setReference(logoReference(id), null);
+        await ctx.events.emit('registry.organisation.updated@1', {
+          organisationId: id,
+          fields: ['logo'],
+          by: 'admin',
+          actorId: actorId(actor),
+        });
+        return updated!;
+      });
+      return view(actor, row);
+    },
+
+    async findByIdsAsSystem(wanted) {
+      const valid = [...new Set(wanted)].filter((id) => z.uuid().safeParse(id).success);
+      if (valid.length === 0) return [];
+      const rows = await db
+        .select()
+        .from(organisation)
+        .where(inArray(organisation.id, valid))
+        .orderBy(asc(organisation.id));
+      return rows.map(record);
+    },
+
+    async findByAbbreviationAsSystem(type, abbreviation) {
+      const [row] = await db
+        .select()
+        .from(organisation)
+        .where(
+          and(
+            eq(organisation.type, type),
+            sql`lower(${organisation.abbreviation}) = lower(${abbreviation})`,
+          ),
+        );
+      return row && record(row);
+    },
+
+    async existsAsSystem(id) {
+      if (!z.uuid().safeParse(id).success) return false;
+      const [row] = await db
+        .select({ id: organisation.id })
+        .from(organisation)
+        .where(eq(organisation.id, id));
+      return row !== undefined;
+    },
+
+    listTypesAsSystem() {
+      return Promise.resolve(typeViews('en'));
+    },
+
+    async toSchemaOrgAsSystem(id, options) {
+      if (!z.uuid().safeParse(id).success) return undefined;
+      const [row] = await db.select().from(organisation).where(eq(organisation.id, id));
+      return row && profile(row, options?.includeContact ?? false);
     },
   };
 }

@@ -13,7 +13,7 @@ import { createIdentityModule } from '@scorpion/core-identity/module';
 import identityPackage from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
-import { createSettingsModule } from '@scorpion/core-settings/module';
+import { createSettingsModule, type SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import {
   createKernel,
@@ -54,6 +54,8 @@ export interface OrganisationsStarted {
   authz: AuthzService;
   /** A signed-in-looking actor for a new user who holds the given roles (rows in the database, so the real authoriser decides). */
   actor: (...roles: string[]) => Promise<UserActor>;
+  /** Saves the settings of registry.organisations (the whole object) as an administrator would. */
+  configure: (values: Record<string, unknown>) => Promise<void>;
   /** Delivers every pending outbox event. */
   dispatch: () => Promise<void>;
   /** The events in the outbox (name and payload), oldest first. */
@@ -153,21 +155,31 @@ export function useOrganisations(): OrganisationsHarness {
     async start(options) {
       const kernel = await build(options);
       await kernel.start();
+      const actor: OrganisationsStarted['actor'] = async (...roles) => {
+        const user = await makeUser(kernel.pool);
+        for (const role of roles) await makeRoleAssignment(kernel.pool, user, role);
+        return {
+          kind: 'user',
+          userId: user.id,
+          username: user.username,
+          roles: [],
+          via: 'session',
+        };
+      };
       return {
         kernel,
         pool: kernel.pool,
         organisations: kernel.services.get('registry.organisations') as OrganisationsService,
         authz: kernel.services.get('core.authz') as AuthzService,
-        async actor(...roles) {
-          const user = await makeUser(kernel.pool);
-          for (const role of roles) await makeRoleAssignment(kernel.pool, user, role);
-          return {
-            kind: 'user',
-            userId: user.id,
-            username: user.username,
-            roles: [],
-            via: 'session',
-          };
+        actor,
+        async configure(values) {
+          const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
+          const admin = await actor('admin');
+          const current = await settings.settings.get(admin, 'registry.organisations');
+          await settings.settings.update(admin, 'registry.organisations', {
+            version: current.version,
+            values,
+          });
         },
         async dispatch() {
           while ((await kernel.dispatcher.dispatchOnce()) > 0) {

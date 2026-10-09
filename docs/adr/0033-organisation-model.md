@@ -1,6 +1,6 @@
 # ADR-0033: the organisation model
 
-- Status: Accepted (the sections marked _to be finished_ are decided here and completed in the sprint named)
+- Status: Accepted (the sections marked _to be finished_ are decided here and completed in the sprint named; the Schema.org profile, the logo and the contact point were completed in sprint 2, apart from what sprint 4 adds)
 - Date: 2026-10-09
 
 ## Context
@@ -41,21 +41,44 @@ data, whereas the name is free text that organisations reword. Hierarchy (`paren
 ### Schema.org profile
 
 One pure function maps the record to a schema.org `Organization` (mapping table in the sprint plan, §3); the API route, the detail
-page and later the public API use only that function. Properties without a value are omitted. _To be finished in sprint 2 (builder,
-route and the escaping function `serializeJsonLd`) and sprint 4 (the one audited `{@html}` component for the JSON-LD block)._
+page and later the public API use only that function (`toSchemaOrg`, in `service/schema-org.ts`, takes the origin and the base path as
+arguments). Properties without a value are omitted.
+
+The profile has a dedicated route, `GET /organisations/{id}/schema-org` (`application/ld+json`), not content negotiation on
+`GET /organisations/{id}`: `createRoute()` declares one media type per response, and the OpenAPI document, the typed client and the
+response walker are built from that. The route needs `…organisation.read` (every signed-in person, no anonymous access in M6) and
+answers `Cache-Control: private, no-cache`, because the contact point depends on the reader. `createRoute()` expresses the media type
+as the route of the audit CSV does; nothing changed in `packages/contracts`.
+
+`serializeJsonLd(value)` is the only function that turns the profile into a string: `JSON.stringify`, then `<`, `>`, `&`, U+2028
+and U+2029 are written as `\uXXXX`. The output has no `<` (so no `</script>`, `<script` or `<!--`), is valid JSON and parses back to
+the same value; a lone surrogate is already escaped by `JSON.stringify`. The route uses it too, so the API answer and the page block
+cannot differ. _Sprint 4 adds the one audited `{@html}` component for the JSON-LD block (Decision 17) and finishes this section._
 
 ### Logo
 
 A module stores an image through its own route, its own permission and the blob service of `core.blob`; `POST /files` and
-`core.blob.manage` stay for the branding logos. The columns `logo_blob_id` and `logo_hash` exist from sprint 1 and stay unused until
-sprint 2, which adds `PUT` and `DELETE /organisations/{id}/logo` with `setReference` on replace and delete. _To be finished in sprint 2._
+`core.blob.manage` stay for the branding logos; nothing changed in `core.blob`. `PUT` and `DELETE /organisations/{id}/logo` take the
+raw image (`maxBodyBytes` is the ceiling of `core.blob`, `rateLimit: 'strict'`, audited) and need `…organisation.manage` (sprint 4: the
+scoped `…organisation.edit`, checked in the service). The service checks the permission first, so a denied caller leaves no file,
+then calls `blob.put` (re-encoded raster or sanitised SVG, else 422), then in one transaction sets `logo_blob_id` and `logo_hash`, calls
+`blob.setReference('registry.organisations:logo:<organisation id>', blobId)` and emits `registry.organisation.updated@1` with the
+field name `logo`. If that transaction fails the new file is unreferenced and the hourly cleanup removes it after the grace period
+(ADR-0018). A replacement releases the old file through `setReference`; deleting the logo or the organisation releases the reference
+in the same transaction. The same image again changes nothing and emits nothing. `GET /organisations/{id}` shows `logoUrl`
+(`<base path>/api/internal/files/{hash}`); the module never serves bytes, and the logo is public by its hash.
 
 ### Contact point
 
 The contact address is the organisation's role address, not a user's address; it belongs to no account and is never a mail recipient.
 It is read by administrators and the organisation's managers always, and by other signed-in persons when the setting
-`organisation.exposeContactPoint` is on (default on). It is never in a list row, an event, an audit entry, a log line or a mail.
-_To be finished in sprint 2 (the visibility check) and sprint 4 (the field table in `authorization.md`)._
+`organisation.exposeContactPoint` is on (default on). It is never in a list row, an event, an audit entry, a log line or a mail, and
+the trusted reads of the public service never return it (`toSchemaOrgAsSystem` has `includeContact: false` by default).
+
+The check is `ctx.authz.can(actor, 'registry.organisations.organisation.read-contact', { type: 'organisation', id })`, then the
+setting. The permission is declared with the scope `organisation` (a manifest field, no sprint 3 machinery): Admin holds it by
+resolution, nobody else by default, and the `organisation.member` policy of sprint 3 adds the managers, so sprint 3 changes no
+service code. _Sprint 4 adds the field table in `authorization.md`._
 
 ### Two editor groups and the field rules per role
 

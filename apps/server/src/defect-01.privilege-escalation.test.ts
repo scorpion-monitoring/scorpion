@@ -251,6 +251,24 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'GET', path: '/organisation-types' }),
   },
+  // Sprint 2: the Schema.org profile is every signed-in person's; the logo is Admin's (managers from
+  // sprint 4, through the service).
+  'GET /organisations/{id}/schema-org': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'GET', path: `/organisations/${id}/schema-org` }),
+  },
+  'PUT /organisations/{id}/logo': {
+    kind: 'admin',
+    sample: ({ id }) => ({
+      method: 'PUT',
+      path: `/organisations/${id}/logo`,
+      body: 'not an image',
+    }),
+  },
+  'DELETE /organisations/{id}/logo': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}/logo` }),
+  },
   'POST /organisations': {
     kind: 'admin',
     sample: () => ({
