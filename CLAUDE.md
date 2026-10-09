@@ -32,7 +32,7 @@ packages/ui-kit    SchemaForm, DataTable, Wizard, Facets, chart adapter
 packages/integrations  SPDX, DOI, OpenAlex adapters (cache, timeout, stub)
 packages/testing   Testcontainers setup, factories, contract-test helpers
 modules/<id>/      one package per module (core-*, registry-*, kpi-*, maturity, ...)
-profiles/*.ts      full, denbi-registry, nfdi-onboarding, kpi-tracker
+profiles/*.ts      full, core-only
 tools/migrate-legacy  one-time import from the old Scorpion database
 .changeset/        pending changesets; CHANGELOG.md is generated from them
 ```
@@ -42,7 +42,7 @@ tools/migrate-legacy  one-time import from the old Scorpion database
 ```bash
 pnpm i                         # install
 pnpm dev                       # docker compose (Postgres, Mailpit) + server + web, PROFILE=full
-PROFILE=kpi-tracker pnpm dev   # run another profile
+PROFILE=core-only pnpm dev   # run another profile
 pnpm check                     # lint + type check (incl. module boundary rule)
 pnpm test                      # unit + integration (needs Docker for Testcontainers)
 pnpm test --filter @scorpion/kpi-ingestion   # one module

@@ -6,13 +6,8 @@ const files = readdirSync(import.meta.dirname).filter(
 );
 
 describe('profiles', () => {
-  it('has the four profiles from the architecture', () => {
-    expect(files.sort()).toEqual([
-      'denbi-registry.ts',
-      'full.ts',
-      'kpi-tracker.ts',
-      'nfdi-onboarding.ts',
-    ]);
+  it('has the two profiles from the architecture', () => {
+    expect(files.sort()).toEqual(['core-only.ts', 'full.ts']);
   });
 
   it.each(files)('%s exports a profile named after its file', async (file) => {

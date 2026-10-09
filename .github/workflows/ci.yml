@@ -201,9 +201,7 @@ jobs:
           # `web: true`: the profile has core.ui-shell, so its image also runs the web server (ADR-0027).
           - profile: full
             web: true
-          - profile: denbi-registry
-          - profile: nfdi-onboarding
-          - profile: kpi-tracker
+          - profile: core-only
             web: true
           # The real profiles are still empty, so a fixture profile proves the mechanism: an image
           # holds exactly the modules of its profile (fixture.a and fixture.b, not fixture.opt).
