@@ -70,6 +70,14 @@ export default defineConfig(
   },
 
   {
+    // The one `{@html}` of the product besides ui-kit's SafeHtml (which carries its own disable comment): the
+    // JSON-LD block of the organisation page. Its only input is the output of `serializeJsonLd` (M6 plan,
+    // Decision 17; ADR-0033). Exactly this path: another file of the module keeps the rule, and
+    // tools/eslint-plugin/test/ui-rules.test.ts proves it.
+    files: ['modules/registry-organisations/ui/JsonLd.svelte'],
+    rules: { 'svelte/no-at-html-tags': 'off' },
+  },
+  {
     plugins: { '@scorpion': scorpion },
     rules: {
       '@scorpion/module-boundaries': [

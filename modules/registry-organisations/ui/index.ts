@@ -1,10 +1,19 @@
-// The browser half of the pages of registry.organisations. The pages arrive with sprints 4 and 5; the
-// entry exists now so that the generated list of the web app is the same for every module (ADR-0027).
-import type { UiMessages, UiRoute, UiWidgets } from '@scorpion/contracts';
+// The browser half of the pages of registry.organisations. Only the web app imports this file
+// (ADR-0027); the server half (who may open them) is `./routes.ts`, and `ui.test.ts` checks that the two
+// agree.
+import type { UiRoute, UiWidgets } from '@scorpion/contracts';
+import { loadOrganisation } from './loaders.ts';
 
-export const messages: UiMessages = { en: {} };
+export { messages } from './messages.ts';
+
 export const widgets: UiWidgets = {};
 
-const routes: UiRoute[] = [];
+const routes: UiRoute[] = [
+  {
+    path: '/organisations/:id',
+    load: loadOrganisation,
+    component: () => import('./Organisation.svelte'),
+  },
+];
 
 export default routes;

@@ -23,6 +23,7 @@ import {
 import { createMemberPolicy, type MemberPolicy } from './service/policy.ts';
 import { TEMPLATES } from './templates/registry.ts';
 import {
+import { ORGANISATION_NAV, ORGANISATION_ROUTES } from './ui/routes.ts';
   ORG_TYPE_REGISTRY,
   ORG_USAGE_REGISTRY,
   orgTypeEntrySchema,
@@ -198,6 +199,9 @@ export function createOrganisationsModule() {
       // The roles User and Reviewer read organisations; `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [
         { role: 'user', permissions: [PERMISSION_READ, PERMISSION_REQUEST] },
+      // The pages and their links; entries for registries of core.ui-shell, an optional peer.
+      'ui.routes': ORGANISATION_ROUTES,
+      'ui.nav': ORGANISATION_NAV,
         { role: 'reviewer', permissions: [PERMISSION_READ] },
       ],
       // The first resource policy (ADR-0034): managers and members of an organisation, per permission.

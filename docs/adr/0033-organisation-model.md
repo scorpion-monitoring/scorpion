@@ -53,7 +53,22 @@ as the route of the audit CSV does; nothing changed in `packages/contracts`.
 `serializeJsonLd(value)` is the only function that turns the profile into a string: `JSON.stringify`, then `<`, `>`, `&`, U+2028
 and U+2029 are written as `\uXXXX`. The output has no `<` (so no `</script>`, `<script` or `<!--`), is valid JSON and parses back to
 the same value; a lone surrogate is already escaped by `JSON.stringify`. The route uses it too, so the API answer and the page block
-cannot differ. _Sprint 4 adds the one audited `{@html}` component for the JSON-LD block (Decision 17) and finishes this section._
+cannot differ.
+
+**The block on the detail page (Decision 17).** The page's server load calls the profile route through the typed client with the
+visitor's session, so the contact point is in the block exactly when the route includes it. One component, `ui/JsonLd.svelte`, puts
+`serializeJsonLd(profile)` into `<svelte:head>` with the module's only `{@html}`; the tags around it are constants and the serialised
+text is its only variable input. The ESLint exception for `svelte/no-at-html-tags` names exactly that file (a `files` override in
+`eslint.config.js`); every other file keeps the rule, and a test lints a fixture to prove it. A `<script type="application/ld+json">`
+is a data block: the browser never runs it, so the CSP (`script-src 'self'` with nonces, no `unsafe-inline`) needs no allowance and the
+block carries no nonce.
+
+**Prototype result (sprint 4, day 1).** The shell's catch-all route (`routes/[...path]`) renders a module page on the server: the page's
+`load` runs on the server (`+page.server.ts` → `loadPage`), the component is imported in `+page.ts`, and SSR collects its
+`<svelte:head>` into `%sveltekit.head%`. Checked two ways: a unit render of `JsonLd.svelte` with `svelte/server` puts the block into
+`head` and nothing into `body`, and a Playwright run against the built web app and the real API (name
+`</script><script>window.pwned=1</script> <!-- & …`) finds the block in the server's HTML, parses to the exact name, executes nothing,
+and reports no CSP violation. So the `transformPageChunk` fallback of the plan is not needed, and `apps/web` stays unchanged.
 
 ### Logo
 
@@ -87,8 +102,7 @@ organisation (sprint 3) edit `description`, `website`, `sameAs`, `rorId`, `logo`
 `type`, `abbreviation` or `name`: those identify the record (membership, `org.usage`, `@type`, the lookup key, the name shown by
 services). There is one `update` method and one logo path; a pure field-rules table (`service/field-rules.ts`) maps a set of fields to
 the access it needs (`admin` or `edit`), so the second group adds a policy answer, never a second code path. A request that touches a
-field its caller may not write is refused whole (403). In sprints 1 to 3 Admin is the only group. No review step for manager edits in
-M6. _To be finished in sprint 4._
+field its caller may not write is refused whole (403). No review step for manager edits in M6 (Decision 19).
 
 ### Membership
 
