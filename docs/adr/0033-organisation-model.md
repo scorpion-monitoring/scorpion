@@ -1,6 +1,6 @@
 # ADR-0033: the organisation model
 
-- Status: Accepted (the sections marked _to be finished_ are decided here and completed in the sprint named; the Schema.org profile, the logo and the contact point were completed in sprint 2, apart from what sprint 4 adds)
+- Status: Accepted (the Schema.org profile, the logo and the contact point were completed in sprint 2 and membership in sprint 3; the two editor groups and the JSON-LD block are finished in sprint 4)
 - Date: 2026-10-09
 
 ## Context
@@ -92,9 +92,48 @@ M6. _To be finished in sprint 4._
 
 ### Membership
 
-One row per person and organisation with a state (`requested`, `approved`, `rejected`, `left`) and a role (`member`, `manager`);
-a later request reopens the row; the history is the audit trail. Decisions by administrators and by managers of that organisation;
-nobody decides on their own request or changes their own role. _To be finished in sprint 3 with ADR-0034._
+One row per person and organisation in `org_membership`, with a **state** (`requested`, `approved`, `rejected`, `left`) and a **role**
+(`member`, `manager`). Both are closed sets of code with check constraints, never a pg enum; `manager` is allowed only while the state
+is `approved` (a check constraint and the state machine). `organisation_id` is a foreign key to `org_organisation` (`on delete
+restrict`: the service removes the rows first, in the delete's transaction); `user_id` is a plain column, so a purge cannot be blocked.
+A later request after a rejection or a leave **reopens the same row** (the role goes back to `member`); the history is the audit trail
+of the events, there is no history table. Only organisations whose type has `membership: true` accept requests
+(`422 membership-not-supported`).
+
+The state machine is one pure function (`service/membership-state.ts`), table-driven tested for every state, role, action and actor:
+
+| Action     | From                       | To                        | Who                                                                              |
+| ---------- | -------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
+| `request`  | none, `rejected`, `left`   | `requested` (role member) | the person                                                                       |
+| `request`  | `requested`, `approved`    | unchanged (idempotent)    | the person                                                                       |
+| `approve`  | `requested`                | `approved` (role member)  | an Admin, or a manager of that organisation; never on their own request          |
+| `reject`   | `requested`                | `rejected`                | the same                                                                         |
+| `withdraw` | `requested`                | `left`                    | the person                                                                       |
+| `leave`    | `approved`                 | `left` (role member)      | the person, a manager too                                                        |
+| `remove`   | `approved`                 | `left` (role member)      | an Admin (any member or manager); a manager (a plain member only); never oneself |
+| `promote`  | `approved`, role `member`  | role `manager`            | an Admin, or a manager of that organisation; never on their own row              |
+| `demote`   | `approved`, role `manager` | role `member`             | the same                                                                         |
+
+Promoting a manager or demoting a member is idempotent. Any other pair is `409 membership-state` naming the state, never a 500. A
+`requested` row is decided or withdrawn, never removed.
+
+Delegation (who may do what, the rules that cannot be delegated, the last manager, serialisation, the one-request window) is
+[ADR-0034](0034-scoped-permissions-at-the-route-and-delegation.md). Limits are settings, not constants:
+`membership.maxPendingPerUser` (default 10, `409 too-many-pending`), `membership.maxManagersPerOrganisation` (default 20,
+`409 too-many-managers`) and `membership.membersVisibleToMembers` (default on).
+
+**Mail and inbox.** The two membership templates moved here from `core.notifications` (same keys `registry.membership-requested` and
+`registry.membership-decided`; the wording says "organisation"). A request goes to the approved managers of that organisation and to
+the administrators, de-duplicated, the requester left out; the decision goes to the requester. Both are optional (category
+`membership`). A role change and "an organisation has no manager" are inbox items only. A removed person is not mailed (backlog). A
+mail names the organisation and the requester's username and never an address beyond the recipient's own.
+
+**Events** carry ids, states and roles: never a username or an address. `registry.membership.decided@1`, `…role-changed@1` and
+`…left@1` are `critical` for `by: admin | manager` in the audit trail.
+
+**Purge.** The module subscribes to `identity.user.purged@1` and deletes the person's memberships (managers' too) in one transaction;
+the handler is idempotent. A deactivated account holds no working session or token, so its approved memberships and roles grant
+nothing; they still count in `memberCount` and in the manager count until the purge.
 
 ## Consequences
 
