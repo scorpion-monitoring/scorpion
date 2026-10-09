@@ -210,11 +210,9 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 
 From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-0034 records the design.
 
-- **A batch lookup of users in `core.identity`.** The manager's and the administrator's list of memberships, the mails of a request and the
-  member list ask `core.identity` for one user at a time (`users.findById`), at most one per person on a page (100) and one per
-  recipient of a request (managers, at most 100, and administrators, at most 1000). A `findByIds` (id, username, address, status) would make
-  these one query and let `memberCount` count active accounts only. It is a change in `modules/core-identity/**`, which is an ASVS-scoped path, so it
-  comes with its V6/V8 entries and tagged tests, not inside a registry sprint.
+- ~~**A batch lookup of users in `core.identity`.**~~ Done in M6 sprint 4 (same PR): `users.findByIds(ids)` (one query per 1000 ids; unknown and
+  malformed ids left out). The member lists, the request mails (managers and administrators) and the "no manager" notice use it. Counting only
+  active accounts in `memberCount` can use it now; not done (see above).
 - **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). A flag on `createRoute()` that lets the pipeline pass a
   caller who lacks the permission globally, with the service re-check as the guard, would make a delegated route visible to the pipeline instead of
   looking like an ordinary read. It touches `packages/contracts/src/route.ts` and `apps/server/src/pipeline/**` (both ASVS-scoped). Build it in M7 only

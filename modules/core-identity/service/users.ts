@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { Conflict, Invalid } from '@scorpion/contracts';
 import { ids, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
@@ -9,6 +9,8 @@ import { hashPassword } from './password.ts';
 import type { User, UserService } from '../public.ts';
 
 /** The columns of a user that leave the service. The temporary admin marker is deliberately not one. */
+const FIND_BY_IDS_CHUNK = 1000;
+
 const publicColumns = {
   id: user.id,
   username: user.username,
@@ -142,6 +144,20 @@ export function createUserService(ctx: ModuleContext): UserService {
       if (!UUID.test(id)) return undefined; // a malformed id is "no such user", not a database error
       const [row] = await ctx.db.select(publicColumns).from(user).where(eq(user.id, id)).limit(1);
       return row ? toUser(row) : undefined;
+    },
+
+    async findByIds(wanted) {
+      const valid = [...new Set(wanted)].filter((id) => UUID.test(id));
+      const found = new Map<string, User>();
+      // A bounded `in` list per query keeps the statement small for a very large fan-out.
+      for (let start = 0; start < valid.length; start += FIND_BY_IDS_CHUNK) {
+        const rows = await ctx.db
+          .select(publicColumns)
+          .from(user)
+          .where(inArray(user.id, valid.slice(start, start + FIND_BY_IDS_CHUNK)));
+        for (const row of rows) found.set(row.id, toUser(row));
+      }
+      return found;
     },
 
     async findByEmail(email) {

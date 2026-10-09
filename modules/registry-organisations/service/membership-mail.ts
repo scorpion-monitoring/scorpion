@@ -8,7 +8,7 @@
 // instance values (rule 9), never a constant.
 import { url } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import type { IdentityService } from '@scorpion/core-identity/public';
+import type { IdentityService, User } from '@scorpion/core-identity/public';
 import type { NotificationsService } from '@scorpion/core-notifications/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import type { DbTx, ModuleContext } from '@scorpion/kernel';
@@ -44,6 +44,8 @@ export interface MembershipMail {
   organisationUrl(organisationId: string): string;
   /** A person's username, for a screen; `undefined` for an account that is gone. */
   usernameOf(userId: string): Promise<string | undefined>;
+  /** The usernames of many people in one query; an unknown id is absent from the map. */
+  usernamesOf(userIds: readonly string[]): Promise<Map<string, string>>;
   /**
    * A request: the approved managers of the organisation and the administrators, once each, the
    * requester left out. A mail and an inbox item; an administrator's link is the administrators' screen.
@@ -71,8 +73,11 @@ export function createMembershipMail(
   const organisationUrl = (id: string) => page(`/organisations/${id}`);
 
   /** An active account, or `undefined`: a deactivated, rejected or deleted account gets nothing. */
-  async function person(userId: string): Promise<Person | undefined> {
-    const user = await deps.identity.users.findById(userId);
+  async function person(
+    userId: string,
+    known?: ReadonlyMap<string, User>,
+  ): Promise<Person | undefined> {
+    const user = known ? known.get(userId) : await deps.identity.users.findById(userId);
     if (!user || user.status !== 'active' || user.deletedAt !== null) return undefined;
     const locale = await deps.settings.getUserPreference(userId, LOCALE_PREFERENCE);
     return {
@@ -94,6 +99,11 @@ export function createMembershipMail(
 
   return {
     organisationUrl,
+
+    async usernamesOf(userIds) {
+      const users = await deps.identity.users.findByIds(userIds);
+      return new Map([...users].map(([id, user]) => [id, user.username]));
+    },
 
     async usernameOf(userId) {
       return (await deps.identity.users.findById(userId))?.username;
@@ -118,8 +128,10 @@ export function createMembershipMail(
       // administrators' link); never one to the requester.
       const recipients = new Set([...managers.map((row) => row.userId), ...admins]);
       recipients.delete(requesterId);
+      // One query for every recipient (managers and administrators), not one per person.
+      const known = await deps.identity.users.findByIds([...recipients]);
       for (const userId of [...recipients].sort()) {
-        const who = await person(userId);
+        const who = await person(userId, known);
         if (!who) continue;
         await deps.notifications.enqueueTemplate(tx, {
           template: 'registry.membership-requested',
@@ -169,8 +181,10 @@ export function createMembershipMail(
     },
 
     async withoutManager(tx, organisation) {
-      for (const userId of await administrators(tx)) {
-        const who = await person(userId);
+      const admins = await administrators(tx);
+      const known = await deps.identity.users.findByIds(admins);
+      for (const userId of admins) {
+        const who = await person(userId, known);
         if (!who) continue;
         await deps.notifications.enqueueTemplate(tx, {
           template: 'registry.organisation-without-manager',
