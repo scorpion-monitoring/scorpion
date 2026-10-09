@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { makePng } from '@scorpion/testing';
 import { adminApi, unique } from './support/admin.ts';
+import { uniqueRorId } from './support/ror.ts';
 import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
 
 // M6 sprint 4, journey 1: an Admin creates, edits and deletes organisations in the browser, and the detail
@@ -44,6 +45,7 @@ test.describe('journey 1: an Admin looks after the organisations', () => {
     test.slow();
     const csp = await watchCsp(page);
     await signInThroughPage(page, at, admin);
+    const ror = uniqueRorId();
     const provider = { abbreviation: unique('PRV').toUpperCase(), name: `Provider ${unique('n')}` };
     const consortium = {
       abbreviation: unique('CON').toUpperCase(),
@@ -63,8 +65,8 @@ test.describe('journey 1: an Admin looks after the organisations', () => {
     await page.getByLabel(/^Name/).fill(provider.name);
     await page.getByLabel('Description').fill('A <b>test</b> provider & more');
     await page.getByLabel('Website').fill('https://provider.example.org');
-    await page.getByLabel('ROR id').fill('https://ror.org/02skbsp27');
-    await expect(page.getByTestId('ror-preview')).toContainText('02skbsp27');
+    await page.getByLabel('ROR id').fill(`https://ror.org/${ror}`);
+    await expect(page.getByTestId('ror-preview')).toContainText(ror);
     await page.getByRole('button', { name: 'Add', exact: true }).click();
     await page
       .getByRole('textbox', { name: 'Other pages about the organisation, item 1' })
@@ -138,9 +140,9 @@ test.describe('journey 1: an Admin looks after the organisations', () => {
     await page.getByRole('link', { name: 'View the organisation page' }).click();
     await expect(page.getByRole('heading', { name: provider.name, level: 1 })).toBeVisible();
     await expect(page.getByText('A <b>test</b> provider & more')).toBeVisible();
-    await expect(page.getByRole('link', { name: '02skbsp27' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: ror })).toHaveAttribute(
       'href',
-      'https://ror.org/02skbsp27',
+      `https://ror.org/${ror}`,
     );
     await expect(page.getByRole('link', { name: 'info@provider.example.org' })).toBeVisible();
     const profile = await jsonLd(page);
@@ -152,10 +154,7 @@ test.describe('journey 1: an Admin looks after the organisations', () => {
       url: 'https://provider.example.org',
       contactPoint: { email: 'info@provider.example.org', contactType: 'customer support' },
     });
-    expect(profile.sameAs).toEqual([
-      'https://ror.org/02skbsp27',
-      'https://www.wikidata.org/wiki/Q1',
-    ]);
+    expect(profile.sameAs).toEqual([`https://ror.org/${ror}`, 'https://www.wikidata.org/wiki/Q1']);
     const origin = new URL(baseURL!).origin;
     expect(profile.logo?.url).toMatch(
       new RegExp(`^${origin}${basePath === '/' ? '' : basePath}/api/internal/files/[0-9a-f]{64}$`),

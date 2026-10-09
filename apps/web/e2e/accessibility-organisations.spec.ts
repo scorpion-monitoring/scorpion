@@ -1,6 +1,7 @@
 import { makePng } from '@scorpion/testing';
 import { violations } from './support/a11y.ts';
 import { adminApi, unique } from './support/admin.ts';
+import { uniqueRorId } from './support/ror.ts';
 import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
 
 // M6 sprint 4: no serious or critical axe violation on the screens of the organisations (the list, the new
@@ -21,7 +22,7 @@ for (const scheme of ['light', 'dark'] as const) {
         name: `Accessible ${unique('n')}`,
         description: 'A plain text description.\nWith a second line.',
         website: 'https://accessible.example.org',
-        rorId: scheme === 'light' ? '02skbsp27' : '03yrm5c26', // a ROR id names one organisation
+        rorId: uniqueRorId(), // a ROR id names one organisation
         sameAs: ['https://www.wikidata.org/wiki/Q1'],
         contactEmail: 'info@accessible.example.org',
         contactType: 'support',
@@ -51,7 +52,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.goto(at('/admin/organisations/new'));
       await expect(page.getByRole('heading', { name: 'New organisation', level: 1 })).toBeVisible();
       await clean('the new form');
-      await page.getByLabel('ROR id').fill('https://ror.org/02skbsp27');
+      await page.getByLabel('ROR id').fill(`https://ror.org/${uniqueRorId()}`);
       await expect(page.getByTestId('ror-preview')).toBeVisible();
       await page.getByRole('button', { name: 'Create the organisation' }).click();
       await expect(
