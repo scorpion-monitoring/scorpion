@@ -81,7 +81,9 @@ describe('schemaOrg', () => {
     });
     const text = serializeJsonLd(await organisations.schemaOrg(user, row.id));
     expect(text).not.toContain('<');
-    expect(JSON.parse(text).name).toBe('</script><script>alert(1)</script><!--');
+    expect((JSON.parse(text) as { name: string }).name).toBe(
+      '</script><script>alert(1)</script><!--',
+    );
   });
 });
 

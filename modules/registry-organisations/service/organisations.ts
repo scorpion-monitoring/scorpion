@@ -580,8 +580,8 @@ export function createOrganisationsService(
       return row !== undefined;
     },
 
-    async listTypesAsSystem() {
-      return typeViews('en');
+    listTypesAsSystem() {
+      return Promise.resolve(typeViews('en'));
     },
 
     async toSchemaOrgAsSystem(id, options) {
