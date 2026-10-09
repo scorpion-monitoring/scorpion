@@ -6,6 +6,19 @@ import type { NavEntry, RouteEntry } from '@scorpion/core-ui-shell/public';
 
 export const ORGANISATION_ROUTES: RouteEntry[] = [
   { path: '/organisations/:id', permission: 'registry.organisations.organisation.read' },
+  { path: '/admin/organisations', permission: 'registry.organisations.organisation.manage' },
+  { path: '/admin/organisations/new', permission: 'registry.organisations.organisation.manage' },
+  { path: '/admin/organisations/:id', permission: 'registry.organisations.organisation.manage' },
 ];
 
-export const ORGANISATION_NAV: NavEntry[] = [];
+export const ORGANISATION_NAV: NavEntry[] = [
+  {
+    id: 'admin.organisations',
+    label: 'nav.admin.organisations',
+    path: '/admin/organisations',
+    icon: 'users',
+    section: 'admin',
+    order: 40,
+    permission: 'registry.organisations.organisation.manage',
+  },
+];

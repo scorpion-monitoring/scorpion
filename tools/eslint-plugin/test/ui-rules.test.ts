@@ -61,7 +61,7 @@ describe('the JSON-LD exception (Decision 17)', () => {
       rules?: Record<string, unknown>;
     };
     const rule = config.rules?.['svelte/no-at-html-tags'];
-    const level = Array.isArray(rule) ? rule[0] : rule;
+    const level: unknown = Array.isArray(rule) ? (rule as unknown[])[0] : rule;
     return level === 0 || level === 'off' ? 'off' : 'on';
   };
 

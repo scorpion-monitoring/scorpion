@@ -221,12 +221,14 @@ describe('a manager of the organisation edits the descriptive fields and the log
       [{ contactEmail: 'only@example.org' }, 'contactType'],
       [{ website: 'javascript:alert(1)' }, 'website'],
     ] as const) {
-      const failure = await w.organisations.update(w.manager, w.target.id, patch).catch((e) => e);
+      const failure = await w.organisations
+        .update(w.manager, w.target.id, patch)
+        .catch((e: unknown) => e);
       expect(failure, path).toBeInstanceOf(Invalid);
     }
     const forAdmin = await w.organisations
       .update(w.admin, w.target.id, { rorId: 'not-a-ror-id' })
-      .catch((e) => e);
+      .catch((e: unknown) => e);
     expect(forAdmin).toBeInstanceOf(Invalid);
   });
 
@@ -240,7 +242,7 @@ describe('a manager of the organisation edits the descriptive fields and the log
     const before = await snapshot(w);
     const failure = await w.organisations
       .update(w.manager, w.target.id, { rorId: '03yrm5c26', description: 'also changed' })
-      .catch((e) => e);
+      .catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(DomainError);
     expect((failure as DomainError).status).toBe(409);
     expect(JSON.stringify(failure)).not.toMatch(/SECRETORG|Secret Other/);
@@ -268,7 +270,7 @@ describe('a manager never writes the identity fields', () => {
         .update(w.manager, w.target.id, {
           [field]: field === 'type' ? 'consortium' : 'SECRETVALUE',
         })
-        .catch((e) => e);
+        .catch((e: unknown) => e);
       expect(failure).toBeInstanceOf(Forbidden);
       expect((failure as Forbidden).message).toBe(IDENTITY_MESSAGE(field));
       expect(JSON.stringify(failure)).not.toMatch(/SECRETVALUE|consortium/);
@@ -288,7 +290,7 @@ describe('a manager never writes the identity fields', () => {
           website: 'https://fine.example.org',
           [field]: field === 'type' ? 'consortium' : 'Other',
         })
-        .catch((e) => e);
+        .catch((e: unknown) => e);
       expect(failure).toBeInstanceOf(Forbidden);
       expect((failure as Forbidden).message).toBe(IDENTITY_MESSAGE(field));
       expect(await snapshot(w)).toEqual(before);
@@ -300,7 +302,7 @@ describe('a manager never writes the identity fields', () => {
     const w = await world();
     const failure = await w.organisations
       .update(w.manager, w.target.id, { name: 'x', abbreviation: 'y', type: 'consortium' })
-      .catch((e) => e);
+      .catch((e: unknown) => e);
     expect((failure as Forbidden).message).toBe(IDENTITY_MESSAGE('type, abbreviation, name'));
   });
 
@@ -308,7 +310,7 @@ describe('a manager never writes the identity fields', () => {
     const w = await world();
     const failure = await w.organisations
       .update(w.manager, w.target.id, { name: w.target.name })
-      .catch((e) => e);
+      .catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(Forbidden);
   });
 
@@ -389,7 +391,7 @@ describe('nobody else edits', () => {
     const w = await world();
     const failure = await w.organisations
       .update(w.user, w.target.id, { name: 'x' })
-      .catch((e) => e);
+      .catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(Forbidden);
     expect((failure as Forbidden).message).not.toMatch(/administrator|name/);
   });

@@ -17,7 +17,10 @@ test('prototype: the JSON-LD block reaches the head, with a hostile name', async
   expect(created.status).toBe(201);
   const id = (created.body as { id: string }).id;
   const violations: string[] = [];
-  page.on('console', (m) => m.text().includes('Content Security Policy') && violations.push(m.text()));
+  page.on(
+    'console',
+    (m) => m.text().includes('Content Security Policy') && violations.push(m.text()),
+  );
   const loginPage = await page.context().request.post(at('/api/internal/auth/login'), {
     data: { username: 'root', password: 'a long password for the admin' },
   });
@@ -27,6 +30,8 @@ test('prototype: the JSON-LD block reaches the head, with a hostile name', async
   expect(html).toContain('application/ld+json');
   const text = await page.locator('head script[type="application/ld+json"]').textContent();
   expect((JSON.parse(text!) as { name: string }).name).toBe(name);
-  expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined();
+  expect(
+    await page.evaluate(() => (window as unknown as { pwned?: number }).pwned),
+  ).toBeUndefined();
   expect(violations).toEqual([]);
 });
