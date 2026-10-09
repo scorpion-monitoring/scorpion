@@ -73,10 +73,16 @@ jobs:
           path: reports/vitest-junit-${{ matrix.shard }}.xml
           retention-days: 1
 
+  # Playwright specs, split over a fixed number of runners; each shard builds the web app and starts its own
+  # stacks and database. To add a shard, add its number here and change `/3` in the command.
   e2e:
-    name: End-to-end tests
+    name: End-to-end tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -90,17 +96,20 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @scorpion/web exec playwright install --with-deps chromium
 
-      - run: pnpm test:e2e
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/3
+        env:
+          # One report per shard; the ASVS job puts them together. Relative to apps/web, where Playwright runs.
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ../../reports/playwright-junit-${{ matrix.shard }}.xml
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: junit-e2e
-          path: reports/playwright-junit.xml
+          name: junit-e2e-${{ matrix.shard }}
+          path: reports/playwright-junit-${{ matrix.shard }}.xml
           retention-days: 1
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-failure
+          name: e2e-failure-${{ matrix.shard }}
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
@@ -127,8 +136,10 @@ jobs:
           path: reports
           merge-multiple: true
       # The report reader scans test cases, so the shards' files joined are one report.
-      - name: Join the unit test reports
-        run: cat reports/vitest-junit-*.xml > reports/vitest-junit.xml
+      - name: Join the test reports of the shards
+        run: |
+          cat reports/vitest-junit-*.xml > reports/vitest-junit.xml
+          cat reports/playwright-junit-*.xml > reports/playwright-junit.xml
       - env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
