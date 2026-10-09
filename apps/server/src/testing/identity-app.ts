@@ -29,6 +29,8 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
+import organisationsModule from '@scorpion/registry-organisations/module';
+import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import uiShellModule from '@scorpion/core-ui-shell/module';
 import uiShellPackage from '@scorpion/core-ui-shell/package.json' with { type: 'json' };
 import {
@@ -107,6 +109,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   startWorkers?: boolean;
   /** false: the profile has no core.audit, so the sink is a no-op (default: it is there). */
   audit?: boolean;
+  /** false: the profile has no registry.organisations (default: it is there, as in `full`). */
+  organisations?: boolean;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
@@ -170,6 +174,7 @@ export function useIdentityApp() {
             'core.identity',
             ...(options.audit === false ? [] : ['core.audit']),
             ...(options.uiShell === false ? [] : ['core.ui-shell']),
+            ...(options.organisations === false ? [] : ['registry.organisations']),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -197,6 +202,9 @@ export function useIdentityApp() {
           ...(options.uiShell === false
             ? []
             : [{ manifest: uiShellModule, packageJson: uiShellPackage }]),
+          ...(options.organisations === false
+            ? []
+            : [{ manifest: organisationsModule, packageJson: organisationsPackage }]),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
@@ -216,6 +224,7 @@ export function useIdentityApp() {
           'core.identity': '@scorpion/core-identity',
           'core.audit': '@scorpion/core-audit',
           'core.ui-shell': '@scorpion/core-ui-shell',
+          'registry.organisations': '@scorpion/registry-organisations',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,

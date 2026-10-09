@@ -194,6 +194,13 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **The icon set** has `lock` now; a `key` and a `tag` would suit secrets and vocabularies (the navigation shows Settings with one icon today).
 - ~~**`SchemaForm` shows an array of objects with the first control focused after Add**~~ Done in M5 sprint 4: `SchemaForm` asks before it removes an item (an item nothing was typed in is removed at once). (was:, but does not ask before removing an item. A confirm for a removal that cannot be undone (a provider with a stored secret) is the page's to add.)
 
+## Organisations follow-ups (M6 sprint 1)
+
+- **Hierarchy.** `parentOrganization` and `subOrganization` (parent and child organisations), an `address` and a `foundingDate` are not modelled ([m6-sprint-plan.md](m6-sprint-plan.md) §3 and §11). The table has no parent column; add one with its own ADR when a milestone needs a tree.
+- **M7/M8: public read of the Schema.org profile of an organisation.** M7 adds a public route that serves `toSchemaOrg(..., includeContact: false)` for organisations referenced by at least one service (an `org.usage` count above zero); never the contact point; rate-limited; unreferenced organisations answer 404. M8 adds the same representation to public API v1 (additive). M6 builds no public read for "is referenced", so M7 adds the small one it needs (for example `isReferencedAsSystem(id)`). From the M6 follow-up decisions of 2026-10-09 (Decision 15).
+- **Counting only active accounts** in `memberCount` (sprint 3), in the manager count and in `isApprovedMember` for a deactivated account: a deactivated person has no working session, so the count may include them until this is decided.
+- **An organisation of a type that is no longer registered** (a profile that dropped the module that contributed the type) is listed and readable with `typeKnown: false`, refuses every change, and can still be deleted when no `org.usage` entry counts a reference. A way to move such organisations to another type in one step is not built.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.

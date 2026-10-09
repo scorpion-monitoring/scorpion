@@ -1,6 +1,6 @@
 # ADR-0033: the organisation model
 
-- Status: Accepted (the sections marked *to be finished* are decided here and completed in the sprint named)
+- Status: Accepted (the sections marked _to be finished_ are decided here and completed in the sprint named)
 - Date: 2026-10-09
 
 ## Context
@@ -41,21 +41,21 @@ data, whereas the name is free text that organisations reword. Hierarchy (`paren
 ### Schema.org profile
 
 One pure function maps the record to a schema.org `Organization` (mapping table in the sprint plan, §3); the API route, the detail
-page and later the public API use only that function. Properties without a value are omitted. *To be finished in sprint 2 (builder,
-route and the escaping function `serializeJsonLd`) and sprint 4 (the one audited `{@html}` component for the JSON-LD block).*
+page and later the public API use only that function. Properties without a value are omitted. _To be finished in sprint 2 (builder,
+route and the escaping function `serializeJsonLd`) and sprint 4 (the one audited `{@html}` component for the JSON-LD block)._
 
 ### Logo
 
 A module stores an image through its own route, its own permission and the blob service of `core.blob`; `POST /files` and
 `core.blob.manage` stay for the branding logos. The columns `logo_blob_id` and `logo_hash` exist from sprint 1 and stay unused until
-sprint 2, which adds `PUT` and `DELETE /organisations/{id}/logo` with `setReference` on replace and delete. *To be finished in sprint 2.*
+sprint 2, which adds `PUT` and `DELETE /organisations/{id}/logo` with `setReference` on replace and delete. _To be finished in sprint 2._
 
 ### Contact point
 
 The contact address is the organisation's role address, not a user's address; it belongs to no account and is never a mail recipient.
 It is read by administrators and the organisation's managers always, and by other signed-in persons when the setting
 `organisation.exposeContactPoint` is on (default on). It is never in a list row, an event, an audit entry, a log line or a mail.
-*To be finished in sprint 2 (the visibility check) and sprint 4 (the field table in `authorization.md`).*
+_To be finished in sprint 2 (the visibility check) and sprint 4 (the field table in `authorization.md`)._
 
 ### Two editor groups and the field rules per role
 
@@ -65,13 +65,13 @@ organisation (sprint 3) edit `description`, `website`, `sameAs`, `rorId`, `logo`
 services). There is one `update` method and one logo path; a pure field-rules table (`service/field-rules.ts`) maps a set of fields to
 the access it needs (`admin` or `edit`), so the second group adds a policy answer, never a second code path. A request that touches a
 field its caller may not write is refused whole (403). In sprints 1 to 3 Admin is the only group. No review step for manager edits in
-M6. *To be finished in sprint 4.*
+M6. _To be finished in sprint 4._
 
 ### Membership
 
 One row per person and organisation with a state (`requested`, `approved`, `rejected`, `left`) and a role (`member`, `manager`);
 a later request reopens the row; the history is the audit trail. Decisions by administrators and by managers of that organisation;
-nobody decides on their own request or changes their own role. *To be finished in sprint 3 with ADR-0034.*
+nobody decides on their own request or changes their own role. _To be finished in sprint 3 with ADR-0034._
 
 ## Consequences
 
