@@ -48,7 +48,7 @@ describe('JsonLd.svelte', () => {
       // Nothing but the block itself (and Svelte's own hydration markers) is in the head.
       expect(rest).not.toMatch(/<script/i);
       expect(rest).not.toContain(hostile);
-      expect(rest.replace(/<!--[\s\S]*?-->/g, '')).toBe('');
+      expect(rest).toMatch(/^(?:<!--[^<>]*-->)*$/);
     },
   );
 
