@@ -32,14 +32,41 @@ describe('the manifest', () => {
     ]);
   });
 
-  it('declares the setting exposeContactPoint (default on, with a title and a description) and nothing else', () => {
+  it('declares exposeContactPoint and the three membership settings, with defaults, titles and descriptions', () => {
     const shape = settingsSchema.shape;
-    expect(Object.keys(shape)).toEqual(['exposeContactPoint']);
-    expect(settingsSchema.parse({})).toEqual({ exposeContactPoint: true });
-    expect(shape.exposeContactPoint.meta()).toMatchObject({
-      title: expect.any(String) as string,
-      description: expect.any(String) as string,
+    expect(Object.keys(shape)).toEqual(['exposeContactPoint', 'membership']);
+    expect(settingsSchema.parse({})).toEqual({
+      exposeContactPoint: true,
+      membership: {
+        maxPendingPerUser: 10,
+        membersVisibleToMembers: true,
+        maxManagersPerOrganisation: 20,
+      },
     });
+    for (const field of [shape.exposeContactPoint, shape.membership]) {
+      expect(field.meta()).toMatchObject({
+        title: expect.any(String) as string,
+        description: expect.any(String) as string,
+      });
+    }
+    const membership = shape.membership.unwrap().shape;
+    expect(Object.keys(membership)).toEqual([
+      'maxPendingPerUser',
+      'membersVisibleToMembers',
+      'maxManagersPerOrganisation',
+    ]);
+    for (const field of Object.values(membership)) {
+      expect(field.meta()).toMatchObject({
+        title: expect.any(String) as string,
+        description: expect.any(String) as string,
+      });
+    }
+    // The limits are bounded: 1 to 100.
+    for (const key of ['maxPendingPerUser', 'maxManagersPerOrganisation']) {
+      expect(settingsSchema.safeParse({ membership: { [key]: 0 } }).success, key).toBe(false);
+      expect(settingsSchema.safeParse({ membership: { [key]: 101 } }).success, key).toBe(false);
+      expect(settingsSchema.safeParse({ membership: { [key]: 100 } }).success, key).toBe(true);
+    }
     expect(manifest.settings).toBe(settingsSchema);
     expect(manifest.permissions?.['registry.organisations.organisation.read-contact']?.scope).toBe(
       'organisation',
