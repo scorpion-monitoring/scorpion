@@ -22,7 +22,12 @@ async function purged(w: World, userId: string) {
 }
 
 const rowsOf = async (w: World, userId: string) =>
-  (await w.pool.query('select state, role from org_membership where user_id = $1', [userId])).rows;
+  (
+    await w.pool.query<{ state: string; role: string }>(
+      'select state, role from org_membership where user_id = $1',
+      [userId],
+    )
+  ).rows;
 
 describe('the purge subscriber', () => {
   it('deletes every membership of the person, in every state, and nobody else’s', async () => {

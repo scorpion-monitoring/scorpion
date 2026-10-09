@@ -212,14 +212,18 @@ export function useOrganisations(): OrganisationsHarness {
           );
         },
         async deliveries() {
-          const { rows } = await kernel.pool.query(
+          const { rows } = await kernel.pool.query<
+            Awaited<ReturnType<OrganisationsStarted['deliveries']>>[number]
+          >(
             `select template, recipient_address, recipient_user_id, locale, subject, text_body
                from notify_delivery order by created_at, id`,
           );
           return rows;
         },
         async inbox() {
-          const { rows } = await kernel.pool.query(
+          const { rows } = await kernel.pool.query<
+            Awaited<ReturnType<OrganisationsStarted['inbox']>>[number]
+          >(
             'select user_id, template, title, text, link from notify_inbox_item order by created_at, id',
           );
           return rows;

@@ -6828,7 +6828,15 @@ export interface paths {
                                 typeKnown: boolean;
                                 abbreviation: string;
                                 name: string;
+                                /** @description Approved members, managers included. */
                                 memberCount: number;
+                                /** @description The caller’s own row in any state, for a badge; `null` without one. */
+                                myMembership: {
+                                    /** @enum {string} */
+                                    state: "requested" | "approved" | "rejected" | "left";
+                                    /** @enum {string} */
+                                    role: "member" | "manager";
+                                } | null;
                             }[];
                         };
                     };
@@ -6908,7 +6916,15 @@ export interface paths {
                             typeKnown: boolean;
                             abbreviation: string;
                             name: string;
+                            /** @description Approved members, managers included. */
                             memberCount: number;
+                            /** @description The caller’s own row in any state, for a badge; `null` without one. */
+                            myMembership: {
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                            } | null;
                             description: string | null;
                             website: string | null;
                             /** @description The bare ROR id, for example `02skbsp27`. */
@@ -7105,7 +7121,15 @@ export interface paths {
                             typeKnown: boolean;
                             abbreviation: string;
                             name: string;
+                            /** @description Approved members, managers included. */
                             memberCount: number;
+                            /** @description The caller’s own row in any state, for a badge; `null` without one. */
+                            myMembership: {
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                            } | null;
                             description: string | null;
                             website: string | null;
                             /** @description The bare ROR id, for example `02skbsp27`. */
@@ -7285,7 +7309,15 @@ export interface paths {
                             typeKnown: boolean;
                             abbreviation: string;
                             name: string;
+                            /** @description Approved members, managers included. */
                             memberCount: number;
+                            /** @description The caller’s own row in any state, for a badge; `null` without one. */
+                            myMembership: {
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                            } | null;
                             description: string | null;
                             website: string | null;
                             /** @description The bare ROR id, for example `02skbsp27`. */
@@ -7510,7 +7542,15 @@ export interface paths {
                             typeKnown: boolean;
                             abbreviation: string;
                             name: string;
+                            /** @description Approved members, managers included. */
                             memberCount: number;
+                            /** @description The caller’s own row in any state, for a badge; `null` without one. */
+                            myMembership: {
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                            } | null;
                             description: string | null;
                             website: string | null;
                             /** @description The bare ROR id, for example `02skbsp27`. */
@@ -7608,7 +7648,15 @@ export interface paths {
                             typeKnown: boolean;
                             abbreviation: string;
                             name: string;
+                            /** @description Approved members, managers included. */
                             memberCount: number;
+                            /** @description The caller’s own row in any state, for a badge; `null` without one. */
+                            myMembership: {
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                            } | null;
                             description: string | null;
                             website: string | null;
                             /** @description The bare ROR id, for example `02skbsp27`. */
@@ -7676,6 +7724,926 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisations/{id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The person had already asked or is a member: the current row. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organisation: {
+                                id: string;
+                                type: string;
+                                abbreviation: string;
+                                name: string;
+                            };
+                            /** @enum {string} */
+                            state: "requested" | "approved" | "rejected" | "left";
+                            /** @enum {string} */
+                            role: "member" | "manager";
+                            /** Format: date-time */
+                            requestedAt: string;
+                            /** Format: date-time */
+                            decidedAt: string | null;
+                            /** Format: date-time */
+                            endedAt: string | null;
+                        };
+                    };
+                };
+                /** @description A new request, or a reopened one. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organisation: {
+                                id: string;
+                                type: string;
+                                abbreviation: string;
+                                name: string;
+                            };
+                            /** @enum {string} */
+                            state: "requested" | "approved" | "rejected" | "left";
+                            /** @enum {string} */
+                            role: "member" | "manager";
+                            /** Format: date-time */
+                            requestedAt: string;
+                            /** Format: date-time */
+                            decidedAt: string | null;
+                            /** Format: date-time */
+                            endedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such organisation. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `too-many-pending`: the person has the most open requests allowed. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `membership-not-supported`: the type of this organisation has no members. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The row after the request was withdrawn or the membership ended. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organisation: {
+                                id: string;
+                                type: string;
+                                abbreviation: string;
+                                name: string;
+                            };
+                            /** @enum {string} */
+                            state: "requested" | "approved" | "rejected" | "left";
+                            /** @enum {string} */
+                            role: "member" | "manager";
+                            /** Format: date-time */
+                            requestedAt: string;
+                            /** Format: date-time */
+                            decidedAt: string | null;
+                            /** Format: date-time */
+                            endedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller has no membership or request to end here. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The caller’s own rows in every state, by abbreviation then id. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                organisation: {
+                                    id: string;
+                                    type: string;
+                                    abbreviation: string;
+                                    name: string;
+                                };
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                                /** Format: date-time */
+                                requestedAt: string;
+                                /** Format: date-time */
+                                decidedAt: string | null;
+                                /** Format: date-time */
+                                endedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisations/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The approved members: usernames and join dates, never an address or a state. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                username: string;
+                                /** Format: date-time */
+                                since: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not an administrator, a manager or (while the setting is on) a member. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such organisation. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                    state?: "requested" | "approved" | "rejected" | "left";
+                    organisationId?: string;
+                    type?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Requests and members the caller may decide on, oldest request first. An Admin sees every organisation, a manager the ones they manage. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                organisation: {
+                                    id: string;
+                                    type: string;
+                                    abbreviation: string;
+                                    name: string;
+                                };
+                                userId: string;
+                                /** @description `null` for an account that is gone; its rows are removed by the purge. */
+                                username: string | null;
+                                /** @enum {string} */
+                                state: "requested" | "approved" | "rejected" | "left";
+                                /** @enum {string} */
+                                role: "member" | "manager";
+                                /** Format: date-time */
+                                requestedAt: string;
+                                /** Format: date-time */
+                                decidedAt: string | null;
+                                /** Format: date-time */
+                                roleChangedAt: string | null;
+                                /** @description What the caller may do to this row now. Draw buttons from it; every action is checked again when it is taken. */
+                                allowedActions: ("approve" | "reject" | "promote" | "demote" | "remove")[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller is neither an administrator nor a manager (or filters on an organisation they do not manage). */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memberships/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description `pending`: the requests the caller may decide; `manages`: whether they manage an organisation. Zeros for a plain user. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pending: number;
+                            manages: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memberships/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        decision: "approved" | "rejected";
+                    };
+                };
+            };
+            responses: {
+                /** @description The row after the decision. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organisation: {
+                                id: string;
+                                type: string;
+                                abbreviation: string;
+                                name: string;
+                            };
+                            userId: string;
+                            /** @description `null` for an account that is gone; its rows are removed by the purge. */
+                            username: string | null;
+                            /** @enum {string} */
+                            state: "requested" | "approved" | "rejected" | "left";
+                            /** @enum {string} */
+                            role: "member" | "manager";
+                            /** Format: date-time */
+                            requestedAt: string;
+                            /** Format: date-time */
+                            decidedAt: string | null;
+                            /** Format: date-time */
+                            roleChangedAt: string | null;
+                            /** @description What the caller may do to this row now. Draw buttons from it; every action is checked again when it is taken. */
+                            allowedActions: ("approve" | "reject" | "promote" | "demote" | "remove")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No right on this organisation, or the caller’s own request. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such membership. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `membership-state`: it is no longer a request. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memberships/{id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        role: "member" | "manager";
+                    };
+                };
+            };
+            responses: {
+                /** @description The row with the role (also when it already had it). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organisation: {
+                                id: string;
+                                type: string;
+                                abbreviation: string;
+                                name: string;
+                            };
+                            userId: string;
+                            /** @description `null` for an account that is gone; its rows are removed by the purge. */
+                            username: string | null;
+                            /** @enum {string} */
+                            state: "requested" | "approved" | "rejected" | "left";
+                            /** @enum {string} */
+                            role: "member" | "manager";
+                            /** Format: date-time */
+                            requestedAt: string;
+                            /** Format: date-time */
+                            decidedAt: string | null;
+                            /** Format: date-time */
+                            roleChangedAt: string | null;
+                            /** @description What the caller may do to this row now. Draw buttons from it; every action is checked again when it is taken. */
+                            allowedActions: ("approve" | "reject" | "promote" | "demote" | "remove")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No right on this organisation, or the caller’s own role. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such membership. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `membership-state` (not an approved member) or `too-many-managers` (the limit of the setting). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memberships/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The row after the membership ended. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organisation: {
+                                id: string;
+                                type: string;
+                                abbreviation: string;
+                                name: string;
+                            };
+                            userId: string;
+                            /** @description `null` for an account that is gone; its rows are removed by the purge. */
+                            username: string | null;
+                            /** @enum {string} */
+                            state: "requested" | "approved" | "rejected" | "left";
+                            /** @enum {string} */
+                            role: "member" | "manager";
+                            /** Format: date-time */
+                            requestedAt: string;
+                            /** Format: date-time */
+                            decidedAt: string | null;
+                            /** Format: date-time */
+                            roleChangedAt: string | null;
+                            /** @description What the caller may do to this row now. Draw buttons from it; every action is checked again when it is taken. */
+                            allowedActions: ("approve" | "reject" | "promote" | "demote" | "remove")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No right on this organisation, the caller’s own row (use leave), or a manager as the target of a manager. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such membership. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `membership-state`: it is not an approved membership. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;

@@ -303,10 +303,10 @@ async function countingStatements<T extends { organisations: unknown[] }>(
 ): Promise<T & { statements: number }> {
   let statements = 0;
   const original = pool.query;
-  pool.query = ((...args: never[]) => {
+  pool.query = (...args: never[]) => {
     statements += 1;
-    return (original as (...a: never[]) => unknown).apply(pool, args);
-  }) as typeof pool.query;
+    return original.apply(pool, args);
+  };
   try {
     return { ...(await work()), statements };
   } finally {

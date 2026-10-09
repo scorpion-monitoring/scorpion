@@ -194,16 +194,18 @@ export function createOrganisationsService(
   const base = mountPath(ctx.config);
   const logoPath = (hash: string) => `${base}/api/internal/files/${hash}`;
   /** A trusted read: the descriptive fields and the member count, never the caller's own row (there is no caller). */
-  const record = (row: Row, memberCount: number): OrganisationRecord => {
-    const { myMembership: _mine, ...rest } = summary(row, { memberCount, mine: undefined });
-    return {
-      ...rest,
-      description: row.description,
-      website: row.website,
-      rorId: row.rorId,
-      sameAs: row.sameAs,
-    };
-  };
+  const record = (row: Row, memberCount: number): OrganisationRecord => ({
+    id: row.id,
+    type: row.type,
+    typeKnown: types.has(row.type),
+    abbreviation: row.abbreviation,
+    name: row.name,
+    memberCount,
+    description: row.description,
+    website: row.website,
+    rorId: row.rorId,
+    sameAs: row.sameAs,
+  });
 
   /**
    * Who sees the contact point (plan §6 item 6): whoever holds `…read-contact` on the organisation
@@ -235,7 +237,9 @@ export function createOrganisationsService(
     const wanted = rows.map((row) => row.id);
     const [counts, mine] = await Promise.all([
       approvedCounts(db, wanted),
-      actor.kind === 'user' ? ownRows(db, actor.userId, wanted) : Promise.resolve(new Map()),
+      actor.kind === 'user'
+        ? ownRows(db, actor.userId, wanted)
+        : Promise.resolve(new Map<string, { state: State; role: Role }>()),
     ]);
     return (row: Row) => ({ memberCount: counts.get(row.id) ?? 0, mine: mine.get(row.id) });
   }

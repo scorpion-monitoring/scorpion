@@ -23,7 +23,7 @@ const CURRENT: { label: string; current: Current }[] = [
   ...STATES.flatMap((state) =>
     ROLES.filter((role) => role === 'member' || state === 'approved').map((role) => ({
       label: `${state}/${role}`,
-      current: { state, role } as Current,
+      current: { state, role },
     })),
   ),
 ];
