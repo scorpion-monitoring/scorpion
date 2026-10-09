@@ -101,6 +101,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../../modules/registry-organisations
       hono:
         specifier: ^4.13.12
         version: 4.13.12
@@ -151,6 +154,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../../modules/registry-organisations
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing

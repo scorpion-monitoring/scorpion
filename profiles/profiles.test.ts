@@ -6,8 +6,8 @@ const files = readdirSync(import.meta.dirname).filter(
 );
 
 describe('profiles', () => {
-  it('has the two profiles from the architecture', () => {
-    expect(files.sort()).toEqual(['core-only.ts', 'full.ts']);
+  it('has the profiles from the architecture (ADR-0030, ADR-0032)', () => {
+    expect(files.sort()).toEqual(['core-only.ts', 'full.ts', 'registry.ts']);
   });
 
   it.each(files)('%s exports a profile named after its file', async (file) => {
