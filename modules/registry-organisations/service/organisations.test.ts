@@ -89,7 +89,7 @@ describe('list', () => {
 });
 
 describe('get', () => {
-  it('shows a plain user the descriptive fields and hides the contact point and the audit columns', async () => {
+  it('shows a plain user the descriptive fields and the contact point (setting on) but not the audit columns', async () => {
     const { organisations, pool, user } = await setup();
     const row = await makeOrganisation(pool, {
       description: 'text',
@@ -109,7 +109,8 @@ describe('get', () => {
       typeKnown: true,
       memberCount: 0,
     });
-    for (const hidden of ['contactEmail', 'contactType', 'createdBy', 'updatedBy']) {
+    expect(got).toMatchObject({ contactEmail: 'info@example.org', contactType: 'support' });
+    for (const hidden of ['createdBy', 'updatedBy', 'logoUrl']) {
       expect(got).not.toHaveProperty(hidden);
     }
   });

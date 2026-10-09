@@ -10,6 +10,7 @@ import {
   createOrganisationsService,
   PERMISSION_MANAGE,
   PERMISSION_READ,
+  PERMISSION_READ_CONTACT,
   type OrganisationsService,
 } from './service/organisations.ts';
 import {
@@ -19,7 +20,7 @@ import {
   orgUsageEntrySchema,
   SEED_TYPES,
 } from './service/registries.ts';
-import type { OrganisationsSettings } from './settings-schema.ts';
+import { settingsSchema, type OrganisationsSettings } from './settings-schema.ts';
 
 export { settingsSchema, type OrganisationsSettings } from './settings-schema.ts';
 export type { OrganisationsService } from './service/organisations.ts';
@@ -56,10 +57,15 @@ export function createOrganisationsModule() {
         description: 'Read organisations and the registered organisation types',
       },
       [PERMISSION_MANAGE]: {
-        description: 'Create, change and delete organisations',
+        description: 'Create, change and delete organisations, and set their logo',
+      },
+      // Scoped: Admin holds it everywhere; sprint 3's policy adds the managers of the organisation.
+      [PERMISSION_READ_CONTACT]: {
+        scope: 'organisation',
+        description: 'Always see the contact point of an organisation, whatever the setting says',
       },
     },
-    // No settings in sprint 1 (the schema in settings-schema.ts is empty): a module with an empty schema would show as an empty form in the settings list.
+    settings: settingsSchema,
 
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
@@ -106,7 +112,11 @@ export function createOrganisationsModule() {
       ],
     },
 
-    services: (ctx) => createOrganisationsService(ctx, { authz: ctx.deps['core.authz'] }),
+    services: (ctx) =>
+      createOrganisationsService(ctx, {
+        authz: ctx.deps['core.authz'],
+        blob: ctx.deps['core.blob'],
+      }),
 
     routes: (r) => {
       registerOrganisationRoutes(r, r.service<OrganisationsService>());

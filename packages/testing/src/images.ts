@@ -36,3 +36,17 @@ export function makePng(size = 8, colour: [number, number, number] = [10, 120, 2
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
+
+/** The text that {@link makeJpegWithExif} hides in the EXIF block. */
+export const JPEG_EXIF_MARK = 'SECRET-OWNER-MARK';
+
+/**
+ * A 16 x 16 JPEG whose EXIF block carries {@link JPEG_EXIF_MARK} as the copyright, for the test that a
+ * stored file has no metadata. A constant (made once with sharp), so no test package needs sharp.
+ */
+export function makeJpegWithExif(): Buffer {
+  return Buffer.from(
+    '/9j/4QDaRXhpZgAASUkqAAgAAAAHABIBAwABAAAAAQAAABoBBQABAAAAYgAAABsBBQABAAAAagAAACgBAwABAAAAAgAAABMCAwABAAAAAQAAAJiCAgASAAAAcgAAAGmHBAABAAAAhAAAAAAAAAA4YwAA6AMAADhjAADoAwAAU0VDUkVULU9XTkVSLU1BUksABgAAkAcABAAAADAyMTABkQcABAAAAAECAwAAoAcABAAAADAxMDABoAMAAQAAAP//AAACoAQAAQAAABAAAAADoAQAAQAAABAAAAAAAAAA/9sAQwAQCwwODAoQDg0OEhEQExgoGhgWFhgxIyUdKDozPTw5Mzg3QEhcTkBEV0U3OFBtUVdfYmdoZz5NcXlwZHhcZWdj/9sAQwEREhIYFRgvGhovY0I4QmNjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2Nj/8AAEQgAEAAQAwEiAAIRAQMRAf/EABUAAQEAAAAAAAAAAAAAAAAAAAAF/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/EABUBAQEAAAAAAAAAAAAAAAAAAAQG/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AjgAqh//Z',
+    'base64',
+  );
+}

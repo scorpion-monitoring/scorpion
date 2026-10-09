@@ -9,8 +9,10 @@ import {
   type AppEnv,
   type RouteHandler,
 } from '@scorpion/contracts';
+import { MAX_UPLOAD_BYTES } from '@scorpion/core-blob/public';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import { createOrganisationSchema, updateOrganisationSchema } from './service/input.ts';
+import { serializeJsonLd } from './service/schema-org.ts';
 import {
   PERMISSION_MANAGE,
   PERMISSION_READ,
@@ -43,6 +45,12 @@ const organisationSchema = summarySchema.extend({
   website: z.string().nullable(),
   rorId: z.string().nullable().describe('The bare ROR id, for example `02skbsp27`.'),
   sameAs: z.array(z.string()),
+  logoUrl: z
+    .string()
+    .optional()
+    .describe(
+      'Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash.',
+    ),
   contactEmail: z
     .string()
     .nullable()
@@ -56,6 +64,43 @@ const organisationSchema = summarySchema.extend({
   createdBy: z.string().nullable().optional().describe('Administrators only.'),
   updatedBy: z.string().nullable().optional().describe('Administrators only.'),
 });
+
+/** The Schema.org profile (plan §3). The property names are the whole list; a property without a value is absent. */
+const schemaOrgSchema = z.object({
+  '@context': z.literal('https://schema.org'),
+  '@type': z.string().describe('The `schemaType` of the organisation type.'),
+  '@id': z.string().describe('The absolute URL of the organisation page.'),
+  name: z.string(),
+  alternateName: z.string().optional().describe('The abbreviation.'),
+  description: z.string().optional(),
+  url: z.string().describe("The organisation's website, else its own page."),
+  identifier: z
+    .object({
+      '@type': z.literal('PropertyValue'),
+      propertyID: z.literal('ROR'),
+      value: z.string(),
+    })
+    .optional(),
+  sameAs: z.array(z.string()).optional(),
+  logo: z.object({ '@type': z.literal('ImageObject'), url: z.string() }).optional(),
+  contactPoint: z
+    .object({ '@type': z.literal('ContactPoint'), email: z.string(), contactType: z.string() })
+    .optional()
+    .describe(
+      "Only for a reader who may see the contact point: the organisation's role address, not a user's.",
+    ),
+});
+
+const imageBody = {
+  required: true as const,
+  description:
+    'The image as the request body (PNG, JPEG, WebP, GIF or SVG). Its `Content-Type` is ignored: the type is determined from the content, and the file is checked and rewritten before it is stored.',
+  content: {
+    'application/octet-stream': {
+      schema: z.string().openapi({ type: 'string', format: 'binary' }),
+    },
+  },
+};
 
 const typeSchema = z.object({
   id: z.string(),
@@ -95,6 +140,49 @@ export const getOrganisationRoute = createRoute({
   responses: {
     200: ok('One organisation.', organisationSchema),
     404: { description: 'No such organisation.' },
+  },
+});
+
+export const getSchemaOrgRoute = createRoute({
+  method: 'get',
+  path: '/organisations/{id}/schema-org',
+  permission: PERMISSION_READ,
+  request: { params: idParam },
+  responses: {
+    200: {
+      description:
+        'The organisation as a Schema.org `Organization` (JSON-LD). `Cache-Control: private, no-cache`: what it holds depends on the reader.',
+      content: { 'application/ld+json': { schema: schemaOrgSchema } },
+    },
+    404: { description: 'No such organisation.' },
+  },
+});
+
+export const setLogoRoute = createRoute({
+  method: 'put',
+  path: '/organisations/{id}/logo',
+  permission: PERMISSION_MANAGE,
+  rateLimit: 'strict',
+  maxBodyBytes: MAX_UPLOAD_BYTES,
+  audit: true,
+  request: { params: idParam, body: imageBody },
+  responses: {
+    200: ok('The organisation with its new logo.', organisationSchema),
+    404: { description: 'No such organisation.' },
+    413: { description: 'The body is larger than the upload ceiling.' },
+    422: { description: 'The file is empty, too big, not a supported image, or damaged.' },
+  },
+});
+
+export const clearLogoRoute = createRoute({
+  method: 'delete',
+  path: '/organisations/{id}/logo',
+  permission: PERMISSION_MANAGE,
+  audit: true,
+  request: { params: idParam },
+  responses: {
+    200: ok('The organisation without its logo.', organisationSchema),
+    404: { description: 'No such organisation, or it has no logo.' },
   },
 });
 
@@ -176,6 +264,7 @@ const organisationOut = (o: OrganisationView) => ({
   website: o.website,
   rorId: o.rorId,
   sameAs: o.sameAs,
+  ...(o.logoUrl !== undefined && { logoUrl: o.logoUrl }),
   ...(o.contactEmail !== undefined && { contactEmail: o.contactEmail, contactType: o.contactType }),
   createdAt: o.createdAt.toISOString(),
   updatedAt: o.updatedAt.toISOString(),
@@ -200,6 +289,36 @@ export function registerOrganisationRoutes(r: RouteRegistrar, service: Organisat
   r.internal(getOrganisationRoute, (async (c) => {
     return c.json(organisationOut(await service.get(c.get('actor'), c.req.valid('param').id)), 200);
   }) satisfies RouteHandler<typeof getOrganisationRoute, AppEnv>);
+
+  r.internal(getSchemaOrgRoute, (async (c) => {
+    const profile = await service.schemaOrg(c.get('actor'), c.req.valid('param').id);
+    // The only way the profile becomes a string (`serializeJsonLd`), also for a plain API answer.
+    return new Response(serializeJsonLd(profile), {
+      status: 200,
+      headers: {
+        'content-type': 'application/ld+json; charset=utf-8',
+        // The contact point depends on the reader: no shared cache may keep it.
+        'cache-control': 'private, no-cache',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }) satisfies RouteHandler<typeof getSchemaOrgRoute, AppEnv>);
+
+  r.internal(setLogoRoute, (async (c) => {
+    // The body is capped by the route (`maxBodyBytes`); the service checks the caller first, then the file.
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    return c.json(
+      organisationOut(await service.setLogo(c.get('actor'), c.req.valid('param').id, bytes)),
+      200,
+    );
+  }) satisfies RouteHandler<typeof setLogoRoute, AppEnv>);
+
+  r.internal(clearLogoRoute, (async (c) => {
+    return c.json(
+      organisationOut(await service.clearLogo(c.get('actor'), c.req.valid('param').id)),
+      200,
+    );
+  }) satisfies RouteHandler<typeof clearLogoRoute, AppEnv>);
 
   r.internal(createOrganisationRoute, (async (c) => {
     return c.json(organisationOut(await service.create(c.get('actor'), c.req.valid('json'))), 201);

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import manifest from './module.ts';
+import { settingsSchema } from './settings-schema.ts';
 import packageJson from './package.json' with { type: 'json' };
 import { useOrganisations } from './test/harness.ts';
 
@@ -21,13 +22,28 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the two permissions', () => {
+  it('has the id, the table prefix and the three permissions', () => {
     expect(manifest.id).toBe('registry.organisations');
     expect(manifest.tablePrefix).toBe('org_');
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
       'registry.organisations.organisation.manage',
       'registry.organisations.organisation.read',
+      'registry.organisations.organisation.read-contact',
     ]);
+  });
+
+  it('declares the setting exposeContactPoint (default on, with a title and a description) and nothing else', () => {
+    const shape = settingsSchema.shape;
+    expect(Object.keys(shape)).toEqual(['exposeContactPoint']);
+    expect(settingsSchema.parse({})).toEqual({ exposeContactPoint: true });
+    expect(shape.exposeContactPoint.meta()).toMatchObject({
+      title: expect.any(String) as string,
+      description: expect.any(String) as string,
+    });
+    expect(manifest.settings).toBe(settingsSchema);
+    expect(manifest.permissions?.['registry.organisations.organisation.read-contact']?.scope).toBe(
+      'organisation',
+    );
   });
 
   it('emits the three organisation events, each strict, with names and ids only', () => {
@@ -118,7 +134,7 @@ describe('in a profile', () => {
   it('gives every route a permission and none is public', async () => {
     const s = await h.start();
     const own = s.kernel.routes.filter((r) => r.route.path.startsWith('/organisation'));
-    expect(own).toHaveLength(6);
+    expect(own).toHaveLength(9);
     for (const { route } of own) {
       expect(route.permission, `${route.method} ${route.path}`).toMatch(
         /^registry\.organisations\./,
