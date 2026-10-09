@@ -99,8 +99,11 @@ export function createOrganisationsModule() {
     contributes: {
       [ORG_TYPE_REGISTRY]: SEED_TYPES,
       // Every signed-in person may read organisations (the forms need them); `manage` stays with Admin.
-      // The role Reviewer is left alone: a reviewer holds the role `user` too, which gives the read.
-      'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ] }],
+      // The roles User and Reviewer read organisations; `manage` stays with Admin (ADR-0014 resolution).
+      'authz.defaultRole': [
+        { role: 'user', permissions: [PERMISSION_READ] },
+        { role: 'reviewer', permissions: [PERMISSION_READ] },
+      ],
     },
 
     services: (ctx) => createOrganisationsService(ctx, { authz: ctx.deps['core.authz'] }),

@@ -521,11 +521,11 @@ describe('the table', () => {
 });
 
 describe('the contributed permissions', () => {
-  it('gives the role user read and keeps manage with Admin; the role reviewer gets nothing from this module', async () => {
+  it('gives the role user read and keeps manage with Admin; the role reviewer reads too but cannot manage', async () => {
     const { authz, user, admin, actor } = await setup();
     const reviewer = await actor('reviewer');
     expect(await authz.can(user, 'registry.organisations.organisation.read')).toBe(true);
-    expect(await authz.can(reviewer, 'registry.organisations.organisation.read')).toBe(false);
+    expect(await authz.can(reviewer, 'registry.organisations.organisation.read')).toBe(true);
     expect(await authz.can(user, 'registry.organisations.organisation.manage')).toBe(false);
     expect(await authz.can(reviewer, 'registry.organisations.organisation.manage')).toBe(false);
     expect(await authz.can(admin, 'registry.organisations.organisation.manage')).toBe(true);

@@ -25,12 +25,12 @@ screens (sprints 4 and 5) follow; the columns `logo_blob_id` and `logo_hash` exi
 
 ### Permissions
 
-| Permission                                   | Allows                                      | Held by default by |
-| -------------------------------------------- | ------------------------------------------- | ------------------ |
-| `registry.organisations.organisation.read`   | Read organisations and the registered types | Admin, User        |
-| `registry.organisations.organisation.manage` | Create, change and delete organisations     | Admin              |
+| Permission                                   | Allows                                      | Held by default by    |
+| -------------------------------------------- | ------------------------------------------- | --------------------- |
+| `registry.organisations.organisation.read`   | Read organisations and the registered types | Admin, User, Reviewer |
+| `registry.organisations.organisation.manage` | Create, change and delete organisations     | Admin                 |
 
-Admin holds every declared permission by resolution (ADR-0014); `user` gets `read` through `authz.defaultRole`. The
+Admin holds every declared permission by resolution (ADR-0014); `user` and `reviewer` get `read` through `authz.defaultRole`. The
 service checks the permission again on every method (`ctx.authz.require`). In sprint 4 `PATCH /organisations/{id}` and the logo
 routes switch their route permission to `…organisation.read` and the service decides, so that the managers of an organisation can edit
 the descriptive fields (ADR-0033, Decision 14); `POST` and `DELETE` keep `manage`.
