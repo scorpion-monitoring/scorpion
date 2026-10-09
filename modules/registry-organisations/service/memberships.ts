@@ -299,8 +299,12 @@ export function createMembershipsService(
    * of at least one organisation. Anybody else is `403` before anything is looked up, so a person with
    * no right learns nothing from the difference between an unknown id and a known one (ADR-0034).
    */
-  async function requireDecider(actor: Actor, user: UserActor): Promise<void> {
-    if (await deps.authz.can(actor, PERMISSION_DECIDE)) return;
+  async function requireDecider(
+    actor: Actor,
+    user: UserActor,
+    permission: string = PERMISSION_DECIDE,
+  ): Promise<void> {
+    if (await deps.authz.can(actor, permission)) return;
     if ((await managedIds(user.userId)).length === 0) throw new Forbidden();
   }
 
@@ -710,7 +714,7 @@ export function createMembershipsService(
       await deps.authz.require(actor, PERMISSION_READ);
       const user = userOf(actor);
       requireId(membershipId);
-      await requireDecider(actor, user);
+      await requireDecider(actor, user, PERMISSION_MANAGE_ROLES);
       const found = await loadMembership(db, membershipId);
       await deps.authz.require(actor, PERMISSION_MANAGE_ROLES, resource(found.organisationId));
       // Whoever the caller is, nobody changes their own role.
@@ -775,7 +779,7 @@ export function createMembershipsService(
       await deps.authz.require(actor, PERMISSION_READ);
       const user = userOf(actor);
       requireId(membershipId);
-      await requireDecider(actor, user);
+      await requireDecider(actor, user, PERMISSION_REMOVE);
       const found = await loadMembership(db, membershipId);
       await deps.authz.require(actor, PERMISSION_REMOVE, resource(found.organisationId));
       if (found.userId === user.userId) {

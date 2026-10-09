@@ -2,7 +2,6 @@
 // settings, blob, notifications, identity): permissions are decided by the real authoriser, events
 // travel through the real outbox. `extra` adds fixture modules next to it (a contributor of an
 // `org.type` or `org.usage` entry). `start` gives a test an empty database of its own.
-import { randomUUID } from 'node:crypto';
 import { Writable } from 'node:stream';
 import type { UserActor } from '@scorpion/contracts';
 import authzModule from '@scorpion/core-authz/module';
@@ -11,6 +10,7 @@ import type { AuthzService } from '@scorpion/core-authz/public';
 import blobModule from '@scorpion/core-blob/module';
 import blobPackage from '@scorpion/core-blob/package.json' with { type: 'json' };
 import { createIdentityModule } from '@scorpion/core-identity/module';
+import type { IdentityService } from '@scorpion/core-identity/public';
 import identityPackage from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
@@ -24,6 +24,11 @@ import {
   type ModuleManifest,
 } from '@scorpion/kernel';
 import {
+  breakDeliveries as breakDeliveriesIn,
+  breakInbox as breakInboxIn,
+  deliveryRows,
+  inboxRows,
+  makePreference,
   makeRoleAssignment,
   makeSecretsKey,
   makeUser,
@@ -198,36 +203,14 @@ export function useOrganisations(): OrganisationsHarness {
         authz: kernel.services.get('core.authz') as AuthzService,
         actor,
         async emailOf(who) {
-          const { rows } = await kernel.pool.query<{ email: string }>(
-            'select email from identity_user where id = $1',
-            [who.userId],
-          );
-          return rows[0]!.email;
+          const identity = kernel.services.get('core.identity') as IdentityService;
+          return (await identity.users.findById(who.userId))!.email!;
         },
         async setLocale(who, locale) {
-          await kernel.pool.query(
-            `insert into settings_user_preference (id, user_id, key, value, updated_at)
-             values ($1, $2, 'notifications.locale', $3, now())`,
-            [randomUUID(), who.userId, JSON.stringify(locale)],
-          );
+          await makePreference(kernel.pool, { id: who.userId }, 'notifications.locale', locale);
         },
-        async deliveries() {
-          const { rows } = await kernel.pool.query<
-            Awaited<ReturnType<OrganisationsStarted['deliveries']>>[number]
-          >(
-            `select template, recipient_address, recipient_user_id, locale, subject, text_body
-               from notify_delivery order by created_at, id`,
-          );
-          return rows;
-        },
-        async inbox() {
-          const { rows } = await kernel.pool.query<
-            Awaited<ReturnType<OrganisationsStarted['inbox']>>[number]
-          >(
-            'select user_id, template, title, text, link from notify_inbox_item order by created_at, id',
-          );
-          return rows;
-        },
+        deliveries: () => deliveryRows(kernel.pool),
+        inbox: () => inboxRows(kernel.pool),
         async configure(values) {
           const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
           const admin = await actor('admin');
@@ -298,21 +281,7 @@ export async function breakOutbox(pool: { query(text: string): Promise<unknown> 
 }
 
 /** Makes the mail queue refuse an insert, so a mail cannot be stored. Returns the undo. */
-export async function breakDeliveries(pool: { query(text: string): Promise<unknown> }) {
-  await pool.query(`
-    create or replace function test_break_deliveries() returns trigger as $$
-    begin raise exception 'the mail queue is broken for this test'; end $$ language plpgsql;
-    create trigger test_break_deliveries before insert on notify_delivery
-      for each row execute function test_break_deliveries();`);
-  return () => pool.query('drop trigger test_break_deliveries on notify_delivery');
-}
+export const breakDeliveries = breakDeliveriesIn;
 
 /** Makes the inbox refuse an insert (an inbox item is a second write after the mail). Returns the undo. */
-export async function breakInbox(pool: { query(text: string): Promise<unknown> }) {
-  await pool.query(`
-    create or replace function test_break_inbox() returns trigger as $$
-    begin raise exception 'the inbox is broken for this test'; end $$ language plpgsql;
-    create trigger test_break_inbox before insert on notify_inbox_item
-      for each row execute function test_break_inbox();`);
-  return () => pool.query('drop trigger test_break_inbox on notify_inbox_item');
-}
+export const breakInbox = breakInboxIn;

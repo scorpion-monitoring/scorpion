@@ -3,7 +3,7 @@
 // concurrency cases are in memberships.concurrency.test.ts; the self cases of defect 1 are also in
 // apps/server/src/defect-01.membership.test.ts.
 import { Forbidden, NotFound, Unauthorized, type Actor, type UserActor } from '@scorpion/contracts';
-import { makeOrganisation } from '@scorpion/testing';
+import { makeOrganisation, makeRole, makeRoleAssignment } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { breakDeliveries, breakInbox, breakOutbox, useOrganisations } from '../test/harness.ts';
 import { startWorld } from '../test/world.ts';
@@ -383,6 +383,23 @@ describe('setRole', () => {
       expect(await w.rowOf(member), name).toMatchObject({ role: 'member', role_changed_at: null });
     }
     expect(await w.eventsNamed('registry.membership.roleChanged@1')).toEqual([]);
+  });
+});
+
+describe('a custom role that holds one of the permissions globally', () => {
+  it('lets its holder do that action on any organisation, and only that one, with no membership at all', async () => {
+    const w = await startWorld(h);
+    const role = await makeRole(w.pool, { permissions: [READ, ROLES] });
+    const who = await w.actor();
+    await makeRoleAssignment(w.pool, { id: who.userId }, role);
+    const member = await w.member();
+    const row = (await w.rowOf(member))!;
+    expect((await w.memberships.setRole(who, row.id, 'manager')).role).toBe('manager');
+    await expect(w.memberships.remove(who, row.id)).rejects.toBeInstanceOf(Forbidden);
+    const { row: request } = await w.requester();
+    await expect(w.memberships.decide(who, request.id, 'approved')).rejects.toBeInstanceOf(
+      Forbidden,
+    );
   });
 });
 

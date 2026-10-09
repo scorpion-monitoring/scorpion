@@ -8,6 +8,10 @@ export { JPEG_EXIF_MARK, makeJpegWithExif, makePng } from './images.ts';
 export { makeAuditEvent, type AuditEventRow, type MakeAuditEvent } from './audit.ts';
 export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
 export {
+  breakDeliveries,
+  breakInbox,
+  deliveryRows,
+  inboxRows,
   mailbox,
   makeDelivery,
   makeInboxItem,
