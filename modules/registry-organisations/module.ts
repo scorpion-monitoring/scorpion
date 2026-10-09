@@ -19,7 +19,7 @@ import {
   orgUsageEntrySchema,
   SEED_TYPES,
 } from './service/registries.ts';
-import { settingsSchema, type OrganisationsSettings } from './settings-schema.ts';
+import type { OrganisationsSettings } from './settings-schema.ts';
 
 export { settingsSchema, type OrganisationsSettings } from './settings-schema.ts';
 export type { OrganisationsService } from './service/organisations.ts';
@@ -59,7 +59,7 @@ export function createOrganisationsModule() {
         description: 'Create, change and delete organisations',
       },
     },
-    settings: settingsSchema,
+    // No settings in sprint 1 (the schema in settings-schema.ts is empty): a module with an empty schema would show as an empty form in the settings list.
 
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
@@ -99,10 +99,8 @@ export function createOrganisationsModule() {
     contributes: {
       [ORG_TYPE_REGISTRY]: SEED_TYPES,
       // Every signed-in person may read organisations (the forms need them); `manage` stays with Admin.
-      'authz.defaultRole': [
-        { role: 'user', permissions: [PERMISSION_READ] },
-        { role: 'reviewer', permissions: [PERMISSION_READ] },
-      ],
+      // The role Reviewer is left alone: a reviewer holds the role `user` too, which gives the read.
+      'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ] }],
     },
 
     services: (ctx) => createOrganisationsService(ctx, { authz: ctx.deps['core.authz'] }),

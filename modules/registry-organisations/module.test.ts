@@ -46,7 +46,6 @@ describe('the manifest', () => {
     ]);
     expect(manifest.contributes?.['authz.defaultRole']).toEqual([
       { role: 'user', permissions: ['registry.organisations.organisation.read'] },
-      { role: 'reviewer', permissions: ['registry.organisations.organisation.read'] },
     ]);
   });
 
