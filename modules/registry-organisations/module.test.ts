@@ -66,7 +66,7 @@ describe('the manifest', () => {
     ]);
   });
 
-  it('creates one table with the prefix org_, no foreign key and no enum', () => {
+  it('creates the two tables with the prefix org_, one foreign key (to its own organisation table), no key to a user or a blob, and no enum', () => {
     const migrations = join(dir, 'migrations');
     const sql = readdirSync(migrations)
       .filter((file) => file.endsWith('.sql'))
@@ -74,8 +74,14 @@ describe('the manifest', () => {
       .join('\n');
     expect([...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((match) => match[1])).toEqual([
       'org_organisation',
+      'org_membership',
     ]);
-    expect(sql).not.toMatch(/REFERENCES/i);
+    // The only reference is membership → organisation: user ids and the logo's blob id are plain
+    // columns, so a purge or the blob cleanup cannot be blocked.
+    expect([...sql.matchAll(/REFERENCES "public"\."([^"]+)"/g)].map((match) => match[1])).toEqual([
+      'org_organisation',
+    ]);
+    expect(sql).not.toMatch(/REFERENCES "public"\."(identity|blob)_/);
     expect(sql).not.toMatch(/CREATE TYPE/i);
   });
 

@@ -18,6 +18,7 @@ export {
   type Mailbox,
   type QueuedMail,
 } from './notifications.ts';
+export { makeMembership, type MakeMembership, type MembershipRow } from './memberships.ts';
 export { makeOrganisation, type MakeOrganisation, type OrganisationRow } from './organisations.ts';
 export {
   makePreference,
