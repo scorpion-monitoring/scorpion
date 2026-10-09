@@ -107,6 +107,12 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
     userBy('requestedBy'),
     subjectOf('delivery', 'deliveryId'),
   ),
+
+  // registry.organisations (present only in profiles that have it; see the module's optional peer).
+  // Not critical: they follow `channels.admin`. The payload names fields and ids, never text.
+  'registry.organisation.created@1': log(false, userBy('actorId'), subjectOf('organisation', 'organisationId')),
+  'registry.organisation.updated@1': log(false, userBy('actorId'), subjectOf('organisation', 'organisationId')),
+  'registry.organisation.deleted@1': log(false, userBy('actorId'), subjectOf('organisation', 'organisationId')),
 };
 
 /** Keys of an event payload that are not stored: the id is enough, and a name is personal data the trail cannot later erase. */
