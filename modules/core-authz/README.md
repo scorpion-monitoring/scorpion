@@ -4,7 +4,7 @@ Roles as data, the permission registry and the authoriser of the request pipelin
 do what and knows nothing about users: it stores an opaque user id with no foreign key and imports
 nothing from `core.identity` (ADR-0014). It has no dependencies, so every other module may depend on it.
 
-Status: M3 sprint 2. The module is in the `full` and `kpi-tracker` profiles and `core.identity` depends on it
+Status: M3 sprint 2. The module is in the `full` and `core-only` profiles and `core.identity` depends on it
 ([ADR-0015](../../docs/adr/0015-identity-on-authz.md)): identity contributes the permissions of the role `user`, gives
 the role at approval, owns the role routes and asks this module for every decision. An anonymous caller of a
 non-public route gets 401, a signed-in user without a role 403. `core.settings` (sprint 3) depends on it too: it uses

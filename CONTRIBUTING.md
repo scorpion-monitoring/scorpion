@@ -114,6 +114,24 @@ added without a change to the ruleset. When the unit tests near the 20-minute li
 raise the shard count in `.github/workflows/ci.yml` (the matrix and the `/4` in the command);
 do not raise the limit. `pnpm test` without `--shard` still runs everything, as before.
 
+## Images in the registry
+
+The `Publish (<profile>)` jobs of the `CI` workflow push the images of `full` and `core-only` to the
+GitHub container registry, as `ghcr.io/scorpion-monitoring/scorpion:<tag>`. They run only after the gate and the
+`Image (...)` smoke tests passed, never for a pull request, and the job has `packages: write` as the only widening
+of the workflow's read-only permissions.
+
+| Event                  | Tags                                                     |
+| ---------------------- | -------------------------------------------------------- |
+| push to `dev`          | `dev-<profile>` (newest) and `dev-<short sha>-<profile>` |
+| tag `v<x.y.z>` on main | `<x.y.z>-<profile>`                                      |
+
+To run one, log in once with a personal access token that has `read:packages`
+(`docker login ghcr.io -u <user>`), then
+`docker pull ghcr.io/scorpion-monitoring/scorpion:dev-core-only`. A new package is private; in the
+package settings on GitHub, link it to the repository and set its visibility. Use the fixed
+`dev-<short sha>-<profile>` tag to deploy or roll back to one build.
+
 ## Dependency audit
 
 CI runs `pnpm audit:check` (the `Dependency audit` job). It reads the lockfile, runs
@@ -159,8 +177,9 @@ Each milestone ends with a release. Before `v1.0.0` (M18), a milestone is a `min
    (`release: v<x.y.z>`).
 3. Open a pull request into `main`. CI skips the changeset check for it because it changes
    `CHANGELOG.md`.
-4. After the merge, tag the merge commit on `main` with an annotated tag `v<x.y.z>` and build
-   the profile images as `scorpion:<x.y.z>-<profile>`.
+4. After the merge, tag the merge commit on `main` with an annotated tag `v<x.y.z>`. The tag
+   push builds the profile images and publishes them as `ghcr.io/<owner>/scorpion:<x.y.z>-<profile>`
+   (see "Images in the registry").
 5. Merge `main` back into `dev`, so `dev` has the new version and changelog.
 
 A hotfix follows the same steps, but starts from `main` as `hotfix/<x.y.z>`: commit the fix

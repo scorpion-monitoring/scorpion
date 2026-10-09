@@ -1,10 +1,10 @@
 asvs_version: 5.0.0
 level: 2
 chapter: V6
-assessment_type: null
-assessed_commit: null
-assessed_on: null
-assessor: null
+assessment_type: self
+assessed_commit: 6ba44c903fbfeb0e232afe8dd3d9fe3bca925266
+assessed_on: 2026-10-09
+assessor: feserm
 second_pass: null
 reviewer: null
 requirements:

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # One image per deployment profile, holding only that profile's modules:
-#   docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
+#   docker build -f docker/Dockerfile --build-arg PROFILE=core-only -t scorpion:dev-core-only .
 #
 # A profile with core.ui-shell runs two processes (ADR-0027): the web server, which is the public origin on
 # PORT (default 3000) and streams `/api`, `/healthz` and `/readyz` to the API, and the API (`scorpion start`)

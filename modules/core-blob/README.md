@@ -14,7 +14,7 @@ Status: M3 sprint 4. The table is the only backend; an S3 backend is in `docs/ba
 | id             | `core.blob`                                                                                                                    |
 | table prefix   | `blob_` (set in the manifest; ADR-0004)                                                                                        |
 | dependencies   | `core.authz`, `core.settings`; packages `@scorpion/sanitize` and `sharp`                                                       |
-| profiles       | every profile that lists `core.identity` (`full`, `kpi-tracker`), between `core.settings` and `core.identity`                  |
+| profiles       | every profile that lists `core.identity` (`full`, `core-only`), between `core.settings` and `core.identity`                    |
 | routes         | internal API: `GET /files/{hash}` (public), `POST /files`                                                                      |
 | jobs           | `core.blob.cleanup`, hourly at minute 30 (UTC), 2 retries, 5 minutes                                                           |
 | CLI            | none                                                                                                                           |

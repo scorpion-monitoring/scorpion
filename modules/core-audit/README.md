@@ -22,8 +22,7 @@ Status: M4 sprint 4. The viewer screens are M5; the routes below are what they u
 | registries     | contributes the one entry of the kernel registry `kernel.auditSink`                                                                                |
 | public service | none. `public.ts` declares an empty service; nobody calls the trail directly. Write through `ctx.audit(entry)`.                                    |
 
-Profiles: `full` and `kpi-tracker` list it. `denbi-registry` and `nfdi-onboarding` have no modules yet; add it when they get
-`core.identity`. A profile without `core.audit` starts: the sink is a function that does nothing, no table is created and the routes
+Profiles: `full` and `core-only` list it. A new profile that lists `core.identity` adds it too. A profile without `core.audit` starts: the sink is a function that does nothing, no table is created and the routes
 do not exist (tested).
 
 ### Permissions

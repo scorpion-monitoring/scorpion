@@ -42,13 +42,13 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | M6 | `registry.organisations` | 2 Registry | M | G1 | none |
 | M7 | `registry.services`: model, wizard, catalogue, detail/edit | 2 Registry | L | M6 | 2, 14 (partly) |
 | M8 | `public-api` v1 (read) + OpenAPI + Swagger | 2 Registry | M | M7 | 15 |
-| **G2** | **Gate 2: `denbi-registry` profile deployable (without KPIs)** | | | M6–M8 | |
+| **G2** | **Gate 2: registry profile deployable (without KPIs)** | | | M6–M8 | |
 | M9 | `kpi.framework` | 3 KPIs | M | G2 | 14 |
 | M10 | `kpi.ingestion`: form, CSV/TSV/XLSX, API write | 3 KPIs | L | M9 | 6 |
 | M11 | `kpi.analytics`: dashboard, scores, exports | 3 KPIs | L | M10 | 10 |
 | M12 | `kpi.impact` | 3 KPIs | M | M11 | 9 |
 | M13 | Legacy data migration tool | 3 KPIs | M | M12 | none |
-| **G3** | **Gate 3: migration dry run clean, `kpi-tracker` live** | | | M9–M13 | |
+| **G3** | **Gate 3: migration dry run clean, KPI profile live** | | | M9–M13 | |
 | M14 | `maturity` | 4 Parity | M | G3 | 7 |
 | M15 | `onboarding` | 4 Parity | M | M14 | 8 |
 | M16 | `bibliometrics` | 4 Parity | M | G3 | none |
@@ -198,11 +198,13 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 ### Gate 1: security foundation
 
+**Status (2026-10-09): conditionally passed** ([ADR-0031](adr/0031-gate-1-conditional-pass.md)). Everything below holds except the second-pass self-review, which the plan itself puts at least 7 days after the first pass (2026-10-09). M6 may start; Gate 1 is cleared on **2026-10-16** or later, when `second_pass` is recorded in the four chapter files, `pnpm security:asvs --write` has regenerated the badges, and the gate commit is checked.
+
 - The regression tests for defects 1, 3, 4, 5, 11, 12 and 13 pass.
 - The four ASVS 5.0 Level 2 chapter assessments in `docs/security/asvs/` (V6, V7, V8, V10; see §8.1) have no `fail` entries, every `n/a` has a reason, and the second-pass self-review (§8.2) is recorded. `pnpm security:asvs` is green on the gate commit.
 - The README badge row (§8.5) shows all four ASVS badges as `self-assessed`, plus the OpenSSF Best Practices badge at **passing** and the OpenSSF Scorecard badge at **≥ 6.5**.
 - `SECURITY.md` is published, and GitHub private vulnerability reporting is switched on.
-- A `core-only` profile image deploys to staging.
+- The `core-only` profile (the core modules, ADR-0030) image deploys to staging.
 
 ---
 
@@ -239,9 +241,9 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - v1 read endpoints: categories (added in M9), indicators (added in M9), providers (`is_member=true|false` both correct), services (with `consortia` filled), keeping the v1 envelope (`metadata` / `result`, 0-based pages) on every endpoint and a stable order (defect 15).
 - Contract-test harness: every v1 route is tested against its schema. CI diffs the spec against the last release tag.
 
-### Gate 2: `denbi-registry` profile deployable
+### Gate 2: registry profile deployable
 
-- The `denbi-registry` profile (without KPI modules) runs on staging with real organisation and service data from a partial migration dry run.
+- A registry profile (without KPI modules; added by M6, ADR-0030) runs on staging with real organisation and service data from a partial migration dry run.
 - Catalogue, wizard and edit flows pass E2E. The v1 contract tests pass.
 
 ---
@@ -297,7 +299,7 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 ### Gate 3
 
 - The migration dry run on a production copy reports no unexplained drops.
-- The `kpi-tracker` profile runs on staging with migrated data. The dashboard numbers match the old app for three sample services, checked by hand.
+- A KPI profile (added by M9, ADR-0030) runs on staging with migrated data. The dashboard numbers match the old app for three sample services, checked by hand.
 
 ---
 

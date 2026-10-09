@@ -27,7 +27,7 @@ what a module does is up to the module.
 1. **Resolve the profile.** The profile lists module ids. Each module's dependencies are derived from
    its `package.json`. The kernel puts the modules in dependency order and refuses to go on for a
    missing dependency or a cycle, naming the path: `kpi.ingestion → kpi.framework (not in profile
-"kpi-tracker")`.
+"core-only")`.
 2. **Migrate.** Each module's Drizzle migrations run in dependency order, under one Postgres advisory
    lock, and the table-prefix rule is checked.
 3. **Register** permissions, settings schemas, event schemas and registries.
@@ -561,7 +561,7 @@ works ([ADR-0021](../../docs/adr/0021-audit-sink-redaction-and-append-only.md)).
 import { defineProfile } from '@scorpion/kernel';
 
 export default defineProfile({
-  name: 'kpi-tracker',
+  name: 'core-only',
   modules: ['core.identity', 'registry.services', 'kpi.framework', 'kpi.ingestion'],
 });
 ```

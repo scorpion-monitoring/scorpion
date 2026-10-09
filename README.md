@@ -47,7 +47,7 @@ pnpm check        # ESLint (incl. module boundaries), Prettier, tsc -b, svelte-c
 pnpm test         # Vitest over all packages (Testcontainers tests need Docker)
 pnpm test --filter @scorpion/server   # one package
 pnpm test:e2e     # Playwright smoke test (first: pnpm --filter @scorpion/web exec playwright install chromium)
-pnpm build --profile kpi-tracker      # image scorpion:dev-kpi-tracker
+pnpm build --profile core-only      # image scorpion:dev-core-only
 ```
 
 ## Profiles
@@ -56,20 +56,21 @@ A profile (`profiles/<name>.ts`) lists the modules one deployment contains. Each
 gets its own image. To add or remove a plugin, rebuild the image and restart; modules are
 never loaded at runtime ([ADR-0001](docs/adr/0001-modular-monolith-build-time-composition.md)).
 
-| Profile           | Purpose                                                            |
-| ----------------- | ------------------------------------------------------------------ |
-| `full`            | Every module                                                       |
-| `denbi-registry`  | de.NBI service registry with KPIs, bibliometrics and network graph |
-| `nfdi-onboarding` | NFDI service onboarding with maturity assessment                   |
-| `kpi-tracker`     | KPI collection and analytics                                       |
+| Profile     | Purpose                                                       |
+| ----------- | ------------------------------------------------------------- |
+| `full`      | Every module                                                  |
+| `core-only` | The core modules only (identity, authz, settings, shell, ...) |
 
 The module lists for each profile are in the comments of the profile files, and the full
 matrix is in [docs/architecture.md](docs/architecture.md). Until M2 every profile's module list is
 still empty.
 
+CI publishes the images of `full` and `core-only` to `ghcr.io/scorpion-monitoring/scorpion`: `dev-<profile>` follows
+`dev`, and `<x.y.z>-<profile>` is built for every release tag (see [CONTRIBUTING.md](CONTRIBUTING.md#images-in-the-registry)).
+
 ```bash
-PROFILE=kpi-tracker pnpm dev
-docker build -f docker/Dockerfile --build-arg PROFILE=kpi-tracker -t scorpion:dev-kpi-tracker .
+PROFILE=core-only pnpm dev
+docker build -f docker/Dockerfile --build-arg PROFILE=core-only -t scorpion:dev-core-only .
 ```
 
 ## Running it
