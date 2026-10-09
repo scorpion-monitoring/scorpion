@@ -1,0 +1,41 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["*.ts", "package.json", "db", "service", "test", "ui"],
+  "references": [
+    {
+      "path": "../../packages/kernel"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/testing"
+    },
+    {
+      "path": "../core-authz"
+    },
+    {
+      "path": "../core-blob"
+    },
+    {
+      "path": "../core-identity"
+    },
+    {
+      "path": "../core-notifications"
+    },
+    {
+      "path": "../core-settings"
+    },
+    {
+      "path": "../core-ui-shell"
+    },
+    {
+      "path": "../../packages/ui-kit"
+    }
+  ]
+}

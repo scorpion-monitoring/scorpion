@@ -1,0 +1,259 @@
+{
+  "id": "4d531a11-cc86-48ed-8ab1-9693c6fc6810",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.org_organisation": {
+      "name": "org_organisation",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "abbreviation": {
+          "name": "abbreviation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "website": {
+          "name": "website",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ror_id": {
+          "name": "ror_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "same_as": {
+          "name": "same_as",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "contact_email": {
+          "name": "contact_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_type": {
+          "name": "contact_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "logo_blob_id": {
+          "name": "logo_blob_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "logo_hash": {
+          "name": "logo_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "org_organisation_type_abbreviation_idx": {
+          "name": "org_organisation_type_abbreviation_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"abbreviation\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "org_organisation_type_name_idx": {
+          "name": "org_organisation_type_name_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "org_organisation_ror_id_idx": {
+          "name": "org_organisation_ror_id_idx",
+          "columns": [
+            {
+              "expression": "ror_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"org_organisation\".\"ror_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "org_organisation_sort_idx": {
+          "name": "org_organisation_sort_idx",
+          "columns": [
+            {
+              "expression": "lower(\"abbreviation\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "org_organisation_name_idx": {
+          "name": "org_organisation_name_idx",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "org_organisation_abbreviation_check": {
+          "name": "org_organisation_abbreviation_check",
+          "value": "char_length(\"org_organisation\".\"abbreviation\") between 1 and 64 and \"org_organisation\".\"abbreviation\" !~ '[[:space:]/]'"
+        },
+        "org_organisation_name_check": {
+          "name": "org_organisation_name_check",
+          "value": "char_length(\"org_organisation\".\"name\") between 1 and 200"
+        },
+        "org_organisation_description_check": {
+          "name": "org_organisation_description_check",
+          "value": "\"org_organisation\".\"description\" is null or char_length(\"org_organisation\".\"description\") <= 4000"
+        },
+        "org_organisation_website_check": {
+          "name": "org_organisation_website_check",
+          "value": "\"org_organisation\".\"website\" is null or (char_length(\"org_organisation\".\"website\") <= 500 and \"org_organisation\".\"website\" ~* '^https?://')"
+        },
+        "org_organisation_ror_id_check": {
+          "name": "org_organisation_ror_id_check",
+          "value": "\"org_organisation\".\"ror_id\" is null or \"org_organisation\".\"ror_id\" ~ '^0[a-hj-km-np-tv-z0-9]{6}[0-9]{2}$'"
+        },
+        "org_organisation_same_as_check": {
+          "name": "org_organisation_same_as_check",
+          "value": "cardinality(\"org_organisation\".\"same_as\") <= 20"
+        },
+        "org_organisation_contact_check": {
+          "name": "org_organisation_contact_check",
+          "value": "(\"org_organisation\".\"contact_email\" is null) = (\"org_organisation\".\"contact_type\" is null)\n        and (\"org_organisation\".\"contact_email\" is null or char_length(\"org_organisation\".\"contact_email\") <= 254)\n        and (\"org_organisation\".\"contact_type\" is null or char_length(\"org_organisation\".\"contact_type\") between 1 and 64)"
+        },
+        "org_organisation_logo_check": {
+          "name": "org_organisation_logo_check",
+          "value": "(\"org_organisation\".\"logo_blob_id\" is null) = (\"org_organisation\".\"logo_hash\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
