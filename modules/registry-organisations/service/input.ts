@@ -70,3 +70,16 @@ export function parseInput<S extends z.ZodType>(schema: S, input: unknown): z.ou
   }));
   throw new Invalid('The request is not valid.', errors);
 }
+
+/** An id that is no UUID is a bad request (422), never a database error (500). */
+export function requireId(
+  id: string,
+  location: 'path' | 'query' | 'body' = 'path',
+  name = 'id',
+): void {
+  if (!z.uuid().safeParse(id).success) {
+    throw new Invalid('The request is not valid.', [
+      { in: location, path: name, message: `The ${name} must be a UUID.` },
+    ]);
+  }
+}

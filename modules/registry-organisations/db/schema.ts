@@ -5,7 +5,16 @@
 // registry `org.type`, so a new type needs no migration. No foreign key to a user or to the blob
 // table: ids are kept as written, so a purge or the blob cleanup cannot be blocked.
 import { sql } from 'drizzle-orm';
-import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -77,6 +86,64 @@ export const organisation = pgTable(
     check(
       'org_organisation_logo_check',
       sql`(${table.logoBlobId} is null) = (${table.logoHash} is null)`,
+    ),
+  ],
+);
+
+/**
+ * One person's membership of one organisation, with a state and a role. One row per pair: a later
+ * request after a rejection or a leave reopens it, and the history is the audit trail of the events
+ * (ADR-0033). The states and roles are closed sets of code with check constraints, never a pg enum.
+ * `user_id` has no foreign key, so a purge cannot be blocked; the service removes the rows of an
+ * organisation before the organisation (hence `restrict`).
+ */
+export const membership = pgTable(
+  'org_membership',
+  {
+    id: uuid().primaryKey(), // UUIDv7
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisation.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id').notNull(),
+    /** `requested`, `approved`, `rejected` or `left` (see `service/membership-state.ts`). */
+    state: text().notNull(),
+    /** `member` or `manager`; `manager` only while the state is `approved`. */
+    role: text().notNull().default('member'),
+    /** When the current request was made (reset when a later request reopens the row). */
+    requestedAt: timestamptz('requested_at').notNull().defaultNow(),
+    decidedAt: timestamptz('decided_at'),
+    decidedBy: uuid('decided_by'),
+    endedAt: timestamptz('ended_at'),
+    endedBy: uuid('ended_by'),
+    roleChangedAt: timestamptz('role_changed_at'),
+    roleChangedBy: uuid('role_changed_by'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    unique('org_membership_organisation_user_key').on(table.organisationId, table.userId),
+    // "My memberships".
+    index('org_membership_user_idx').on(table.userId),
+    // "Pending, oldest first".
+    index('org_membership_pending_idx')
+      .on(table.requestedAt, table.id)
+      .where(sql`${table.state} = 'requested'`),
+    // "Members of an organisation" and the grouped member count.
+    index('org_membership_members_idx')
+      .on(table.organisationId)
+      .where(sql`${table.state} = 'approved'`),
+    // "Managers of an organisation" (the manager count, the organisations a person manages).
+    index('org_membership_managers_idx')
+      .on(table.organisationId, table.userId)
+      .where(sql`${table.state} = 'approved' and ${table.role} = 'manager'`),
+    check(
+      'org_membership_state_check',
+      sql`${table.state} in ('requested', 'approved', 'rejected', 'left')`,
+    ),
+    check('org_membership_role_check', sql`${table.role} in ('member', 'manager')`),
+    check(
+      'org_membership_manager_approved_check',
+      sql`${table.role} = 'member' or ${table.state} = 'approved'`,
     ),
   ],
 );

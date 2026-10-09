@@ -10,6 +10,7 @@ import type { AuthzService } from '@scorpion/core-authz/public';
 import blobModule from '@scorpion/core-blob/module';
 import blobPackage from '@scorpion/core-blob/package.json' with { type: 'json' };
 import { createIdentityModule } from '@scorpion/core-identity/module';
+import type { IdentityService } from '@scorpion/core-identity/public';
 import identityPackage from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
@@ -23,6 +24,11 @@ import {
   type ModuleManifest,
 } from '@scorpion/kernel';
 import {
+  breakDeliveries as breakDeliveriesIn,
+  breakInbox as breakInboxIn,
+  deliveryRows,
+  inboxRows,
+  makePreference,
   makeRoleAssignment,
   makeSecretsKey,
   makeUser,
@@ -31,6 +37,7 @@ import {
 } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createOrganisationsModule } from '../module.ts';
+import type { MembershipsService } from '../service/memberships.ts';
 import type { OrganisationsService } from '../service/organisations.ts';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -51,9 +58,29 @@ export interface OrganisationsStarted {
   kernel: Kernel;
   pool: Kernel['pool'];
   organisations: OrganisationsService;
+  memberships: MembershipsService;
   authz: AuthzService;
   /** A signed-in-looking actor for a new user who holds the given roles (rows in the database, so the real authoriser decides). */
   actor: (...roles: string[]) => Promise<UserActor>;
+  /** The address of a user, read from the database (so a test can look for it in a mail). */
+  emailOf: (actor: UserActor) => Promise<string>;
+  /** Stores the language preference `notifications.locale` of a user. */
+  setLocale: (actor: UserActor, locale: string) => Promise<void>;
+  /** The mails queued so far, oldest first: who got which template, in which language, with its text. */
+  deliveries: () => Promise<
+    {
+      template: string;
+      recipient_address: string | null;
+      recipient_user_id: string | null;
+      locale: string;
+      subject: string;
+      text_body: string | null;
+    }[]
+  >;
+  /** The inbox items so far, oldest first. */
+  inbox: () => Promise<
+    { user_id: string; template: string; title: string; text: string; link: string | null }[]
+  >;
   /** Saves the settings of registry.organisations (the whole object) as an administrator would. */
   configure: (values: Record<string, unknown>) => Promise<void>;
   /** Delivers every pending outbox event. */
@@ -166,12 +193,24 @@ export function useOrganisations(): OrganisationsHarness {
           via: 'session',
         };
       };
+      const service = kernel.services.get('registry.organisations') as OrganisationsService &
+        MembershipsService;
       return {
         kernel,
         pool: kernel.pool,
-        organisations: kernel.services.get('registry.organisations') as OrganisationsService,
+        organisations: service,
+        memberships: service,
         authz: kernel.services.get('core.authz') as AuthzService,
         actor,
+        async emailOf(who) {
+          const identity = kernel.services.get('core.identity') as IdentityService;
+          return (await identity.users.findById(who.userId))!.email!;
+        },
+        async setLocale(who, locale) {
+          await makePreference(kernel.pool, { id: who.userId }, 'notifications.locale', locale);
+        },
+        deliveries: () => deliveryRows(kernel.pool),
+        inbox: () => inboxRows(kernel.pool),
         async configure(values) {
           const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
           const admin = await actor('admin');
@@ -230,3 +269,19 @@ export function fixtureContributor(options: {
     },
   };
 }
+
+/** Makes the outbox refuse an insert, so the event of a write cannot be stored. Returns the undo. */
+export async function breakOutbox(pool: { query(text: string): Promise<unknown> }) {
+  await pool.query(`
+    create or replace function test_break_outbox() returns trigger as $$
+    begin raise exception 'outbox is broken for this test'; end $$ language plpgsql;
+    create trigger test_break_outbox before insert on kernel_outbox
+      for each row execute function test_break_outbox();`);
+  return () => pool.query('drop trigger test_break_outbox on kernel_outbox');
+}
+
+/** Makes the mail queue refuse an insert, so a mail cannot be stored. Returns the undo. */
+export const breakDeliveries = breakDeliveriesIn;
+
+/** Makes the inbox refuse an insert (an inbox item is a second write after the mail). Returns the undo. */
+export const breakInbox = breakInboxIn;

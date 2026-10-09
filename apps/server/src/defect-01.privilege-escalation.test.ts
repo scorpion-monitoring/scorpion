@@ -289,6 +289,54 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}` }),
   },
+  // M6 sprint 3 (ADR-0034): membership. Asking, withdrawing and the own list are the caller's own
+  // (`…membership.request`, role `user`). The rest are DELEGATED: the route names the plain
+  // `…organisation.read` that every signed-in person holds, so a plain User passes the pipeline, and the
+  // SERVICE refuses with 403 (an Admin, or a manager of that organisation, may act). These rows
+  // therefore prove the service answer, not the pipeline: a delegated route without its service check
+  // would answer 200 or 404 here and fail this file.
+  'POST /organisations/{id}/membership': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'POST', path: `/organisations/${id}/membership` }),
+  },
+  'DELETE /organisations/{id}/membership': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}/membership` }),
+  },
+  'GET /account/memberships': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/account/memberships' }),
+  },
+  // Never 403: a plain User's answer is zeros, so the dashboard card needs no error handling.
+  'GET /memberships/summary': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/memberships/summary' }),
+  },
+  'GET /organisations/{id}/members': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'GET', path: `/organisations/${id}/members` }),
+  },
+  'GET /memberships': { kind: 'admin', sample: () => ({ method: 'GET', path: '/memberships' }) },
+  'POST /memberships/{id}/decision': {
+    kind: 'admin',
+    sample: ({ id }) => ({
+      method: 'POST',
+      path: `/memberships/${id}/decision`,
+      body: { decision: 'approved' },
+    }),
+  },
+  'POST /memberships/{id}/role': {
+    kind: 'admin',
+    sample: ({ id }) => ({
+      method: 'POST',
+      path: `/memberships/${id}/role`,
+      body: { role: 'manager' },
+    }),
+  },
+  'POST /memberships/{id}/remove': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'POST', path: `/memberships/${id}/remove` }),
+  },
   // core.blob: the generic upload is Admin's (logos). The avatar is the caller's own.
   'POST /files': {
     kind: 'admin',
@@ -545,6 +593,12 @@ describe('defect 1: the route table', () => {
       'core.audit.export',
       'core.audit.system.read',
       'core.audit.system.manage',
+      // The scoped permissions of registry.organisations: a plain User's token that names them gets
+      // nothing the person lacks (the policy answers for people who are managers, and this one is not).
+      'registry.organisations.membership.view-members',
+      'registry.organisations.membership.decide',
+      'registry.organisations.membership.manage-roles',
+      'registry.organisations.membership.remove',
     ];
     // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
     const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 10)], permissions.slice(10)];

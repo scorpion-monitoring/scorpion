@@ -138,8 +138,6 @@ describe('in a kernel', () => {
       'notifications.test',
       'onboarding.application-decided',
       'onboarding.application-submitted',
-      'registry.membership-decided',
-      'registry.membership-requested',
     ]);
   });
 

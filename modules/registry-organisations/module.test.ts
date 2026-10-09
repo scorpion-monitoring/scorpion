@@ -22,51 +22,111 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the three permissions', () => {
+  it('has the id, the table prefix and the eight permissions: three plain, five scoped to organisation', () => {
     expect(manifest.id).toBe('registry.organisations');
     expect(manifest.tablePrefix).toBe('org_');
-    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+    const permissions = manifest.permissions ?? {};
+    expect(Object.keys(permissions).sort()).toEqual([
+      'registry.organisations.membership.decide',
+      'registry.organisations.membership.manage-roles',
+      'registry.organisations.membership.remove',
+      'registry.organisations.membership.request',
+      'registry.organisations.membership.view-members',
       'registry.organisations.organisation.manage',
       'registry.organisations.organisation.read',
       'registry.organisations.organisation.read-contact',
     ]);
+    // A route names a plain permission only (ADR-0034); the scoped ones are checked by the service.
+    const scoped = Object.entries(permissions)
+      .filter(([, def]) => def.scope !== undefined)
+      .map(([id, def]) => `${id}:${def.scope}`)
+      .sort();
+    expect(scoped).toEqual([
+      'registry.organisations.membership.decide:organisation',
+      'registry.organisations.membership.manage-roles:organisation',
+      'registry.organisations.membership.remove:organisation',
+      'registry.organisations.membership.view-members:organisation',
+      'registry.organisations.organisation.read-contact:organisation',
+    ]);
   });
 
-  it('declares the setting exposeContactPoint (default on, with a title and a description) and nothing else', () => {
+  it('declares exposeContactPoint and the three membership settings, with defaults, titles and descriptions', () => {
     const shape = settingsSchema.shape;
-    expect(Object.keys(shape)).toEqual(['exposeContactPoint']);
-    expect(settingsSchema.parse({})).toEqual({ exposeContactPoint: true });
-    expect(shape.exposeContactPoint.meta()).toMatchObject({
-      title: expect.any(String) as string,
-      description: expect.any(String) as string,
+    expect(Object.keys(shape)).toEqual(['exposeContactPoint', 'membership']);
+    expect(settingsSchema.parse({})).toEqual({
+      exposeContactPoint: true,
+      membership: {
+        maxPendingPerUser: 10,
+        membersVisibleToMembers: true,
+        maxManagersPerOrganisation: 20,
+      },
     });
+    for (const field of [shape.exposeContactPoint, shape.membership]) {
+      expect(field.meta()).toMatchObject({
+        title: expect.any(String) as string,
+        description: expect.any(String) as string,
+      });
+    }
+    const membership = shape.membership.unwrap().shape;
+    expect(Object.keys(membership)).toEqual([
+      'maxPendingPerUser',
+      'membersVisibleToMembers',
+      'maxManagersPerOrganisation',
+    ]);
+    for (const field of Object.values(membership)) {
+      expect(field.meta()).toMatchObject({
+        title: expect.any(String) as string,
+        description: expect.any(String) as string,
+      });
+    }
+    // The limits are bounded: 1 to 100.
+    for (const key of ['maxPendingPerUser', 'maxManagersPerOrganisation']) {
+      expect(settingsSchema.safeParse({ membership: { [key]: 0 } }).success, key).toBe(false);
+      expect(settingsSchema.safeParse({ membership: { [key]: 101 } }).success, key).toBe(false);
+      expect(settingsSchema.safeParse({ membership: { [key]: 100 } }).success, key).toBe(true);
+    }
     expect(manifest.settings).toBe(settingsSchema);
     expect(manifest.permissions?.['registry.organisations.organisation.read-contact']?.scope).toBe(
       'organisation',
     );
   });
 
-  it('emits the three organisation events, each strict, with names and ids only', () => {
+  it('emits the three organisation events and the four membership events, each strict, with names and ids only', () => {
     expect(Object.keys(manifest.events?.emits ?? {}).sort()).toEqual([
+      'registry.membership.decided@1',
+      'registry.membership.left@1',
+      'registry.membership.requested@1',
+      'registry.membership.roleChanged@1',
       'registry.organisation.created@1',
       'registry.organisation.deleted@1',
       'registry.organisation.updated@1',
     ]);
   });
 
-  it('declares the registries org.type and org.usage, and contributes the seed types and the default roles', () => {
+  it('declares the registries org.type and org.usage, and contributes the seed types, the default roles and the member policy', () => {
     expect(Object.keys(manifest.registries ?? {}).sort()).toEqual(['org.type', 'org.usage']);
     expect((manifest.contributes?.['org.type'] as { id: string }[]).map((t) => t.id)).toEqual([
       'provider',
       'consortium',
     ]);
     expect(manifest.contributes?.['authz.defaultRole']).toEqual([
-      { role: 'user', permissions: ['registry.organisations.organisation.read'] },
+      {
+        role: 'user',
+        permissions: [
+          'registry.organisations.organisation.read',
+          'registry.organisations.membership.request',
+        ],
+      },
       { role: 'reviewer', permissions: ['registry.organisations.organisation.read'] },
     ]);
+    expect(
+      (manifest.contributes?.['authz.resourcePolicy'] as { resourceType: string }[]).map(
+        (policy) => policy.resourceType,
+      ),
+    ).toEqual(['organisation']);
   });
 
-  it('creates one table with the prefix org_, no foreign key and no enum', () => {
+  it('creates the two tables with the prefix org_, one foreign key (to its own organisation table), no key to a user or a blob, and no enum', () => {
     const migrations = join(dir, 'migrations');
     const sql = readdirSync(migrations)
       .filter((file) => file.endsWith('.sql'))
@@ -74,8 +134,14 @@ describe('the manifest', () => {
       .join('\n');
     expect([...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((match) => match[1])).toEqual([
       'org_organisation',
+      'org_membership',
     ]);
-    expect(sql).not.toMatch(/REFERENCES/i);
+    // The only reference is membership → organisation: user ids and the logo's blob id are plain
+    // columns, so a purge or the blob cleanup cannot be blocked.
+    expect([...sql.matchAll(/REFERENCES "public"\."([^"]+)"/g)].map((match) => match[1])).toEqual([
+      'org_organisation',
+    ]);
+    expect(sql).not.toMatch(/REFERENCES "public"\."(identity|blob)_/);
     expect(sql).not.toMatch(/CREATE TYPE/i);
   });
 
@@ -131,13 +197,21 @@ describe('in a profile', () => {
     expect(paths).toContain('/organisation-types');
   });
 
-  it('gives every route a permission and none is public', async () => {
+  it('gives every route a plain permission of the module and none is public; no route names a scoped one (ADR-0034)', async () => {
     const s = await h.start();
-    const own = s.kernel.routes.filter((r) => r.route.path.startsWith('/organisation'));
-    expect(own).toHaveLength(9);
+    const own = s.kernel.routes.filter((r) =>
+      String(r.route.permission).startsWith('registry.organisations.'),
+    );
+    // Nine for the record, the logo and the types; nine for membership.
+    expect(own).toHaveLength(18);
+    const plain = new Set(
+      Object.entries(manifest.permissions ?? {})
+        .filter(([, def]) => def.scope === undefined)
+        .map(([id]) => id),
+    );
     for (const { route } of own) {
-      expect(route.permission, `${route.method} ${route.path}`).toMatch(
-        /^registry\.organisations\./,
+      expect(plain, `${route.method} ${route.path}: ${route.permission}`).toContain(
+        route.permission,
       );
       expect(route.public).not.toBe(true);
     }

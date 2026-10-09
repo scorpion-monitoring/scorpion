@@ -50,7 +50,16 @@ describe('GET /settings', () => {
       'core.settings',
       'registry.organisations',
     ]);
-    expect(body.result[5]).toMatchObject({ values: { exposeContactPoint: true } });
+    expect(body.result[5]).toMatchObject({
+      values: {
+        exposeContactPoint: true,
+        membership: {
+          maxPendingPerUser: 10,
+          membersVisibleToMembers: true,
+          maxManagersPerOrganisation: 20,
+        },
+      },
+    });
     expect(body.result[2]).toMatchObject({
       version: 0,
       values: { localAccounts: true, approvalPolicy: 'manual', oidcProviders: [] },

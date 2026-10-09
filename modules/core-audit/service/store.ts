@@ -78,10 +78,12 @@ export function createStore({ db, settings }: StoreDeps): Store {
     async recordEvent(event) {
       const decision = EVENT_DECISIONS[event.name];
       if (decision?.decision !== 'log') return;
-      if (!decision.critical && !(await settings()).channels.admin) return;
       const payload = (
         typeof event.payload === 'object' && event.payload !== null ? event.payload : {}
       ) as Record<string, unknown>;
+      const critical =
+        typeof decision.critical === 'function' ? decision.critical(payload) : decision.critical;
+      if (!critical && !(await settings()).channels.admin) return;
       const kept = Object.fromEntries(
         Object.entries(payload).filter(([key]) => !PAYLOAD_DROPPED_KEYS.includes(key)),
       );

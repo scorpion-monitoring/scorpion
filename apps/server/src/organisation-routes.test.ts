@@ -644,10 +644,18 @@ describe('the OpenAPI document', () => {
       .map(({ route, surface }) => ({ ...route, path: `${SURFACE_PREFIX[surface]}${route.path}` }));
     const document = generateOpenApiDocument(routes, { title: 'Organisations', version: '1' });
     expect(Object.keys(document.paths ?? {}).sort()).toEqual([
+      '/api/internal/account/memberships',
+      '/api/internal/memberships',
+      '/api/internal/memberships/summary',
+      '/api/internal/memberships/{id}/decision',
+      '/api/internal/memberships/{id}/remove',
+      '/api/internal/memberships/{id}/role',
       '/api/internal/organisation-types',
       '/api/internal/organisations',
       '/api/internal/organisations/{id}',
       '/api/internal/organisations/{id}/logo',
+      '/api/internal/organisations/{id}/members',
+      '/api/internal/organisations/{id}/membership',
       '/api/internal/organisations/{id}/schema-org',
     ]);
     const profile = document.paths?.['/api/internal/organisations/{id}/schema-org']?.get;

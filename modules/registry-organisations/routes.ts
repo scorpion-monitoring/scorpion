@@ -37,7 +37,14 @@ const summarySchema = z.object({
     ),
   abbreviation: z.string(),
   name: z.string(),
-  memberCount: z.number().int(),
+  memberCount: z.number().int().describe('Approved members, managers included.'),
+  myMembership: z
+    .object({
+      state: z.enum(['requested', 'approved', 'rejected', 'left']),
+      role: z.enum(['member', 'manager']),
+    })
+    .nullable()
+    .describe('The caller’s own row in any state, for a badge; `null` without one.'),
 });
 
 const organisationSchema = summarySchema.extend({
@@ -255,6 +262,7 @@ const summaryOut = (o: OrganisationSummary) => ({
   abbreviation: o.abbreviation,
   name: o.name,
   memberCount: o.memberCount,
+  myMembership: o.myMembership,
 });
 
 /** Field by field on purpose: a column added to the table later is not exposed by accident. */

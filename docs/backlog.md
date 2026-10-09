@@ -84,8 +84,9 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   fan-out job; nothing near it exists.
 - **Admin mails are sent one by one inside the registration transaction.** Fine for a handful; with many administrators a fan-out job reading the
   list after the commit would shorten the request.
-- **Templates of modules that do not exist yet live in core.notifications** (`registry.membership-*`, `onboarding.application-*`,
-  `kpi.reporting-reminder`). When M6, M10 and M15 land, each module takes over its own (a rename of the contributor, same key).
+- **Templates of modules that do not exist yet live in core.notifications** (`onboarding.application-*`, `kpi.reporting-reminder`). When M10 and M15 land,
+  each module takes over its own (a rename of the contributor, same key). Done for `registry.membership-*` in M6 sprint 3 (they moved to
+  `registry.organisations` with the same keys, worded for organisations).
 - **No unsubscribe link.** Done in M4 sprint 3: `category` and `mandatory` drive the preference switches (ADR-0023). Still open: an unsubscribe link in the mail.
 - **The text and HTML of a template are not checked by a mail-client test.** The HTML is plain tables-free markup with inline styles; the
   layout is tested for escaping and structure, not rendered in real clients.
@@ -201,9 +202,41 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - ~~**Who may upload a logo through the blob store.**~~ Closed in M6 sprint 2: a module stores an image through its own route, its own permission and the blob service; `POST /files` and `core.blob.manage` stay for the branding logos of the settings and are not used here. `PUT /organisations/{id}/logo` needs `…organisation.manage` (sprint 4: the scoped `…organisation.edit`, checked in the service), and the service calls `blob.put` (which needs `core.blob.upload`, held by the role `user`) and then `setReference`. Nothing changed in `core.blob`.
 - **Logo extras (M6 sprint 2).** Logo variants (thumbnails of a fixed size), a logo fetched from a URL (an outgoing request, so SSRF rules and a timeout), and SVG-only logos (today a raster or an SVG is accepted and the blob store rewrites it; there is no way to require vector input) are not built. The logo hash is public by `GET /files/{hash}`; a private logo is not possible.
 - **`address` and `foundingDate`** (schema.org) are not stored or mapped; see the hierarchy entry above.
-- **One contact permission only until sprint 3.** `…organisation.read-contact` is declared (scope `organisation`) and held by Admin; the managers of an organisation get it through the `organisation.member` policy of sprint 3, which also needs a test for the manager clause. Until then the contact point is shown by that permission or the setting `organisation.exposeContactPoint`.
-- **Counting only active accounts** in `memberCount` (sprint 3), in the manager count and in `isApprovedMember` for a deactivated account: a deactivated person has no working session, so the count may include them until this is decided.
+- ~~**One contact permission only until sprint 3.**~~ Done in M6 sprint 3: the managers of an organisation hold `…organisation.read-contact` through the policy `organisation.member`, with no change in the organisation service; the manager clause is tested (`memberships.lists.test.ts`, `policy.test.ts`).
+- **Counting only active accounts** in `memberCount`, in the manager count and in `isApprovedMemberAsSystem` for a deactivated account: a deactivated person has no working session, so their approved membership grants nothing, but it still counts until the purge (documented in the README of `registry.organisations`, M6 sprint 3). Counting active accounts only needs a way to ask `core.identity` for the status of many users at once (see the batch lookup below).
 - **An organisation of a type that is no longer registered** (a profile that dropped the module that contributed the type) is listed and readable with `typeKnown: false`, refuses every change, and can still be deleted when no `org.usage` entry counts a reference. A way to move such organisations to another type in one step is not built.
+
+## Membership and delegation follow-ups (M6 sprint 3)
+
+From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-0034 records the design.
+
+- **A batch lookup of users in `core.identity`.** The manager's and the administrator's list of memberships, the mails of a request and the
+  member list ask `core.identity` for one user at a time (`users.findById`), at most one per person on a page (100) and one per
+  recipient of a request (managers, at most 100, and administrators, at most 1000). A `findByIds` (id, username, address, status) would make
+  these one query and let `memberCount` count active accounts only. It is a change in `modules/core-identity/**`, which is an ASVS-scoped path, so it
+  comes with its V6/V8 entries and tagged tests, not inside a registry sprint.
+- **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). A flag on `createRoute()` that lets the pipeline pass a
+  caller who lacks the permission globally, with the service re-check as the guard, would make a delegated route visible to the pipeline instead of
+  looking like an ordinary read. It touches `packages/contracts/src/route.ts` and `apps/server/src/pipeline/**` (both ASVS-scoped). Build it in M7 only
+  if `service.edit` cannot use the pattern of M6 (a plain permission on the route, the scoped check in the service).
+- **Closing the one-request window after a demotion** (ADR-0034): a decision that passed the permission check a moment before a demotion committed
+  is allowed once. Taking the row lock before the permission check would close it at the price of letting an unauthorised caller queue behind a
+  lock. Not worth it unless a case shows up.
+- **Managers removing other managers**, inviting people, an expiry of a membership, a transfer between organisations, roles beyond `member`
+  and `manager`, a manager of several organisations through one action, an organisation-level setting for who may decide. (Today only an Admin removes a
+  manager; a manager can demote one. Decision 16 and 18.)
+- **Mail to the person** when an Admin or a manager removes them, or when a person leaves (a role change is an inbox item only), a digest for the
+  deciders, and the "all administrators" fan-out job for more than 1000 holders (see the entry on admin mails above).
+- **Reactivation** of a purged person's memberships (there is none: the rows are deleted), and a history view of one membership beyond the audit trail
+  (the row keeps only the last decision; a reopened row forgets the old one).
+- **A slot in the identity profile page for module sections** (Decision 10) and a notification preference per organisation.
+- **Editing by managers (sprint 4, Decision 19).** No review step for manager edits in M6. Backlog: a review queue for manager edits, an inbox item to the
+  administrators when a manager changes the contact point or the ROR id, and an instance switch that turns manager editing off.
+- **An anonymous caller gets 422 before 401 on a route with a required body.** `POST /organisations`, `POST /tokens` and the membership routes
+  answer 422 (a problem that names the body fields) to a caller who is not signed in and sends no body, because validation runs before the
+  authorization in the pipeline. Nothing is changed by it, but the answer names the schema to somebody who may not read it. Found while writing the
+  401 case for the membership routes; the matrix of defect 1 sends a valid body on every route, which hides it. A fix is in `apps/server/src/pipeline/**`
+  (ASVS-scoped), so it is not done here.
 
 ## Later
 

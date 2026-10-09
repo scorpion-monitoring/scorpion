@@ -56,7 +56,7 @@ describe('list', () => {
     });
     const { organisations: rows } = await organisations.list(admin, {}, PAGE);
     expect(Object.keys(rows[0]!).sort()).toEqual(
-      ['abbreviation', 'id', 'memberCount', 'name', 'type', 'typeKnown'].sort(),
+      ['abbreviation', 'id', 'memberCount', 'myMembership', 'name', 'type', 'typeKnown'].sort(),
     );
   });
 
