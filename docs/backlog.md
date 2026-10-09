@@ -231,6 +231,22 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-
   (the row keeps only the last decision; a reopened row forgets the old one).
 - **A slot in the identity profile page for module sections** (Decision 10) and a notification preference per organisation.
 - ~~**Editing by managers (sprint 4, Decision 19).**~~ Built in M6 sprint 4; the follow-ups (a review queue, an inbox item, an instance switch) are in "Editing and screens follow-ups" below.
+
+## Editing and screens follow-ups (M6 sprint 4)
+
+- **Manager edits go live at once (Decision 19).** A review queue for manager edits of the ROR id, the website and the `sameAs` links, an
+  inbox item to administrators when a manager changes the contact point or the ROR id, and an instance switch that turns manager editing
+  off are not built. Today an Admin sees every manager edit on the critical audit channel (`registry.organisation.updated@1` with
+  `by: manager`) and can revert it; relaxing the audit channel is one line in `core.audit`'s `decisions.ts`.
+- **A `sort` parameter on `GET /organisations`.** The list sorts by abbreviation, then id on the server, and the administrator's table has no
+  sortable columns. A sort by name, type or member count needs a `sort`/`dir` pair on the route (additive).
+- **Component tests for a module's Svelte pages.** The modules' Vitest projects have no Svelte plugin, and the module boundary rule keeps the
+  web app from importing a module's files, so the render test of `JsonLd.svelte` (`apps/web/src/json-ld.test.ts`) loads the component by its
+  path. A shared way to render a module's component in a test (a Svelte-enabled project per module, or an allowed import for tests) would
+  also serve the sprint 5 page tests.
+- **Logo in the list rows and on the administrator's list.** The list shows no logo; `logoUrl` is only in the record. A small thumbnail needs
+  a variant of the file (see "Logo extras").
+
 - **An anonymous caller gets 422 before 401 on a route with a required body.** `POST /organisations`, `POST /tokens` and the membership routes
   answer 422 (a problem that names the body fields) to a caller who is not signed in and sends no body, because validation runs before the
   authorization in the pipeline. Nothing is changed by it, but the answer names the schema to somebody who may not read it. Found while writing the
