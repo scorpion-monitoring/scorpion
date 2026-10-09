@@ -114,14 +114,16 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   ),
 
   // registry.organisations (present only in profiles that have it; see the module's optional peer).
-  // Not critical: they follow `channels.admin`. The payload names fields and ids, never text.
+  // Creating and deleting is an Admin's act and follows `channels.admin`. An edit is critical when a manager
+  // made it (`by: manager`, Decision 19 of the M6 plan: the administrators see every manager edit; cheap to
+  // relax), and follows `channels.admin` when an Admin did. The payload names fields and ids, never text.
   'registry.organisation.created@1': log(
     false,
     userBy('actorId'),
     subjectOf('organisation', 'organisationId'),
   ),
   'registry.organisation.updated@1': log(
-    false,
+    (payload) => payload.by === 'manager',
     userBy('actorId'),
     subjectOf('organisation', 'organisationId'),
   ),
