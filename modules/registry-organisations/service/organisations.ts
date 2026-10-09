@@ -26,12 +26,19 @@ import {
   type OrgUsageEntry,
 } from './registries.ts';
 
-export const PERMISSION_READ = 'registry.organisations.organisation.read';
-export const PERMISSION_MANAGE = 'registry.organisations.organisation.manage';
-/** Scoped to `organisation`: Admin everywhere; sprint 3 adds the managers of the organisation. */
-export const PERMISSION_READ_CONTACT = 'registry.organisations.organisation.read-contact';
-/** The resource type of the scoped permissions of this module. */
-export const RESOURCE_TYPE = 'organisation';
+import {
+  PERMISSION_MANAGE,
+  PERMISSION_READ,
+  PERMISSION_READ_CONTACT,
+  RESOURCE_TYPE,
+} from './permissions.ts';
+
+export {
+  PERMISSION_MANAGE,
+  PERMISSION_READ,
+  PERMISSION_READ_CONTACT,
+  RESOURCE_TYPE,
+} from './permissions.ts';
 
 /** The reference that keeps a logo alive in `core.blob`: owner, purpose, organisation. */
 export const logoReference = (organisationId: string) =>

@@ -22,13 +22,31 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the three permissions', () => {
+  it('has the id, the table prefix and the eight permissions: three plain, five scoped to organisation', () => {
     expect(manifest.id).toBe('registry.organisations');
     expect(manifest.tablePrefix).toBe('org_');
-    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+    const permissions = manifest.permissions ?? {};
+    expect(Object.keys(permissions).sort()).toEqual([
+      'registry.organisations.membership.decide',
+      'registry.organisations.membership.manage-roles',
+      'registry.organisations.membership.remove',
+      'registry.organisations.membership.request',
+      'registry.organisations.membership.view-members',
       'registry.organisations.organisation.manage',
       'registry.organisations.organisation.read',
       'registry.organisations.organisation.read-contact',
+    ]);
+    // A route names a plain permission only (ADR-0034); the scoped ones are checked by the service.
+    const scoped = Object.entries(permissions)
+      .filter(([, def]) => def.scope !== undefined)
+      .map(([id, def]) => `${id}:${def.scope}`)
+      .sort();
+    expect(scoped).toEqual([
+      'registry.organisations.membership.decide:organisation',
+      'registry.organisations.membership.manage-roles:organisation',
+      'registry.organisations.membership.remove:organisation',
+      'registry.organisations.membership.view-members:organisation',
+      'registry.organisations.organisation.read-contact:organisation',
     ]);
   });
 
@@ -81,16 +99,27 @@ describe('the manifest', () => {
     ]);
   });
 
-  it('declares the registries org.type and org.usage, and contributes the seed types and the default roles', () => {
+  it('declares the registries org.type and org.usage, and contributes the seed types, the default roles and the member policy', () => {
     expect(Object.keys(manifest.registries ?? {}).sort()).toEqual(['org.type', 'org.usage']);
     expect((manifest.contributes?.['org.type'] as { id: string }[]).map((t) => t.id)).toEqual([
       'provider',
       'consortium',
     ]);
     expect(manifest.contributes?.['authz.defaultRole']).toEqual([
-      { role: 'user', permissions: ['registry.organisations.organisation.read'] },
+      {
+        role: 'user',
+        permissions: [
+          'registry.organisations.organisation.read',
+          'registry.organisations.membership.request',
+        ],
+      },
       { role: 'reviewer', permissions: ['registry.organisations.organisation.read'] },
     ]);
+    expect(
+      (manifest.contributes?.['authz.resourcePolicy'] as { resourceType: string }[]).map(
+        (policy) => policy.resourceType,
+      ),
+    ).toEqual(['organisation']);
   });
 
   it('creates the two tables with the prefix org_, one foreign key (to its own organisation table), no key to a user or a blob, and no enum', () => {
