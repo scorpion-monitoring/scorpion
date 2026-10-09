@@ -213,3 +213,82 @@ describe('event payloads never name a secret', () => {
     expect(violations).toEqual([]);
   });
 });
+
+// The contact point of an organisation is the organisation's role address, not a user's (M6 sprint 2, field
+// table of docs/security/authorization.md). It may appear in the answers of exactly these routes, which
+// serve it only to the readers the table names: Admin and the managers of that organisation always, other
+// signed-in persons while `organisation.exposeContactPoint` is on. It is never in a list row, a member list,
+// a membership, an event payload or any other route.
+const CONTACT_FIELDS = ['contactEmail', 'contactType', 'contactPoint'] as const;
+const CONTACT_ROUTES: Record<string, readonly string[]> = {
+  'GET /organisations/{id}': ['contactEmail', 'contactType'],
+  'POST /organisations': ['contactEmail', 'contactType'],
+  'PATCH /organisations/{id}': ['contactEmail', 'contactType'],
+  'PUT /organisations/{id}/logo': ['contactEmail', 'contactType'],
+  'DELETE /organisations/{id}/logo': ['contactEmail', 'contactType'],
+  // The profile nests `contactType` inside `contactPoint`.
+  'GET /organisations/{id}/schema-org': ['contactPoint', 'contactType'],
+};
+/** The instance's own contact address (branding settings), a different thing that happens to share a name. */
+const NOT_THE_ORGANISATIONS = ['GET /branding'];
+
+describe('the contact point of an organisation', () => {
+  it('is declared by the routes the field table names and by no other route [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start();
+    const found: Record<string, string[]> = {};
+    for (const { route } of kernel.routes) {
+      const key = `${route.method.toUpperCase()} ${route.path}`;
+      if (NOT_THE_ORGANISATIONS.includes(key)) continue;
+      const names = new Set<string>();
+      for (const response of Object.values((route as RouteLike).responses ?? {})) {
+        for (const content of Object.values(response?.content ?? {})) {
+          for (const at of propertyNames(content.schema)) {
+            const name = at.slice(at.lastIndexOf('.') + 1);
+            if ((CONTACT_FIELDS as readonly string[]).includes(name)) names.add(name);
+          }
+        }
+      }
+      if (names.size > 0) found[key] = [...names].sort();
+    }
+    expect(found).toEqual(
+      Object.fromEntries(
+        Object.entries(CONTACT_ROUTES).map(([key, names]) => [key, [...names].sort()]),
+      ),
+    );
+  });
+
+  it('is in no event payload, and no event payload of the organisation module carries a value of the record [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start();
+    const VALUES =
+      /contact|email|address|website|sameas|ror|description|url|logo|name$|abbreviation/i;
+    const offenders = [...kernel.composition.events.values()]
+      .filter((event) => event.name.startsWith('registry.'))
+      .flatMap((event) =>
+        propertyNames(event.schema)
+          .map((at) => at.slice(at.lastIndexOf('.') + 1))
+          .filter((name) => VALUES.test(name))
+          .map((name) => `${event.name}: ${name}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it('is never part of a list row, a member list or a membership: those schemas name no contact field', async () => {
+    const { kernel } = await app.start();
+    const mustNot = [
+      'GET /organisations',
+      'GET /organisations/{id}/members',
+      'GET /memberships',
+      'GET /account/memberships',
+    ];
+    for (const key of mustNot) {
+      const entry = kernel.routes.find(
+        ({ route }) => `${route.method.toUpperCase()} ${route.path}` === key,
+      );
+      expect(entry, key).toBeDefined();
+      const names = Object.values((entry!.route as RouteLike).responses ?? {}).flatMap((response) =>
+        Object.values(response?.content ?? {}).flatMap((content) => propertyNames(content.schema)),
+      );
+      for (const name of names) expect(name, key).not.toMatch(/contact|email/i);
+    }
+  });
+});

@@ -9,7 +9,7 @@
 //  2. The scenarios: what a plain User, an anonymous caller, a user without roles and a token
 //     with a broader scope than its owner's permissions can and cannot do.
 import { randomUUID } from 'node:crypto';
-import { makeInboxItem, makeRole } from '@scorpion/testing';
+import { makeInboxItem, makeOrganisation, makeRole } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { ALL_USER_SCOPES, PASSWORD, useIdentityApp, type Reply } from './testing/identity-app.ts';
 
@@ -25,7 +25,9 @@ interface Sample {
 }
 
 /**
- * `admin`: a plain User (the role `user`) must get 403, and the handler must not run.
+ * `admin`: a plain User (the role `user`) must get 403, and the handler must not run. (A route that is
+ * DELEGATED, ADR-0034, carries the plain `…organisation.read` and the service refuses; its sample names a
+ * real organisation, because the service answers 404 for an unknown one before it answers 403.)
  * `self`: the routes a plain User uses on their own account. They act on the caller only (no user id
  * in the input), so they are protected by the role: a user without roles gets 403.
  * Every entry also answers 401 to an anonymous caller and 403 to a user without any role.
@@ -40,7 +42,7 @@ const SAMPLES: Record<
     own?: boolean;
     /** An event stream: a plain User's success is read as the start of a stream and closed, not read to the end. */
     streaming?: boolean;
-    sample: (ids: { id: string }) => Sample;
+    sample: (ids: { id: string; organisation: string }) => Sample;
   }
 > = {
   'POST /auth/logout': { kind: 'self', sample: () => ({ method: 'POST', path: '/auth/logout' }) },
@@ -251,23 +253,29 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'GET', path: '/organisation-types' }),
   },
-  // Sprint 2: the Schema.org profile is every signed-in person's; the logo is Admin's (managers from
-  // sprint 4, through the service).
+  // Sprint 2: the Schema.org profile is every signed-in person's. Sprint 4 (ADR-0034, Decision 14): the
+  // logo routes and PATCH are DELEGATED: they carry the plain `…organisation.read`, so a plain User passes
+  // the pipeline and the SERVICE refuses with 403 (an Admin, or a manager of that organisation, may edit,
+  // and a manager only the descriptive fields). Only POST and DELETE /organisations keep `manage` at the
+  // route. defect-01.organisation-editing.test.ts has the cases of a manager and of another organisation.
   'GET /organisations/{id}/schema-org': {
     kind: 'self',
     sample: ({ id }) => ({ method: 'GET', path: `/organisations/${id}/schema-org` }),
   },
   'PUT /organisations/{id}/logo': {
     kind: 'admin',
-    sample: ({ id }) => ({
+    sample: ({ organisation }) => ({
       method: 'PUT',
-      path: `/organisations/${id}/logo`,
+      path: `/organisations/${organisation}/logo`,
       body: 'not an image',
     }),
   },
   'DELETE /organisations/{id}/logo': {
     kind: 'admin',
-    sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}/logo` }),
+    sample: ({ organisation }) => ({
+      method: 'DELETE',
+      path: `/organisations/${organisation}/logo`,
+    }),
   },
   'POST /organisations': {
     kind: 'admin',
@@ -279,9 +287,9 @@ const SAMPLES: Record<
   },
   'PATCH /organisations/{id}': {
     kind: 'admin',
-    sample: ({ id }) => ({
+    sample: ({ organisation }) => ({
       method: 'PATCH',
-      path: `/organisations/${id}`,
+      path: `/organisations/${organisation}`,
       body: { description: 'defaced' },
     }),
   },
@@ -496,7 +504,7 @@ describe('defect 1: the route table', () => {
     const s = await start();
     const roleless = await s.signedIn('norole', { roles: [] });
     for (const [key, { sample }] of Object.entries(SAMPLES)) {
-      const request = sample({ id: FOREIGN });
+      const request = sample({ id: FOREIGN, organisation: FOREIGN });
       const anonymous = await send(s, request);
       expect(anonymous.status, `${key}: anonymous`).toBe(401);
       expect(problem(anonymous), key).toContain('application/problem+json');
@@ -510,12 +518,17 @@ describe('defect 1: the route table', () => {
     const s = await start();
     const plain = await s.signedIn('plain');
     const victim = await register(s, 'victim');
+    const organisationId = (await makeOrganisation(s.kernel.pool)).id;
     const before = await s.kernel.pool.query(
       'select count(*)::int as n from authz_role_assignment',
     );
     for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
       if (kind !== 'admin') continue;
-      const reply = await send(s, sample({ id: victim }), session(plain));
+      const reply = await send(
+        s,
+        sample({ id: victim, organisation: organisationId }),
+        session(plain),
+      );
       expect(reply.status, key).toBe(403);
       expect(problem(reply), key).toContain('application/problem+json');
     }
@@ -552,14 +565,17 @@ describe('defect 1: the route table', () => {
       if (kind !== 'self') continue;
       const who = await s.signedIn(`selfservice${n++}`);
       if (streaming) {
-        const opened = await s.stream(sample({ id: FOREIGN }).path, session(who));
+        const opened = await s.stream(
+          sample({ id: FOREIGN, organisation: FOREIGN }).path,
+          session(who),
+        );
         expect(opened.status, key).toBe(200);
         await opened.close();
         continue;
       }
       // An item id is the caller's own, or the answer is 403 by design (see notification-routes.test.ts).
       const id = own ? (await makeInboxItem(s.kernel.pool, { userId: who.user.id })).id : FOREIGN;
-      const reply = await send(s, sample({ id }), session(who));
+      const reply = await send(s, sample({ id, organisation: FOREIGN }), session(who));
       expect([401, 403], key).not.toContain(reply.status);
     }
   });
@@ -599,10 +615,12 @@ describe('defect 1: the route table', () => {
       'registry.organisations.membership.decide',
       'registry.organisations.membership.manage-roles',
       'registry.organisations.membership.remove',
+      'registry.organisations.organisation.edit',
     ];
     // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
     const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 10)], permissions.slice(10)];
     const victim = await register(s, 'victim');
+    const organisationId = (await makeOrganisation(s.kernel.pool)).id;
     for (const [index, scopes] of wide.entries()) {
       const made = await s.post('/tokens', {
         ...session(plain),
@@ -612,7 +630,7 @@ describe('defect 1: the route table', () => {
       const { token } = made.body as { token: string };
       for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
         if (kind !== 'admin') continue;
-        const request = sample({ id: victim });
+        const request = sample({ id: victim, organisation: organisationId });
         const reply = await s.call(request.method, request.path, {
           headers: bearer(token),
           body: request.body,
