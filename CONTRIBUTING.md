@@ -116,7 +116,7 @@ do not raise the limit. `pnpm test` without `--shard` still runs everything, as 
 
 ## Images in the registry
 
-The `Publish (<profile>)` jobs of the `CI` workflow push the images of `full` and `core-only` to the
+The `Publish (<profile>)` jobs of the `CI` workflow push the images of `full`, `core-only` and `registry` to the
 GitHub container registry, as `ghcr.io/scorpion-monitoring/scorpion:<tag>`. They run only after the gate and the
 `Image (...)` smoke tests passed, never for a pull request, and the job has `packages: write` as the only widening
 of the workflow's read-only permissions.

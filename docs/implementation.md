@@ -210,15 +210,19 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 ## 4. Phase 2: Registry
 
-### M6: `registry.organisations` (M)
+### M6: `registry.organisations` (M, about five weeks in five sprints, [m6-sprint-plan.md](m6-sprint-plan.md))
 
-- One `organisation` table typed by the `org.type` registry (seed types: provider, consortium).
-- CRUD for admins, including delete (blocked while services reference it) and detail pages.
-- Membership as a state machine (`requested → approved | rejected`, `left`), with notifications to admins and the requester, and support for consortium membership too.
-- Resource policy `organisation.member` registered with authz.
-- UI: admin groups editor; profile → group membership (search, 5 per page, member counts, pending/member badges).
+- One `organisation` table typed by the `org.type` registry (entries `{ id, labels, membership, schemaType, order }`; seed types: provider, consortium) and the registry `org.usage` (a reference count per contributing module that blocks a delete or a type change).
+- **The `registry` profile** (the seven core modules and `registry.organisations`; M7 and M8 add their modules) with its image in the CI matrix and the ghcr publish matrix ([ADR-0032](adr/0032-registry-profile.md)). Gate 2's first line then reads "the `registry` profile runs on staging with real organisation and service data from a partial migration dry run".
+- The organisation as a Schema.org `Organization` profile ([ADR-0033](adr/0033-organisation-model.md)): stored `sameAs` list, ROR id, contact point (email and contact type) and logo (through `core.blob`, re-encoded or sanitised, released on replace and delete); one `application/ld+json` route and a server-rendered JSON-LD block on the detail page, with the output escaped; visibility of the contact point (administrators and the organisation's managers always, other signed-in persons by setting); no anonymous access in M6 (M7 adds a public profile without the contact point for organisations that have services, M8 mirrors it in v1).
+- CRUD for admins, including delete (blocked while services reference it) and detail pages. Editing by two groups: an Admin edits every field and alone creates and deletes; the managers of an organisation edit only its description, website, `sameAs`, ROR id, logo and contact point, through one `update` method with a field-rules table.
+- Membership as a state machine (`requested → approved | rejected`; `approved → left`; `requested → left` for a withdrawal) over one row per person and organisation, with a role per membership (`member`, `manager`); decisions by administrators and by the managers of that organisation; removal of an approved member by an Admin, and of a plain member by a manager of that organisation; nobody decides on their own request or changes their own role; the last manager may leave and the organisation falls back to administrators. Consortium membership too. Notifications to the deciders and to the requester; the two membership templates move from `core.notifications` to this module.
+- Events `registry.organisation.created|updated|deleted@1`, `registry.membership.requested|decided|left|role-changed@1`.
+- Resource policy `organisation.member` registered with authz, with per-permission answers and the scoped permissions `…membership.view-members`, `…membership.decide`, `…membership.manage-roles`, `…membership.remove`, `…organisation.read-contact` and `…organisation.edit`; ADR-0034 settles scoped permissions at the route and the delegation; the V8 evidence for resource-scoped authorization is updated.
+- UI: admin organisations editor (with logo), organisation detail with JSON-LD, profile → organisations (search, 5 per page, member counts, pending/member badges, the manager section), admin membership requests, a dashboard card.
+- Release `0.8.0`.
 
-**Acceptance:** a user cannot approve their own membership. Approving sends the requester an email.
+**Acceptance:** a user cannot approve their own membership. Approving sends the requester an email. No pg enum and no hard-coded type, state or role label; the module starts without the shell; the image of the `registry` profile is built and published.
 
 ### M7: `registry.services` (L)
 

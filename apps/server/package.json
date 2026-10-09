@@ -22,6 +22,7 @@
     "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "@scorpion/registry-organisations": "workspace:*",
     "hono": "^4.13.12",
     "prom-client": "^15.1.3",
     "zod": "^4.6.5"

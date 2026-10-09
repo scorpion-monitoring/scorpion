@@ -35,6 +35,9 @@
       "path": "../core-ui-shell"
     },
     {
+      "path": "../registry-organisations"
+    },
+    {
       "path": "../../packages/ui-kit"
     }
   ]

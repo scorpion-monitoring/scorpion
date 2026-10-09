@@ -47,7 +47,7 @@ pnpm check        # ESLint (incl. module boundaries), Prettier, tsc -b, svelte-c
 pnpm test         # Vitest over all packages (Testcontainers tests need Docker)
 pnpm test --filter @scorpion/server   # one package
 pnpm test:e2e     # Playwright smoke test (first: pnpm --filter @scorpion/web exec playwright install chromium)
-pnpm build --profile core-only      # image scorpion:dev-core-only
+pnpm build --profile core-only      # image scorpion:dev-core-only (also: --profile registry)
 ```
 
 ## Profiles
@@ -56,16 +56,17 @@ A profile (`profiles/<name>.ts`) lists the modules one deployment contains. Each
 gets its own image. To add or remove a plugin, rebuild the image and restart; modules are
 never loaded at runtime ([ADR-0001](docs/adr/0001-modular-monolith-build-time-composition.md)).
 
-| Profile     | Purpose                                                       |
-| ----------- | ------------------------------------------------------------- |
-| `full`      | Every module                                                  |
-| `core-only` | The core modules only (identity, authz, settings, shell, ...) |
+| Profile     | Purpose                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| `full`      | Every module                                                                                        |
+| `core-only` | The core modules only (identity, authz, settings, shell, ...)                                       |
+| `registry`  | The core modules and the registry modules, without KPIs (organisations now; services and API later) |
 
 The module lists for each profile are in the comments of the profile files, and the full
 matrix is in [docs/architecture.md](docs/architecture.md). Until M2 every profile's module list is
 still empty.
 
-CI publishes the images of `full` and `core-only` to `ghcr.io/scorpion-monitoring/scorpion`: `dev-<profile>` follows
+CI publishes the images of `full`, `core-only` and `registry` to `ghcr.io/scorpion-monitoring/scorpion`: `dev-<profile>` follows
 `dev`, and `<x.y.z>-<profile>` is built for every release tag (see [CONTRIBUTING.md](CONTRIBUTING.md#images-in-the-registry)).
 
 ```bash

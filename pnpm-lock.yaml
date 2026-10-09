@@ -101,6 +101,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../../modules/registry-organisations
       hono:
         specifier: ^4.13.12
         version: 4.13.12
@@ -151,6 +154,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../../modules/registry-organisations
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
@@ -230,6 +236,9 @@ importers:
       '@scorpion/core-ui-shell':
         specifier: workspace:*
         version: link:../core-ui-shell
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../registry-organisations
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
@@ -437,6 +446,55 @@ importers:
       '@scorpion/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+
+  modules/registry-organisations:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-authz':
+        specifier: workspace:*
+        version: link:../core-authz
+      '@scorpion/core-blob':
+        specifier: workspace:*
+        version: link:../core-blob
+      '@scorpion/core-identity':
+        specifier: workspace:*
+        version: link:../core-identity
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../core-notifications
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)
+      hono:
+        specifier: ^4.13.12
+        version: 4.13.12
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
 
   packages/contracts:
     dependencies:

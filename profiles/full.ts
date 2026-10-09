@@ -19,5 +19,6 @@ export default defineProfile({
     'core.identity',
     'core.audit',
     'core.ui-shell',
+    'registry.organisations',
   ],
 });

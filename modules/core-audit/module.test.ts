@@ -48,7 +48,7 @@ describe('the manifest', () => {
     expect(sql).not.toMatch(/REFERENCES/i);
   });
 
-  it('depends on authz, settings and identity, with notifications and the shell as optional peers', () => {
+  it('depends on authz, settings and identity, with notifications, organisations and the shell as optional peers', () => {
     const own = (names: string[]) =>
       names.filter((n) => n.startsWith('@scorpion/') && n.includes('core-'));
     expect(own(Object.keys(packageJson.dependencies)).sort()).toEqual([
@@ -59,8 +59,13 @@ describe('the manifest', () => {
     expect(Object.keys(packageJson.peerDependencies).sort()).toEqual([
       '@scorpion/core-notifications',
       '@scorpion/core-ui-shell',
+      '@scorpion/registry-organisations',
     ]);
-    for (const peer of ['@scorpion/core-notifications', '@scorpion/core-ui-shell'] as const) {
+    for (const peer of [
+      '@scorpion/core-notifications',
+      '@scorpion/core-ui-shell',
+      '@scorpion/registry-organisations',
+    ] as const) {
       expect(packageJson.peerDependenciesMeta[peer]).toEqual({ optional: true });
     }
   });
@@ -75,6 +80,7 @@ describe('in a profile', () => {
       'core.blob',
       'core.notifications',
       'core.identity',
+      'registry.organisations',
       'core.audit',
     ]);
     await s.kernel.audit({ action: 'thing.done', outcome: 'ok', actor: { kind: 'system' } });

@@ -237,6 +237,40 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: () => ({ method: 'DELETE', path: '/vocabularies/stage/terms/PROD' }),
   },
+  // registry.organisations (M6 sprint 1). Reading organisations and their types is every signed-in
+  // person's (the forms need them); writing is Admin's.
+  'GET /organisations': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/organisations' }),
+  },
+  'GET /organisations/{id}': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'GET', path: `/organisations/${id}` }),
+  },
+  'GET /organisation-types': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/organisation-types' }),
+  },
+  'POST /organisations': {
+    kind: 'admin',
+    sample: () => ({
+      method: 'POST',
+      path: '/organisations',
+      body: { type: 'provider', abbreviation: 'EVIL', name: 'Evil' },
+    }),
+  },
+  'PATCH /organisations/{id}': {
+    kind: 'admin',
+    sample: ({ id }) => ({
+      method: 'PATCH',
+      path: `/organisations/${id}`,
+      body: { description: 'defaced' },
+    }),
+  },
+  'DELETE /organisations/{id}': {
+    kind: 'admin',
+    sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}` }),
+  },
   // core.blob: the generic upload is Admin's (logos). The avatar is the caller's own.
   'POST /files': {
     kind: 'admin',
