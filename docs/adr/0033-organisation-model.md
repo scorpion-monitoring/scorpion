@@ -13,7 +13,7 @@ entry. M6 builds it ([m6-sprint-plan.md](../m6-sprint-plan.md)); M7 (services) a
 ### Table prefix and ownership
 
 The module `registry.organisations` sets `tablePrefix: 'org_'` (ADR-0004), as `core.audit` does with `audit_`. Tables are
-`org_organisation` and, from sprint 3, `org_membership`. User ids and the logo's blob id are plain columns without a foreign key,
+`org_organisation` and `org_membership`. User ids and the logo's blob id are plain columns without a foreign key,
 so a purge or the blob cleanup cannot be blocked. No pg enum: the check constraints and the registry carry the closed sets.
 
 ### One table, typed by a code registry
