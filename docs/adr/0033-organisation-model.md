@@ -53,7 +53,22 @@ as the route of the audit CSV does; nothing changed in `packages/contracts`.
 `serializeJsonLd(value)` is the only function that turns the profile into a string: `JSON.stringify`, then `<`, `>`, `&`, U+2028
 and U+2029 are written as `\uXXXX`. The output has no `<` (so no `</script>`, `<script` or `<!--`), is valid JSON and parses back to
 the same value; a lone surrogate is already escaped by `JSON.stringify`. The route uses it too, so the API answer and the page block
-cannot differ. _Sprint 4 adds the one audited `{@html}` component for the JSON-LD block (Decision 17) and finishes this section._
+cannot differ.
+
+**The block on the detail page (Decision 17).** The page's server load calls the profile route through the typed client with the
+visitor's session, so the contact point is in the block exactly when the route includes it. One component, `ui/JsonLd.svelte`, puts
+`serializeJsonLd(profile)` into `<svelte:head>` with the module's only `{@html}`; the tags around it are constants and the serialised
+text is its only variable input. The ESLint exception for `svelte/no-at-html-tags` names exactly that file (a `files` override in
+`eslint.config.js`); every other file keeps the rule, and a test lints a fixture to prove it. A `<script type="application/ld+json">`
+is a data block: the browser never runs it, so the CSP (`script-src 'self'` with nonces, no `unsafe-inline`) needs no allowance and the
+block carries no nonce.
+
+**Prototype result (sprint 4, day 1).** The shell's catch-all route (`routes/[...path]`) renders a module page on the server: the page's
+`load` runs on the server (`+page.server.ts` → `loadPage`), the component is imported in `+page.ts`, and SSR collects its
+`<svelte:head>` into `%sveltekit.head%`. Checked two ways: a unit render of `JsonLd.svelte` with `svelte/server` puts the block into
+`head` and nothing into `body`, and a Playwright run against the built web app and the real API (name
+`</script><script>window.pwned=1</script> <!-- & …`) finds the block in the server's HTML, parses to the exact name, executes nothing,
+and reports no CSP violation. So the `transformPageChunk` fallback of the plan is not needed, and `apps/web` stays unchanged.
 
 ### Logo
 
@@ -87,8 +102,34 @@ organisation (sprint 3) edit `description`, `website`, `sameAs`, `rorId`, `logo`
 `type`, `abbreviation` or `name`: those identify the record (membership, `org.usage`, `@type`, the lookup key, the name shown by
 services). There is one `update` method and one logo path; a pure field-rules table (`service/field-rules.ts`) maps a set of fields to
 the access it needs (`admin` or `edit`), so the second group adds a policy answer, never a second code path. A request that touches a
-field its caller may not write is refused whole (403). In sprints 1 to 3 Admin is the only group. No review step for manager edits in
-M6. _To be finished in sprint 4._
+field its caller may not write is refused whole (403). No review step for manager edits in M6 (Decision 19).
+
+**The final rules (sprint 4).**
+
+- Permissions: `…organisation.manage` (plain, Admin) covers create, delete and the identity fields; `…organisation.edit` (scoped to
+  `organisation`) is held by Admin globally and by an approved manager of that organisation through the policy `organisation.member`.
+  A member, a requester and everyone else do not hold it.
+- `PATCH /organisations/{id}` and the two logo routes carry the plain `…organisation.read` (ADR-0034); the service is the
+  authorization: `accessLevel` answers `admin` when the caller holds `manage` globally (so an Admin who is also a manager counts as
+  `admin`), `edit` when they hold `edit` on that organisation, else nothing. `allows(level, requiredAccess(fields))` decides. The
+  order is 404 (an organisation is readable by every signed-in person, so it reveals nothing), then 403, then input validation (422).
+  The logo method decides before `blob.put`, so a denied caller leaves no file.
+- A manager who names `type`, `abbreviation` or `name` gets 403 "These fields can only be changed by an administrator: name." The
+  message lists field names, never values; nothing is written, even if the other fields in the request are allowed. A caller who holds
+  nothing on the organisation gets the plain 403 (401 anonymous), the same as for any route.
+- `create` and `delete` need `manage`; a manager gets 403 on both, for their own organisation too.
+- `GET /organisations/{id}` returns `editableFields` for the caller, computed by the same table (`editableFields(level)`): all
+  fields for an Admin, the descriptive ones for a manager of that organisation, none otherwise. The screens draw forms from it; the
+  server still refuses what is not allowed.
+- Both groups pass the same normalisation and validation (`sameAs` at most 20, ROR id pattern, contact point pair, lengths), the same
+  409 for a duplicate (it names the field and nothing about the other organisation) and the same logo limits. An update sets only the
+  given columns plus `updated_at` and `updated_by` (two editors on different fields both stick; on one field the last write wins and
+  the audit trail shows both).
+- `registry.organisation.updated@1` carries `{ organisationId, fields, by: admin | manager, actorId }`: field names, never values.
+  `core.audit` logs it as critical when `by` is `manager` (Decision 19), so administrators see every manager edit.
+- The contact point is the organisation's role address, never a user's and never a recipient of any mail, so a manager cannot
+  redirect mail by editing it. Authorization is read at every call; a manager demoted a moment before a request has passed the
+  check may finish that one request (the window of ADR-0034).
 
 ### Membership
 

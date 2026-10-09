@@ -7,8 +7,9 @@ events that `core.audit` decides on, and a profile that is not `core-only`
 ([ADR-0032](../../docs/adr/0032-registry-profile.md), [ADR-0033](../../docs/adr/0033-organisation-model.md),
 [m6-sprint-plan.md](../../docs/m6-sprint-plan.md)).
 
-Status: M6 sprint 3 (the organisation record, its Schema.org profile and logo, and membership with organisation managers). Editing by
-managers (sprint 4) and the screens (sprints 4 and 5) follow.
+Status: M6 sprint 4 (the organisation record, its Schema.org profile and logo, membership with organisation managers, editing by an
+Admin and by the managers of an organisation, the administrator's editor and the organisation page). The member and manager screens
+(sprint 5) follow.
 
 ## Manifest
 
@@ -18,30 +19,31 @@ managers (sprint 4) and the screens (sprints 4 and 5) follow.
 | table prefix | `org_` (set in the manifest; ADR-0004): `org_organisation`, `org_membership`                                                                                                                                                |
 | dependencies | `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob`; `core.ui-shell` as an optional peer (the module starts without the shell)                                                                |
 | routes       | internal API, see "Routes"                                                                                                                                                                                                  |
-| ui           | `ui` entry with no pages yet (sprints 4 and 5)                                                                                                                                                                              |
+| ui           | `ui` entry with the organisation page (`/organisations/:id`) and the administrator's editor (`/admin/organisations`, `/new`, `/:id`); the member and manager screens follow in sprint 5                                     |
 | events       | emits the three organisation events and the four membership events (see "Events"); subscribes to `identity.user.purged@1`                                                                                                   |
 | registries   | declares `org.type` and `org.usage`; contributes the seed types to `org.type`, the default roles to `authz.defaultRole`, the policy `organisation.member` to `authz.resourcePolicy` and four templates to `notify.template` |
 | settings     | `exposeContactPoint` and the three `membership.*` settings (see "Settings"), shown by the generic settings form                                                                                                             |
 
 ### Permissions
 
-| Permission                                         | Allows                                                                                     | Held by default by                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `registry.organisations.organisation.read`         | Read organisations and the registered types; the plain permission of every delegated route | Admin, User, Reviewer                                                     |
-| `registry.organisations.organisation.manage`       | Create, change and delete organisations, and set or remove their logo                      | Admin                                                                     |
-| `registry.organisations.membership.request`        | Ask to join an organisation, withdraw, leave, and list your own memberships                | Admin, User                                                               |
-| `registry.organisations.organisation.read-contact` | scoped (`organisation`): always see the contact point of an organisation                   | Admin; managers                                                           |
-| `registry.organisations.membership.view-members`   | scoped: see the members of an organisation (usernames and join dates)                      | Admin; managers; members while `membership.membersVisibleToMembers` is on |
-| `registry.organisations.membership.decide`         | scoped: approve or reject requests of an organisation, and list its requests and members   | Admin; managers                                                           |
-| `registry.organisations.membership.manage-roles`   | scoped: promote a member to manager, demote a manager                                      | Admin; managers                                                           |
-| `registry.organisations.membership.remove`         | scoped: end the membership of a member (a manager removes plain members only)              | Admin; managers                                                           |
+| Permission                                         | Allows                                                                                                     | Held by default by                                                        |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `registry.organisations.organisation.read`         | Read organisations and the registered types; the plain permission of every delegated route                 | Admin, User, Reviewer                                                     |
+| `registry.organisations.organisation.manage`       | Create and delete organisations, and change every field of one, `type`, `abbreviation` and `name` included | Admin                                                                     |
+| `registry.organisations.organisation.edit`         | scoped (`organisation`): change the description, website, `sameAs` links, ROR id, contact point and logo   | Admin; managers                                                           |
+| `registry.organisations.membership.request`        | Ask to join an organisation, withdraw, leave, and list your own memberships                                | Admin, User                                                               |
+| `registry.organisations.organisation.read-contact` | scoped (`organisation`): always see the contact point of an organisation                                   | Admin; managers                                                           |
+| `registry.organisations.membership.view-members`   | scoped: see the members of an organisation (usernames and join dates)                                      | Admin; managers; members while `membership.membersVisibleToMembers` is on |
+| `registry.organisations.membership.decide`         | scoped: approve or reject requests of an organisation, and list its requests and members                   | Admin; managers                                                           |
+| `registry.organisations.membership.manage-roles`   | scoped: promote a member to manager, demote a manager                                                      | Admin; managers                                                           |
+| `registry.organisations.membership.remove`         | scoped: end the membership of a member (a manager removes plain members only)                              | Admin; managers                                                           |
 
 Admin holds every declared permission by resolution (ADR-0014); `user` gets `read` and `membership.request`, `reviewer` gets `read`,
-through `authz.defaultRole`. The service checks the permission again on every method (`ctx.authz.require`). In sprint 4
-`PATCH /organisations/{id}` and the logo routes switch their route permission to `…organisation.read` and the service decides, so that
-the managers of an organisation can edit the descriptive fields (ADR-0033, Decision 14); `POST` and `DELETE` keep `manage`.
+through `authz.defaultRole`. The service checks the permission again on every method (`ctx.authz.require`). `PATCH
+/organisations/{id}` and the two logo routes name the plain `…organisation.read` and the service decides (ADR-0034), so that the
+managers of an organisation can edit its descriptive fields (ADR-0033, Decision 14); `POST` and `DELETE /organisations` keep `manage`.
 
-**Scoped permissions and the routes (ADR-0034).** The five scoped permissions declare `scope: 'organisation'`. Admin holds them
+**Scoped permissions and the routes (ADR-0034).** The six scoped permissions declare `scope: 'organisation'`. Admin holds them
 everywhere (by resolution); the managers, and for `view-members` the members, of **one** organisation hold them through the policy
 `organisation.member` (below). **No route names a scoped permission**: the pipeline checks a route's permission without a resource,
 which would turn a manager away. A delegated route names the plain `…organisation.read`, which every signed-in person holds, and the
@@ -212,10 +214,10 @@ A person who is both manager and administrator gets one mail, with the administr
 ### The policy `organisation.member`
 
 Contributed to `authz.resourcePolicy` (`service/policy.ts`). It answers per permission from the caller's **approved** membership of
-`resource.id`, read from the database on every call: a manager holds the five scoped permissions; an approved member holds
+`resource.id`, read from the database on every call: a manager holds the six scoped permissions (`edit` included); an approved member holds
 `view-members` while the setting is on; a requested, rejected or left row, a membership of another organisation, a resource without a
-valid id and a permission it does not know grant nothing. It only adds access and cannot override the `approval` rule. Sprint 4 adds
-`…organisation.edit`.
+valid id and a permission it does not know grant nothing. It only adds access and cannot override the `approval` rule. `…organisation.edit` is narrowed by the
+field rules of the service, never by the policy: a manager never writes `type`, `abbreviation` or `name`.
 
 ### Purge and deactivation
 
@@ -253,10 +255,27 @@ logo hash; the membership reads answer from ids and name nobody. M7's `service.m
 | `countApprovedMembersAsSystem(organisationIds)`    | `{ [organisationId]: n }`, `0` for an organisation without members   |
 | `isManagerAsSystem(userId, organisationId)`        | `boolean`: an approved manager                                       |
 
-**Who writes which field.** `service/field-rules.ts` is the one table: `type`, `abbreviation` and `name` need `admin` access; the
-descriptive fields need `edit`. In sprints 1 to 3 both need `…organisation.manage` (Admin); sprint 4 lets the managers of the
-organisation pass the `edit` case and nothing else, through the same `update` method. A request that touches a field its caller may
-not write is refused whole.
+**Who writes which field (Decision 14).** `service/field-rules.ts` is the one table, for both editor groups: `type`,
+`abbreviation` and `name` need `admin` access (`…organisation.manage`, an Admin); `description`, `website`, `sameAs`, `rorId`, the
+contact point and the logo need `edit` (`…organisation.edit` on that organisation: an Admin, or an approved manager of it). One
+`update` method and one logo path serve both, with one normalisation and one validation.
+
+- The order is: the id (422), the organisation (404, readable by every signed-in person, so it reveals nothing), what the caller holds
+  on it, then the input (422). A caller who holds nothing gets the plain 403 (401 without a session).
+- A manager who names `type`, `abbreviation` or `name` gets 403 "These fields can only be changed by an administrator: name." The
+  message lists field names, never values, and the request is refused whole: nothing is written, not even the allowed fields.
+- `create` and `delete` need `manage`: a manager gets 403 on both, for their own organisation too.
+- The logo methods decide before `blob.put`, so a denied caller leaves no file behind.
+- `editableFields` on `GET /organisations/{id}` (and on every answer that shows the organisation) is computed by the same table: all
+  fields for an Admin, the descriptive ones for a manager of that organisation, none for anybody else. Screens draw forms from it; the
+  server still refuses what is not allowed.
+- An Admin who is also a manager of the organisation counts as `admin` (`by: 'admin'` in the event).
+- Two editors changing different fields both stick (an update sets only the given columns, `updated_at` and `updated_by`); on the same
+  field the last write wins, and the events show both. A duplicate ROR id is a 409 that names the field and nothing about the other
+  organisation.
+- The contact point is the organisation's role address, not a user's: it is never the recipient of a mail, so a manager cannot
+  redirect mail by editing it.
+- No review step for manager edits in M6 (Decision 19): the edit applies at once and `core.audit` logs it as critical.
 
 ## Registries
 
@@ -296,7 +315,7 @@ All schemas are `z.strictObject`; payloads hold ids, states and roles, never a u
 | Event                               | Payload                                                                                                                              | Audit                                                  |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
 | `registry.organisation.created@1`   | `organisationId`, `type`, `actorId`                                                                                                  | logged, not critical                                   |
-| `registry.organisation.updated@1`   | `organisationId`, `fields`, `by`, `actorId`                                                                                          | logged, not critical                                   |
+| `registry.organisation.updated@1`   | `organisationId`, `fields`, `by` (`admin` \| `manager`), `actorId`                                                                   | logged; **critical** when `by` is `manager`            |
 | `registry.organisation.deleted@1`   | `organisationId`, `type`, `actorId`                                                                                                  | logged, not critical                                   |
 | `registry.membership.requested@1`   | `membershipId`, `organisationId`, `userId`                                                                                           | logged, not critical                                   |
 | `registry.membership.decided@1`     | `membershipId`, `organisationId`, `userId`, `state` (`approved` \| `rejected`), `by`, `actorId`                                      | logged, **critical**                                   |
@@ -304,7 +323,7 @@ All schemas are `z.strictObject`; payloads hold ids, states and roles, never a u
 | `registry.membership.roleChanged@1` | `membershipId`, `organisationId`, `userId`, `from`, `to`, `by`, `actorId`, `organisationHasManager`                                  | logged, **critical**                                   |
 
 `fields` holds the names of the changed fields (`description`, `sameAs`, `rorId`, `contact`, `logo`, ...), never their values (a test
-checks the payload: no address, no URL, no hash); `by` is `admin` (and `manager` from sprint 4). `by: system` is a purge (no actor).
+checks the payload: no address, no URL, no hash); `by` is `admin` when the actor holds `…organisation.manage` (an Admin who is also a manager counts as `admin`) and `manager` otherwise. A manager's edit is critical (Decision 19: administrators see every manager edit; cheap to relax in `core.audit`'s `decisions.ts`). `by: system` is a purge (no actor).
 An approval or a role change is a permission-relevant act, like an approved account and a role assignment, hence critical (logged
 whatever `channels.admin` says). The name is `roleChanged`, not `role-changed`: the kernel's event names allow letters and digits only.
 `core.audit` has a decision for each and lists this module as an optional peer; the subject of a membership event is the membership.
@@ -320,12 +339,12 @@ do to the row now, for drawing buttons) and never an address.
 | Route                                   | Permission                                   | Notes                                                                                                                                                                |
 | --------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /organisations`                    | `registry.organisations.organisation.read`   | `q` (abbreviation or name, `%` `_` `\` are text), `type`, `page`, `pageSize` (at most 100)                                                                           |
-| `GET /organisations/{id}`               | `registry.organisations.organisation.read`   | with `sameAs`, ROR id, `logoUrl`; the contact point as in "The contact point"                                                                                        |
+| `GET /organisations/{id}`               | `registry.organisations.organisation.read`   | with `sameAs`, ROR id, `logoUrl`, `editableFields`; the contact point as in "The contact point"                                                                      |
 | `GET /organisations/{id}/schema-org`    | `registry.organisations.organisation.read`   | `application/ld+json`, `Cache-Control: private, no-cache`; 404, 422; no anonymous access                                                                             |
-| `PUT /organisations/{id}/logo`          | `registry.organisations.organisation.manage` | raw image body; 413, 422, 404; strict rate limit; audited                                                                                                            |
-| `DELETE /organisations/{id}/logo`       | `registry.organisations.organisation.manage` | 404 when there is no logo; audited                                                                                                                                   |
+| `PUT /organisations/{id}/logo`          | `registry.organisations.organisation.read`   | **delegated** (`manage` or `…organisation.edit`): raw image body; 403, 404, 413, 422; strict rate limit; audited                                                     |
+| `DELETE /organisations/{id}/logo`       | `registry.organisations.organisation.read`   | **delegated** (as above): 403; 404 when there is no logo; audited                                                                                                    |
 | `POST /organisations`                   | `registry.organisations.organisation.manage` | 201; 409 duplicate; 422 unknown type or bad input; audited                                                                                                           |
-| `PATCH /organisations/{id}`             | `registry.organisations.organisation.manage` | partial; `null` clears an optional field; 404, 409, 422; audited                                                                                                     |
+| `PATCH /organisations/{id}`             | `registry.organisations.organisation.read`   | **delegated**: partial; `null` clears an optional field; 403 (a manager naming `type`, `abbreviation` or `name`: refused whole), 404, 409, 422; audited              |
 | `DELETE /organisations/{id}`            | `registry.organisations.organisation.manage` | 204; by id only; 409 `organisation-in-use` while `org.usage` counts; audited                                                                                         |
 | `GET /organisation-types`               | `registry.organisations.organisation.read`   | the registered types, labels for `locale`                                                                                                                            |
 | `POST /organisations/{id}/membership`   | `registry.organisations.membership.request`  | `201` a new or reopened request, `200` when already asked or a member; 422 `membership-not-supported`; 409 `too-many-pending`                                        |
@@ -337,6 +356,30 @@ do to the row now, for drawing buttons) and never an address.
 | `POST /memberships/{id}/decision`       | `registry.organisations.organisation.read`   | **delegated** (`…membership.decide`): `{ decision }`; audited; 403 own request or no right; 409 `membership-state`                                                   |
 | `POST /memberships/{id}/role`           | `registry.organisations.organisation.read`   | **delegated** (`…membership.manage-roles`): `{ role }`; audited; 403 own role; 409 `membership-state`, `too-many-managers`                                           |
 | `POST /memberships/{id}/remove`         | `registry.organisations.organisation.read`   | **delegated** (`…membership.remove`): audited; 403 own row, a manager as the target of a manager, no right; 409 `membership-state`                                   |
+
+## Screens
+
+The pages are contributed to `ui.routes` and `ui.nav` of `core.ui-shell` (an optional peer: without the shell the module starts and
+serves its API). The server half is `ui/routes.ts`, the browser half `ui/index.ts`; `ui/ui.test.ts` checks that they agree. All
+fetches go through the typed client, every link through `href()`, and no filesystem route is added (the shell's catch-all renders them).
+
+| Page                       | Permission                                   | Shows                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/organisations/:id`       | `registry.organisations.organisation.read`   | logo, name, abbreviation, the type's label (from the registry entry), description, website, ROR id and `sameAs` links (`rel="noopener noreferrer"`), the contact point when the API returned it, the member count, the viewer's own membership with its action, the member list when the API allows it, a link to the editor for an Admin, and the JSON-LD block in the head |
+| `/admin/organisations`     | `registry.organisations.organisation.manage` | the list: search, type filter, 0-based pages (the server sorts by abbreviation, then id); a nav entry in the administration section                                                                                                                                                                                                                                          |
+| `/admin/organisations/new` | `registry.organisations.organisation.manage` | the create form with every field                                                                                                                                                                                                                                                                                                                                             |
+| `/admin/organisations/:id` | `registry.organisations.organisation.manage` | the editor: the form drawn from `editableFields`, the logo block, and the delete behind a confirm that says what goes with it (the memberships and the logo); `409 organisation-in-use` is shown in words naming the module                                                                                                                                                  |
+
+The form is ui-kit's `SchemaForm`, fed by a JSON Schema from `ui/form-schema.ts` whose limits a test keeps equal to `service/fields.ts`.
+It draws only the fields the caller may write; two widgets are the module's own: the type select (options and labels from `GET
+/organisation-types`, never from the code) and the ROR id (a pasted ror.org link previews as the bare id; the server judges the rest).
+`ui/patch.ts` turns the form's values into a PATCH of what changed (an emptied field is `null`, the two halves of the contact point go
+together). The logo block (`ui/LogoBlock.svelte`) is shared with the manager's form of sprint 5. Every text is in `en` and `de`.
+
+**The JSON-LD block.** The page's server load calls `GET /organisations/{id}/schema-org` with the visitor's session, so the contact
+point is in the block exactly when the route includes it, and the component `ui/JsonLd.svelte` writes `serializeJsonLd(profile)` into
+`<svelte:head>`. It is the one `{@html}` of the module (ADR-0033, Decision 17): the ESLint exception names exactly that file, its only
+input is the escaped JSON, and a `<script type="application/ld+json">` is a data block that needs no CSP allowance.
 
 ## Operating notes
 
@@ -350,7 +393,11 @@ do to the row now, for drawing buttons) and never an address.
 
 `service/fields.test.ts`, `service/field-rules.test.ts` and `service/membership-state.test.ts` are table-driven and need no database.
 `service/organisations.test.ts` covers every organisation method against real Postgres, each with a denied case and each write with a
-rollback case (the outbox is broken so the event cannot be stored). The membership service has one file per concern, all over real
+rollback case (the outbox is broken so the event cannot be stored). `service/editing.test.ts` is the two editor groups: an Admin on every
+field, a manager on each descriptive field and refused whole on the identity fields, another organisation, members and non-members,
+demoted managers, tokens, rollbacks, two editors, `editableFields` and the events without values; `ui/*.test.ts` are the table-driven
+tests of the screens' helpers and `apps/web/src/json-ld.test.ts` renders hostile data through `JsonLd.svelte`. The journeys are in
+`apps/web/e2e/organisations.spec.ts` and `accessibility-organisations.spec.ts`. The membership service has one file per concern, all over real
 Postgres and the real authoriser: `memberships.request.test.ts` (requests, the cap, mail and inbox in `en` and `de`, withdrawing,
 leaving), `memberships.decisions.test.ts` (decide, roles, removal, the last manager, rollbacks of the mail, the inbox item and the
 event), `memberships.lists.test.ts` (who sees which rows, no address, the counts, the trusted reads), `memberships.concurrency.test.ts`
@@ -362,6 +409,6 @@ ADR-0034 and stay as regression tests. `templates/registry.test.ts` renders the 
 the failures a bad contribution causes. `service/schema-org.test.ts` is table-driven (the mapping, `/` and `/a/b`, hostile text).
 `service/profile.test.ts` covers the profile, the contact point matrix and the trusted reads; `service/logo.test.ts` the upload,
 replacement, removal and the rollback cases. `module.test.ts` checks the manifest, the prefix, that no route names a scoped permission
-and that there is no enum. The route tests are in `apps/server/src/organisation-routes.test.ts` and `membership-routes.test.ts`;
+and that there is no enum. The route tests are in `apps/server/src/organisation-routes.test.ts`, `organisation-editing-routes.test.ts` and `membership-routes.test.ts`;
 the denied cases of every route are in `defect-01.privilege-escalation.test.ts` (the matrix, which proves the service answer for the
 delegated rows) and the self cases in `defect-01.membership.test.ts`.

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { useOrganisations } from '../test/harness.ts';
 import {
   PERMISSION_DECIDE,
+  PERMISSION_EDIT,
   PERMISSION_MANAGE_ROLES,
   PERMISSION_READ_CONTACT,
   PERMISSION_REMOVE,
@@ -22,6 +23,7 @@ const ALL = [
   PERMISSION_MANAGE_ROLES,
   PERMISSION_REMOVE,
   PERMISSION_READ_CONTACT,
+  PERMISSION_EDIT,
 ] as const;
 
 async function setup() {
@@ -69,7 +71,7 @@ const only = (...granted: (typeof ALL)[number][]) =>
 const none = only();
 
 describe('the policy organisation.member: who holds which scoped permission on one organisation', () => {
-  it('gives an approved manager every one of the five', async () => {
+  it('gives an approved manager every one of the six', async () => {
     const { answers, people } = await setup();
     expect(await answers(people.manager)).toEqual(only(...ALL));
   });
@@ -139,6 +141,62 @@ describe('the policy organisation.member: who holds which scoped permission on o
         permission,
       ).toBe(false);
     }
+  });
+});
+
+describe('the edit row of the policy (Decision 14)', () => {
+  it('is held by Admin and by an approved manager of that organisation, and by nobody else [ASVS-8.2.1]', async () => {
+    const { authz, people, admin, org, other } = await setup();
+    const may = (actor: Actor, id = org.id) =>
+      authz.can(actor, PERMISSION_EDIT, { type: 'organisation', id });
+    expect(await may(admin)).toBe(true);
+    expect(await may(admin, other.id)).toBe(true);
+    expect(await may(people.manager)).toBe(true);
+    expect(await may(people.manager, other.id)).toBe(false);
+    expect(await may(people.managerElsewhere)).toBe(false);
+    expect(await may(people.member)).toBe(false);
+    for (const state of ['requested', 'rejected', 'left'] as const) {
+      expect(await may(people[state]), state).toBe(false);
+    }
+    expect(await may(people.nobody)).toBe(false);
+    expect(await may({ kind: 'anonymous' })).toBe(false);
+  });
+
+  it('is limited by token scopes, and never gives a member a manager token’s edit [ASVS-8.2.1]', async () => {
+    const { authz, people, admin, org } = await setup();
+    const resource = { type: 'organisation', id: org.id };
+    const asToken = (actor: UserActor, scopes: string[]): UserActor => ({
+      ...actor,
+      via: 'token',
+      scopes,
+    });
+    expect(
+      await authz.can(
+        asToken(people.manager, ['core.identity.me.read']),
+        PERMISSION_EDIT,
+        resource,
+      ),
+    ).toBe(false);
+    expect(
+      await authz.can(asToken(people.manager, [PERMISSION_EDIT]), PERMISSION_EDIT, resource),
+    ).toBe(true);
+    expect(
+      await authz.can(asToken(people.member, [PERMISSION_EDIT]), PERMISSION_EDIT, resource),
+    ).toBe(false);
+    expect(
+      await authz.can(asToken(admin, ['core.identity.me.read']), PERMISSION_EDIT, resource),
+    ).toBe(false);
+  });
+
+  it('is denied as 401 for an anonymous caller and 403 for a person with no right', async () => {
+    const { authz, people, org } = await setup();
+    const resource = { type: 'organisation', id: org.id };
+    await expect(
+      authz.require({ kind: 'anonymous' }, PERMISSION_EDIT, resource),
+    ).rejects.toBeInstanceOf(Unauthorized);
+    await expect(authz.require(people.member, PERMISSION_EDIT, resource)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
   });
 });
 

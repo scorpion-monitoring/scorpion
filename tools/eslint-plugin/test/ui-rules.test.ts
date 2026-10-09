@@ -53,6 +53,50 @@ describe('the SafeHtml rule', () => {
   });
 });
 
+describe('the JSON-LD exception (Decision 17)', () => {
+  const JSON_LD = 'modules/registry-organisations/ui/JsonLd.svelte';
+  // The severity the real configuration gives `svelte/no-at-html-tags` for a path: 'off' only where the exception is.
+  const severity = async (file: string) => {
+    const config = (await eslint.calculateConfigForFile(file)) as {
+      rules?: Record<string, unknown>;
+    };
+    const rule = config.rules?.['svelte/no-at-html-tags'];
+    const level: unknown = Array.isArray(rule) ? (rule as unknown[])[0] : rule;
+    return level === 0 || level === 'off' ? 'off' : 'on';
+  };
+
+  it('lets exactly one file use {@html}: the component for the JSON-LD block', async () => {
+    expect(await severity(JSON_LD)).toBe('off');
+    // The same name elsewhere, a sibling in the same folder, a file of another module, the shell and ui-kit keep the rule.
+    for (const other of [
+      'modules/registry-organisations/ui/Other.svelte',
+      'modules/registry-organisations/ui/nested/JsonLd.svelte',
+      'modules/core-audit/ui/JsonLd.svelte',
+      'apps/web/src/lib/components/JsonLd.svelte',
+      'tools/lint-fixtures/ui/html-tag.svelte',
+    ]) {
+      expect(await severity(other), other).toBe('on');
+    }
+  });
+
+  it('is lint-clean itself, and is the only file with {@html} besides SafeHtml', async () => {
+    const [result] = await eslint.lintFiles([JSON_LD]);
+    expect(result?.messages.map((message) => message.ruleId)).toEqual([]);
+    const { readFileSync } = await import('node:fs');
+    const { execFileSync } = await import('node:child_process');
+    const files = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '*.svelte'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter((file) => file && !file.startsWith('tools/lint-fixtures/'));
+    const using = files.filter((file) =>
+      /\{@html\b/.test(readFileSync(resolve(repoRoot, file), 'utf8')),
+    );
+    expect(using.sort()).toEqual([JSON_LD, 'packages/ui-kit/src/SafeHtml.svelte'].sort());
+  });
+});
+
 describe('the loader rule (defect 12)', () => {
   it('rejects a loader that returns a Response or json()', async () => {
     expect(await lint('loaders/response.ts')).toEqual(restricted(2, 3));

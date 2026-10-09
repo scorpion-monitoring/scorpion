@@ -6,7 +6,7 @@
 ## Context
 
 M6 is the first module whose rights belong to people **inside** a resource: an approved manager of an organisation decides
-membership requests, changes roles and removes plain members of that organisation, and (sprint 4) edits its description. The
+membership requests, changes roles and removes plain members of that organisation, and edits its descriptive fields (sprint 4). The
 authorizer of `core.authz` already supports a permission that declares a `scope` and a resource policy that answers for it
 (ADR-0014, ADR-0015). One question was left open in the backlog ("decide it with the first resource policy"): the authorizer checks
 the permission of a **route** without a resource. A route that names a scoped permission therefore denies a caller who holds it only
@@ -48,15 +48,15 @@ A membership has a role, `member` or `manager`, and the role is a property of an
 manager of A has no right on B. The policy reads the caller's approved membership of `resource.id` from the database on every call
 (no cache), so a removal or a demotion takes effect at the next call.
 
-| Action (scoped permission)                                  | Admin                 | Manager of that organisation | Approved member                         | Others  |
-| ----------------------------------------------------------- | --------------------- | ---------------------------- | --------------------------------------- | ------- |
-| view members (`membership.view-members`)                    | global                | yes                          | yes, while `membersVisibleToMembers` on | no      |
-| decide a request (`membership.decide`)                      | global                | yes, never their own request | no                                      | no      |
-| promote or demote (`membership.manage-roles`)               | global                | yes, never their own role    | no                                      | no      |
-| remove a member (`membership.remove`)                       | global, a manager too | yes, a **plain member** only | no                                      | no      |
-| read the contact point (`organisation.read-contact`)        | global                | yes                          | no (the setting decides)                | no      |
-| edit the description fields (`organisation.edit`, sprint 4) | global                | yes                          | no                                      | no      |
-| request, withdraw, leave (`membership.request`, plain)      | own row               | own row                      | own row                                 | own row |
+| Action (scoped permission)                                     | Admin                 | Manager of that organisation | Approved member                         | Others  |
+| -------------------------------------------------------------- | --------------------- | ---------------------------- | --------------------------------------- | ------- |
+| view members (`membership.view-members`)                       | global                | yes                          | yes, while `membersVisibleToMembers` on | no      |
+| decide a request (`membership.decide`)                         | global                | yes, never their own request | no                                      | no      |
+| promote or demote (`membership.manage-roles`)                  | global                | yes, never their own role    | no                                      | no      |
+| remove a member (`membership.remove`)                          | global, a manager too | yes, a **plain member** only | no                                      | no      |
+| read the contact point (`organisation.read-contact`)           | global                | yes                          | no (the setting decides)                | no      |
+| edit the descriptive fields and the logo (`organisation.edit`) | global                | yes                          | no                                      | no      |
+| request, withdraw, leave (`membership.request`, plain)         | own row               | own row                      | own row                                 | own row |
 
 "Admin: global" means the caller holds the permission through a role (Admin holds every declared permission); the service tells an
 Admin from a manager by asking `authz.can(actor, permission)` **without** a resource, which never consults the policy. A rejected,
@@ -81,7 +81,7 @@ shown only to those who may see the row, so the difference tells a manager nothi
 - **Nobody removes themselves.** That is `leave`. An Admin who is a member is bound by it.
 - **A manager never removes another manager.** Only an Admin does (Decision 16). To end another manager's role a manager can only
   demote them (Decision 18), a separate, audited and announced act.
-- **Creating and deleting organisations, and `type`, `abbreviation`, `name`** stay with Admin (Decision 14; sprint 4).
+- **Creating and deleting organisations, and `type`, `abbreviation`, `name`** stay with Admin (Decision 14). A manager who names one of the three in an edit is refused whole (403, field names only).
 
 ### The last manager
 

@@ -6,12 +6,13 @@
 //
 //   permission                               approved manager   approved member
 //   membership.view-members                  yes                while the setting is on
-//   membership.decide / manage-roles / remove, organisation.read-contact
+//   membership.decide / manage-roles / remove, organisation.read-contact, organisation.edit
 //                                            yes                no
 //   anything else                            no                 no
 //
 // A requested, rejected or left row grants nothing, and neither does a membership of another
-// organisation. `remove` is narrowed further by the service (a manager removes plain members only).
+// organisation. `remove` is narrowed further by the service (a manager removes plain members only), and `edit` by the
+// field rules (a manager never writes `type`, `abbreviation` or `name`: `field-rules.ts`).
 import { z, type UserActor } from '@scorpion/contracts';
 import type { Db } from '@scorpion/kernel';
 import { and, eq } from 'drizzle-orm';

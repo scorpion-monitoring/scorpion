@@ -377,6 +377,7 @@ describe('the OpenAPI document', () => {
       'registry.organisations.membership.manage-roles',
       'registry.organisations.membership.remove',
       'registry.organisations.membership.view-members',
+      'registry.organisations.organisation.edit',
       'registry.organisations.organisation.read-contact',
     ];
     for (const permission of permissions) expect(scoped).not.toContain(permission);

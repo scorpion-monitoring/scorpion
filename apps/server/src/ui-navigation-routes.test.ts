@@ -89,7 +89,15 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     // A plain user also has the profile page and its link (core.identity.profile.read), and the inbox and
     // the notification settings (core.notifications, M5 sprint 4).
     expect(body.routes).toEqual(
-      sorted(...PUBLIC_PAGES, '/fixture/open', '/profile', '/inbox', '/profile/notifications'),
+      sorted(
+        ...PUBLIC_PAGES,
+        '/fixture/open',
+        '/profile',
+        '/inbox',
+        '/profile/notifications',
+        // The page of one organisation (registry.organisations, M6): every signed-in person reads organisations.
+        '/organisations/:id',
+      ),
     );
     expect(body.nav.map((entry) => entry.id)).toContain('account.profile');
     expect(body.nav.map((entry) => entry.id)).not.toContain('fixture.admin');
@@ -139,6 +147,11 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/admin/logs/:id',
         '/admin/system',
         '/admin/notifications',
+        // M6 sprint 4: the page of an organisation (every signed-in person) and the administrator's editor.
+        '/organisations/:id',
+        '/admin/organisations',
+        '/admin/organisations/new',
+        '/admin/organisations/:id',
       ),
     );
     expect(body.nav.map((entry) => entry.id)).toEqual([
@@ -151,6 +164,7 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
       'admin.users.pending',
       'admin.roles',
       'admin.settings',
+      'admin.organisations',
       'admin.logs',
       'admin.notifications',
       'admin.system',

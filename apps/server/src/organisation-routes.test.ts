@@ -666,5 +666,18 @@ describe('the OpenAPI document', () => {
     expect(document.paths?.['/api/internal/organisations/{id}']?.get).toMatchObject({
       'x-permission': 'registry.organisations.organisation.read',
     });
+    // Delegated (ADR-0034, Decision 14): the plain permission at the route, the service decides.
+    expect(document.paths?.['/api/internal/organisations/{id}']?.patch).toMatchObject({
+      'x-permission': 'registry.organisations.organisation.read',
+    });
+    expect(document.paths?.['/api/internal/organisations/{id}/logo']?.put).toMatchObject({
+      'x-permission': 'registry.organisations.organisation.read',
+    });
+    expect(document.paths?.['/api/internal/organisations/{id}/logo']?.delete).toMatchObject({
+      'x-permission': 'registry.organisations.organisation.read',
+    });
+    expect(document.paths?.['/api/internal/organisations/{id}']?.delete).toMatchObject({
+      'x-permission': 'registry.organisations.organisation.manage',
+    });
   });
 });

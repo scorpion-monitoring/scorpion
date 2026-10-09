@@ -11,6 +11,7 @@ import { createMembershipsService, type MembershipsService } from './service/mem
 import { createOrganisationsService, type OrganisationsService } from './service/organisations.ts';
 import {
   PERMISSION_DECIDE,
+  PERMISSION_EDIT,
   PERMISSION_MANAGE,
   PERMISSION_MANAGE_ROLES,
   PERMISSION_READ,
@@ -22,6 +23,7 @@ import {
 } from './service/permissions.ts';
 import { createMemberPolicy, type MemberPolicy } from './service/policy.ts';
 import { TEMPLATES } from './templates/registry.ts';
+import { ORGANISATION_NAV, ORGANISATION_ROUTES } from './ui/routes.ts';
 import {
   ORG_TYPE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -104,6 +106,11 @@ export function createOrganisationsModule() {
       [PERMISSION_READ_CONTACT]: {
         scope: RESOURCE_TYPE,
         description: 'Always see the contact point of an organisation, whatever the setting says',
+      },
+      [PERMISSION_EDIT]: {
+        scope: RESOURCE_TYPE,
+        description:
+          'Change the description, website, sameAs links, ROR id, contact point and logo of an organisation (never its type, abbreviation or name)',
       },
       [PERMISSION_VIEW_MEMBERS]: {
         scope: RESOURCE_TYPE,
@@ -192,6 +199,9 @@ export function createOrganisationsModule() {
 
     contributes: {
       [ORG_TYPE_REGISTRY]: SEED_TYPES,
+      // The pages and their links; entries for registries of core.ui-shell, an optional peer.
+      'ui.routes': ORGANISATION_ROUTES,
+      'ui.nav': ORGANISATION_NAV,
       // The membership mails and inbox items (they moved here from core.notifications, same keys).
       'notify.template': TEMPLATES,
       // Every signed-in person may read organisations (the forms need them); `manage` stays with Admin.

@@ -2,11 +2,16 @@
 // needs (ADR-0033, Decision 14). A field that is added without a rule fails here.
 import { describe, expect, it } from 'vitest';
 import {
+  adminFieldsOf,
   ADMIN_FIELDS,
+  allows,
+  editableFields,
   EDITOR_FIELDS,
   fieldsOfBody,
   fieldsOfInput,
   requiredAccess,
+  type Access,
+  type AccessLevel,
   type OrganisationField,
 } from './field-rules.ts';
 import { createOrganisationSchema, updateOrganisationSchema } from './input.ts';
@@ -75,5 +80,68 @@ describe('fieldsOfInput (before the input is parsed)', () => {
     [{ contactType: 'x', description: 'y' }, ['contact', 'description']],
   ])('%j → %j', (input, expected) => {
     expect(fieldsOfInput(input).sort()).toEqual([...expected].sort());
+  });
+});
+
+describe('allows: what a caller holds against what a change needs', () => {
+  it.each<[AccessLevel, Access, boolean]>([
+    ['admin', 'admin', true],
+    ['admin', 'edit', true],
+    ['edit', 'edit', true],
+    ['edit', 'admin', false],
+    [null, 'edit', false],
+    [null, 'admin', false],
+  ])('holding %s, needing %s → %s', (level, needed, expected) => {
+    expect(allows(level, needed)).toBe(expected);
+  });
+
+  it('lets a manager write every set of editor fields and no set that names an identity field', () => {
+    const everyField = [...ADMIN_FIELDS, ...EDITOR_FIELDS];
+    // All 512 subsets of the nine fields: a manager passes exactly those without an identity field.
+    for (let mask = 0; mask < 1 << everyField.length; mask++) {
+      const fields = everyField.filter((_, index) => mask & (1 << index));
+      const hasIdentityField = fields.some((field) =>
+        (ADMIN_FIELDS as readonly string[]).includes(field),
+      );
+      expect(allows('edit', requiredAccess(fields)), fields.join()).toBe(!hasIdentityField);
+      expect(allows('admin', requiredAccess(fields)), fields.join()).toBe(true);
+      expect(allows(null, requiredAccess(fields)), fields.join()).toBe(false);
+    }
+  });
+});
+
+describe('editableFields (what GET /organisations/{id} tells a screen)', () => {
+  it('is every field for an admin, the descriptive ones for an editor, none for anybody else', () => {
+    expect(editableFields('admin')).toEqual([...ADMIN_FIELDS, ...EDITOR_FIELDS]);
+    expect(editableFields('edit')).toEqual([...EDITOR_FIELDS]);
+    expect(editableFields(null)).toEqual([]);
+  });
+
+  it('agrees with allows: a field is listed exactly when a change to that field alone is allowed', () => {
+    for (const level of ['admin', 'edit', null] as const) {
+      for (const field of [...ADMIN_FIELDS, ...EDITOR_FIELDS]) {
+        expect(editableFields(level).includes(field), `${level} ${field}`).toBe(
+          allows(level, requiredAccess([field])),
+        );
+      }
+    }
+  });
+});
+
+describe('adminFieldsOf (the names a refusal lists)', () => {
+  it.each<[OrganisationField[], string[]]>([
+    [[], []],
+    [['description', 'logo'], []],
+    [['name'], ['name']],
+    [
+      ['name', 'description', 'type'],
+      ['type', 'name'],
+    ],
+    [
+      ['name', 'abbreviation', 'type'],
+      ['type', 'abbreviation', 'name'],
+    ],
+  ])('%j → %j', (fields, expected) => {
+    expect(adminFieldsOf(fields)).toEqual(expected);
   });
 });

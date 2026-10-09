@@ -1,7 +1,15 @@
 // The organisation record: list, read, create, update, delete, and the registered types. The service
 // layer is the only way to change this data (CLAUDE.md rule 5): the routes call it, and so will the
 // jobs and the migration tool. Every method takes the `actor` and checks the permission first.
-import { Conflict, DomainError, Invalid, NotFound, z, type Actor } from '@scorpion/contracts';
+import {
+  Conflict,
+  DomainError,
+  Forbidden,
+  Invalid,
+  NotFound,
+  z,
+  type Actor,
+} from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { BlobService } from '@scorpion/core-blob/public';
 import { ids, mountPath, type Db, type DbTx, type ModuleContext } from '@scorpion/kernel';
@@ -11,7 +19,17 @@ import { OrganisationInUse } from './errors.ts';
 import { escapeLike } from './fields.ts';
 import { approvedCounts, ownRows } from './membership-queries.ts';
 import type { Role, State } from './membership-state.ts';
-import { fieldsOfBody, fieldsOfInput, requiredAccess, type Access } from './field-rules.ts';
+import {
+  adminFieldsOf,
+  allows,
+  editableFields,
+  fieldsOfBody,
+  fieldsOfInput,
+  requiredAccess,
+  type Access,
+  type AccessLevel,
+  type OrganisationField,
+} from './field-rules.ts';
 import {
   createOrganisationSchema,
   parseInput,
@@ -29,6 +47,7 @@ import {
 } from './registries.ts';
 
 import {
+  PERMISSION_EDIT,
   PERMISSION_MANAGE,
   PERMISSION_READ,
   PERMISSION_READ_CONTACT,
@@ -36,6 +55,7 @@ import {
 } from './permissions.ts';
 
 export {
+  PERMISSION_EDIT,
   PERMISSION_MANAGE,
   PERMISSION_READ,
   PERMISSION_READ_CONTACT,
@@ -72,6 +92,11 @@ export interface OrganisationView extends OrganisationSummary {
    * The file is public by its hash.
    */
   logoUrl?: string;
+  /**
+   * The fields the caller may write on this organisation: all for an Admin, the descriptive ones for a
+   * manager of it, none for anybody else (`field-rules.ts`).
+   */
+  editableFields: OrganisationField[];
   /** Only for a reader who may see the contact point (see `canSeeContact`). */
   contactEmail?: string | null;
   contactType?: string | null;
@@ -123,9 +148,9 @@ export interface OrganisationsService {
    * `canSeeContact` says so. Needs `…organisation.read`.
    */
   schemaOrg: (actor: Actor, id: string) => Promise<SchemaOrgProfile>;
-  /** Needs `…organisation.manage` (sprint 4: or `…organisation.edit`). `bytes` is the raw image. */
+  /** Needs `…organisation.manage`, or `…organisation.edit` on that organisation. `bytes` is the raw image. */
   setLogo: (actor: Actor, id: string, bytes: Uint8Array) => Promise<OrganisationView>;
-  /** Needs `…organisation.manage`. `NotFound` when there is no logo. */
+  /** Needs `…organisation.manage`, or `…organisation.edit` on that organisation. `NotFound` when there is no logo. */
   clearLogo: (actor: Actor, id: string) => Promise<OrganisationView>;
 
   // Trusted reads for other modules (ADR-0015): no permission check, no caller named. A route that
@@ -209,7 +234,7 @@ export function createOrganisationsService(
 
   /**
    * Who sees the contact point (plan §6 item 6): whoever holds `…read-contact` on the organisation
-   * (Admin now; sprint 3's policy adds its managers), and every other signed-in person while the
+   * (Admin globally, its managers through the policy), and every other signed-in person while the
    * setting `organisation.exposeContactPoint` is on. The caller has passed `…organisation.read`.
    */
   async function canSeeContact(actor: Actor, id: string): Promise<boolean> {
@@ -248,12 +273,14 @@ export function createOrganisationsService(
     const extras = (await extrasOf(actor, [row]))(row);
     // The audit columns are for administrators; the contact point follows `canSeeContact`
     // (ADR-0033, field table).
-    const [admin, contact] = await Promise.all([
-      deps.authz.can(actor, PERMISSION_MANAGE),
+    const [level, contact] = await Promise.all([
+      accessLevel(actor, row.id),
       canSeeContact(actor, row.id),
     ]);
+    const admin = level === 'admin';
     return {
       ...summary(row, extras),
+      editableFields: editableFields(level),
       description: row.description,
       website: row.website,
       rorId: row.rorId,
@@ -324,11 +351,45 @@ export function createOrganisationsService(
     );
   }
 
-  /** In sprints 1 to 3 both kinds of access need `manage`; sprint 4 lets the managers pass `edit`. */
-  async function requireAccess(actor: Actor, access: Access): Promise<void> {
-    // Both kinds need `manage` for now; the switch on `access` is what sprint 4 changes.
-    void access;
-    await deps.authz.require(actor, PERMISSION_MANAGE);
+  /**
+   * What the caller holds on this organisation: `admin` when they hold `…organisation.manage` (globally:
+   * an Admin who is also a manager counts as `admin`), `edit` when they hold the scoped
+   * `…organisation.edit` on it (a manager of it), else `null`. One function for the update, the logo
+   * and `editableFields`, so the screens and the checks cannot disagree.
+   */
+  async function accessLevel(actor: Actor, id: string): Promise<AccessLevel> {
+    if (await deps.authz.can(actor, PERMISSION_MANAGE)) return 'admin';
+    if (await deps.authz.can(actor, PERMISSION_EDIT, { type: RESOURCE_TYPE, id })) return 'edit';
+    return null;
+  }
+
+  /**
+   * The check of a change to an existing organisation: `needed` against what the caller holds on it.
+   * Whoever holds nothing gets the plain 403 (or 401), the same as for any other route. A manager who
+   * asks for an identity field is told which fields they may not change, never their values, and
+   * nothing is written (the request is refused whole). Returns what the caller holds.
+   */
+  async function requireAccess(
+    actor: Actor,
+    id: string,
+    needed: Access,
+    fields: readonly OrganisationField[] = [],
+  ): Promise<'admin' | 'edit'> {
+    const level = await accessLevel(actor, id);
+    if (level === null) {
+      // Throws 401 or 403 as the pipeline would for a route without the permission.
+      await deps.authz.require(actor, needed === 'admin' ? PERMISSION_MANAGE : PERMISSION_EDIT, {
+        type: RESOURCE_TYPE,
+        id,
+      });
+      throw new Forbidden();
+    }
+    if (!allows(level, needed)) {
+      throw new Forbidden(
+        `These fields can only be changed by an administrator: ${adminFieldsOf(fields).join(', ')}.`,
+      );
+    }
+    return level;
   }
 
   const actorId = (actor: Actor): string | null => (actor.kind === 'user' ? actor.userId : null);
@@ -393,7 +454,7 @@ export function createOrganisationsService(
     },
 
     async create(actor, input) {
-      await requireAccess(actor, 'admin'); // only an Admin creates
+      await deps.authz.require(actor, PERMISSION_MANAGE); // only an Admin creates
       const body = parseInput(createOrganisationSchema, input);
       requireType(body.type);
       const id = ids.uuidv7();
@@ -433,9 +494,14 @@ export function createOrganisationsService(
     },
 
     async update(actor, id, input) {
-      // The permission first, so a caller without it learns nothing about the input or the id.
-      await requireAccess(actor, requiredAccess(fieldsOfInput(input)));
+      // The route carries `…organisation.read` (ADR-0034), so this method is the authorization: the id
+      // first (an organisation is readable by every signed-in person, so 404 before 403 reveals
+      // nothing), then the access the named fields need, then the input.
+      await deps.authz.require(actor, PERMISSION_READ);
       requireId(id);
+      await load(db, id);
+      const fields = fieldsOfInput(input);
+      const level = await requireAccess(actor, id, requiredAccess(fields), fields);
       const body = parseInput(updateOrganisationSchema, input);
       try {
         const row = await db.tx(async (tx) => {
@@ -480,7 +546,7 @@ export function createOrganisationsService(
           await ctx.events.emit('registry.organisation.updated@1', {
             organisationId: id,
             fields: changed,
-            by: 'admin',
+            by: level === 'admin' ? 'admin' : 'manager',
             actorId: actorId(actor),
           });
           return updated!;
@@ -494,7 +560,7 @@ export function createOrganisationsService(
     },
 
     async delete(actor, id) {
-      await requireAccess(actor, 'admin');
+      await deps.authz.require(actor, PERMISSION_MANAGE);
       requireId(id);
       await db.tx(async (tx) => {
         const current = await load(tx, id, true);
@@ -526,10 +592,11 @@ export function createOrganisationsService(
     },
 
     async setLogo(actor, id, bytes) {
-      // The permission first, so a caller without it leaves no file behind.
-      await requireAccess(actor, 'edit');
+      await deps.authz.require(actor, PERMISSION_READ);
       requireId(id);
       await load(db, id); // an unknown organisation stores no file either
+      // The permission before the file is stored, so a caller without it leaves none behind.
+      const level = await requireAccess(actor, id, 'edit');
       const stored = await deps.blob.put(actor, bytes);
       const row = await db.tx(async (tx) => {
         const current = await load(tx, id, true);
@@ -550,7 +617,7 @@ export function createOrganisationsService(
         await ctx.events.emit('registry.organisation.updated@1', {
           organisationId: id,
           fields: ['logo'],
-          by: 'admin',
+          by: level === 'admin' ? 'admin' : 'manager',
           actorId: actorId(actor),
         });
         return updated!;
@@ -559,8 +626,10 @@ export function createOrganisationsService(
     },
 
     async clearLogo(actor, id) {
-      await requireAccess(actor, 'edit');
+      await deps.authz.require(actor, PERMISSION_READ);
       requireId(id);
+      await load(db, id);
+      const level = await requireAccess(actor, id, 'edit');
       const row = await db.tx(async (tx) => {
         const current = await load(tx, id, true);
         if (!current.logoBlobId) throw new NotFound('The organisation has no logo.');
@@ -578,7 +647,7 @@ export function createOrganisationsService(
         await ctx.events.emit('registry.organisation.updated@1', {
           organisationId: id,
           fields: ['logo'],
-          by: 'admin',
+          by: level === 'admin' ? 'admin' : 'manager',
           actorId: actorId(actor),
         });
         return updated!;

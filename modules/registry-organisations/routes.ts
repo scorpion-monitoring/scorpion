@@ -52,6 +52,23 @@ const organisationSchema = summarySchema.extend({
   website: z.string().nullable(),
   rorId: z.string().nullable().describe('The bare ROR id, for example `02skbsp27`.'),
   sameAs: z.array(z.string()),
+  editableFields: z
+    .array(
+      z.enum([
+        'type',
+        'abbreviation',
+        'name',
+        'description',
+        'website',
+        'sameAs',
+        'rorId',
+        'logo',
+        'contact',
+      ]),
+    )
+    .describe(
+      'The fields the caller may change on this organisation: all of them for an administrator, the descriptive ones (not `type`, `abbreviation`, `name`) for a manager of it, none for anybody else. The server still refuses what is not allowed.',
+    ),
   logoUrl: z
     .string()
     .optional()
@@ -168,7 +185,9 @@ export const getSchemaOrgRoute = createRoute({
 export const setLogoRoute = createRoute({
   method: 'put',
   path: '/organisations/{id}/logo',
-  permission: PERMISSION_MANAGE,
+  // ADR-0034: delegated. The plain permission lets every signed-in person reach the service,
+  // which checks `manage` or the scoped `edit` of this organisation (and the fields) and is the authorization.
+  permission: PERMISSION_READ,
   rateLimit: 'strict',
   maxBodyBytes: MAX_UPLOAD_BYTES,
   audit: true,
@@ -184,7 +203,9 @@ export const setLogoRoute = createRoute({
 export const clearLogoRoute = createRoute({
   method: 'delete',
   path: '/organisations/{id}/logo',
-  permission: PERMISSION_MANAGE,
+  // ADR-0034: delegated. The plain permission lets every signed-in person reach the service,
+  // which checks `manage` or the scoped `edit` of this organisation (and the fields) and is the authorization.
+  permission: PERMISSION_READ,
   audit: true,
   request: { params: idParam },
   responses: {
@@ -211,7 +232,9 @@ export const createOrganisationRoute = createRoute({
 export const updateOrganisationRoute = createRoute({
   method: 'patch',
   path: '/organisations/{id}',
-  permission: PERMISSION_MANAGE,
+  // ADR-0034: delegated. The plain permission lets every signed-in person reach the service,
+  // which checks `manage` or the scoped `edit` of this organisation (and the fields) and is the authorization.
+  permission: PERMISSION_READ,
   audit: true,
   request: {
     params: idParam,
@@ -219,6 +242,10 @@ export const updateOrganisationRoute = createRoute({
   },
   responses: {
     200: ok('The organisation after the change.', organisationSchema),
+    403: {
+      description:
+        'The caller may not change this organisation, or a manager asked for `type`, `abbreviation` or `name` (the request is refused whole).',
+    },
     404: { description: 'No such organisation.' },
     409: {
       description:
@@ -272,6 +299,7 @@ const organisationOut = (o: OrganisationView) => ({
   website: o.website,
   rorId: o.rorId,
   sameAs: o.sameAs,
+  editableFields: o.editableFields,
   ...(o.logoUrl !== undefined && { logoUrl: o.logoUrl }),
   ...(o.contactEmail !== undefined && { contactEmail: o.contactEmail, contactType: o.contactType }),
   createdAt: o.createdAt.toISOString(),

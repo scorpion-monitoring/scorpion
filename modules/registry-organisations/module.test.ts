@@ -22,7 +22,7 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the eight permissions: three plain, five scoped to organisation', () => {
+  it('has the id, the table prefix and the nine permissions: three plain, six scoped to organisation', () => {
     expect(manifest.id).toBe('registry.organisations');
     expect(manifest.tablePrefix).toBe('org_');
     const permissions = manifest.permissions ?? {};
@@ -32,6 +32,7 @@ describe('the manifest', () => {
       'registry.organisations.membership.remove',
       'registry.organisations.membership.request',
       'registry.organisations.membership.view-members',
+      'registry.organisations.organisation.edit',
       'registry.organisations.organisation.manage',
       'registry.organisations.organisation.read',
       'registry.organisations.organisation.read-contact',
@@ -46,6 +47,7 @@ describe('the manifest', () => {
       'registry.organisations.membership.manage-roles:organisation',
       'registry.organisations.membership.remove:organisation',
       'registry.organisations.membership.view-members:organisation',
+      'registry.organisations.organisation.edit:organisation',
       'registry.organisations.organisation.read-contact:organisation',
     ]);
   });

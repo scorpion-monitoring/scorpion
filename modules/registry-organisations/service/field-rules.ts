@@ -1,6 +1,7 @@
-// Who may write which field of an organisation (ADR-0033, Decision 14). One pure table, so that the
-// second editor group of sprint 4 (the managers of the organisation) adds a policy answer and never a
-// second code path. In sprints 1 to 3 both kinds of access need `…organisation.manage` (Admin).
+// Who may write which field of an organisation (ADR-0033, Decision 14). One pure table for both editor
+// groups: an Admin (every field, `…organisation.manage`) and the managers of that organisation (the
+// descriptive fields, the scoped `…organisation.edit`). The service asks the table; the table says
+// nothing about who the caller is.
 
 /** Identity of the record: only an Admin changes them, because other modules refer to them. */
 export const ADMIN_FIELDS = ['type', 'abbreviation', 'name'] as const;
@@ -18,6 +19,9 @@ export type AdminField = (typeof ADMIN_FIELDS)[number];
 export type EditorField = (typeof EDITOR_FIELDS)[number];
 export type OrganisationField = AdminField | EditorField;
 export type Access = 'admin' | 'edit';
+
+/** What a caller holds on one organisation: everything (`admin`), the descriptive fields (`edit`), or nothing. */
+export type AccessLevel = Access | null;
 
 const ADMIN_SET: ReadonlySet<string> = new Set(ADMIN_FIELDS);
 
@@ -56,4 +60,24 @@ export function fieldsOfInput(input: unknown): OrganisationField[] {
     ),
   );
   return fieldsOfBody(known);
+}
+
+/** Whether a caller with `level` may make a change that needs `needed`. An Admin may do everything. */
+export function allows(level: AccessLevel, needed: Access): boolean {
+  return level === 'admin' || (level === 'edit' && needed === 'edit');
+}
+
+/**
+ * The fields a caller with `level` may write, for `editableFields` of `GET /organisations/{id}`: the same
+ * table the update checks, so a screen draws its form from data and the server still refuses the rest.
+ */
+export function editableFields(level: AccessLevel): OrganisationField[] {
+  if (level === 'admin') return [...ADMIN_FIELDS, ...EDITOR_FIELDS];
+  if (level === 'edit') return [...EDITOR_FIELDS];
+  return [];
+}
+
+/** The identity fields of a request, in the order of the table: what a caller without `admin` may not change. */
+export function adminFieldsOf(fields: readonly OrganisationField[]): AdminField[] {
+  return ADMIN_FIELDS.filter((field) => fields.includes(field));
 }

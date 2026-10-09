@@ -1,6 +1,8 @@
-// `{@html}` renders a string as HTML, so it may appear in one place only: ui-kit's SafeHtml, for text the
-// server has sanitised (CLAUDE.md, security rules). The ESLint rule `svelte/no-at-html-tags` refuses
-// it elsewhere; this scan also refuses a way around the rule (a disable comment).
+// `{@html}` renders a string as HTML, so it may appear in two places only: ui-kit's SafeHtml, for text the
+// server has sanitised (CLAUDE.md, security rules), and the JSON-LD block of the organisation page, whose only
+// input is the output of `serializeJsonLd` (M6 plan, Decision 17). The ESLint rule `svelte/no-at-html-tags`
+// refuses it elsewhere (the exception for the second one is a `files` override of eslint.config.js that names
+// exactly that path); this scan also refuses a way around the rule (a disable comment).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -21,11 +23,14 @@ describe('{@html}', () => {
     svelteFiles(join(repo, dir)),
   );
 
-  it('is rendered by SafeHtml.svelte and nowhere else, and nobody switches the rule off but it', () => {
+  it('is rendered by SafeHtml.svelte and JsonLd.svelte and nowhere else, and nobody switches the rule off but SafeHtml', () => {
     const using = files
       .filter((file) => /\{@html\b/.test(readFileSync(file, 'utf8')))
       .map((file) => relative(repo, file));
-    expect(using).toEqual(['packages/ui-kit/src/SafeHtml.svelte']);
+    expect(using.sort()).toEqual([
+      'modules/registry-organisations/ui/JsonLd.svelte',
+      'packages/ui-kit/src/SafeHtml.svelte',
+    ]);
     const disabling = files
       .filter((file) => /no-at-html-tags/.test(readFileSync(file, 'utf8')))
       .map((file) => relative(repo, file));

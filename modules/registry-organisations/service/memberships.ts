@@ -358,8 +358,8 @@ export function createMembershipsService(
 
   async function usernames(userIds: readonly string[]): Promise<Map<string, string | null>> {
     const unique = [...new Set(userIds)];
-    const found = await Promise.all(unique.map((id) => mail.usernameOf(id)));
-    return new Map(unique.map((id, index) => [id, found[index] ?? null]));
+    const found = await mail.usernamesOf(unique);
+    return new Map(unique.map((id) => [id, found.get(id) ?? null]));
   }
 
   /** The rows of a decider's list with their organisation and username. */

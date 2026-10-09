@@ -308,7 +308,7 @@ describe('update', () => {
     expect(await events()).toEqual([]);
   });
 
-  it('is denied to a plain user and to an anonymous caller, before the id is looked at', async () => {
+  it('is denied to a plain user and to an anonymous caller; an unknown id is 404 first, because an organisation is readable by every signed-in person', async () => {
     const { organisations, user, pool } = await setup();
     const row = await makeOrganisation(pool, { description: 'keep' });
     await expect(organisations.update(user, row.id, { description: 'x' })).rejects.toBeInstanceOf(
@@ -319,7 +319,7 @@ describe('update', () => {
     );
     await expect(
       organisations.update(user, '018f3b7e-0000-7000-8000-000000000000', { name: 'x' }),
-    ).rejects.toBeInstanceOf(Forbidden);
+    ).rejects.toBeInstanceOf(NotFound);
     await expect(organisations.update(anonymous, row.id, { name: 'x' })).rejects.toBeInstanceOf(
       Unauthorized,
     );

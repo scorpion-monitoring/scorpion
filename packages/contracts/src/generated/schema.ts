@@ -6930,6 +6930,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description The fields the caller may change on this organisation: all of them for an administrator, the descriptive ones (not `type`, `abbreviation`, `name`) for a manager of it, none for anybody else. The server still refuses what is not allowed. */
+                            editableFields: ("type" | "abbreviation" | "name" | "description" | "website" | "sameAs" | "rorId" | "logo" | "contact")[];
                             /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
                             logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
@@ -7135,6 +7137,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description The fields the caller may change on this organisation: all of them for an administrator, the descriptive ones (not `type`, `abbreviation`, `name`) for a manager of it, none for anybody else. The server still refuses what is not allowed. */
+                            editableFields: ("type" | "abbreviation" | "name" | "description" | "website" | "sameAs" | "rorId" | "logo" | "contact")[];
                             /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
                             logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
@@ -7323,6 +7327,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description The fields the caller may change on this organisation: all of them for an administrator, the descriptive ones (not `type`, `abbreviation`, `name`) for a manager of it, none for anybody else. The server still refuses what is not allowed. */
+                            editableFields: ("type" | "abbreviation" | "name" | "description" | "website" | "sameAs" | "rorId" | "logo" | "contact")[];
                             /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
                             logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
@@ -7349,14 +7355,12 @@ export interface paths {
                         "application/problem+json": components["schemas"]["Problem"];
                     };
                 };
-                /** @description Not allowed. */
+                /** @description The caller may not change this organisation, or a manager asked for `type`, `abbreviation` or `name` (the request is refused whole). */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
+                    content?: never;
                 };
                 /** @description No such organisation. */
                 404: {
@@ -7556,6 +7560,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description The fields the caller may change on this organisation: all of them for an administrator, the descriptive ones (not `type`, `abbreviation`, `name`) for a manager of it, none for anybody else. The server still refuses what is not allowed. */
+                            editableFields: ("type" | "abbreviation" | "name" | "description" | "website" | "sameAs" | "rorId" | "logo" | "contact")[];
                             /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
                             logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */
@@ -7662,6 +7668,8 @@ export interface paths {
                             /** @description The bare ROR id, for example `02skbsp27`. */
                             rorId: string | null;
                             sameAs: string[];
+                            /** @description The fields the caller may change on this organisation: all of them for an administrator, the descriptive ones (not `type`, `abbreviation`, `name`) for a manager of it, none for anybody else. The server still refuses what is not allowed. */
+                            editableFields: ("type" | "abbreviation" | "name" | "description" | "website" | "sameAs" | "rorId" | "logo" | "contact")[];
                             /** @description Where the logo is served, below the base path (`/api/internal/files/{hash}`). Absent without a logo. The file is public by its hash. */
                             logoUrl?: string;
                             /** @description The organisation's role address, not a user's. Present only for a reader who may see it. */

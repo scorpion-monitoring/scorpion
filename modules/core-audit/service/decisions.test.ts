@@ -57,6 +57,18 @@ describe('the audit decision for every declared event', () => {
     }
   });
 
+  it('marks an edit of an organisation as critical when a manager made it, not when an Admin did (Decision 19)', () => {
+    const updated = EVENT_DECISIONS['registry.organisation.updated@1'];
+    expect(updated?.decision).toBe('log');
+    const critical = (updated as { critical: (payload: Record<string, unknown>) => boolean })
+      .critical;
+    expect(critical({ by: 'manager' })).toBe(true);
+    expect(critical({ by: 'admin' })).toBe(false);
+    for (const name of ['registry.organisation.created@1', 'registry.organisation.deleted@1']) {
+      expect((EVENT_DECISIONS[name] as { critical: unknown }).critical, name).toBe(false);
+    }
+  });
+
   it('marks a membership that ends as critical when an Admin or a manager ended it, not when the person left', () => {
     const left = EVENT_DECISIONS['registry.membership.left@1'];
     expect(left?.decision).toBe('log');
