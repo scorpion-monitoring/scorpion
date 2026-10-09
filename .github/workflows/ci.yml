@@ -4,6 +4,8 @@ name: CI
 on:
   push:
     branches: [main, dev, 'release/**', 'hotfix/**']
+    # A release tag publishes the release images (job `publish`).
+    tags: ['v*']
   pull_request:
     branches: [main, dev, 'release/**']
 
@@ -309,3 +311,69 @@ jobs:
             echo "an image must refuse a PROFILE it was not built for" >&2
             exit 1
           fi
+
+  # Publishes the profile images to the GitHub container registry, so an instance can pull them
+  # (CONTRIBUTING.md, "Images in the registry"). It runs only on a push to `dev` and on a release tag, never for a
+  # pull request, and only after the gate and the smoke tests of the image job passed. The build reuses the
+  # layers the image job cached. `packages: write` is granted to this job alone.
+  publish:
+    name: Publish (${{ matrix.profile }})
+    needs: [verify, image]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [full, core-only]
+    env:
+      REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+      REF_NAME: ${{ github.ref_name }}
+      REF_TYPE: ${{ github.ref_type }}
+      COMMIT: ${{ github.sha }}
+      PROFILE: ${{ matrix.profile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # A release tag v<x.y.z> gives `<x.y.z>-<profile>`; a push to dev gives `dev-<profile>` (the newest dev
+      # build) and `dev-<short sha>-<profile>` (a fixed one to roll back to).
+      - name: Image tags
+        id: tags
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            tags="$REGISTRY_IMAGE:${REF_NAME#v}-$PROFILE"
+            version="${REF_NAME#v}"
+          else
+            tags="$REGISTRY_IMAGE:dev-$PROFILE"$'\n'"$REGISTRY_IMAGE:dev-${COMMIT:0:7}-$PROFILE"
+            version="dev-${COMMIT:0:7}"
+          fi
+          {
+            echo "version=$version"
+            echo "list<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          build-args: |
+            PROFILE=${{ matrix.profile }}
+          tags: ${{ steps.tags.outputs.list }}
+          push: true
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.licenses=ISC
+          cache-from: type=gha,scope=image-${{ matrix.profile }}

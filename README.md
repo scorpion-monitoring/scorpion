@@ -65,6 +65,9 @@ The module lists for each profile are in the comments of the profile files, and 
 matrix is in [docs/architecture.md](docs/architecture.md). Until M2 every profile's module list is
 still empty.
 
+CI publishes the images of `full` and `core-only` to `ghcr.io/scorpion-monitoring/scorpion`: `dev-<profile>` follows
+`dev`, and `<x.y.z>-<profile>` is built for every release tag (see [CONTRIBUTING.md](CONTRIBUTING.md#images-in-the-registry)).
+
 ```bash
 PROFILE=core-only pnpm dev
 docker build -f docker/Dockerfile --build-arg PROFILE=core-only -t scorpion:dev-core-only .

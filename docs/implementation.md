@@ -198,6 +198,8 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 ### Gate 1: security foundation
 
+**Status (2026-10-09): conditionally passed** ([ADR-0031](adr/0031-gate-1-conditional-pass.md)). Everything below holds except the second-pass self-review, which the plan itself puts at least 7 days after the first pass (2026-10-09). M6 may start; Gate 1 is cleared on **2026-10-16** or later, when `second_pass` is recorded in the four chapter files, `pnpm security:asvs --write` has regenerated the badges, and the gate commit is checked.
+
 - The regression tests for defects 1, 3, 4, 5, 11, 12 and 13 pass.
 - The four ASVS 5.0 Level 2 chapter assessments in `docs/security/asvs/` (V6, V7, V8, V10; see §8.1) have no `fail` entries, every `n/a` has a reason, and the second-pass self-review (§8.2) is recorded. `pnpm security:asvs` is green on the gate commit.
 - The README badge row (§8.5) shows all four ASVS badges as `self-assessed`, plus the OpenSSF Best Practices badge at **passing** and the OpenSSF Scorecard badge at **≥ 6.5**.
