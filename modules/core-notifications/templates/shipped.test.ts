@@ -9,17 +9,6 @@ const URL = 'https://example.org/somewhere';
 
 /** Data for each template; `text` goes into every free-text field. */
 const samples: Record<string, (text: string) => unknown> = {
-  'registry.membership-requested': (text) => ({
-    applicant: text,
-    providers: [text, 'Second Provider'],
-    reviewUrl: URL,
-  }),
-  'registry.membership-decided': (text) => ({
-    provider: text,
-    decision: 'approved',
-    providerUrl: URL,
-    note: text,
-  }),
   'onboarding.application-submitted': (text) => ({ service: text }),
   'onboarding.application-decided': (text) => ({
     service: text,
@@ -35,7 +24,7 @@ const samples: Record<string, (text: string) => unknown> = {
 };
 
 describe('the shipped templates', () => {
-  it('are the five of the plan, each with a sample here', () => {
+  it('are the three of the plan that no module has taken over yet, each with a sample here', () => {
     expect(SHIPPED_TEMPLATES.map((entry) => entry.key).sort()).toEqual(Object.keys(samples).sort());
   });
 

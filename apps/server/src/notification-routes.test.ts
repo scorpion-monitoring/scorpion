@@ -189,14 +189,14 @@ describe('what a mail leaves in the inbox', () => {
           inApp: true,
         }),
       );
-    const decided = { provider: 'Provider A', decision: 'approved' };
+    const decided = { organisation: 'Organisation A', decision: 'approved' };
 
     expect(await send('registry.membership-decided', decided)).not.toBeNull();
     const inbox = (await s.get('/notifications/inbox', session(alice))).body as Envelope;
     expect(inbox.result).toHaveLength(1);
     expect(inbox.result[0]).toMatchObject({
       template: 'registry.membership-decided',
-      title: 'You are a member of Provider A',
+      title: 'You are a member of Organisation A',
       readAt: null,
     });
 

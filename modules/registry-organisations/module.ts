@@ -19,6 +19,7 @@ import {
   RESOURCE_TYPE,
 } from './service/permissions.ts';
 import { createMemberPolicy, type MemberPolicy } from './service/policy.ts';
+import { TEMPLATES } from './templates/registry.ts';
 import {
   ORG_TYPE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -141,6 +142,8 @@ export function createOrganisationsModule() {
 
     contributes: {
       [ORG_TYPE_REGISTRY]: SEED_TYPES,
+      // The membership mails and inbox items (they moved here from core.notifications, same keys).
+      'notify.template': TEMPLATES,
       // Every signed-in person may read organisations (the forms need them); `manage` stays with Admin.
       // The roles User and Reviewer read organisations; `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [

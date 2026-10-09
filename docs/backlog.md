@@ -84,8 +84,9 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   fan-out job; nothing near it exists.
 - **Admin mails are sent one by one inside the registration transaction.** Fine for a handful; with many administrators a fan-out job reading the
   list after the commit would shorten the request.
-- **Templates of modules that do not exist yet live in core.notifications** (`registry.membership-*`, `onboarding.application-*`,
-  `kpi.reporting-reminder`). When M6, M10 and M15 land, each module takes over its own (a rename of the contributor, same key).
+- **Templates of modules that do not exist yet live in core.notifications** (`onboarding.application-*`, `kpi.reporting-reminder`). When M10 and M15 land,
+  each module takes over its own (a rename of the contributor, same key). Done for `registry.membership-*` in M6 sprint 3 (they moved to
+  `registry.organisations` with the same keys, worded for organisations).
 - **No unsubscribe link.** Done in M4 sprint 3: `category` and `mandatory` drive the preference switches (ADR-0023). Still open: an unsubscribe link in the mail.
 - **The text and HTML of a template are not checked by a mail-client test.** The HTML is plain tables-free markup with inline styles; the
   layout is tested for escaping and structure, not rendered in real clients.
