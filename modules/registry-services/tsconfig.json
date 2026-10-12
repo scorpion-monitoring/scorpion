@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["*.ts", "package.json", "config", "db", "service", "test"],
+  "references": [
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/integrations" },
+    { "path": "../../packages/testing" },
+    { "path": "../core-authz" },
+    { "path": "../core-blob" },
+    { "path": "../core-identity" },
+    { "path": "../core-notifications" },
+    { "path": "../core-settings" },
+    { "path": "../core-ui-shell" },
+    { "path": "../registry-organisations" }
+  ]
+}
