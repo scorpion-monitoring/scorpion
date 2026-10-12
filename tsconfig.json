@@ -29,6 +29,9 @@
       "path": "./modules/core-ui-shell"
     },
     {
+      "path": "./modules/registry-organisations"
+    },
+    {
       "path": "./packages/contracts"
     },
     {

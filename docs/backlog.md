@@ -84,8 +84,9 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   fan-out job; nothing near it exists.
 - **Admin mails are sent one by one inside the registration transaction.** Fine for a handful; with many administrators a fan-out job reading the
   list after the commit would shorten the request.
-- **Templates of modules that do not exist yet live in core.notifications** (`registry.membership-*`, `onboarding.application-*`,
-  `kpi.reporting-reminder`). When M6, M10 and M15 land, each module takes over its own (a rename of the contributor, same key).
+- **Templates of modules that do not exist yet live in core.notifications** (`onboarding.application-*`, `kpi.reporting-reminder`). When M10 and M15 land,
+  each module takes over its own (a rename of the contributor, same key). Done for `registry.membership-*` in M6 sprint 3 (they moved to
+  `registry.organisations` with the same keys, worded for organisations).
 - **No unsubscribe link.** Done in M4 sprint 3: `category` and `mandatory` drive the preference switches (ADR-0023). Still open: an unsubscribe link in the mail.
 - **The text and HTML of a template are not checked by a mail-client test.** The HTML is plain tables-free markup with inline styles; the
   layout is tested for escaping and structure, not rendered in real clients.
@@ -152,6 +153,11 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
   without a restart would help operators.
 - **A private window cannot resume a re-authentication at a provider.** Without `sessionStorage` the intended action is lost and the person lands on the start page; the dialog does not warn of it.
 
+## End-to-end test follow-ups (0.7.0 release)
+
+- **Only `page.goto` waits for hydration.** A click that loads another page with a full reload, or a form that redirects, is not covered by the wait (`hydrated(page)` in `apps/web/e2e/support/fixtures.ts` can be called by hand). Look at the first failure of any E2E test that types or presses a key right after a navigation before looking elsewhere.
+- **A retry is only as good as its fixtures.** `createUser` now accepts the account of a failed first attempt (409 on a retry), but a test that changes the account before it fails (password, email) leaves a different state for the retry. Prefer tests that create what they change.
+
 ## Operations screen follow-ups (M5 sprint 4)
 
 - **The audit list pages by offset, so "Load more" can repeat or skip a row** when entries arrive while the page is open (the page keeps each id once, so it never repeats, but a skipped row is possible). A cursor (`before=<occurredAt>,<id>`) on `GET /audit` would make it exact; the CSV export already reads by keyset.
@@ -171,7 +177,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **Widgets load in the browser only** (no server rendering), so the bell and the cards appear a moment after the page. A widget that needs data on first paint would need a `load` like a page has.
 - **The dashboard has two cards.** KPI cards are M13; a card needs only a `ui.widget` entry and a component in a module's `ui` entry.
 - **The inbox has no cap per person** (see "Notifications follow-ups (M4 sprint 3)"); now that a registration request lands there for every administrator, a flood of registrations grows every administrator's inbox. Read items are deleted after `inboxRetentionDays`.
-- **The "vocabularies" journey is flaky on its first attempt in a full e2e run** (`admin-settings.spec.ts`, "an Admin adds a term, relabels it, deactivates it and removes it"); alone it passes. The cause is not found.
+- **The "vocabularies" journey is flaky on its first attempt in a full e2e run** (`admin-settings.spec.ts`, "an Admin adds a term, relabels it, deactivates it and removes it"); alone it passes. The cause is not found; it may be the hydration race of `accessibility-auth.spec.ts` (see below), which `page.goto` now waits out, so check whether it still happens.
 
 ## Administration screen follow-ups (M5 sprint 3)
 
@@ -188,6 +194,82 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **`core.authz` and `core.settings` cannot contribute pages** because `core.ui-shell` depends on them. If that matters later (a module that owns its own screens), the shell would have to depend on neither, which means moving the permission check of the navigation out of the shell, and needs an ADR.
 - **The icon set** has `lock` now; a `key` and a `tag` would suit secrets and vocabularies (the navigation shows Settings with one icon today).
 - ~~**`SchemaForm` shows an array of objects with the first control focused after Add**~~ Done in M5 sprint 4: `SchemaForm` asks before it removes an item (an item nothing was typed in is removed at once). (was:, but does not ask before removing an item. A confirm for a removal that cannot be undone (a provider with a stored secret) is the page's to add.)
+
+## Organisations follow-ups (M6 sprint 1)
+
+- **Hierarchy.** `parentOrganization` and `subOrganization` (parent and child organisations), an `address` and a `foundingDate` are not modelled ([m6-sprint-plan.md](m6-sprint-plan.md) §3 and §11). The table has no parent column; add one with its own ADR when a milestone needs a tree.
+- **M7/M8: public read of the Schema.org profile of an organisation.** M7 adds a public route that serves `toSchemaOrg(..., includeContact: false)` for organisations referenced by at least one service (an `org.usage` count above zero); never the contact point; rate-limited; unreferenced organisations answer 404. M8 adds the same representation to public API v1 (additive). M6 builds no public read for "is referenced", so M7 adds the small one it needs (for example `isReferencedAsSystem(id)`). From the M6 follow-up decisions of 2026-10-09 (Decision 15).
+- ~~**Who may upload a logo through the blob store.**~~ Closed in M6 sprint 2: a module stores an image through its own route, its own permission and the blob service; `POST /files` and `core.blob.manage` stay for the branding logos of the settings and are not used here. `PUT /organisations/{id}/logo` needs `…organisation.manage` (sprint 4: the scoped `…organisation.edit`, checked in the service), and the service calls `blob.put` (which needs `core.blob.upload`, held by the role `user`) and then `setReference`. Nothing changed in `core.blob`.
+- **Logo extras (M6 sprint 2).** Logo variants (thumbnails of a fixed size), a logo fetched from a URL (an outgoing request, so SSRF rules and a timeout), and SVG-only logos (today a raster or an SVG is accepted and the blob store rewrites it; there is no way to require vector input) are not built. The logo hash is public by `GET /files/{hash}`; a private logo is not possible.
+- **`address` and `foundingDate`** (schema.org) are not stored or mapped; see the hierarchy entry above.
+- ~~**One contact permission only until sprint 3.**~~ Done in M6 sprint 3: the managers of an organisation hold `…organisation.read-contact` through the policy `organisation.member`, with no change in the organisation service; the manager clause is tested (`memberships.lists.test.ts`, `policy.test.ts`).
+- **Counting only active accounts** in `memberCount`, in the manager count and in `isApprovedMemberAsSystem` for a deactivated account: a deactivated person has no working session, so their approved membership grants nothing, but it still counts until the purge (documented in the README of `registry.organisations`, M6 sprint 3). Counting active accounts only needs a way to ask `core.identity` for the status of many users at once (see the batch lookup below).
+- **An organisation of a type that is no longer registered** (a profile that dropped the module that contributed the type) is listed and readable with `typeKnown: false`, refuses every change, and can still be deleted when no `org.usage` entry counts a reference. A way to move such organisations to another type in one step is not built.
+
+## Membership and delegation follow-ups (M6 sprint 3)
+
+From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-0034 records the design.
+
+- ~~**A batch lookup of users in `core.identity`.**~~ Done in M6 sprint 4 (same PR): `users.findByIds(ids)` (one query per 1000 ids; unknown and
+  malformed ids left out). The member lists, the request mails (managers and administrators) and the "no manager" notice use it. Counting only
+  active accounts in `memberCount` can use it now; not done (see above).
+- **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). A flag on `createRoute()` that lets the pipeline pass a
+  caller who lacks the permission globally, with the service re-check as the guard, would make a delegated route visible to the pipeline instead of
+  looking like an ordinary read. It touches `packages/contracts/src/route.ts` and `apps/server/src/pipeline/**` (both ASVS-scoped). Build it in M7 only
+  if `service.edit` cannot use the pattern of M6 (a plain permission on the route, the scoped check in the service).
+- **Closing the one-request window after a demotion** (ADR-0034): a decision that passed the permission check a moment before a demotion committed
+  is allowed once. Taking the row lock before the permission check would close it at the price of letting an unauthorised caller queue behind a
+  lock. Not worth it unless a case shows up.
+- **Managers removing other managers**, inviting people, an expiry of a membership, a transfer between organisations, roles beyond `member`
+  and `manager`, a manager of several organisations through one action, an organisation-level setting for who may decide. (Today only an Admin removes a
+  manager; a manager can demote one. Decision 16 and 18.)
+- **Mail to the person** when an Admin or a manager removes them, or when a person leaves (a role change is an inbox item only), a digest for the
+  deciders, and the "all administrators" fan-out job for more than 1000 holders (see the entry on admin mails above).
+- **Reactivation** of a purged person's memberships (there is none: the rows are deleted), and a history view of one membership beyond the audit trail
+  (the row keeps only the last decision; a reopened row forgets the old one).
+- **A slot in the identity profile page for module sections** (Decision 10) and a notification preference per organisation.
+- ~~**Editing by managers (sprint 4, Decision 19).**~~ Built in M6 sprint 4; the follow-ups (a review queue, an inbox item, an instance switch) are in "Editing and screens follow-ups" below.
+
+## Editing and screens follow-ups (M6 sprint 4)
+
+- **Manager edits go live at once (Decision 19).** A review queue for manager edits of the ROR id, the website and the `sameAs` links, an
+  inbox item to administrators when a manager changes the contact point or the ROR id, and an instance switch that turns manager editing
+  off are not built. Today an Admin sees every manager edit on the critical audit channel (`registry.organisation.updated@1` with
+  `by: manager`) and can revert it; relaxing the audit channel is one line in `core.audit`'s `decisions.ts`.
+- **A `sort` parameter on `GET /organisations`.** The list sorts by abbreviation, then id on the server, and the administrator's table has no
+  sortable columns. A sort by name, type or member count needs a `sort`/`dir` pair on the route (additive).
+- ~~**Component tests for a module's Svelte pages.**~~ Settled in M6 sprint 5 without a Svelte plugin in the module projects: the page tests
+  live in `apps/web/src` (which has the plugin), load the module's pages by path (as `json-ld.test.ts` does) and render them on the server
+  through `apps/web/src/test/ShellHarness.svelte`, a stand-in for the layout with a fixed signed-in person. What is left is a test that
+  clicks (see "Membership screens follow-ups").
+- **Logo in the list rows and on the administrator's list.** The list shows no logo; `logoUrl` is only in the record. A small thumbnail needs
+  a variant of the file (see "Logo extras").
+
+- **An anonymous caller gets 422 before 401 on a route with a required body.** `POST /organisations`, `POST /tokens` and the membership routes
+  answer 422 (a problem that names the body fields) to a caller who is not signed in and sends no body, because validation runs before the
+  authorization in the pipeline. Nothing is changed by it, but the answer names the schema to somebody who may not read it. Found while writing the
+  401 case for the membership routes; the matrix of defect 1 sends a valid body on every route, which hides it. A fix is in `apps/server/src/pipeline/**`
+  (ASVS-scoped), so it is not done here.
+
+## Membership screens follow-ups (M6 sprint 5)
+
+From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found.
+
+- **Who decided.** The plan asks for a row that "says who decided and when". `GET /memberships` returns `decidedAt` but not `decidedBy` (the
+  field table says no route returns `decidedBy`, `endedBy` or `roleChangedBy`; the audit trail holds the actor), so the screens show the
+  outcome and the time only. Showing the name needs an additive field on the decider's row (a username, `null` for a gone account), the
+  field table, the walker in `response-fields.test.ts` and a test per reader.
+- **Long lists.** The manager section shows at most the first 100 requests and members of an organisation (and says when there are more), and
+  the filter of `/admin/memberships` lists the first 100 organisations. A manager of a very large organisation needs a page per list, and
+  the administrator a search-as-you-type for the organisation filter.
+- **A click-level component test.** The page tests render on the server and fix every state that depends on data; what a click does (the
+  confirm, the in-place update, the focus afterwards, the card's request on mount) is proved by the Playwright journeys and the keyboard
+  run only. A browser-mode or jsdom harness for module components would let those be unit tests.
+- **The dashboard card reads the summary once** when the dashboard opens; a request that arrives while it is open shows after a reload (the
+  inbox bell is the live signal).
+- **Not in M6 by decision (plan §11), kept here so they are not lost:** a funder or any other type (the `org.type` registry makes them
+  possible; they arrive with the module that needs them), contact persons of an organisation, a logo from a URL, an import or export of
+  organisations (M13 writes through the service) and a CSV of members.
 
 ## Later
 

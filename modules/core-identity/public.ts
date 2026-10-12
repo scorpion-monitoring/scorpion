@@ -27,6 +27,12 @@ export interface UserService {
   findByUsername(username: string): Promise<User | undefined>;
   /** `undefined` when there is no such user (also for an id that is not a UUID). */
   findById(id: string): Promise<User | undefined>;
+  /**
+   * Many users in one query (per 1000 ids). Malformed and unknown ids are left out, duplicates are
+   * read once, soft-deleted users are found. For a list or a fan-out that would otherwise call
+   * `findById` once per person.
+   */
+  findByIds(ids: readonly string[]): Promise<Map<string, User>>;
   /** Case-insensitive. `undefined` when no user has this address. */
   findByEmail(email: string): Promise<User | undefined>;
 }

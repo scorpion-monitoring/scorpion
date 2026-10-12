@@ -17,7 +17,13 @@ export default defineConfig<{ basePath: string }>({
     ? [
         ['list'],
         ['html', { open: 'never' }],
-        ['junit', { outputFile: '../../reports/playwright-junit.xml' }],
+        [
+          'junit',
+          {
+            outputFile:
+              process.env.PLAYWRIGHT_JUNIT_OUTPUT_FILE ?? '../../reports/playwright-junit.xml',
+          },
+        ],
       ]
     : 'list',
   use: { trace: 'retain-on-failure' },

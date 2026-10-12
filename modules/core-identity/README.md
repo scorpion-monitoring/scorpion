@@ -523,6 +523,7 @@ sessions, the provider's session, recent authentication). In short:
   writes the user and its auth method in one transaction. A race is stopped by the unique indexes and is also a 409.
   The result never holds a hash or an internal flag.
 - `findById(id)`: `undefined` when there is no such user, also for text that is not a UUID.
+- `findByIds(ids)`: a `Map` of the users found, in one query per 1000 ids; unknown and malformed ids are left out, a repeated id is read once, soft-deleted users are found (M6: lists and fan-outs that would call `findById` per person).
 - `findByUsername(name)` and `findByEmail(address)`: case-insensitive, `undefined` when there is no match,
   soft-deleted users included (the caller refuses their login).
 

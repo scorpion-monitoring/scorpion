@@ -209,3 +209,51 @@ export function mailbox(pool: Queryable): Mailbox {
     clear: async () => void (await pool.query('delete from notify_delivery')),
   };
 }
+
+/** The mail queue as stored, oldest first (column names as in the table), for a test that reads who was mailed what. */
+export async function deliveryRows(db: Queryable) {
+  const { rows } = await db.query<{
+    template: string;
+    recipient_address: string | null;
+    recipient_user_id: string | null;
+    locale: string;
+    subject: string;
+    text_body: string | null;
+  }>(
+    `select template, recipient_address, recipient_user_id, locale, subject, text_body
+       from notify_delivery order by created_at, id`,
+  );
+  return rows;
+}
+
+/** The inbox items as stored, oldest first. */
+export async function inboxRows(db: Queryable) {
+  const { rows } = await db.query<{
+    user_id: string;
+    template: string;
+    title: string;
+    text: string;
+    link: string | null;
+  }>('select user_id, template, title, text, link from notify_inbox_item order by created_at, id');
+  return rows;
+}
+
+/** Makes the mail queue refuse an insert, so a mail cannot be stored. Returns the undo. */
+export async function breakDeliveries(db: Queryable) {
+  await db.query(`
+    create or replace function test_break_deliveries() returns trigger as $$
+    begin raise exception 'the mail queue is broken for this test'; end $$ language plpgsql;
+    create trigger test_break_deliveries before insert on notify_delivery
+      for each row execute function test_break_deliveries();`);
+  return () => db.query('drop trigger test_break_deliveries on notify_delivery');
+}
+
+/** Makes the inbox refuse an insert (an item is a second write after the mail). Returns the undo. */
+export async function breakInbox(db: Queryable) {
+  await db.query(`
+    create or replace function test_break_inbox() returns trigger as $$
+    begin raise exception 'the inbox is broken for this test'; end $$ language plpgsql;
+    create trigger test_break_inbox before insert on notify_inbox_item
+      for each row execute function test_break_inbox();`);
+  return () => db.query('drop trigger test_break_inbox on notify_inbox_item');
+}

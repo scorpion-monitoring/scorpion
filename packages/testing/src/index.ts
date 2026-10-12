@@ -4,10 +4,14 @@ export {
   testAuthorizerEntry,
   type TestAuthorizationRequest,
 } from './authorizer.ts';
-export { makePng } from './images.ts';
+export { JPEG_EXIF_MARK, makeJpegWithExif, makePng } from './images.ts';
 export { makeAuditEvent, type AuditEventRow, type MakeAuditEvent } from './audit.ts';
 export { makeRole, makeRoleAssignment, type MakeRole, type MakeRoleAssignment } from './authz.ts';
 export {
+  breakDeliveries,
+  breakInbox,
+  deliveryRows,
+  inboxRows,
   mailbox,
   makeDelivery,
   makeInboxItem,
@@ -18,6 +22,8 @@ export {
   type Mailbox,
   type QueuedMail,
 } from './notifications.ts';
+export { makeMembership, type MakeMembership, type MembershipRow } from './memberships.ts';
+export { makeOrganisation, type MakeOrganisation, type OrganisationRow } from './organisations.ts';
 export {
   makePreference,
   makeSecret,

@@ -386,3 +386,38 @@ describe('findById', () => {
     }
   });
 });
+
+describe('findByIds', () => {
+  it('finds many users at once, each equal to what findById returns, soft-deleted ones included', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const alice = await id.users.createUser({ username: 'alice', auth: local() });
+    const bob = await id.users.createUser({ username: 'bob', auth: local() });
+    const gone = await makeUser(kernel.pool, { deleted: true });
+    const found = await id.users.findByIds([alice.id, bob.id, gone.id]);
+    expect([...found.keys()].sort()).toEqual([alice.id, bob.id, gone.id].sort());
+    expect(found.get(alice.id)).toEqual(await id.users.findById(alice.id));
+    expect(found.get(gone.id)?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('leaves out unknown and malformed ids, reads a repeated id once, and answers an empty list with an empty map', async () => {
+    const { identity: id } = await identity.start();
+    const alice = await id.users.createUser({ username: 'alice', auth: local() });
+    const found = await id.users.findByIds([
+      alice.id,
+      alice.id,
+      '019a0000-0000-7000-8000-000000000000',
+      'nope',
+      '',
+      "' or 1=1 --",
+    ]);
+    expect([...found.keys()]).toEqual([alice.id]);
+    expect((await id.users.findByIds([])).size).toBe(0);
+  });
+
+  it('works across more ids than one query takes', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const users = await Promise.all(Array.from({ length: 1005 }, () => makeUser(kernel.pool)));
+    const found = await id.users.findByIds(users.map((u) => u.id));
+    expect(found.size).toBe(1005);
+  });
+});

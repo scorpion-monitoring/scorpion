@@ -36,7 +36,7 @@ describe('the audit decision for every declared event', () => {
 
   it('marks as critical the events of role, approval, token, settings and secret changes', () => {
     const critical = Object.entries(EVENT_DECISIONS)
-      .filter(([, d]) => d.decision === 'log' && d.critical)
+      .filter(([, d]) => d.decision === 'log' && d.critical === true)
       .map(([name]) => name);
     for (const name of [
       'authz.role.assigned@1',
@@ -50,9 +50,33 @@ describe('the audit decision for every declared event', () => {
       'identity.token.rotated@1',
       'settings.changed@1',
       'settings.secret.changed@1',
+      'registry.membership.decided@1',
+      'registry.membership.roleChanged@1',
     ]) {
       expect(critical, name).toContain(name);
     }
+  });
+
+  it('marks an edit of an organisation as critical when a manager made it, not when an Admin did (Decision 19)', () => {
+    const updated = EVENT_DECISIONS['registry.organisation.updated@1'];
+    expect(updated?.decision).toBe('log');
+    const critical = (updated as { critical: (payload: Record<string, unknown>) => boolean })
+      .critical;
+    expect(critical({ by: 'manager' })).toBe(true);
+    expect(critical({ by: 'admin' })).toBe(false);
+    for (const name of ['registry.organisation.created@1', 'registry.organisation.deleted@1']) {
+      expect((EVENT_DECISIONS[name] as { critical: unknown }).critical, name).toBe(false);
+    }
+  });
+
+  it('marks a membership that ends as critical when an Admin or a manager ended it, not when the person left', () => {
+    const left = EVENT_DECISIONS['registry.membership.left@1'];
+    expect(left?.decision).toBe('log');
+    const critical = (left as { critical: (payload: Record<string, unknown>) => boolean }).critical;
+    expect(critical({ by: 'admin' })).toBe(true);
+    expect(critical({ by: 'manager' })).toBe(true);
+    expect(critical({ by: 'member' })).toBe(false);
+    expect(critical({ by: 'system' })).toBe(false);
   });
 });
 

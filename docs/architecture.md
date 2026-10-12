@@ -275,19 +275,19 @@ Security is enforced by the kernel's request pipeline, so no module can opt out 
 
 ## Deployment profiles and operations
 
-A deployment profile is a small file (`profiles/<name>.ts`) that lists the modules to include. The build bundles only those modules, and the startup refuses to run if a dependency is missing. The repository has two profiles, `full` and `core-only` ([ADR-0030](adr/0030-core-only-profile.md)). The columns for the three example deployments from FEATURES.md are kept as the plan for profiles that return when their milestones need them (● = included, ○ = optional):
+A deployment profile is a small file (`profiles/<name>.ts`) that lists the modules to include. The build bundles only those modules, and the startup refuses to run if a dependency is missing. The repository has three profiles, `full`, `core-only` and `registry` ([ADR-0030](adr/0030-core-only-profile.md), [ADR-0032](adr/0032-registry-profile.md)). The `registry` column is the profile as it grows (M6 adds the organisations, M7 the services, M8 the public API; no KPI modules). The columns for the other example deployments from FEATURES.md are kept as the plan for profiles that return when their milestones need them (● = included, ○ = optional):
 
-| Module | `full` | `denbi-registry` | `nfdi-onboarding` | `kpi-tracker` |
+| Module | `full` | `registry` | `nfdi-onboarding` | `kpi-tracker` |
 | --- | --- | --- | --- | --- |
-| Core (all six) | ● | ● | ● | ● |
+| Core (all seven) | ● | ● | ● | ● |
 | registry.organisations | ● | ● | ● | ● |
 | registry.services | ● | ● | ● | ● |
-| kpi.framework, kpi.ingestion, kpi.analytics | ● | ● | ○ | ● |
-| kpi.impact | ● | ● |  | ○ |
-| maturity, onboarding | ● | ○ | ● |  |
-| bibliometrics | ● | ● |  | ○ |
-| network-graph | ● | ● |  |  |
-| announcements | ● | ● | ○ | ○ |
+| kpi.framework, kpi.ingestion, kpi.analytics | ● |  | ○ | ● |
+| kpi.impact | ● |  |  | ○ |
+| maturity, onboarding | ● |  | ● |  |
+| bibliometrics | ● |  |  | ○ |
+| network-graph | ● |  |  |  |
+| announcements | ● | ○ | ○ | ○ |
 | backup | ● | ● | ● | ● |
 | public-api | ● | ● | ○ | ● |
 
@@ -326,7 +326,7 @@ scorpion/
     kpi-framework/  kpi-ingestion/  kpi-analytics/  kpi-impact/
     maturity/  onboarding/  bibliometrics/  network-graph/  announcements/  backup/  public-api/
   profiles/
-    full.ts  core-only.ts
+    full.ts  core-only.ts  registry.ts
   tools/
     migrate-legacy/      # one-time import from the current Scorpion database
   docker/  .github/workflows/

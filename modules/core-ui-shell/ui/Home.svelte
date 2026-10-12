@@ -24,7 +24,11 @@
 </section>
 
 {#if who && cards}
-  <section class="mt-8 flex flex-col gap-4" aria-labelledby="dashboard-title">
+  <!-- A module's card may draw nothing (a card that has nothing to say); then the heading goes too. -->
+  <section
+    class="mt-8 flex flex-col gap-4 [&:not(:has(.grid>*))]:hidden"
+    aria-labelledby="dashboard-title"
+  >
     <h2 id="dashboard-title" class="text-xl font-semibold">{t('home.dashboard')}</h2>
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Widgets slot="dashboard" />

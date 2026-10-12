@@ -21,7 +21,12 @@
     </script>
     %sveltekit.head%
   </head>
-  <body class="bg-base-100 text-base-content" data-sveltekit-preload-data="hover">
+  <!-- `data-hydrated` is "false" until the root layout has mounted, so a browser test knows when the page reacts. -->
+  <body
+    class="bg-base-100 text-base-content"
+    data-sveltekit-preload-data="hover"
+    data-hydrated="false"
+  >
     <div class="contents">%sveltekit.body%</div>
   </body>
 </html>

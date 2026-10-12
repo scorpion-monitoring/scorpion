@@ -198,8 +198,9 @@ export const approved = defineTemplate({
   whatever a name holds, so a hostile name cannot add a header. Tests use `<script>`, a bidi override and a line break in every template and language.
 - **Language** (`enqueueTemplate`): the language the caller names (a user's `notifications.locale`, or one a request carried), checked against the
   shipped list (`de-AT` gives `de`); else `defaultLocale`; else English. An unsupported value never fails a mail.
-- **Shipped here**, registered and tested, for modules that do not exist yet: `registry.membership-requested`, `registry.membership-decided`,
-  `onboarding.application-submitted`, `onboarding.application-decided` and `kpi.reporting-reminder`. The seven identity templates (`identity.welcome`,
+- **Shipped here**, registered and tested, for modules that do not exist yet: `onboarding.application-submitted`,
+  `onboarding.application-decided` and `kpi.reporting-reminder`. The membership templates (`registry.membership-requested`,
+  `registry.membership-decided`) moved to [registry.organisations](../registry-organisations/README.md) in M6 with the same keys. The seven identity templates (`identity.welcome`,
   `.registration-request`, `.approved`, `.rejected`, `.password-reset`, `.email-verification`, `.register-attempt`) belong to
   [core.identity](../core-identity/README.md).
 

@@ -15,6 +15,8 @@ import { createIdentityModule } from '@scorpion/core-identity/module';
 import identityPackage from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
+import orgModule from '@scorpion/registry-organisations/module';
+import orgPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import { createSettingsModule, type SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
@@ -96,6 +98,7 @@ export function useAudit(): AuditHarness {
           'core.blob',
           'core.notifications',
           'core.identity',
+          'registry.organisations',
           ...(withAudit ? ['core.audit'] : []),
         ] as never,
       },
@@ -114,6 +117,8 @@ export function useAudit(): AuditHarness {
           packageJson: notificationsPackage,
         },
         { manifest: createIdentityModule(), packageJson: identityPackage },
+        // An optional peer of core.audit: its three events need a decision (decisions.test.ts).
+        { manifest: orgModule, packageJson: orgPackage },
         ...(withAudit ? [{ manifest, packageJson }] : []),
       ],
       modulePackages: {
@@ -124,6 +129,7 @@ export function useAudit(): AuditHarness {
         'core.identity': '@scorpion/core-identity',
         // An optional peer of core.identity and core.audit (their pages): known, so that its absence is not a mistake.
         'core.ui-shell': '@scorpion/core-ui-shell',
+        'registry.organisations': '@scorpion/registry-organisations',
         'core.audit': '@scorpion/core-audit',
       },
       config: loadConfig({
