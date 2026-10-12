@@ -226,7 +226,7 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 
 ### M7: `registry.services` (L)
 
-- Tables: `service`, `service_organisation` (roles: provider, consortium), `service_field_value` for deployment-specific metadata.
+- Tables: `service`, `service_organisation` (roles: provider, consortium), `service_field_value` for deployment-specific metadata (named with the prefix `svc_`, see below).
 - Service metadata schema and wizard steps loaded from config (successor of `steps.json` / `service_schema.json`), validated at startup.
 - `service.fieldType` registry with text, select, license (SPDX adapter), organisation (own providers), multi-select, image. `service.wizardStep` registry.
 - Create wizard with client-side and server-side validation from the same schema, created in one transaction. Dev-only JSON console kept.
@@ -234,6 +234,19 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Catalogue: paginated, sortable table; facets (category, consortium, stage, license) computed in SQL **over the filtered set**; the page resets when a filter changes; removable filter badges.
 - Correct service ↔ consortium read model (a tested query function, no hand-written view) (defect 2).
 - `packages/integrations`: SPDX adapter with a 24 h cache and a bundled fallback.
+
+Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [ADR-0035](adr/0035-service-model.md), ADR-0036 with sprint 2):
+
+- Tables `svc_service`, `svc_service_organisation`, `svc_field_value`, `svc_slug_history`, `svc_license_cache`; table prefix `svc_`.
+- The service carries `description`, `url`, `sameAs`, a contact point (role address), an icon through `core.blob` and a `public` flag, in addition to slug, name, licence and stage.
+- A service serves a **Schema.org `Service` profile** (one builder, a signed-in route, a public route, a server-rendered JSON-LD block, escaped); the provider is `provider`, the consortia are `brand`, the category arrives from `kpi.framework` through `service.profileContributor`; the contact point and the stage are not in the JSON-LD.
+- **Public reads that Reviewers and Admin control:** the flag `public`, the permission `registry.services.service.publish`, public routes and pages that answer 404 for everything not published, the public profile of an organisation that has at least one public service (M6 Decision 15 refined), and the setting `service.allowPublic`.
+- The registries `service.orgRole`, `service.fieldType`, `service.wizardStep`, `service.facet` and `service.profileContributor`; the config files `config/steps.ts` and `config/fields.ts`, validated at startup.
+- The policy `service.member` and the scoped permissions `…service.edit`, `…service.edit-identity` and `…service.read-contact`; three groups: members edit the descriptive fields and the consortia, managers of the provider and Admin change the slug and the provider, Reviewers and Admin publish.
+- Events `registry.service.created|updated|slugChanged|published|unpublished@1`; the contributions to `org.usage` and to the `stage` vocabulary's `usage`.
+- The SPDX adapter in `packages/integrations` with a cache table owned by the module and a bundled fallback.
+- Screens: the catalogue with facets, the wizard, the service page with edit mode and publication, the public service and organisation pages.
+- Acceptance additions: the journeys of the plan under both base paths, the identical-404 rule, no pg enum and no hard-coded label, the module starts without the shell. Release `0.9.0`.
 
 **Acceptance:** the defect-2 test passes: a service with zero or several consortia appears correctly in the catalogue, in the facet counts and in the consortium filter. A non-member gets 403 on edit.
 
