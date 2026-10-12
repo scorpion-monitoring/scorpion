@@ -33,13 +33,21 @@ interface PlaywrightLike {
 }
 
 /** The administrator, signed in through the API in a context of its own. */
-export async function adminApi(
+export const adminApi = (
   playwright: PlaywrightLike,
   baseURL: string | undefined,
   at: (path: string) => string,
+): Promise<AdminApi> => apiAs(playwright, baseURL, at, admin);
+
+/** Any account, signed in through the API in a context of its own (a second session, as another browser would have). */
+export async function apiAs(
+  playwright: PlaywrightLike,
+  baseURL: string | undefined,
+  at: (path: string) => string,
+  credentials: Credentials,
 ): Promise<AdminApi> {
   const request = await playwright.request.newContext({ baseURL });
-  const login = await request.post(at('/api/internal/auth/login'), { data: admin });
+  const login = await request.post(at('/api/internal/auth/login'), { data: credentials });
   expect(login.status(), await login.text()).toBe(200);
   const csrf = ((await login.json()) as { csrfToken: string }).csrfToken;
   return {

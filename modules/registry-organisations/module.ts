@@ -23,7 +23,7 @@ import {
 } from './service/permissions.ts';
 import { createMemberPolicy, type MemberPolicy } from './service/policy.ts';
 import { TEMPLATES } from './templates/registry.ts';
-import { ORGANISATION_NAV, ORGANISATION_ROUTES } from './ui/routes.ts';
+import { ORGANISATION_NAV, ORGANISATION_ROUTES, ORGANISATION_WIDGETS } from './ui/routes.ts';
 import {
   ORG_TYPE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -202,6 +202,8 @@ export function createOrganisationsModule() {
       // The pages and their links; entries for registries of core.ui-shell, an optional peer.
       'ui.routes': ORGANISATION_ROUTES,
       'ui.nav': ORGANISATION_NAV,
+      // The dashboard card of the requests waiting for a decision.
+      'ui.widget': ORGANISATION_WIDGETS,
       // The membership mails and inbox items (they moved here from core.notifications, same keys).
       'notify.template': TEMPLATES,
       // Every signed-in person may read organisations (the forms need them); `manage` stays with Admin.

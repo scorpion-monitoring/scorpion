@@ -13,16 +13,16 @@ Admin and by the managers of an organisation, the administrator's editor and the
 
 ## Manifest
 
-| Part         | Value                                                                                                                                                                                                                       |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id           | `registry.organisations`                                                                                                                                                                                                    |
-| table prefix | `org_` (set in the manifest; ADR-0004): `org_organisation`, `org_membership`                                                                                                                                                |
-| dependencies | `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob`; `core.ui-shell` as an optional peer (the module starts without the shell)                                                                |
-| routes       | internal API, see "Routes"                                                                                                                                                                                                  |
-| ui           | `ui` entry with the organisation page (`/organisations/:id`) and the administrator's editor (`/admin/organisations`, `/new`, `/:id`); the member and manager screens follow in sprint 5                                     |
-| events       | emits the three organisation events and the four membership events (see "Events"); subscribes to `identity.user.purged@1`                                                                                                   |
-| registries   | declares `org.type` and `org.usage`; contributes the seed types to `org.type`, the default roles to `authz.defaultRole`, the policy `organisation.member` to `authz.resourcePolicy` and four templates to `notify.template` |
-| settings     | `exposeContactPoint` and the three `membership.*` settings (see "Settings"), shown by the generic settings form                                                                                                             |
+| Part         | Value                                                                                                                                                                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id           | `registry.organisations`                                                                                                                                                                                                                                                                          |
+| table prefix | `org_` (set in the manifest; ADR-0004): `org_organisation`, `org_membership`                                                                                                                                                                                                                      |
+| dependencies | `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob`; `core.ui-shell` as an optional peer (the module starts without the shell)                                                                                                                                      |
+| routes       | internal API, see "Routes"                                                                                                                                                                                                                                                                        |
+| ui           | `ui` entry with the organisation page (`/organisations/:id`), the administrator's editor (`/admin/organisations`, `/new`, `/:id`), the member and manager screen (`/account/organisations`), the administrator's membership requests (`/admin/memberships`) and the dashboard card; see "Screens" |
+| events       | emits the three organisation events and the four membership events (see "Events"); subscribes to `identity.user.purged@1`                                                                                                                                                                         |
+| registries   | declares `org.type` and `org.usage`; contributes the seed types to `org.type`, the dashboard card to `ui.widget`, the default roles to `authz.defaultRole`, the policy `organisation.member` to `authz.resourcePolicy` and four templates to `notify.template`                                    |
+| settings     | `exposeContactPoint` and the three `membership.*` settings (see "Settings"), shown by the generic settings form                                                                                                                                                                                   |
 
 ### Permissions
 
@@ -363,23 +363,60 @@ The pages are contributed to `ui.routes` and `ui.nav` of `core.ui-shell` (an opt
 serves its API). The server half is `ui/routes.ts`, the browser half `ui/index.ts`; `ui/ui.test.ts` checks that they agree. All
 fetches go through the typed client, every link through `href()`, and no filesystem route is added (the shell's catch-all renders them).
 
-| Page                       | Permission                                   | Shows                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/organisations/:id`       | `registry.organisations.organisation.read`   | logo, name, abbreviation, the type's label (from the registry entry), description, website, ROR id and `sameAs` links (`rel="noopener noreferrer"`), the contact point when the API returned it, the member count, the viewer's own membership with its action, the member list when the API allows it, a link to the editor for an Admin, and the JSON-LD block in the head |
-| `/admin/organisations`     | `registry.organisations.organisation.manage` | the list: search, type filter, 0-based pages (the server sorts by abbreviation, then id); a nav entry in the administration section                                                                                                                                                                                                                                          |
-| `/admin/organisations/new` | `registry.organisations.organisation.manage` | the create form with every field                                                                                                                                                                                                                                                                                                                                             |
-| `/admin/organisations/:id` | `registry.organisations.organisation.manage` | the editor: the form drawn from `editableFields`, the logo block, and the delete behind a confirm that says what goes with it (the memberships and the logo); `409 organisation-in-use` is shown in words naming the module                                                                                                                                                  |
+| Page                       | Permission                                   | Shows                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/organisations/:id`       | `registry.organisations.organisation.read`   | logo, name, abbreviation, the type's label (from the registry entry), description, website, ROR id and `sameAs` links (`rel="noopener noreferrer"`), the contact point when the API returned it, the member count, the viewer's own membership with its action, the member list when the API allows it, a link to the editor for an Admin, and the JSON-LD block in the head                                                                      |
+| `/admin/organisations`     | `registry.organisations.organisation.manage` | the list: search, type filter, 0-based pages (the server sorts by abbreviation, then id); a nav entry in the administration section                                                                                                                                                                                                                                                                                                               |
+| `/admin/organisations/new` | `registry.organisations.organisation.manage` | the create form with every field                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `/admin/organisations/:id` | `registry.organisations.organisation.manage` | the editor: the form drawn from `editableFields`, the logo block, and the delete behind a confirm that says what goes with it (the memberships and the logo); `409 organisation-in-use` is shown in words naming the module                                                                                                                                                                                                                       |
+| `/account/organisations`   | `registry.organisations.organisation.read`   | your memberships with state and role badges (words, never colour alone) and a withdraw or leave action; the search (name or abbreviation, a type filter, **5 per page**, member counts, a "Pending", "Member" or "Manager" badge on rows you have, and a request button where a request can work); and, **only when `GET /memberships/summary` says `manages: true`**, the section "My organisations" (below). A nav entry in the account section |
+| `/admin/memberships`       | `registry.organisations.organisation.manage` | the requests of every organisation, oldest first, with filters by state (default: pending), organisation and type, and approve, reject, promote, demote and remove from `allowedActions`; no button on the viewer's own row, with the reason in words; a nav entry in the administration section. The page the administrators' mail and inbox item link to                                                                                        |
+
+**Widgets.** `ui.widget` contributes one card to the `dashboard` slot (`membership-requests`, permission `…organisation.read`): "N requests
+are waiting for a decision" with a link to `/admin/memberships` for a caller whose navigation lists it (an Admin) and to
+`/account/organisations` for everybody else. It reads `GET /memberships/summary` and draws **nothing** when `pending` is zero or the call
+fails, so a plain User never sees a card or an error. The heading is an `h2`, as the slot's other cards.
+
+**The manager section.** For each organisation the caller manages (the `approved` rows with the role `manager` of their own list, and
+only when `manages` is true) the page shows a card with three parts: _Requests_ (approve, reject behind a short confirm; the decided
+rows stay in view with their outcome until the page is left), _Members_ (promote, demote and remove, each drawn from the row's
+`allowedActions`; the caller's own row and, for a manager, another manager's remove button are not drawn and a sentence says why; "No
+manager: administrators decide." when the list names none) and _Edit organisation_ (`ui/ManagerOrganisation.svelte`). The edit form is the
+same `OrganisationForm` and `LogoBlock` as the administrator's, fed by `editableFields` of `GET /organisations/{id}`, so it offers the
+description, website, `sameAs` links, ROR id, contact point and logo; `type`, `abbreviation` and `name` are shown as plain text with the
+line "Only an administrator can change these; ask one." (when the API lets the caller write them, the line and the text are not drawn).
+There is no create and no delete. A 403 from a stale page is shown in words and the page reloads. Lists show at most 100 rows and say
+when there are more.
+
+**What the page never does.** It never decides a right from a role: buttons come from `allowedActions`, forms from `editableFields`,
+the manager section from `summary.manages`. The server checks every action again (ADR-0034). Focus: after an action the focus goes to
+the line that says what happened (the pressed button may have left with its row); a dialog returns it to the button that opened it.
+
+**Tests of the screens.** `ui/member-query.test.ts` and `ui/membership-rows.test.ts` are table-driven (the addresses and the pagination of
+the two lists, the sentence that explains a missing button, the badge words); `ui/ui.test.ts` checks the pages, the navigation, the card
+and the catalogues; `apps/web/src/membership-pages.test.ts` renders the pages on the server through a stand-in for the shell
+(`apps/web/src/test/ShellHarness.svelte`) and fixes the own-request and own-role states, the remove buttons, the read-only identity fields and
+the hidden manager section. The journeys 2 to 7 and the axe and keyboard runs are in `apps/web/e2e`.
 
 The form is ui-kit's `SchemaForm`, fed by a JSON Schema from `ui/form-schema.ts` whose limits a test keeps equal to `service/fields.ts`.
 It draws only the fields the caller may write; two widgets are the module's own: the type select (options and labels from `GET
 /organisation-types`, never from the code) and the ROR id (a pasted ror.org link previews as the bare id; the server judges the rest).
 `ui/patch.ts` turns the form's values into a PATCH of what changed (an emptied field is `null`, the two halves of the contact point go
-together). The logo block (`ui/LogoBlock.svelte`) is shared with the manager's form of sprint 5. Every text is in `en` and `de`.
+together). The logo block (`ui/LogoBlock.svelte`) is shared with the manager's form. Every text is in `en` and `de`.
 
 **The JSON-LD block.** The page's server load calls `GET /organisations/{id}/schema-org` with the visitor's session, so the contact
 point is in the block exactly when the route includes it, and the component `ui/JsonLd.svelte` writes `serializeJsonLd(profile)` into
 `<svelte:head>`. It is the one `{@html}` of the module (ADR-0033, Decision 17): the ESLint exception names exactly that file, its only
 input is the escaped JSON, and a `<script type="application/ld+json">` is a data block that needs no CSP allowance.
+
+## Adding the module to a profile
+
+A profile lists the module in `profiles/<name>.ts` (`defineProfile`; `pnpm modules:sync` keeps the id list that the helper checks
+against) and the build bakes it in: `pnpm scorpion profile:generate <name>` writes the server and web halves, and the image of the
+profile has to be rebuilt (there is no runtime plugin loading). The module needs `core.authz`, `core.settings`, `core.identity`,
+`core.notifications` and `core.blob` in the same profile; `core.ui-shell` makes the screens appear and `core.audit` makes the events
+visible in the trail, and the module starts, serving its API, without either. The `registry` profile holds exactly these modules
+([ADR-0032](../../docs/adr/0032-registry-profile.md)).
 
 ## Operating notes
 

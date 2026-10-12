@@ -238,10 +238,10 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-
   `by: manager`) and can revert it; relaxing the audit channel is one line in `core.audit`'s `decisions.ts`.
 - **A `sort` parameter on `GET /organisations`.** The list sorts by abbreviation, then id on the server, and the administrator's table has no
   sortable columns. A sort by name, type or member count needs a `sort`/`dir` pair on the route (additive).
-- **Component tests for a module's Svelte pages.** The modules' Vitest projects have no Svelte plugin, and the module boundary rule keeps the
-  web app from importing a module's files, so the render test of `JsonLd.svelte` (`apps/web/src/json-ld.test.ts`) loads the component by its
-  path. A shared way to render a module's component in a test (a Svelte-enabled project per module, or an allowed import for tests) would
-  also serve the sprint 5 page tests.
+- ~~**Component tests for a module's Svelte pages.**~~ Settled in M6 sprint 5 without a Svelte plugin in the module projects: the page tests
+  live in `apps/web/src` (which has the plugin), load the module's pages by path (as `json-ld.test.ts` does) and render them on the server
+  through `apps/web/src/test/ShellHarness.svelte`, a stand-in for the layout with a fixed signed-in person. What is left is a test that
+  clicks (see "Membership screens follow-ups").
 - **Logo in the list rows and on the administrator's list.** The list shows no logo; `logoUrl` is only in the record. A small thumbnail needs
   a variant of the file (see "Logo extras").
 
@@ -250,6 +250,26 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-
   authorization in the pipeline. Nothing is changed by it, but the answer names the schema to somebody who may not read it. Found while writing the
   401 case for the membership routes; the matrix of defect 1 sends a valid body on every route, which hides it. A fix is in `apps/server/src/pipeline/**`
   (ASVS-scoped), so it is not done here.
+
+## Membership screens follow-ups (M6 sprint 5)
+
+From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found.
+
+- **Who decided.** The plan asks for a row that "says who decided and when". `GET /memberships` returns `decidedAt` but not `decidedBy` (the
+  field table says no route returns `decidedBy`, `endedBy` or `roleChangedBy`; the audit trail holds the actor), so the screens show the
+  outcome and the time only. Showing the name needs an additive field on the decider's row (a username, `null` for a gone account), the
+  field table, the walker in `response-fields.test.ts` and a test per reader.
+- **Long lists.** The manager section shows at most the first 100 requests and members of an organisation (and says when there are more), and
+  the filter of `/admin/memberships` lists the first 100 organisations. A manager of a very large organisation needs a page per list, and
+  the administrator a search-as-you-type for the organisation filter.
+- **A click-level component test.** The page tests render on the server and fix every state that depends on data; what a click does (the
+  confirm, the in-place update, the focus afterwards, the card's request on mount) is proved by the Playwright journeys and the keyboard
+  run only. A browser-mode or jsdom harness for module components would let those be unit tests.
+- **The dashboard card reads the summary once** when the dashboard opens; a request that arrives while it is open shows after a reload (the
+  inbox bell is the live signal).
+- **Not in M6 by decision (plan §11), kept here so they are not lost:** a funder or any other type (the `org.type` registry makes them
+  possible; they arrive with the module that needs them), contact persons of an organisation, a logo from a URL, an import or export of
+  organisations (M13 writes through the service) and a CSV of members.
 
 ## Later
 

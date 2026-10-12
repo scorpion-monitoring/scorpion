@@ -3,6 +3,8 @@
 // agree.
 import type { UiRoute, UiWidgets } from '@scorpion/contracts';
 import {
+  loadAccountOrganisations,
+  loadAdminMemberships,
   loadAdminOrganisation,
   loadAdminOrganisations,
   loadNewOrganisation,
@@ -11,7 +13,9 @@ import {
 
 export { messages } from './messages.ts';
 
-export const widgets: UiWidgets = {};
+export const widgets: UiWidgets = {
+  'membership-requests': () => import('./MembershipRequestsCard.svelte'),
+};
 
 const routes: UiRoute[] = [
   {
@@ -33,6 +37,16 @@ const routes: UiRoute[] = [
     path: '/admin/organisations/:id',
     load: loadAdminOrganisation,
     component: () => import('./admin/OrganisationEdit.svelte'),
+  },
+  {
+    path: '/account/organisations',
+    load: loadAccountOrganisations,
+    component: () => import('./AccountOrganisations.svelte'),
+  },
+  {
+    path: '/admin/memberships',
+    load: loadAdminMemberships,
+    component: () => import('./admin/Memberships.svelte'),
   },
 ];
 
