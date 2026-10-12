@@ -105,8 +105,12 @@ describe('the manifest', () => {
     ]);
   });
 
-  it('declares the registries org.type and org.usage, and contributes the seed types, the default roles and the member policy', () => {
-    expect(Object.keys(manifest.registries ?? {}).sort()).toEqual(['org.type', 'org.usage']);
+  it('declares the registries org.type, org.usage and org.publicReference, and contributes the seed types, the default roles and the member policy', () => {
+    expect(Object.keys(manifest.registries ?? {}).sort()).toEqual([
+      'org.publicReference',
+      'org.type',
+      'org.usage',
+    ]);
     expect((manifest.contributes?.['org.type'] as { id: string }[]).map((t) => t.id)).toEqual([
       'provider',
       'consortium',
