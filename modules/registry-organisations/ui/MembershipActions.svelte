@@ -89,12 +89,15 @@
 </div>
 {#if failed}<p class="text-error mt-1 text-sm" role="alert">{failed}</p>{/if}
 
-<ConfirmDialog
-  open={asking !== undefined}
-  title={t(`membership.confirm.${asking ?? 'reject'}.title`, { name })}
-  message={t(`membership.confirm.${asking ?? 'reject'}.message`)}
-  confirmLabel={t(`membership.action.${asking ?? 'reject'}`)}
-  {busy}
-  onconfirm={() => asking && take(asking)}
-  oncancel={() => (asking = undefined)}
-/>
+<!-- Only a row that can be rejected or removed carries the dialog; the others have nothing to ask. -->
+{#if row.allowedActions.includes('reject') || row.allowedActions.includes('remove')}
+  <ConfirmDialog
+    open={asking !== undefined}
+    title={t(`membership.confirm.${asking ?? 'reject'}.title`, { name })}
+    message={t(`membership.confirm.${asking ?? 'reject'}.message`)}
+    confirmLabel={t(`membership.action.${asking ?? 'reject'}`)}
+    {busy}
+    onconfirm={() => asking && take(asking)}
+    oncancel={() => (asking = undefined)}
+  />
+{/if}
