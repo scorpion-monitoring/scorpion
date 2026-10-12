@@ -418,9 +418,9 @@ describe('update: input', () => {
 
   it('lists the problems by field, with the path of the field', async () => {
     const w = await world(h);
-    const error = (await rejection(
+    const error = await rejection(
       w.services.update(w.people.member, w.svc.id, { url: 'ftp://x', stage: 'NOPE' }),
-    )) as Invalid;
+    );
     const paths = (error.errors ?? []).map((e) => e.path).sort();
     expect(paths).toEqual(['stage', 'url']);
   });
