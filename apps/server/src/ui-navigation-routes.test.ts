@@ -97,6 +97,8 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/profile/notifications',
         // The page of one organisation (registry.organisations, M6): every signed-in person reads organisations.
         '/organisations/:id',
+        // M6 sprint 5: the member and manager screen (the manager part draws itself from the API).
+        '/account/organisations',
       ),
     );
     expect(body.nav.map((entry) => entry.id)).toContain('account.profile');
@@ -152,6 +154,9 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/admin/organisations',
         '/admin/organisations/new',
         '/admin/organisations/:id',
+        // M6 sprint 5: the member screen and the administrator's membership requests.
+        '/account/organisations',
+        '/admin/memberships',
       ),
     );
     expect(body.nav.map((entry) => entry.id)).toEqual([
@@ -159,12 +164,14 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
       'docs',
       'account.profile',
       'account.inbox',
+      'account.organisations',
       'account.notifications',
       'admin.users',
       'admin.users.pending',
       'admin.roles',
       'admin.settings',
       'admin.organisations',
+      'admin.memberships',
       'admin.logs',
       'admin.notifications',
       'admin.system',
