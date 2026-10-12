@@ -271,6 +271,25 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found.
   possible; they arrive with the module that needs them), contact persons of an organisation, a logo from a URL, an import or export of
   organisations (M13 writes through the service) and a CSV of members.
 
+## Maintainer observations (after 0.8.0)
+
+Found while using the instance; not yet investigated.
+
+- **Horizontal scrollbar in the collapsed sidebar.** With the sidebar collapsed, a horizontal scrollbar appears. Probably the expanded content
+  overflows the narrow width; the labels need `overflow-x: hidden` or the collapsed layout must not render them.
+- **Too many 429s when administering the instance.** Clicking through the administration screens quickly hits the rate limit within seconds.
+  The limits (`default` and `strict` groups, `apps/server/src/pipeline/rate-limit.ts`, and the settings that feed them) need a review against
+  what an administrator's screens call per page (several requests per page load, plus the inbox bell and the dashboard cards). Measure the
+  requests per page first, then raise the `default` group or key it so that a signed-in person is not counted like an anonymous caller. The
+  pipeline is an ASVS-scoped path (V7, V8): the change needs the chapter files or the `asvs-no-impact` line and a test that the public
+  endpoints (login, register, token use) stay limited.
+- **Account pictures are not used anywhere.** A person can upload an avatar (`PUT /account/avatar`, shown on the profile page), but it appears
+  in no other place. Expected: the header's account menu and the member lists (the organisation page's member list and the manager's
+  member table). The member list route returns usernames and join dates only, so showing a picture needs an additive field (the avatar's
+  file hash, never an address) in the member list and the decider's row, an update of the membership field table in
+  `docs/security/authorization.md` and the walker in `response-fields.test.ts`, and a fallback (initials) for a person without one. The
+  header needs the avatar in `GET /auth/me` or `GET /account/profile` (check what the shell already loads).
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.
