@@ -132,6 +132,11 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
     userBy('actorId'),
     subjectOf('organisation', 'organisationId'),
   ),
+  // registry.services (present only in profiles that have it; see the module's optional peer). A service is
+  // created by an Admin in sprint 1 (members of the provider in sprint 2) and follows `channels.admin`; the
+  // payload holds ids and `by`, never a name, address or URL. Sprint 2 adds updated, slugChanged, published
+  // and unpublished, with their own decisions.
+  'registry.service.created@1': log(false, userBy('actorId'), subjectOf('service', 'serviceId')),
   // Membership (M6 sprint 3). An approval or a role change is a permission-relevant act, like an approved
   // account and a role assignment, so `decided` and `roleChanged` are critical; so is a membership that an
   // Admin or a manager ended (`by`), while a person who leaves or withdraws follows `channels.admin`. A purge

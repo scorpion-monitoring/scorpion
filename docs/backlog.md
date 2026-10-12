@@ -298,6 +298,19 @@ Found while using the instance; not yet investigated.
   entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
   already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table.
 
+## Services follow-ups (M7 sprint 1)
+
+- **Facet semantics are sprint 4's.** The `service.facet` entry carries `where(selected)` (the condition for a selection) and `values(scope, db)` (counts over the services a scope matches); the four seeded facets implement both and are tested, but the catalogue (sprint 4) decides which filters it passes as `scope` (Decision 13: all the other facets and the search). If sprint 4 finds the shape too narrow for the M9 category facet (a value held in `svc_field_value`), change the entry before M9 contributes one.
+- **The OpenAPI body of `POST /services` documents the shipped fields only.** A deployment's own configured fields are accepted at their paths (the body is a loose object) and validated by the service, but they are not typed in the generated client. `GET /services/schema` (sprint 5) gives the browser the full schema; a generated per-profile OpenAPI body is not planned.
+- **The slug history holds the current slug too** (ADR-0035), so one unique index decides whether a slug is free; the plan wrote "the old slug is written to `svc_slug_history` on a rename". A rename (sprint 2) adds a row and keeps the old ones. A view of the history per service is not built.
+- **Message keys of the config have no catalogue yet.** The steps and fields name keys such as `services.field.slug.label`; the texts (en and de) arrive with the wizard (sprint 5), where a missing key fails the build. A contributed step uses the same convention.
+- **`./ui` is not exported yet.** The module has no screen in sprint 1; sprint 4 adds the `ui` entry and the `ui.routes` registrations (the profile generator picks it up).
+- **`core.audit` is the observer, as in M6.** Plan §2 lists `core.audit` as an optional peer of `registry.services`; the module follows `registry.organisations` instead: `core-audit` lists `registry.services` as an optional peer and holds the decisions, so the dependency graph has no cycle.
+- **The SPDX list is refreshed by hand in the repository.** The bundled fallback is regenerated with `node packages/integrations/scripts/generate-spdx.ts` after the pin in `spdx-pin.ts` moves; nothing reminds the maintainer when a new SPDX release appears. A scheduled workflow that opens a pull request, or a Dependabot-style check, is not built. The live list is fetched at most once a day and cached in `svc_license_cache`.
+- **A custom licence** (`LicenseRef-…`) and an expression such as `MIT OR Apache-2.0` are refused: only one SPDX id is accepted (plan §12).
+- **The field type `check` cannot ask for more than a vocabulary term and an SPDX id.** `FieldEnv` is closed on purpose; a contributed type that needs another lookup (an ORCID, a ROR id, an EDAM term) extends the interface with an ADR, or does its work inside its own module's route.
+- **`create` is Admin-only until sprint 2** (plan §5 item 8); the event carries `by: 'admin' | 'member'` already so the payload does not change.
+
 ## Service wizard follow-ups (M7 plan)
 
 - **Field-level conditions and a base path per step.** The wizard config of M7 has `applies` per step only. A `showIf` on a field (show it when another field has a value) and a base path per step (the same field list bound below a nested path, so M9's category step or M15's onboarding fields can reuse a step) are not planned. Source: the maintainer's ISA Wizard questionnaire, which has the base-path idea (`isaLvl + path`) and no conditions; see Decision 21 of [m7-sprint-plan.md](m7-sprint-plan.md).
@@ -361,7 +374,7 @@ Found while using the instance; not yet investigated.
 
 ## Vocabularies, blob store and branding follow-ups (M3 sprint 4)
 
-- **Usage checks for the built-in vocabularies.** `stage`, `thematic-category`, `necessity`, `sender-type` and `aggregate` have no `usage` check, so every term an administrator adds can be deleted. The module that starts storing a key (registry.services for `stage`, M7; kpi.framework for the rest, M8) adds its entry to the registry `vocabulary` and calls `validateTerm` when it saves.
+- **Usage checks for the built-in vocabularies.** `thematic-category`, `necessity`, `sender-type` and `aggregate` have no `usage` check, so every term an administrator adds can be deleted. The module that starts storing a key (kpi.framework, M9) adds its entry to the registry `vocabulary` and calls `validateTerm` when it saves. ~~`stage`~~ Done in M7 sprint 1: `registry.services` contributes the `usage` of `stage` (a term a service has is deactivated, not deleted) and `create` validates the stage through `validateTerm`.
 - **Vocabulary administration.** No import or export of terms, no list of locales to offer in the UI, no way to reorder many terms in one call, and no history beyond `settings.vocabulary.changed@1` (recorded by the audit trail since M4 sprint 4, without the labels). Administrators cannot declare a vocabulary; that stays with modules.
 - **A full Markdown parser.** Legal texts use a small in-house subset (`packages/sanitize`) because the sprint allowed no dependency beyond `sharp` and DOMPurify. Tables, nested lists, images and reference links need a CommonMark parser (for example `marked` or `markdown-it`) in front of the same DOMPurify step; it needs approval as a new runtime dependency. The bio (plain text today) could use it too.
 - **Legal texts per locale, and versions.** One text per page; no translations, no "accepted on" record, no history.

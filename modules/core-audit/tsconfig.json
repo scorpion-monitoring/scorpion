@@ -38,6 +38,9 @@
       "path": "../registry-organisations"
     },
     {
+      "path": "../registry-services"
+    },
+    {
       "path": "../../packages/ui-kit"
     }
   ]

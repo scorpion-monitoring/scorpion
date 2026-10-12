@@ -157,6 +157,12 @@ the same file answers 401 and 403 on every non-public route.
 | `POST /organisations`                           | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
 | `POST /organisations/{id}/membership`           | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
 | `PUT /organisations/{id}/logo`                  | registry.organisations | `registry.organisations.organisation.read`   | strict     | yes            |
+| `GET /licenses`                                 | registry.services      | `registry.services.service.read`             | default    | no             |
+| `GET /service-roles`                            | registry.services      | `registry.services.service.read`             | default    | no             |
+| `GET /services`                                 | registry.services      | `registry.services.service.read`             | default    | no             |
+| `GET /services/{id}`                            | registry.services      | `registry.services.service.read`             | default    | no             |
+| `GET /services/by-slug/{slug}`                  | registry.services      | `registry.services.service.read`             | default    | no             |
+| `POST /services`                                | registry.services      | `registry.services.service.manage`           | default    | yes            |
 
 <!-- routes:end -->
 

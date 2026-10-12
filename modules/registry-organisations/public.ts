@@ -15,6 +15,24 @@ export {
   type OrgUsageEntry,
   type SchemaType,
 } from './service/registries.ts';
+// The field rules that other modules apply to the same kinds of value (a service's URL, `sameAs` links and
+// contact point follow the organisation's rules: one normaliser, not a copy that can drift). Pure.
+export {
+  escapeLike,
+  MAX_CONTACT_TYPE_LENGTH,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_EMAIL_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_SAME_AS,
+  MAX_URL_LENGTH,
+  parseContactEmail,
+  parseContactType,
+  parseDescription,
+  parseName,
+  parseSameAs,
+  parseUrl,
+  type Parsed,
+} from './service/fields.ts';
 export type { SchemaOrgProfile } from './service/schema-org.ts';
 export type { OrganisationRecord, TypeView } from './service/organisations.ts';
 

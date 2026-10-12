@@ -17,10 +17,12 @@ import module6 from '@scorpion/core-ui-shell/module';
 import package6 from '@scorpion/core-ui-shell/package.json' with { type: 'json' };
 import module7 from '@scorpion/registry-organisations/module';
 import package7 from '@scorpion/registry-organisations/package.json' with { type: 'json' };
+import module8 from '@scorpion/registry-services/module';
+import package8 from '@scorpion/registry-services/package.json' with { type: 'json' };
 
 export const profileName = "full";
 
-export const moduleIds = ["core.authz","core.settings","core.blob","core.notifications","core.identity","core.audit","core.ui-shell","registry.organisations"] as const;
+export const moduleIds = ["core.authz","core.settings","core.blob","core.notifications","core.identity","core.audit","core.ui-shell","registry.organisations","registry.services"] as const;
 
 export const sources: ModuleSource[] = [
   { manifest: module0, packageJson: package0 },
@@ -31,4 +33,5 @@ export const sources: ModuleSource[] = [
   { manifest: module5, packageJson: package5 },
   { manifest: module6, packageJson: package6 },
   { manifest: module7, packageJson: package7 },
+  { manifest: module8, packageJson: package8 },
 ];

@@ -214,7 +214,7 @@ describe('event payloads never name a secret', () => {
   });
 });
 
-// The contact point of an organisation is the organisation's role address, not a user's (M6 sprint 2, field
+// The contact point of an organisation (and of a service, below) is the organisation's role address, not a user's (M6 sprint 2, field
 // table of docs/security/authorization.md). It may appear in the answers of exactly these routes, which
 // serve it only to the readers the table names: Admin and the managers of that organisation always, other
 // signed-in persons while `organisation.exposeContactPoint` is on. It is never in a list row, a member list,
@@ -228,6 +228,12 @@ const CONTACT_ROUTES: Record<string, readonly string[]> = {
   'DELETE /organisations/{id}/logo': ['contactEmail', 'contactType'],
   // The profile nests `contactType` inside `contactPoint`.
   'GET /organisations/{id}/schema-org': ['contactPoint', 'contactType'],
+  // A service has the same kind of contact point (M7 sprint 1): the record serves it to Admin and, by the
+  // setting `exposeContactPoint`, to other signed-in persons; sprint 2 adds the provider's members. Never in a
+  // list row, an event or the Schema.org profile (a `Service` has no contact point).
+  'GET /services/{id}': ['contactEmail', 'contactType'],
+  'GET /services/by-slug/{slug}': ['contactEmail', 'contactType'],
+  'POST /services': ['contactEmail', 'contactType'],
 };
 /** The instance's own contact address (branding settings), a different thing that happens to share a name. */
 const NOT_THE_ORGANISATIONS = ['GET /branding'];
