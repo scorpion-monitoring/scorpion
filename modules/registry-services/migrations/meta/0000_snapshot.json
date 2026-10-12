@@ -68,12 +68,8 @@
           "name": "svc_field_value_service_id_svc_service_id_fk",
           "tableFrom": "svc_field_value",
           "tableTo": "svc_service",
-          "columnsFrom": [
-            "service_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["service_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -448,12 +444,8 @@
           "name": "svc_service_organisation_service_id_svc_service_id_fk",
           "tableFrom": "svc_service_organisation",
           "tableTo": "svc_service",
-          "columnsFrom": [
-            "service_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["service_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -536,12 +528,8 @@
           "name": "svc_slug_history_service_id_svc_service_id_fk",
           "tableFrom": "svc_slug_history",
           "tableTo": "svc_service",
-          "columnsFrom": [
-            "service_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["service_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

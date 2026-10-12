@@ -54,7 +54,9 @@ import {
   type ProfileContributorEntry,
   type WizardStepEntry,
 } from './service/registries.ts';
+import { createPublicationMail } from './service/publication-mail.ts';
 import { createServicesService, type ServicesService } from './service/services.ts';
+import { TEMPLATES } from './templates/registry.ts';
 import { settingsSchema, type ServicesSettings } from './settings-schema.ts';
 
 export { settingsSchema, type ServicesSettings } from './settings-schema.ts';
@@ -214,6 +216,8 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
           },
         } satisfies OrgUsageEntry,
       ],
+      // The notice to the provider when a service is made public or private again.
+      'notify.template': TEMPLATES,
       // An organisation has a public profile exactly when a public service names it (ADR-0036 part 2).
       [ORG_PUBLIC_REFERENCE_REGISTRY]: [
         {
@@ -304,6 +308,12 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         config: resolved,
         roles,
         contributors: profileContributors,
+        publicationMail: createPublicationMail(ctx, {
+          identity: ctx.deps['core.identity'],
+          notifications: ctx.deps['core.notifications'],
+          settings: ctx.deps['core.settings'],
+          organisations: ctx.deps['registry.organisations'],
+        }),
       });
       publicServices = services.listPublicByOrganisationAsSystem;
       stageInUse = async (termKey) => {

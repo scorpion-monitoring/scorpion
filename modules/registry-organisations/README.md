@@ -7,7 +7,7 @@ events that `core.audit` decides on, and a profile that is not `core-only`
 ([ADR-0032](../../docs/adr/0032-registry-profile.md), [ADR-0033](../../docs/adr/0033-organisation-model.md),
 [m6-sprint-plan.md](../../docs/m6-sprint-plan.md)).
 
-Status: M6 sprint 4 (the organisation record, its Schema.org profile and logo, membership with organisation managers, editing by an
+Status: M6 sprint 4, plus the public profile of M7 sprint 3 (the organisation record, its Schema.org profile and logo, membership with organisation managers, editing by an
 Admin and by the managers of an organisation, the administrator's editor and the organisation page). The member and manager screens
 (sprint 5) follow.
 
@@ -21,7 +21,7 @@ Admin and by the managers of an organisation, the administrator's editor and the
 | routes       | internal API, see "Routes"                                                                                                                                                                                                                                                                        |
 | ui           | `ui` entry with the organisation page (`/organisations/:id`), the administrator's editor (`/admin/organisations`, `/new`, `/:id`), the member and manager screen (`/account/organisations`), the administrator's membership requests (`/admin/memberships`) and the dashboard card; see "Screens" |
 | events       | emits the three organisation events and the four membership events (see "Events"); subscribes to `identity.user.purged@1`                                                                                                                                                                         |
-| registries   | declares `org.type` and `org.usage`; contributes the seed types to `org.type`, the dashboard card to `ui.widget`, the default roles to `authz.defaultRole`, the policy `organisation.member` to `authz.resourcePolicy` and four templates to `notify.template`                                    |
+| registries   | declares `org.type`, `org.usage` and `org.publicReference`; contributes the seed types to `org.type`, the dashboard card to `ui.widget`, the default roles to `authz.defaultRole`, the policy `organisation.member` to `authz.resourcePolicy` and four templates to `notify.template`             |
 | settings     | `exposeContactPoint` and the three `membership.*` settings (see "Settings"), shown by the generic settings form                                                                                                                                                                                   |
 
 ### Permissions
@@ -119,6 +119,20 @@ then `<`, `>`, `&`, U+2028 and U+2029 are written as `\uXXXX`, so the result has
 | `logo_hash`                     | `logo`                                         | `ImageObject` with the absolute `/api/internal/files/{hash}` URL                                 |
 | `contact_email`, `contact_type` | `contactPoint`                                 | `ContactPoint` (`email`, `contactType`); only for a reader who may see it                        |
 | (not stored)                    | `parentOrganization`, `address`, `member`, ... | not built                                                                                        |
+
+### The public profile (M7 sprint 3, ADR-0036 part 2)
+
+An organisation has a public profile exactly while **a public service names it as its provider or as a consortium** (Decision 8). This
+module does not know the services: the rule goes through the registry `org.publicReference`, which `registry.services` contributes to (see
+"Registries"). `GET /public/organisations/{id}` and `GET /public/organisations/{id}/schema-org` (`public: true`, each with a reason, the
+`default` rate limit) answer only then; for every other organisation, an unknown id, an id that is no UUID, and an instance where
+`service.allowPublic` is off, the answer is the **404 of an unknown id** with the same body, never a 403. A 200 carries `Cache-Control: public,
+max-age=60`: that is the only delay before an unpublish is seen by a shared cache; the server keeps no copy.
+
+The public record is a pinned list of fields: `id`, `name`, `abbreviation`, `logoUrl`, `description`, `website`, `rorId`, `sameAs` and
+`services` as `{ id, slug, name }` (by name). It has no `type`, no contact point, no member count, no audit column. The public profile is the
+profile above built with `includeContact: false`. `apps/server/src/public-records.test.ts` pins the names; `service/public.test.ts` proves the rule
+with a fixture contributor.
 
 ## Membership
 
@@ -243,17 +257,18 @@ permission first. They return the descriptive fields only (`OrganisationRecord`,
 logo hash; the membership reads answer from ids and name nobody. M7's `service.member` asks `isApprovedMemberAsSystem` and
 `listApprovedOrganisationIdsAsSystem`.
 
-| Method                                             | Returns                                                              |
-| -------------------------------------------------- | -------------------------------------------------------------------- |
-| `findByIdsAsSystem(ids)`                           | the records of the known ids (unknown and malformed ids are ignored) |
-| `findByAbbreviationAsSystem(type, abbreviation)`   | one record or `undefined`; case-insensitive, within the type         |
-| `existsAsSystem(id)`                               | `boolean`                                                            |
-| `listTypesAsSystem()`                              | the registered types, labels in English                              |
-| `toSchemaOrgAsSystem(id, { includeContact? })`     | the profile or `undefined`; `includeContact` defaults to `false`     |
-| `isApprovedMemberAsSystem(userId, organisationId)` | `boolean`: an approved membership (a manager is a member)            |
-| `listApprovedOrganisationIdsAsSystem(userId)`      | the ids of the organisations the person is an approved member of     |
-| `countApprovedMembersAsSystem(organisationIds)`    | `{ [organisationId]: n }`, `0` for an organisation without members   |
-| `isManagerAsSystem(userId, organisationId)`        | `boolean`: an approved manager                                       |
+| Method                                             | Returns                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `findByIdsAsSystem(ids)`                           | the records of the known ids (unknown and malformed ids are ignored)      |
+| `findByAbbreviationAsSystem(type, abbreviation)`   | one record or `undefined`; case-insensitive, within the type              |
+| `existsAsSystem(id)`                               | `boolean`                                                                 |
+| `listTypesAsSystem()`                              | the registered types, labels in English                                   |
+| `toSchemaOrgAsSystem(id, { includeContact? })`     | the profile or `undefined`; `includeContact` defaults to `false`          |
+| `isApprovedMemberAsSystem(userId, organisationId)` | `boolean`: an approved membership (a manager is a member)                 |
+| `listApprovedOrganisationIdsAsSystem(userId)`      | the ids of the organisations the person is an approved member of          |
+| `countApprovedMembersAsSystem(organisationIds)`    | `{ [organisationId]: n }`, `0` for an organisation without members        |
+| `isManagerAsSystem(userId, organisationId)`        | `boolean`: an approved manager                                            |
+| `listApprovedManagerIdsAsSystem(organisationId)`   | the user ids of the approved managers, by id (M7: the publication notice) |
 
 **Who writes which field (Decision 14).** `service/field-rules.ts` is the one table, for both editor groups: `type`,
 `abbreviation` and `name` need `admin` access (`…organisation.manage`, an Admin); `description`, `website`, `sameAs`, `rorId`, the
@@ -302,6 +317,14 @@ contributes: {
 },
 ```
 
+### `org.publicReference` (declared here)
+
+An entry is `{ id, list(organisationId) }`: it lists the **public** records that name the organisation as `{ id, slug, name }` (M7: the
+services it is provider or consortium of), and an empty list when it has none or when public reads are switched off. An organisation is public
+exactly when the merged lists are not empty; the public record shows them as `services`. Entries are asked at every request (nothing is cached) and
+a wrong entry fails at start with the contributing module's name. It is not `org.usage`: usage says "something refers to it" and blocks a delete,
+this says "something public refers to it" and opens a read.
+
 ### `org.usage` (declared here)
 
 An entry is `{ id, count(tx, organisationId) }`, where `id` is the contributing module's id. Deleting an organisation, and changing its
@@ -332,30 +355,32 @@ The routes with `audit: true` also write an entry in the request log, also when 
 ## Routes
 
 Internal API (`/api/internal`). Lists use the legacy envelope (`metadata`, `result`, 0-based pages) with a stable sort. Invalid input
-is 422 problem+json; nothing the caller sends becomes a 500. There is no public route in M6. A row marked **delegated** names the
+is 422 problem+json; nothing the caller sends becomes a 500. The two public routes of M7 sprint 3 are at the end of the table. A row marked **delegated** names the
 plain `…organisation.read` and is authorised by its service (ADR-0034); a manager's rows carry `allowedActions` (what the caller may
 do to the row now, for drawing buttons) and never an address.
 
-| Route                                   | Permission                                   | Notes                                                                                                                                                                |
-| --------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /organisations`                    | `registry.organisations.organisation.read`   | `q` (abbreviation or name, `%` `_` `\` are text), `type`, `page`, `pageSize` (at most 100)                                                                           |
-| `GET /organisations/{id}`               | `registry.organisations.organisation.read`   | with `sameAs`, ROR id, `logoUrl`, `editableFields`; the contact point as in "The contact point"                                                                      |
-| `GET /organisations/{id}/schema-org`    | `registry.organisations.organisation.read`   | `application/ld+json`, `Cache-Control: private, no-cache`; 404, 422; no anonymous access                                                                             |
-| `PUT /organisations/{id}/logo`          | `registry.organisations.organisation.read`   | **delegated** (`manage` or `…organisation.edit`): raw image body; 403, 404, 413, 422; strict rate limit; audited                                                     |
-| `DELETE /organisations/{id}/logo`       | `registry.organisations.organisation.read`   | **delegated** (as above): 403; 404 when there is no logo; audited                                                                                                    |
-| `POST /organisations`                   | `registry.organisations.organisation.manage` | 201; 409 duplicate; 422 unknown type or bad input; audited                                                                                                           |
-| `PATCH /organisations/{id}`             | `registry.organisations.organisation.read`   | **delegated**: partial; `null` clears an optional field; 403 (a manager naming `type`, `abbreviation` or `name`: refused whole), 404, 409, 422; audited              |
-| `DELETE /organisations/{id}`            | `registry.organisations.organisation.manage` | 204; by id only; 409 `organisation-in-use` while `org.usage` counts; audited                                                                                         |
-| `GET /organisation-types`               | `registry.organisations.organisation.read`   | the registered types, labels for `locale`                                                                                                                            |
-| `POST /organisations/{id}/membership`   | `registry.organisations.membership.request`  | `201` a new or reopened request, `200` when already asked or a member; 422 `membership-not-supported`; 409 `too-many-pending`                                        |
-| `DELETE /organisations/{id}/membership` | `registry.organisations.membership.request`  | withdraws or leaves; 404 when there is neither                                                                                                                       |
-| `GET /account/memberships`              | `registry.organisations.membership.request`  | the caller's own rows in every state, with `role`                                                                                                                    |
-| `GET /organisations/{id}/members`       | `registry.organisations.organisation.read`   | **delegated**: the service requires `…membership.view-members`; usernames and join dates                                                                             |
-| `GET /memberships`                      | `registry.organisations.organisation.read`   | **delegated**: requests and members the caller may decide on, oldest first; `state`, `organisationId`, `type`; 403 for anybody who is neither an Admin nor a manager |
-| `GET /memberships/summary`              | `registry.organisations.organisation.read`   | `{ pending, manages }` for the dashboard card; zeros for a plain user, never 403                                                                                     |
-| `POST /memberships/{id}/decision`       | `registry.organisations.organisation.read`   | **delegated** (`…membership.decide`): `{ decision }`; audited; 403 own request or no right; 409 `membership-state`                                                   |
-| `POST /memberships/{id}/role`           | `registry.organisations.organisation.read`   | **delegated** (`…membership.manage-roles`): `{ role }`; audited; 403 own role; 409 `membership-state`, `too-many-managers`                                           |
-| `POST /memberships/{id}/remove`         | `registry.organisations.organisation.read`   | **delegated** (`…membership.remove`): audited; 403 own row, a manager as the target of a manager, no right; 409 `membership-state`                                   |
+| Route                                       | Permission                                   | Notes                                                                                                                                                                |
+| ------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /organisations`                        | `registry.organisations.organisation.read`   | `q` (abbreviation or name, `%` `_` `\` are text), `type`, `page`, `pageSize` (at most 100)                                                                           |
+| `GET /organisations/{id}`                   | `registry.organisations.organisation.read`   | with `sameAs`, ROR id, `logoUrl`, `editableFields`; the contact point as in "The contact point"                                                                      |
+| `GET /organisations/{id}/schema-org`        | `registry.organisations.organisation.read`   | `application/ld+json`, `Cache-Control: private, no-cache`; 404, 422; no anonymous access                                                                             |
+| `PUT /organisations/{id}/logo`              | `registry.organisations.organisation.read`   | **delegated** (`manage` or `…organisation.edit`): raw image body; 403, 404, 413, 422; strict rate limit; audited                                                     |
+| `DELETE /organisations/{id}/logo`           | `registry.organisations.organisation.read`   | **delegated** (as above): 403; 404 when there is no logo; audited                                                                                                    |
+| `POST /organisations`                       | `registry.organisations.organisation.manage` | 201; 409 duplicate; 422 unknown type or bad input; audited                                                                                                           |
+| `PATCH /organisations/{id}`                 | `registry.organisations.organisation.read`   | **delegated**: partial; `null` clears an optional field; 403 (a manager naming `type`, `abbreviation` or `name`: refused whole), 404, 409, 422; audited              |
+| `DELETE /organisations/{id}`                | `registry.organisations.organisation.manage` | 204; by id only; 409 `organisation-in-use` while `org.usage` counts; audited                                                                                         |
+| `GET /organisation-types`                   | `registry.organisations.organisation.read`   | the registered types, labels for `locale`                                                                                                                            |
+| `GET /public/organisations/{id}`            | **public**                                   | the public record; 404 with the body of an unknown id unless a public service names the organisation; `Cache-Control: public, max-age=60`; `default` rate limit      |
+| `GET /public/organisations/{id}/schema-org` | **public**                                   | `application/ld+json` without a contact point; the same 404 rule and cache header                                                                                    |
+| `POST /organisations/{id}/membership`       | `registry.organisations.membership.request`  | `201` a new or reopened request, `200` when already asked or a member; 422 `membership-not-supported`; 409 `too-many-pending`                                        |
+| `DELETE /organisations/{id}/membership`     | `registry.organisations.membership.request`  | withdraws or leaves; 404 when there is neither                                                                                                                       |
+| `GET /account/memberships`                  | `registry.organisations.membership.request`  | the caller's own rows in every state, with `role`                                                                                                                    |
+| `GET /organisations/{id}/members`           | `registry.organisations.organisation.read`   | **delegated**: the service requires `…membership.view-members`; usernames and join dates                                                                             |
+| `GET /memberships`                          | `registry.organisations.organisation.read`   | **delegated**: requests and members the caller may decide on, oldest first; `state`, `organisationId`, `type`; 403 for anybody who is neither an Admin nor a manager |
+| `GET /memberships/summary`                  | `registry.organisations.organisation.read`   | `{ pending, manages }` for the dashboard card; zeros for a plain user, never 403                                                                                     |
+| `POST /memberships/{id}/decision`           | `registry.organisations.organisation.read`   | **delegated** (`…membership.decide`): `{ decision }`; audited; 403 own request or no right; 409 `membership-state`                                                   |
+| `POST /memberships/{id}/role`               | `registry.organisations.organisation.read`   | **delegated** (`…membership.manage-roles`): `{ role }`; audited; 403 own role; 409 `membership-state`, `too-many-managers`                                           |
+| `POST /memberships/{id}/remove`             | `registry.organisations.organisation.read`   | **delegated** (`…membership.remove`): audited; 403 own row, a manager as the target of a manager, no right; 409 `membership-state`                                   |
 
 ## Screens
 
@@ -405,7 +430,7 @@ It draws only the fields the caller may write; two widgets are the module's own:
 together). The logo block (`ui/LogoBlock.svelte`) is shared with the manager's form. Every text is in `en` and `de`.
 
 **The JSON-LD block.** The page's server load calls `GET /organisations/{id}/schema-org` with the visitor's session, so the contact
-point is in the block exactly when the route includes it, and the component `ui/JsonLd.svelte` writes `serializeJsonLd(profile)` into
+point is in the block exactly when the route includes it, and the component `JsonLd.svelte` (moved to `packages/ui-kit` in M7 sprint 3, one input: the output of `serializeJsonLd`) writes `serializeJsonLd(profile)` into
 `<svelte:head>`. It is the one `{@html}` of the module (ADR-0033, Decision 17): the ESLint exception names exactly that file, its only
 input is the escaped JSON, and a `<script type="application/ld+json">` is a data block that needs no CSP allowance.
 
@@ -433,7 +458,7 @@ visible in the trail, and the module starts, serving its API, without either. Th
 rollback case (the outbox is broken so the event cannot be stored). `service/editing.test.ts` is the two editor groups: an Admin on every
 field, a manager on each descriptive field and refused whole on the identity fields, another organisation, members and non-members,
 demoted managers, tokens, rollbacks, two editors, `editableFields` and the events without values; `ui/*.test.ts` are the table-driven
-tests of the screens' helpers and `apps/web/src/json-ld.test.ts` renders hostile data through `JsonLd.svelte`. The journeys are in
+tests of the screens' helpers and `apps/web/src/json-ld.test.ts` renders hostile data through ui-kit's `JsonLd.svelte`. The journeys are in
 `apps/web/e2e/organisations.spec.ts` and `accessibility-organisations.spec.ts`. The membership service has one file per concern, all over real
 Postgres and the real authoriser: `memberships.request.test.ts` (requests, the cap, mail and inbox in `en` and `de`, withdrawing,
 leaving), `memberships.decisions.test.ts` (decide, roles, removal, the last manager, rollbacks of the mail, the inbox item and the

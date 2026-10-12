@@ -4,11 +4,8 @@
 //
 // Never mapped: the stage and the contact point (`Service` has neither a lifecycle nor a `contactPoint`).
 import type { SchemaOrgProfile } from '@scorpion/registry-organisations/public';
-import { OWNER_ROLE } from './permissions.ts';
+import { BRAND_ROLE, OWNER_ROLE } from './permissions.ts';
 import type { FieldSchemaOrgProperty } from './registries.ts';
-
-/** The role whose organisations are the `brand` of a service (the network it is offered under). */
-export const BRAND_ROLE = 'consortium';
 
 /**
  * The properties another module (or a configured field) may add. Anything else a contributor returns is

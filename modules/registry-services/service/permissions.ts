@@ -24,6 +24,8 @@ export const RESOURCE_TYPE = 'service';
 
 /** The key of the organisation role whose holder owns a service (a key of the registry `service.orgRole`). */
 export const OWNER_ROLE = 'provider';
+/** The key of the role whose organisations are the `brand` of the Schema.org profile and the consortia of the public record. */
+export const BRAND_ROLE = 'consortium';
 
 /** What an approved **member** of the provider holds on the service (a manager is a member too). */
 export const MEMBER_PERMISSIONS: ReadonlySet<string> = new Set([

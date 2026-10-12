@@ -309,6 +309,13 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'GET', path: '/services/by-slug/galaxy' }),
   },
+  // M7 sprint 3: the profile for a signed-in reader names the plain `…service.read` (any service, never the contact
+  // point). The four anonymous routes under `/public/` are public with a reason: they are listed in
+  // `public-records.test.ts`, which also pins their fields, and proved in `public-service-routes.test.ts`.
+  'GET /services/{id}/schema-org': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'GET', path: `/services/${id}/schema-org` }),
+  },
   'GET /licenses': { kind: 'self', sample: () => ({ method: 'GET', path: '/licenses?q=mit' }) },
   'GET /service-roles': {
     kind: 'self',

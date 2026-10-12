@@ -27,6 +27,7 @@ import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/sch
 import { settingsSchema } from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import { SlugTaken } from './errors.ts';
+import type { PublicationMail } from './publication-mail.ts';
 import { escapeLike } from './fields.ts';
 import {
   allows,
@@ -37,6 +38,7 @@ import {
   type AccessLevel,
 } from './field-rules.ts';
 import {
+  BRAND_ROLE,
   OWNER_ROLE,
   PERMISSION_CREATE,
   PERMISSION_EDIT,
@@ -53,7 +55,7 @@ import type {
   OrgRoleEntry,
   ProfileContributorEntry,
 } from './registries.ts';
-import { BRAND_ROLE, toSchemaOrg, type Contribution, type ServiceProfile } from './schema-org.ts';
+import { toSchemaOrg, type Contribution, type ServiceProfile } from './schema-org.ts';
 
 export {
   PERMISSION_CREATE,
@@ -275,6 +277,8 @@ export interface ServicesDeps {
   spdx: Spdx;
   config: ResolvedConfig;
   roles: readonly OrgRoleEntry[];
+  /** The notice to the provider on a publication; absent in a unit test that does not need it. */
+  publicationMail?: PublicationMail;
   /** The entries of `service.profileContributor`. */
   contributors?: readonly ProfileContributorEntry[];
 }
@@ -1128,6 +1132,23 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
           publication.public ? 'registry.service.published@1' : 'registry.service.unpublished@1',
           { serviceId: id, actorId: by },
         );
+        // The notice is in the same transaction: a rollback sends nothing.
+        if (deps.publicationMail) {
+          const [owner] = await tx
+            .select({ organisationId: serviceOrganisation.organisationId })
+            .from(serviceOrganisation)
+            .where(
+              and(eq(serviceOrganisation.serviceId, id), eq(serviceOrganisation.role, OWNER_ROLE)),
+            );
+          await deps.publicationMail.notify(tx, {
+            serviceId: id,
+            serviceName: updated!.name,
+            providerId: owner?.organisationId,
+            createdBy: updated!.createdBy,
+            actorId: by,
+            state: publication.public ? 'public' : 'private',
+          });
+        }
         return updated!;
       });
       return (await views(actor, [row]))[0]!;

@@ -56,7 +56,7 @@ the same value; a lone surrogate is already escaped by `JSON.stringify`. The rou
 cannot differ.
 
 **The block on the detail page (Decision 17).** The page's server load calls the profile route through the typed client with the
-visitor's session, so the contact point is in the block exactly when the route includes it. One component, `ui/JsonLd.svelte`, puts
+visitor's session, so the contact point is in the block exactly when the route includes it. One component, `JsonLd.svelte` (in `modules/registry-organisations/ui` until M7 sprint 3, then in `packages/ui-kit`: ADR-0036 part 2), puts
 `serializeJsonLd(profile)` into `<svelte:head>` with the module's only `{@html}`; the tags around it are constants and the serialised
 text is its only variable input. The ESLint exception for `svelte/no-at-html-tags` names exactly that file (a `files` override in
 `eslint.config.js`); every other file keeps the rule, and a test lints a fixture to prove it. A `<script type="application/ld+json">`
