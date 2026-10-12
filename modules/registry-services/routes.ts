@@ -1,6 +1,7 @@
 // The HTTP routes of registry.services (internal API). Thin: Zod parses, one service call, the result is
-// mapped. Every route has a permission; the service checks it again (CLAUDE.md, security rules). Sprint 1
-// has no public route and no screen.
+// mapped. Every route has a permission; the service checks it again (CLAUDE.md, security rules). The
+// delegated routes (`PATCH /services/{id}` and the icon) carry the plain `…service.read` and the service
+// decides with the policy `service.member` (ADR-0034, ADR-0036). There is no public route and no screen yet.
 import {
   createRoute,
   listEnvelope,
@@ -10,9 +11,11 @@ import {
   type AppEnv,
   type RouteHandler,
 } from '@scorpion/contracts';
+import { MAX_UPLOAD_BYTES } from '@scorpion/core-blob/public';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import {
-  PERMISSION_MANAGE,
+  PERMISSION_CREATE,
+  PERMISSION_PUBLISH,
   PERMISSION_READ,
   SORT_KEYS,
   type RoleView,
@@ -76,6 +79,16 @@ const serviceSchema = summarySchema.extend({
   updatedAt: z.iso.datetime(),
   createdBy: z.string().nullable().optional().describe('Administrators only.'),
   updatedBy: z.string().nullable().optional().describe('Administrators only.'),
+  editableFields: z
+    .array(z.string())
+    .describe(
+      'The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed.',
+    ),
+  allowedActions: z
+    .array(z.enum(['edit', 'publish', 'unpublish']))
+    .describe(
+      'What the caller may do with this service now. Screens draw their buttons from this.',
+    ),
 });
 
 /**
@@ -105,6 +118,49 @@ export const createServiceBody = z.looseObject({
     .optional()
     .describe('Both parts or neither.'),
 });
+
+/**
+ * The body of an update is a part of the same nested object: the fields it names change, the others are not
+ * touched, and `null` clears an optional field. A field its caller may not write refuses the whole request.
+ */
+export const patchServiceBody = z.looseObject({
+  slug: z
+    .string()
+    .max(200)
+    .optional()
+    .describe('Managers of the provider and administrators only.'),
+  name: z.string().max(1000).optional(),
+  license: z.string().max(256).nullable().optional(),
+  stage: z.string().max(256).optional(),
+  description: z.string().max(20_000).nullable().optional(),
+  url: z.string().max(4000).nullable().optional(),
+  sameAs: z.array(z.string().max(4000)).max(100).nullable().optional(),
+  provider: z
+    .uuid()
+    .optional()
+    .describe(
+      'Managers of the provider and administrators only; a manager may move the service only to an organisation they manage.',
+    ),
+  consortia: z.array(z.uuid()).max(100).nullable().optional(),
+  contact: z
+    .object({
+      email: z.string().max(1000).nullable().optional(),
+      type: z.string().max(1000).nullable().optional(),
+    })
+    .optional()
+    .describe('Both parts or neither; `null` in both clears the contact point.'),
+});
+
+const imageBody = {
+  required: true as const,
+  description:
+    'The image as the request body (PNG, JPEG, WebP, GIF or SVG). Its `Content-Type` is ignored: the type is determined from the content, and the file is checked and rewritten before it is stored.',
+  content: {
+    'application/octet-stream': {
+      schema: z.string().openapi({ type: 'string', format: 'binary' }),
+    },
+  },
+};
 
 const roleSchema = z.object({
   id: z.string(),
@@ -167,9 +223,9 @@ export const getServiceRoute = createRoute({
 export const createServiceRoute = createRoute({
   method: 'post',
   path: '/services',
-  // Sprint 1: Admin only. Sprint 2 changes the permission to `…service.create` and adds the rule that
-  // the caller is an Admin or an approved member of the provider (ADR-0036).
-  permission: PERMISSION_MANAGE,
+  // Every User holds `create`; the service then requires an Admin or an approved member of the provider
+  // (Decision 14), and answers 403 to anybody else.
+  permission: PERMISSION_CREATE,
   audit: true,
   maxBodyBytes: MAX_CREATE_BODY_BYTES,
   request: {
@@ -177,11 +233,94 @@ export const createServiceRoute = createRoute({
   },
   responses: {
     201: ok('The service, created with its organisations in one transaction.', serviceSchema),
+    403: { description: 'The caller is neither an administrator nor a member of the provider.' },
     409: { description: 'The slug is taken, or was used by another service once.' },
     422: {
       description:
         'Invalid input: an unknown or wrong-typed organisation, stage or licence, a missing provider, a bad slug.',
     },
+  },
+});
+
+export const updateServiceRoute = createRoute({
+  method: 'patch',
+  path: '/services/{id}',
+  // ADR-0034: delegated. The plain permission lets every signed-in person reach the service, which checks
+  // the scoped `edit` (and `edit-identity` for the slug and the provider) on this service and is the
+  // authorization.
+  permission: PERMISSION_READ,
+  audit: true,
+  maxBodyBytes: MAX_CREATE_BODY_BYTES,
+  request: {
+    params: idParam,
+    body: { required: true, content: { 'application/json': { schema: patchServiceBody } } },
+  },
+  responses: {
+    200: ok('The service with its changes.', serviceSchema),
+    403: {
+      description:
+        'The caller may not change a field the request names. The whole request is refused, nothing is written, and the problem names fields, never values.',
+    },
+    404: { description: 'No such service.' },
+    409: { description: 'The new slug is taken, or was used by another service once.' },
+    422: {
+      description: 'Invalid input, an unknown organisation, stage or licence, or no field named.',
+    },
+  },
+});
+
+export const setIconRoute = createRoute({
+  method: 'put',
+  path: '/services/{id}/icon',
+  // ADR-0034: delegated, as the organisation's logo: the service checks `…service.edit` on this service
+  // before the file is stored.
+  permission: PERMISSION_READ,
+  rateLimit: 'strict',
+  maxBodyBytes: MAX_UPLOAD_BYTES,
+  audit: true,
+  request: { params: idParam, body: imageBody },
+  responses: {
+    200: ok('The service with its new icon.', serviceSchema),
+    403: { description: 'The caller may not edit this service.' },
+    404: { description: 'No such service.' },
+    413: { description: 'The body is larger than the upload ceiling.' },
+    422: { description: 'The file is empty, too big, not a supported image, or damaged.' },
+  },
+});
+
+export const clearIconRoute = createRoute({
+  method: 'delete',
+  path: '/services/{id}/icon',
+  permission: PERMISSION_READ, // delegated, see `setIconRoute`
+  audit: true,
+  request: { params: idParam },
+  responses: {
+    200: ok('The service without its icon.', serviceSchema),
+    403: { description: 'The caller may not edit this service.' },
+    404: { description: 'No such service, or it has no icon.' },
+  },
+});
+
+export const setPublicationRoute = createRoute({
+  method: 'put',
+  path: '/services/{id}/publication',
+  // Reviewers and Admin only: a manager or a member of the provider cannot change who may read the service.
+  permission: PERMISSION_PUBLISH,
+  audit: true,
+  request: {
+    params: idParam,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: z.strictObject({ public: z.boolean() }) } },
+    },
+  },
+  responses: {
+    200: ok(
+      'The service. Setting the state it already has changes nothing and sends no event.',
+      serviceSchema,
+    ),
+    404: { description: 'No such service.' },
+    409: { description: 'Making a service public is switched off (`service.allowPublic`).' },
   },
 });
 
@@ -248,6 +387,8 @@ const serviceOut = (s: ServiceView) => ({
   createdAt: s.createdAt.toISOString(),
   updatedAt: s.updatedAt.toISOString(),
   ...(s.createdBy !== undefined && { createdBy: s.createdBy, updatedBy: s.updatedBy }),
+  editableFields: s.editableFields,
+  allowedActions: s.allowedActions,
 });
 
 const roleOut = (r: RoleView) => ({
@@ -298,4 +439,30 @@ export function registerServiceRoutes(r: RouteRegistrar, service: ServicesServic
   r.internal(createServiceRoute, (async (c) => {
     return c.json(serviceOut(await service.create(c.get('actor'), c.req.valid('json'))), 201);
   }) satisfies RouteHandler<typeof createServiceRoute, AppEnv>);
+
+  r.internal(updateServiceRoute, (async (c) => {
+    const { id } = c.req.valid('param');
+    return c.json(serviceOut(await service.update(c.get('actor'), id, c.req.valid('json'))), 200);
+  }) satisfies RouteHandler<typeof updateServiceRoute, AppEnv>);
+
+  r.internal(setIconRoute, (async (c) => {
+    const { id } = c.req.valid('param');
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    return c.json(serviceOut(await service.setIcon(c.get('actor'), id, bytes)), 200);
+  }) satisfies RouteHandler<typeof setIconRoute, AppEnv>);
+
+  r.internal(clearIconRoute, (async (c) => {
+    return c.json(
+      serviceOut(await service.clearIcon(c.get('actor'), c.req.valid('param').id)),
+      200,
+    );
+  }) satisfies RouteHandler<typeof clearIconRoute, AppEnv>);
+
+  r.internal(setPublicationRoute, (async (c) => {
+    const { id } = c.req.valid('param');
+    return c.json(
+      serviceOut(await service.setPublication(c.get('actor'), id, c.req.valid('json'))),
+      200,
+    );
+  }) satisfies RouteHandler<typeof setPublicationRoute, AppEnv>);
 }

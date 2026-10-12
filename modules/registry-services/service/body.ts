@@ -130,3 +130,106 @@ export async function validateBody(
   if (problems.length > 0) throw new Invalid('The request is not valid.', problems);
   return values;
 }
+
+/** Whether the body names the pointer, even with `null` (a field that is cleared is named). */
+function hasPointer(body: Record<string, unknown>, pointer: string): boolean {
+  let current: unknown = body;
+  for (const part of pointer.slice(1).split('/')) {
+    if (!isObject(current) || !Object.hasOwn(current, part)) return false;
+    current = current[part];
+  }
+  return true;
+}
+
+/**
+ * The keys of the configured fields a raw, not yet validated patch names, in the order of the
+ * configuration: what the access check needs before anything is parsed. A key that is no field is left
+ * out; the parse refuses it with a 422.
+ */
+export function fieldKeysOfInput(config: ResolvedConfig, input: unknown): string[] {
+  if (!isObject(input)) return [];
+  return config.fields
+    .filter((resolved) => hasPointer(input, resolved.field.path))
+    .map((resolved) => resolved.field.key);
+}
+
+/**
+ * The values of a partial body by field key: only the fields the body names. A `null` clears an optional
+ * field (the map holds `null`); a required field cannot be cleared. A field the body leaves out is not in
+ * the map and is not touched, and no default applies. The icon is never part of a patch. At least one field
+ * must be named. The pair rule of the contact point needs the stored row, so the service applies it to the
+ * merged state.
+ */
+export async function validatePatch(
+  config: ResolvedConfig,
+  body: unknown,
+  env: FieldEnv,
+): Promise<Map<string, unknown>> {
+  if (!isObject(body)) {
+    throw new Invalid('The request is not valid.', [
+      { in: 'body', path: '', message: 'The body must be an object.' },
+    ]);
+  }
+  const problems: FieldProblem[] = [];
+  const problem = (pointer: string, message: string) =>
+    problems.push({ in: 'body', path: dotted(pointer), message });
+
+  const paths = new Set(config.fields.map((resolved) => resolved.field.path));
+  for (const pointer of unknownPointers(body, paths)) {
+    problem(pointer, 'This field is not known.');
+  }
+
+  const named = config.fields.filter((resolved) => hasPointer(body, resolved.field.path));
+  if (named.length === 0 && problems.length === 0) {
+    problems.push({ in: 'body', path: '', message: 'Name at least one field to change.' });
+  }
+
+  const parsed: { resolved: ResolvedField; value: unknown }[] = [];
+  const values = new Map<string, unknown>();
+  for (const resolved of named) {
+    const { field } = resolved;
+    if (field.storage.kind === 'icon') {
+      problem(field.path, 'The icon is changed through the icon route.');
+      continue;
+    }
+    const raw = valueAt(body, field.path);
+    if (raw === null || raw === undefined) {
+      if (field.required) problem(field.path, 'This field is required.');
+      else values.set(field.key, null);
+      continue;
+    }
+    const result = resolved.schema.safeParse(raw);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const extra = issue.path.map(String).join('.');
+        problems.push({
+          in: 'body',
+          path: [dotted(field.path), extra].filter(Boolean).join('.'),
+          message: issue.message,
+        });
+      }
+      continue;
+    }
+    // An emptied text is "not set": the same rule as on create.
+    if (result.data === null) {
+      if (field.required) problem(field.path, 'This field is required.');
+      else values.set(field.key, null);
+      continue;
+    }
+    parsed.push({ resolved, value: result.data });
+  }
+
+  for (const { resolved, value } of parsed) {
+    let final = value;
+    const result = await resolved.type.check?.(value, resolved.config, env);
+    if (result && 'problem' in result) {
+      problem(resolved.field.path, result.problem);
+      continue;
+    }
+    if (result && 'value' in result) final = result.value;
+    values.set(resolved.field.key, final);
+  }
+
+  if (problems.length > 0) throw new Invalid('The request is not valid.', problems);
+  return values;
+}
