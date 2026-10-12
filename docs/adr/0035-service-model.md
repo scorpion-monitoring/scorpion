@@ -16,13 +16,13 @@ The access rules (the policy `service.member`, the three edit groups, the public
 
 ### Tables (prefix `svc_`, `tablePrefix: 'svc_'`)
 
-| Table                     | Holds                                                                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `svc_service`             | `id` (UUIDv7), `slug` (unique without case), `name`, `license` (SPDX id), `stage` (a term of the `stage` vocabulary), `description`, `url`, `same_as`, the contact pair, the icon, `public`, audit columns |
-| `svc_service_organisation`| `service_id` (cascade), `organisation_id`, `role` (a key of `service.orgRole`); unique on the triple                                                                                         |
-| `svc_field_value`         | `service_id` (cascade), `field_key`, `value` (`jsonb`); unique on the pair: the values of configured fields that are not columns                                                              |
-| `svc_slug_history`        | every slug a service has had, **the current one included**; unique without case                                                                                                              |
-| `svc_license_cache`       | one row: the fetched SPDX list and its time                                                                                                                                                  |
+| Table                      | Holds                                                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `svc_service`              | `id` (UUIDv7), `slug` (unique without case), `name`, `license` (SPDX id), `stage` (a term of the `stage` vocabulary), `description`, `url`, `same_as`, the contact pair, the icon, `public`, audit columns |
+| `svc_service_organisation` | `service_id` (cascade), `organisation_id`, `role` (a key of `service.orgRole`); unique on the triple                                                                                                       |
+| `svc_field_value`          | `service_id` (cascade), `field_key`, `value` (`jsonb`); unique on the pair: the values of configured fields that are not columns                                                                           |
+| `svc_slug_history`         | every slug a service has had, **the current one included**; unique without case                                                                                                                            |
+| `svc_license_cache`        | one row: the fetched SPDX list and its time                                                                                                                                                                |
 
 No pg enum anywhere: the stage is a vocabulary term, the role a registry key, the field key a configured string; each is checked in the
 service. **No foreign key** to `org_organisation`, `identity_user` or the blob table: organisation ids, user ids and the icon's blob
@@ -63,13 +63,13 @@ per step** (the same field list bound below a nested path, so M9 or M15 can reus
 All are declared by `registry.services`; the loader validates every entry with Zod and names the contributing module in the message
 (`composition.ts`); a module may contribute only if it declares `registry.services` as a dependency.
 
-| Registry                        | Entry                                                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `service.orgRole`               | `{ id, labels, orgTypes, min, max, order }`; seeded `provider` (1..1) and `consortium` (0..20)           |
-| `service.fieldType`             | `{ id, labels, widget, configSchema, schema(config), jsonSchema(config), check?, toValue?, schemaOrg? }`; seeded `text`, `select`, `multi-select`, `license`, `organisation`, `image` |
-| `service.wizardStep`            | `{ id, order, title, intro, fields, component?, applies? }`; the module's own steps are its config     |
-| `service.facet`                 | `{ id, labels, order, emptyLabel?, where(selected), values(scope, db) }`; seeded `consortium`, `stage`, `license`, `provider` |
-| `service.profileContributor`    | `{ id, contribute(service, ctx) }`; the allow-list of properties is enforced when the profile is built (sprint 3) |
+| Registry                     | Entry                                                                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`; seeded `provider` (1..1) and `consortium` (0..20)                                                                                                  |
+| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), check?, toValue?, schemaOrg? }`; seeded `text`, `select`, `multi-select`, `license`, `organisation`, `image` |
+| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies? }`; the module's own steps are its config                                                                                              |
+| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selected), values(scope, db) }`; seeded `consortium`, `stage`, `license`, `provider`                                                                   |
+| `service.profileContributor` | `{ id, contribute(service, ctx) }`; the allow-list of properties is enforced when the profile is built (sprint 3)                                                                               |
 
 A contributing module must provide, for a field type: a Zod schema for the value and for its config, the JSON Schema of both, the
 widget name the UI maps, and, if the value refers to other data, a `check` that returns a problem text. A role's `orgTypes` must be
