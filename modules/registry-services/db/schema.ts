@@ -2,7 +2,7 @@
 // Create a migration after a change: `pnpm db:generate --filter @scorpion/registry-services`.
 //
 // No pg enum: `stage` is a term of the `stage` vocabulary, `role` a key of the registry `service.orgRole`,
-// `field_key` a configured string; the service checks each. No foreign key to `org_organisation`, to a
+// `field_key` a configured string; the service checks each. No foreign key to the organisation table, to a
 // user or to the blob table: those ids are plain columns that the service checks, so a purge or the blob
 // cleanup cannot be blocked by this module. Foreign keys point only to this module's own tables.
 import { sql } from 'drizzle-orm';

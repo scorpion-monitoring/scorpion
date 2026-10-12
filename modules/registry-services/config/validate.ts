@@ -31,6 +31,9 @@ export const CONFIGURABLE_COLUMNS = [
   'contactType',
 ] as const;
 
+/** The NOT NULL columns of `svc_service` without a database default that a create must fill. */
+export const REQUIRED_COLUMNS = ['slug', 'name', 'stage'] as const;
+
 export class ServicesConfigError extends Error {
   readonly problems: readonly string[];
   constructor(problems: readonly string[]) {
@@ -330,6 +333,23 @@ export function validateServicesConfig(input: ValidateInput): ResolvedConfig {
       config: parsedConfig,
       schema,
     });
+  }
+
+  // The columns that are NOT NULL without a default must be written by a required field (or one with a default),
+  // or no service could be created: a bad config would be a 500 at the first create, not a refusal at start.
+  for (const column of REQUIRED_COLUMNS) {
+    const holder = origins.find(
+      (o) => o.field.storage.kind === 'column' && o.field.storage.column === column,
+    );
+    if (!holder) {
+      problems.push(
+        `${FIELDS_FILE}: no field is stored in the column "${column}", which a service needs`,
+      );
+    } else if (!holder.field.required && holder.field.default === undefined) {
+      problems.push(
+        `${holder.where}: the column "${column}" is needed, so the field must be "required": true or have a default`,
+      );
+    }
   }
 
   // A role that needs at least one organisation must have a required field, or no service could be created.

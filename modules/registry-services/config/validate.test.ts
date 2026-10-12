@@ -205,6 +205,21 @@ describe('every mistake stops the start and names the file and the field', () =>
       /field "consortia": the role "consortium" allows 20 organisations, so the field needs "multiple": true/,
     ],
     [
+      'no field for a column a service needs',
+      {
+        fields: FIELDS.filter((f) => f.key !== 'name'),
+        steps: withStep('basics', {
+          fields: STEPS[0]!.fields!.filter((k) => k !== 'name'),
+        }),
+      },
+      /config\/fields\.ts: no field is stored in the column "name", which a service needs/,
+    ],
+    [
+      'a needed column whose field is optional and has no default',
+      { fields: withField('name', { required: false }) },
+      /field "name": the column "name" is needed, so the field must be "required": true or have a default/,
+    ],
+    [
       'a missing provider field',
       {
         fields: FIELDS.filter((f) => f.key !== 'provider'),
