@@ -185,7 +185,7 @@ export interface ServicesService {
   // Trusted reads for other modules (ADR-0015): no permission check, no caller named. A route that
   // uses one must check the permission itself.
   findByIdsAsSystem: (ids: readonly string[]) => Promise<ServiceRecord[]>;
-  /** An old slug resolves too; `redirectedFrom` is then the slug that was asked for. */
+  /** An old slug resolves too (without regard to case); `redirectedFrom` is then that old slug as it was stored. */
   findBySlugAsSystem: (
     slug: string,
   ) => Promise<(ServiceRecord & { redirectedFrom?: string }) | undefined>;
