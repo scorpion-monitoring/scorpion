@@ -181,6 +181,8 @@ export interface MembershipsService {
     organisationIds: readonly string[],
   ) => Promise<Record<string, number>>;
   isManagerAsSystem: (userId: string, organisationId: string) => Promise<boolean>;
+  /** The user ids of the approved managers of an organisation, by id; read at the moment of the call. */
+  listApprovedManagerIdsAsSystem: (organisationId: string) => Promise<string[]>;
   /**
    * Deletes every membership of a purged person, managers' too, in one transaction (idempotent).
    * Called by the subscriber of `identity.user.purged@1`; no route calls it.
@@ -876,6 +878,22 @@ export function createMembershipsService(
           ),
         );
       return row !== undefined;
+    },
+
+    async listApprovedManagerIdsAsSystem(organisationId) {
+      if (!isUuid(organisationId)) return [];
+      const rows = await db
+        .select({ id: membership.userId })
+        .from(membership)
+        .where(
+          and(
+            eq(membership.organisationId, organisationId),
+            eq(membership.state, 'approved'),
+            eq(membership.role, 'manager'),
+          ),
+        )
+        .orderBy(asc(membership.userId));
+      return rows.map((row) => row.id);
     },
 
     async purgeUserAsSystem(userId) {

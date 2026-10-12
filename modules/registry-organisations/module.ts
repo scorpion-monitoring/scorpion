@@ -26,7 +26,9 @@ import { TEMPLATES } from './templates/registry.ts';
 import { ORGANISATION_NAV, ORGANISATION_ROUTES, ORGANISATION_WIDGETS } from './ui/routes.ts';
 import {
   ORG_TYPE_REGISTRY,
+  ORG_PUBLIC_REFERENCE_REGISTRY,
   ORG_USAGE_REGISTRY,
+  orgPublicReferenceEntrySchema,
   orgTypeEntrySchema,
   orgUsageEntrySchema,
   SEED_TYPES,
@@ -192,6 +194,8 @@ export function createOrganisationsModule() {
     registries: {
       [ORG_TYPE_REGISTRY]: orgTypeEntrySchema,
       [ORG_USAGE_REGISTRY]: orgUsageEntrySchema,
+      // M7: the public records that name an organisation; it has a public profile exactly when there are some.
+      [ORG_PUBLIC_REFERENCE_REGISTRY]: orgPublicReferenceEntrySchema,
     },
 
     // The pages (Svelte) are loaded by the web app only; the manifest just names the entry.

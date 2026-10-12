@@ -8,11 +8,15 @@
 // asks `isApprovedMemberAsSystem` and `listApprovedOrganisationIdsAsSystem`.
 export {
   ORG_TYPE_REGISTRY,
+  ORG_PUBLIC_REFERENCE_REGISTRY,
   ORG_USAGE_REGISTRY,
   SCHEMA_TYPES,
+  type OrgPublicReferenceEntry,
+  type OrgPublicReferences,
   type OrgTypeEntry,
   type OrgUsageCount,
   type OrgUsageEntry,
+  type PublicReference,
   type SchemaType,
 } from './service/registries.ts';
 // The field rules that other modules apply to the same kinds of value (a service's URL, `sameAs` links and
@@ -33,8 +37,13 @@ export {
   parseUrl,
   type Parsed,
 } from './service/fields.ts';
-export type { SchemaOrgProfile } from './service/schema-org.ts';
-export type { OrganisationRecord, TypeView } from './service/organisations.ts';
+// The one function that turns a profile into a string for HTML; M7's service profile goes through it too.
+export { serializeJsonLd, type SchemaOrgProfile } from './service/schema-org.ts';
+export type {
+  OrganisationRecord,
+  PublicOrganisationRecord,
+  TypeView,
+} from './service/organisations.ts';
 
 import type { MembershipsService } from './service/memberships.ts';
 import type { OrganisationsService } from './service/organisations.ts';
@@ -53,6 +62,7 @@ export type OrganisationsPublic = Pick<
     | 'listApprovedOrganisationIdsAsSystem'
     | 'countApprovedMembersAsSystem'
     | 'isManagerAsSystem'
+    | 'listApprovedManagerIdsAsSystem'
   >;
 
 declare module '@scorpion/kernel' {

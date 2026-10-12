@@ -3,7 +3,7 @@
   // returned it, the member count, the viewer's own membership with the action that fits, and the member list
   // when the API allows it. The page shows what the API returns and never decides from the client: a part the
   // caller may not see is simply absent from the data. The Schema.org block in the head is rendered on the
-  // server from the profile route by the one audited component (`JsonLd.svelte`).
+  // server from the profile route by the one audited component (ui-kit's `JsonLd.svelte`).
   import {
     Alert,
     Breadcrumb,
@@ -11,11 +11,12 @@
     failureMessage,
     failureOf,
     getShell,
+    JsonLd,
     Time,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
-  import JsonLd from './JsonLd.svelte';
   import type { OrganisationData } from './loaders.ts';
+  import { serializeJsonLd } from '../service/schema-org.ts';
   import { rorLink } from './ror.ts';
 
   let { data }: { data: OrganisationData } = $props();
@@ -84,7 +85,7 @@
 <svelte:head>
   <title>{organisation.name}</title>
 </svelte:head>
-<JsonLd profile={data.profile} />
+<JsonLd json={serializeJsonLd(data.profile)} />
 
 <div class="flex max-w-3xl flex-col gap-6">
   <Breadcrumb items={[{ label: t('organisation.crumb') }, { label: organisation.name }]} />
