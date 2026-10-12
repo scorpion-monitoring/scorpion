@@ -292,3 +292,80 @@ describe('the contact point of an organisation', () => {
     }
   });
 });
+
+// The field table of a membership (docs/security/authorization.md, section Membership; M6 sprint 5). What each
+// membership route may return is pinned name by name, so a new field has to pass through this list and the
+// table. The member list shows a username and a date, nothing else: no state, no role, no address, no id of
+// the person. An address of a person is in no membership answer; `decidedBy` and `endedBy` are stored and are
+// returned by no route (the audit trail holds who acted).
+const ENVELOPE = ['metadata', 'currentPage', 'pageSize', 'totalCount', 'totalPages', 'result'];
+const ORGANISATION_REF = ['id', 'type', 'abbreviation', 'name'];
+const MANAGED_ROW = [
+  'id',
+  'organisation',
+  ...ORGANISATION_REF.slice(1), // `id` is already there
+  'userId',
+  'username',
+  'state',
+  'role',
+  'requestedAt',
+  'decidedAt',
+  'roleChangedAt',
+  'allowedActions',
+];
+const MEMBERSHIP_ANSWERS: Record<string, readonly string[]> = {
+  'GET /organisations/{id}/members': ['username', 'since'],
+  'GET /account/memberships': [
+    'id',
+    'organisation',
+    ...ORGANISATION_REF.slice(1),
+    'state',
+    'role',
+    'requestedAt',
+    'decidedAt',
+    'endedAt',
+  ],
+  'GET /memberships': MANAGED_ROW,
+  'GET /memberships/summary': ['pending', 'manages'],
+  'POST /memberships/{id}/decision': MANAGED_ROW,
+  'POST /memberships/{id}/role': MANAGED_ROW,
+  'POST /memberships/{id}/remove': MANAGED_ROW,
+};
+
+describe('the fields of a membership', () => {
+  it('are the ones the field table names, per route, and no address or decider is among them [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start();
+    for (const [key, expected] of Object.entries(MEMBERSHIP_ANSWERS)) {
+      const entry = kernel.routes.find(
+        ({ route }) => `${route.method.toUpperCase()} ${route.path}` === key,
+      );
+      expect(entry, key).toBeDefined();
+      const names = new Set(
+        Object.entries((entry!.route as RouteLike).responses ?? {})
+          .filter(([status]) => status === '200')
+          .flatMap(([, response]) =>
+            Object.values(response?.content ?? {}).flatMap((content) =>
+              propertyNames(content.schema).map((at) => at.slice(at.lastIndexOf('.') + 1)),
+            ),
+          ),
+      );
+      for (const name of ENVELOPE) names.delete(name);
+      expect([...names].sort(), key).toEqual([...new Set(expected)].sort());
+      for (const name of names) expect(name, key).not.toMatch(/email|address|decidedBy|endedBy/i);
+    }
+  });
+
+  it('are the whole membership surface: every route that names a membership is in the list above or acts on the caller’s own row', async () => {
+    const { kernel } = await app.start();
+    const keys = kernel.routes
+      .map(({ route }) => `${route.method.toUpperCase()} ${route.path}`)
+      .filter((key) => /membership/.test(key));
+    const ownRow = ['POST /organisations/{id}/membership', 'DELETE /organisations/{id}/membership'];
+    expect(keys.sort()).toEqual(
+      [
+        ...Object.keys(MEMBERSHIP_ANSWERS).filter((key) => /membership/.test(key)),
+        ...ownRow,
+      ].sort(),
+    );
+  });
+});
