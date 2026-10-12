@@ -763,7 +763,7 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
               changed.push(resolved.field.key);
             }
           }
-          const after = { ...current, ...next } as Row;
+          const after = { ...current, ...next };
           if ((after.contactEmail === null) !== (after.contactType === null)) {
             throw new Invalid('The request is not valid.', [
               {

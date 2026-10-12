@@ -36,6 +36,8 @@ export {
   type Returned,
 } from './reauth.ts';
 export { default as Alert } from './Alert.svelte';
+export { default as ImageBlock } from './ImageBlock.svelte';
+export type { ImageBlockTexts } from './image-block.ts';
 export { default as Dialog } from './Dialog.svelte';
 export { default as ReauthDialog } from './ReauthDialog.svelte';
 export { default as SubmitButton } from './SubmitButton.svelte';
