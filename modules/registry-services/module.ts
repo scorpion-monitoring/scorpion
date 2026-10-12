@@ -23,7 +23,17 @@ import { registerServiceRoutes } from './routes.ts';
 import { SEED_FACETS } from './service/facets.ts';
 import { SEED_FIELD_TYPES } from './service/field-types.ts';
 import { createLicenseCache } from './service/licences.ts';
-import { PERMISSION_MANAGE, PERMISSION_READ } from './service/permissions.ts';
+import {
+  PERMISSION_CREATE,
+  PERMISSION_EDIT,
+  PERMISSION_EDIT_IDENTITY,
+  PERMISSION_MANAGE,
+  PERMISSION_PUBLISH,
+  PERMISSION_READ,
+  PERMISSION_READ_CONTACT,
+  RESOURCE_TYPE,
+} from './service/permissions.ts';
+import { createMemberPolicy, type MemberPolicy } from './service/policy.ts';
 import {
   facetEntrySchema,
   fieldTypeEntrySchema,
@@ -93,6 +103,12 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
   // The stage vocabulary's `usage` check needs the database, which exists only once the module starts;
   // the manifest's contribution reaches it through this closure (the pattern of the member policy).
   let stageInUse: ((termKey: string) => Promise<boolean>) | undefined;
+  // The same for the policy, which needs the database and registry.organisations.
+  let policy: MemberPolicy | undefined;
+  const policyOrThrow = () => {
+    if (!policy) throw new Error('registry.services: the member policy was asked before start');
+    return policy;
+  };
 
   return defineModule<
     RegistryServicesService,
@@ -114,8 +130,31 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       [PERMISSION_READ]: {
         description: 'Read services, the licence list and the organisation roles',
       },
+      [PERMISSION_CREATE]: {
+        description:
+          'Create a service (the caller must also be an administrator or an approved member of the owning organisation they choose)',
+      },
       [PERMISSION_MANAGE]: {
-        description: 'Create services (sprint 2 adds change and publication rules)',
+        description: 'Create and change every field of any service, as an administrator',
+      },
+      [PERMISSION_PUBLISH]: {
+        description: 'Make a service public, or private again (Reviewers and administrators)',
+      },
+      // Scoped to `service` (ADR-0034, ADR-0036): Admin holds each everywhere, the members and managers
+      // of the service's provider through the policy `service.member`. Routes never name them; the
+      // service checks them (`ctx.authz.require` with the service).
+      [PERMISSION_EDIT]: {
+        scope: RESOURCE_TYPE,
+        description:
+          'Change the name, licence, stage, description, links, contact point, icon, further organisations and configured fields of a service (not its slug or owning organisation)',
+      },
+      [PERMISSION_EDIT_IDENTITY]: {
+        scope: RESOURCE_TYPE,
+        description: 'Change the slug and the owning organisation of a service',
+      },
+      [PERMISSION_READ_CONTACT]: {
+        scope: RESOURCE_TYPE,
+        description: 'Always see the contact point of a service, whatever the setting says',
       },
     },
     settings: settingsSchema,
@@ -131,6 +170,17 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
           by: z.enum(['admin', 'member']),
           actorId,
         }),
+        // `fields` are the keys of the configured fields that changed, never their values; `by` is the
+        // highest group the change needed (ADR-0036).
+        'registry.service.updated@1': z.strictObject({
+          serviceId: uuid,
+          fields: z.array(z.string().min(1).max(64)).min(1).max(100),
+          by: z.enum(['admin', 'manager', 'member']),
+          actorId,
+        }),
+        'registry.service.slugChanged@1': z.strictObject({ serviceId: uuid, actorId }),
+        'registry.service.published@1': z.strictObject({ serviceId: uuid, actorId }),
+        'registry.service.unpublished@1': z.strictObject({ serviceId: uuid, actorId }),
       },
     },
 
@@ -167,10 +217,19 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
           usage: (termKey: string) => stageInUse?.(termKey) ?? Promise.resolve(false),
         },
       ],
-      // Every signed-in person may read services; `manage` stays with Admin (ADR-0014 resolution).
+      // Every signed-in person may read services and ask to create one (the service checks the provider);
+      // Reviewers publish. `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [
-        { role: 'user', permissions: [PERMISSION_READ] },
-        { role: 'reviewer', permissions: [PERMISSION_READ] },
+        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_CREATE] },
+        { role: 'reviewer', permissions: [PERMISSION_READ, PERMISSION_PUBLISH] },
+      ],
+      // The policy `service.member` (ADR-0036): members and managers of the service's provider.
+      'authz.resourcePolicy': [
+        {
+          resourceType: RESOURCE_TYPE,
+          allows: (request: Parameters<MemberPolicy['allows']>[0]) =>
+            policyOrThrow().allows(request),
+        },
       ],
     },
 
@@ -221,8 +280,13 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         (process.env.NODE_ENV === 'test'
           ? createStubSpdx()
           : createSpdx({ cache: createLicenseCache(ctx.db) }));
+      policy = createMemberPolicy({
+        db: ctx.db,
+        organisations: ctx.deps['registry.organisations'],
+      });
       const services = createServicesService(ctx, {
         authz: ctx.deps['core.authz'],
+        blob: ctx.deps['core.blob'],
         settings: ctx.deps['core.settings'],
         organisations: ctx.deps['registry.organisations'],
         spdx,
