@@ -239,6 +239,9 @@ importers:
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations
+      '@scorpion/registry-services':
+        specifier: workspace:*
+        version: link:../registry-services
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing

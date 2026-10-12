@@ -100,8 +100,13 @@ export async function validateBody(
   const email = contact('contactEmail');
   const type = contact('contactType');
   if (email && type) {
-    const hasEmail = parsed.some((p) => p.resolved === email);
-    const hasType = parsed.some((p) => p.resolved === type);
+    // Presence is what the body said, not what parsed: a bad address is a bad address, not a missing one.
+    const given = (path: string) => {
+      const value = valueAt(body, path);
+      return value !== undefined && value !== null;
+    };
+    const hasEmail = given(email.field.path);
+    const hasType = given(type.field.path);
     if (hasEmail !== hasType) {
       problem(
         hasEmail ? type.field.path : email.field.path,

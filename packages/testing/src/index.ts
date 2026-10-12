@@ -24,6 +24,7 @@ export {
 } from './notifications.ts';
 export { makeMembership, type MakeMembership, type MembershipRow } from './memberships.ts';
 export { makeOrganisation, type MakeOrganisation, type OrganisationRow } from './organisations.ts';
+export { makeService, type MakeService, type ServiceRow } from './services.ts';
 export {
   makePreference,
   makeSecret,

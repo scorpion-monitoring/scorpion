@@ -3,7 +3,7 @@
 // (`validate.ts`) checks them again at start, so a file that bypasses the types (a cast, a generated file)
 // still cannot start the server with a broken wizard.
 import { z } from '@scorpion/contracts';
-import { fieldConfigSchema, type FieldConfig } from '../service/registries.ts';
+import { fieldConfigSchema, messageKey, type FieldConfig } from '../service/registries.ts';
 
 export type { FieldConfig };
 export { fieldConfigSchema };
@@ -16,9 +16,9 @@ export const stepConfigSchema = z.strictObject({
     .max(32),
   order: z.number().int().min(0).max(100_000),
   /** The message key of the step's title. */
-  title: z.string().min(1).max(120),
+  title: messageKey,
   /** Message keys of the paragraphs above the fields (the legacy `texts`). */
-  intro: z.array(z.string().min(1).max(120)).max(10).optional(),
+  intro: z.array(messageKey).max(10).optional(),
   /** Keys of fields of `config/fields.ts`. */
   fields: z.array(z.string().min(1).max(64)).max(50).optional(),
   /** The name of a UI component for a step that is not a list of fields. */

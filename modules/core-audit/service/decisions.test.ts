@@ -69,6 +69,20 @@ describe('the audit decision for every declared event', () => {
     }
   });
 
+  it('logs the creation of a service as an ordinary admin event, with the service as its subject', () => {
+    const created = EVENT_DECISIONS['registry.service.created@1'];
+    expect(created?.decision).toBe('log');
+    const logged = created as {
+      critical: boolean;
+      actor: (payload: Record<string, unknown>) => unknown;
+      subject: (payload: Record<string, unknown>) => unknown;
+    };
+    expect(logged.critical).toBe(false);
+    const payload = { serviceId: 'svc-1', by: 'admin', actorId: 'user-1' };
+    expect(logged.actor(payload)).toEqual({ kind: 'user', userId: 'user-1' });
+    expect(logged.subject(payload)).toEqual({ type: 'service', id: 'svc-1' });
+  });
+
   it('marks a membership that ends as critical when an Admin or a manager ended it, not when the person left', () => {
     const left = EVENT_DECISIONS['registry.membership.left@1'];
     expect(left?.decision).toBe('log');

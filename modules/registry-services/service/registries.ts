@@ -19,7 +19,7 @@ const labelSchema = z.string().min(1).max(100);
 const labels = z.strictObject({ en: labelSchema, de: labelSchema.optional() });
 const order = z.number().int().min(0).max(100_000);
 /** A message key of the UI catalogue, `services.field.slug.label`. */
-const messageKey = z
+export const messageKey = z
   .string()
   .regex(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)+$/, 'must be a dotted message key')
   .max(120);
