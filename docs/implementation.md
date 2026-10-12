@@ -235,7 +235,7 @@ M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if
 - Correct service ↔ consortium read model (a tested query function, no hand-written view) (defect 2).
 - `packages/integrations`: SPDX adapter with a 24 h cache and a bundled fallback.
 
-Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [ADR-0035](adr/0035-service-model.md), ADR-0036 with sprint 2):
+Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [ADR-0035](adr/0035-service-model.md), [ADR-0036](adr/0036-service-access.md) from sprint 2):
 
 - Tables `svc_service`, `svc_service_organisation`, `svc_field_value`, `svc_slug_history`, `svc_license_cache`; table prefix `svc_`.
 - The service carries `description`, `url`, `sameAs`, a contact point (role address), an icon through `core.blob` and a `public` flag, in addition to slug, name, licence and stage.
