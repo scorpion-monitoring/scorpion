@@ -289,6 +289,14 @@ Found while using the instance; not yet investigated.
   file hash, never an address) in the member list and the decider's row, an update of the membership field table in
   `docs/security/authorization.md` and the walker in `response-fields.test.ts`, and a fallback (initials) for a person without one. The
   header needs the avatar in `GET /auth/me` or `GET /account/profile` (check what the shell already loads).
+- **Use an icon library instead of hand-drawn SVGs.** The shell draws its icons from a small table of paths in
+  `apps/web/src/lib/components/Icon.svelte` (about 20 names; `Bell.svelte` of `core.notifications` has its own SVG). The maintainer recommends
+  [Tabler Icons](https://tabler.io/icons) (MIT, outline style on a 24 x 24 grid like the current ones). Decide how to ship it (the Svelte
+  package `@tabler/icons-svelte` imports per icon and tree-shakes, or the SVG set copied into the repository, which avoids a runtime
+  dependency and fits the CLAUDE.md rule to justify new dependencies), keep the `name` string of `ui.nav` entries working through a mapping (an
+  unknown name still falls back to a dot), and check that the icons stay out of the accessible name (`aria-hidden`). A side finding: nav
+  entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
+  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table.
 
 ## Later
 
