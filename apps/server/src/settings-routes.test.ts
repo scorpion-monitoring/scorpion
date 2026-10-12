@@ -41,7 +41,7 @@ describe('GET /settings', () => {
       metadata: Record<string, number>;
       result: { module: string; version: number; values: Record<string, unknown> }[];
     };
-    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 6, totalPages: 1 });
+    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 20, totalCount: 7, totalPages: 1 });
     expect(body.result.map((entry) => entry.module)).toEqual([
       'core.audit',
       'core.blob',
@@ -49,6 +49,7 @@ describe('GET /settings', () => {
       'core.notifications',
       'core.settings',
       'registry.organisations',
+      'registry.services',
     ]);
     expect(body.result[5]).toMatchObject({
       values: {
@@ -59,6 +60,9 @@ describe('GET /settings', () => {
           maxManagersPerOrganisation: 20,
         },
       },
+    });
+    expect(body.result[6]).toMatchObject({
+      values: { exposeContactPoint: true, allowPublic: true },
     });
     expect(body.result[2]).toMatchObject({
       version: 0,

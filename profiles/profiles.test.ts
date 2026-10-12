@@ -18,3 +18,21 @@ describe('profiles', () => {
     expect(Array.isArray(profile.modules)).toBe(true);
   });
 });
+
+describe('the registry modules', () => {
+  const modulesOf = async (name: string) =>
+    ((await import(`./${name}.ts`)) as { default: { modules: string[] } }).default.modules;
+
+  it('are in the registry and the full profile, in dependency order, and not in core-only', async () => {
+    for (const name of ['registry', 'full']) {
+      const modules = await modulesOf(name);
+      expect(modules, name).toContain('registry.organisations');
+      expect(modules, name).toContain('registry.services');
+      expect(modules.indexOf('registry.organisations'), name).toBeLessThan(
+        modules.indexOf('registry.services'),
+      );
+    }
+    const core = await modulesOf('core-only');
+    expect(core.filter((id) => id.startsWith('registry.'))).toEqual([]);
+  });
+});

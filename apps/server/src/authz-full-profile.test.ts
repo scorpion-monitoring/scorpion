@@ -86,6 +86,7 @@ describe('profile full with core.authz', () => {
       'core.audit',
       'core.ui-shell',
       'registry.organisations',
+      'registry.services',
     ]);
   });
 

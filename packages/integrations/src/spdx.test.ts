@@ -348,9 +348,9 @@ describe('createSpdx', () => {
 describe('createStubSpdx', () => {
   it('never fetches and records its calls', async () => {
     const original = globalThis.fetch;
-    globalThis.fetch = (() => {
+    globalThis.fetch = () => {
       throw new Error('the stub must not use the network');
-    }) as typeof fetch;
+    };
     try {
       const stub = createStubSpdx();
       expect(await stub.has('MIT')).toBe(true);

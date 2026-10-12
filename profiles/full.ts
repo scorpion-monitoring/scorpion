@@ -20,5 +20,6 @@ export default defineProfile({
     'core.audit',
     'core.ui-shell',
     'registry.organisations',
+    'registry.services',
   ],
 });

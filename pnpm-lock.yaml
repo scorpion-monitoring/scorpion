@@ -104,6 +104,9 @@ importers:
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../../modules/registry-organisations
+      '@scorpion/registry-services':
+        specifier: workspace:*
+        version: link:../../modules/registry-services
       hono:
         specifier: ^4.13.12
         version: 4.13.12

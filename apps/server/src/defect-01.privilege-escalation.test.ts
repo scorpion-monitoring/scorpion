@@ -297,6 +297,30 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}` }),
   },
+  // registry.services (M7 sprint 1). Reading services, the licence list and the organisation roles is every
+  // signed-in person's (the forms need them); creating is Admin's until sprint 2 adds the member rule.
+  'GET /services': { kind: 'self', sample: () => ({ method: 'GET', path: '/services' }) },
+  'GET /services/{id}': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'GET', path: `/services/${id}` }),
+  },
+  'GET /services/by-slug/{slug}': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/services/by-slug/galaxy' }),
+  },
+  'GET /licenses': { kind: 'self', sample: () => ({ method: 'GET', path: '/licenses?q=mit' }) },
+  'GET /service-roles': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/service-roles' }),
+  },
+  'POST /services': {
+    kind: 'admin',
+    sample: ({ organisation }) => ({
+      method: 'POST',
+      path: '/services',
+      body: { slug: 'evil', name: 'Evil', provider: organisation },
+    }),
+  },
   // M6 sprint 3 (ADR-0034): membership. Asking, withdrawing and the own list are the caller's own
   // (`…membership.request`, role `user`). The rest are DELEGATED: the route names the plain
   // `…organisation.read` that every signed-in person holds, so a plain User passes the pipeline, and the
@@ -548,6 +572,10 @@ describe('defect 1: the route table', () => {
     expect(
       (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'settings.%'")).rows,
     ).toEqual([]);
+    // ... nor the services: a refused create left no row behind.
+    for (const table of ['svc_service', 'svc_service_organisation', 'svc_slug_history']) {
+      expect((await s.kernel.pool.query(`select 1 from ${table}`)).rows, table).toEqual([]);
+    }
     // ... nor the vocabularies: the seeded terms are as they were.
     expect(
       (

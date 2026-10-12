@@ -31,6 +31,8 @@ import {
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import organisationsModule from '@scorpion/registry-organisations/module';
 import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
+import servicesModule from '@scorpion/registry-services/module';
+import servicesPackage from '@scorpion/registry-services/package.json' with { type: 'json' };
 import uiShellModule from '@scorpion/core-ui-shell/module';
 import uiShellPackage from '@scorpion/core-ui-shell/package.json' with { type: 'json' };
 import {
@@ -111,6 +113,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   audit?: boolean;
   /** false: the profile has no registry.organisations (default: it is there, as in `full`). */
   organisations?: boolean;
+  /** false: the profile has no registry.services (default: it is there, as in `full`; it needs the organisations). */
+  services?: boolean;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
@@ -175,6 +179,9 @@ export function useIdentityApp() {
             ...(options.audit === false ? [] : ['core.audit']),
             ...(options.uiShell === false ? [] : ['core.ui-shell']),
             ...(options.organisations === false ? [] : ['registry.organisations']),
+            ...(options.organisations === false || options.services === false
+              ? []
+              : ['registry.services']),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -205,6 +212,9 @@ export function useIdentityApp() {
           ...(options.organisations === false
             ? []
             : [{ manifest: organisationsModule, packageJson: organisationsPackage }]),
+          ...(options.organisations === false || options.services === false
+            ? []
+            : [{ manifest: servicesModule, packageJson: servicesPackage }]),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
@@ -225,6 +235,7 @@ export function useIdentityApp() {
           'core.audit': '@scorpion/core-audit',
           'core.ui-shell': '@scorpion/core-ui-shell',
           'registry.organisations': '@scorpion/registry-organisations',
+          'registry.services': '@scorpion/registry-services',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,

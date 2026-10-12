@@ -96,6 +96,7 @@ export default defineConfig(
             'modules/core-identity/test/harness.ts',
             'modules/core-notifications/test/harness.ts',
             'modules/registry-organisations/test/harness.ts',
+            'modules/registry-services/test/harness.ts',
             'modules/core-settings/test/harness.ts',
           ],
         },
