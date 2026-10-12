@@ -4,8 +4,9 @@
 import { catalogueProblems } from '@scorpion/ui-kit/i18n';
 import { describe, expect, it } from 'vitest';
 import manifest from '../module.ts';
-import routes, { messages } from './index.ts';
-import { ORGANISATION_NAV, ORGANISATION_ROUTES } from './routes.ts';
+import routes, { messages, widgets } from './index.ts';
+import { ORGANISATION_NAV, ORGANISATION_ROUTES, ORGANISATION_WIDGETS } from './routes.ts';
+import { rowNote } from './membership-rows.ts';
 
 describe('the pages of registry.organisations', () => {
   it('are the same paths in the server half and the browser half', () => {
@@ -17,6 +18,7 @@ describe('the pages of registry.organisations', () => {
   it('are contributed to the registries of the shell, as the manifest says', () => {
     expect(manifest.contributes?.['ui.routes']).toEqual(ORGANISATION_ROUTES);
     expect(manifest.contributes?.['ui.nav']).toEqual(ORGANISATION_NAV);
+    expect(manifest.contributes?.['ui.widget']).toEqual(ORGANISATION_WIDGETS);
     expect(typeof manifest.ui).toBe('function');
   });
 
@@ -42,16 +44,68 @@ describe('the pages of registry.organisations', () => {
     }
   });
 
-  it('have a navigation entry only for a page of the module, in the administration, with the permission of that page and a text', () => {
+  it('have a navigation entry only for a page of the module, with the permission of that page and a text', () => {
     const byPath = new Map(ORGANISATION_ROUTES.map((route) => [route.path, route.permission]));
     for (const entry of ORGANISATION_NAV) {
       expect(byPath.get(entry.path), entry.id).toBe(entry.permission);
-      expect(entry.section).toBe('admin');
       for (const locale of ['en', 'de']) {
         expect(messages[locale]?.[entry.label], `${locale} ${entry.label}`).toBeTruthy();
       }
     }
-    expect(ORGANISATION_NAV.map((entry) => entry.path)).toEqual(['/admin/organisations']);
+    // The administration lists what only an administrator may open; the profile section lists the member screen,
+    // which every signed-in person may open (the manager part draws itself from the API, not from the menu).
+    const sectionOf = Object.fromEntries(
+      ORGANISATION_NAV.map((entry) => [entry.path, entry.section]),
+    );
+    expect(sectionOf).toEqual({
+      '/account/organisations': 'account',
+      '/admin/organisations': 'admin',
+      '/admin/memberships': 'admin',
+    });
+    for (const entry of ORGANISATION_NAV.filter((entry) => entry.section === 'admin')) {
+      expect(entry.permission, entry.id).toBe('registry.organisations.organisation.manage');
+    }
+  });
+
+  it('have a widget in the browser half for every widget entry, in the dashboard, with a permission the module declares', () => {
+    expect(Object.keys(widgets).sort()).toEqual(
+      ORGANISATION_WIDGETS.map((widget) => widget.component).sort(),
+    );
+    const declared = new Set(Object.keys(manifest.permissions ?? {}));
+    for (const widget of ORGANISATION_WIDGETS) {
+      expect(widget.slot, widget.id).toBe('dashboard');
+      expect(declared.has(widget.permission!), widget.id).toBe(true);
+    }
+  });
+
+  it('give the member screen the plain read and the membership requests the permission of the administration', () => {
+    const permissionOf = Object.fromEntries(
+      ORGANISATION_ROUTES.map((route) => [route.path, route.permission]),
+    );
+    expect(permissionOf['/account/organisations']).toBe('registry.organisations.organisation.read');
+    expect(permissionOf['/admin/memberships']).toBe('registry.organisations.organisation.manage');
+  });
+
+  it('have a text for every sentence that explains a missing button', () => {
+    const keys = new Set<string>();
+    for (const state of ['requested', 'approved', 'rejected', 'left'] as const) {
+      for (const role of ['member', 'manager'] as const) {
+        for (const own of [true, false]) {
+          for (const allowedActions of [[], ['remove']] as const) {
+            const key = rowNote(
+              { userId: own ? 'me' : 'other', state, role, allowedActions: [...allowedActions] },
+              'me',
+            );
+            if (key) keys.add(key);
+          }
+        }
+      }
+    }
+    expect(keys.size).toBe(4);
+    for (const key of keys) {
+      for (const locale of ['en', 'de'])
+        expect(messages[locale]?.[key], `${locale} ${key}`).toBeTruthy();
+    }
   });
 
   it('have every text in English and German, with the same placeholders', () => {

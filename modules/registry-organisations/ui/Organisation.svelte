@@ -32,6 +32,8 @@
   const mine = $derived(organisation.myMembership);
   /** An administrator edits every field; the API says so in `editableFields`. */
   const isAdmin = $derived(organisation.editableFields.includes('name'));
+  /** A manager of this organisation edits the descriptive fields: the API says so, the page does not guess from a role. */
+  const isManager = $derived(!isAdmin && organisation.editableFields.length > 0);
   const canJoin = $derived(
     entry?.membership === true &&
       (mine === null || mine.state === 'rejected' || mine.state === 'left'),
@@ -113,11 +115,24 @@
     </div>
   </header>
 
-  {#if isAdmin}
-    <p>
-      <a class="btn btn-sm" href={href(`/admin/organisations/${organisation.id}`)}
-        >{t('organisation.edit')}</a
-      >
+  {#if isAdmin || isManager}
+    <p class="flex flex-wrap gap-2">
+      {#if isAdmin}
+        <a class="btn btn-sm" href={href(`/admin/organisations/${organisation.id}`)}
+          >{t('organisation.edit')}</a
+        >
+        <a class="btn btn-sm" href={href(`/admin/memberships?organisation=${organisation.id}`)}
+          >{t('organisation.requests.admin')}</a
+        >
+      {:else}
+        <!-- A manager's requests and edit form are on their own page; the API said so in `editableFields`. -->
+        <a class="btn btn-sm" href={href('/account/organisations')}
+          >{t('organisation.requests.manager')}</a
+        >
+        <a class="btn btn-sm" href={href('/account/organisations')}
+          >{t('organisation.edit.manager')}</a
+        >
+      {/if}
     </p>
   {/if}
 
