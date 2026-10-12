@@ -298,6 +298,10 @@ Found while using the instance; not yet investigated.
   entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
   already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table.
 
+## Service wizard follow-ups (M7 plan)
+
+- **Field-level conditions and a base path per step.** The wizard config of M7 has `applies` per step only. A `showIf` on a field (show it when another field has a value) and a base path per step (the same field list bound below a nested path, so M9's category step or M15's onboarding fields can reuse a step) are not planned. Source: the maintainer's ISA Wizard questionnaire, which has the base-path idea (`isaLvl + path`) and no conditions; see Decision 21 of [m7-sprint-plan.md](m7-sprint-plan.md).
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.
