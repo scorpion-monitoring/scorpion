@@ -7509,6 +7509,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/organisations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public organisation record. `Cache-Control: public, max-age=60`: an unpublished service takes effect here after at most that long. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            abbreviation: string;
+                            /** @description Below the base path. Absent without a logo. */
+                            logoUrl?: string;
+                            description: string | null;
+                            website: string | null;
+                            /** @description The bare ROR id, for example `02skbsp27`. */
+                            rorId: string | null;
+                            sameAs: string[];
+                            /** @description The public services that name this organisation as provider or consortium, by name. */
+                            services: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description No such organisation, or none that a public service names. The body is the same for both. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/organisations/{id}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The organisation as a Schema.org JSON-LD profile, without a contact point. `Cache-Control: public, max-age=60`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @description The `schemaType` of the organisation type. */
+                            "@type": string;
+                            /** @description The absolute URL of the organisation page. */
+                            "@id": string;
+                            name: string;
+                            /** @description The abbreviation. */
+                            alternateName?: string;
+                            description?: string;
+                            /** @description The organisation's website, else its own page. */
+                            url: string;
+                            identifier?: {
+                                /** @enum {string} */
+                                "@type": "PropertyValue";
+                                /** @enum {string} */
+                                propertyID: "ROR";
+                                value: string;
+                            };
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                        };
+                    };
+                };
+                /** @description As for the public record: the same body for every organisation that is not public. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organisations/{id}/logo": {
         parameters: {
             query?: never;
@@ -9459,6 +9626,325 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/services/{id}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The service as a Schema.org `Service` (JSON-LD), private services included, never the contact point or the stage. `Cache-Control: private, no-cache`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @enum {string} */
+                            "@type": "Service";
+                            /** @description The absolute URL of the service by id; stable across a rename of the slug. */
+                            "@id": string;
+                            name: string;
+                            /** @description The slug. */
+                            alternateName: string;
+                            description?: string;
+                            /** @description The service's own address. */
+                            url?: string;
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                            /** @description The SPDX licence page, for an id the list knows. */
+                            license?: string;
+                            provider?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            };
+                            /** @description The consortia. */
+                            brand?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            }[];
+                            serviceType?: string | string[];
+                            category?: string | string[];
+                            audience?: string | string[];
+                            areaServed?: string | string[];
+                            termsOfService?: string | string[];
+                            slogan?: string | string[];
+                            serviceOutput?: string | string[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/services/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id or the slug (an old slug works) of a public service. */
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public record of the service. `Cache-Control: public, max-age=60`: an unpublish takes effect here after at most that long. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description Below the base path. Absent without an icon. */
+                            logoUrl?: string;
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            provider: {
+                                id: string;
+                                name: string;
+                                /**
+                                 * @description An organisation of a public service is public.
+                                 * @enum {boolean}
+                                 */
+                                public: true;
+                            };
+                            consortia: {
+                                id: string;
+                                name: string;
+                                /**
+                                 * @description An organisation of a public service is public.
+                                 * @enum {boolean}
+                                 */
+                                public: true;
+                            }[];
+                        };
+                    };
+                };
+                /** @description No such service, not public, or public reads are switched off. The body is the same for all three. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/services/{ref}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id or the slug (an old slug works) of a public service. */
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public service as a Schema.org `Service` (JSON-LD). `Cache-Control: public, max-age=60`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @enum {string} */
+                            "@type": "Service";
+                            /** @description The absolute URL of the service by id; stable across a rename of the slug. */
+                            "@id": string;
+                            name: string;
+                            /** @description The slug. */
+                            alternateName: string;
+                            description?: string;
+                            /** @description The service's own address. */
+                            url?: string;
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                            /** @description The SPDX licence page, for an id the list knows. */
+                            license?: string;
+                            provider?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            };
+                            /** @description The consortia. */
+                            brand?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            }[];
+                            serviceType?: string | string[];
+                            category?: string | string[];
+                            audience?: string | string[];
+                            areaServed?: string | string[];
+                            termsOfService?: string | string[];
+                            slogan?: string | string[];
+                            serviceOutput?: string | string[];
+                        };
+                    };
+                };
+                /** @description As for the public record: the same body for every service that is not public. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/services/{id}/icon": {

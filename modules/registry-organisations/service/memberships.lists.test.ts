@@ -339,6 +339,10 @@ describe('the trusted reads (AsSystem)', () => {
       [w.other.id]: 1,
       [ABSENT]: 0,
     });
+    // The managers of an organisation, approved ones only, by id; a bad id has none (M7 sprint 3: the publication notice).
+    expect(await s.listApprovedManagerIdsAsSystem(w.org.id)).toEqual([manager.userId]);
+    expect(await s.listApprovedManagerIdsAsSystem(w.other.id)).toEqual([]);
+    expect(await s.listApprovedManagerIdsAsSystem('nope')).toEqual([]);
     expect(await s.isApprovedMemberAsSystem('nope', w.org.id)).toBe(false);
     expect(await s.isManagerAsSystem(manager.userId, 'nope')).toBe(false);
     expect(await s.listApprovedOrganisationIdsAsSystem('nope')).toEqual([]);

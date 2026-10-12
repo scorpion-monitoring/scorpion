@@ -1,19 +1,22 @@
-// The JSON-LD block of the organisation page (ADR-0033, Decision 17): `JsonLd.svelte` is the one place that
-// writes organisation data into the document without Svelte's escaping, so the output is tested with
+// The JSON-LD block of the organisation and the service page (ADR-0033, ADR-0036, Decision 17): `JsonLd.svelte`
+// (ui-kit) is the one place that writes record data into the document without Svelte's escaping, so the output is tested with
 // hostile data. The block must end up in the head, hold exactly the JSON, and never contain an element,
 // a comment or a script of its own.
 import type { Component } from 'svelte';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 
-// The component belongs to the module, and the module boundary rule allows no import of a module's internals
-// from the web app. The test loads the file by its path, the way the web app's build finds it.
+// The component is ui-kit's. `serializeJsonLd` is registry.organisations' (the one escape function), and the module
+// boundary rule allows no import of a module's internals from the web app: the test loads the file by its path.
 const { default: JsonLd } = (await import(
+  /* @vite-ignore */ new URL('../../../packages/ui-kit/src/JsonLd.svelte', import.meta.url).pathname
+)) as { default: Component<{ json: string }> };
+const { serializeJsonLd } = (await import(
   /* @vite-ignore */ new URL(
-    '../../../modules/registry-organisations/ui/JsonLd.svelte',
+    '../../../modules/registry-organisations/service/schema-org.ts',
     import.meta.url,
   ).pathname
-)) as { default: Component<{ profile: unknown }> };
+)) as { serializeJsonLd: (value: unknown) => string };
 
 const HOSTILE = [
   '</script><script>alert(1)</script>',
@@ -38,7 +41,7 @@ describe('JsonLd.svelte', () => {
     'writes %j as data into the head: no extra element, the JSON parses back',
     (hostile) => {
       const profile = { '@context': 'https://schema.org', '@type': 'Organization', name: hostile };
-      const { head, body } = render(JsonLd, { props: { profile } });
+      const { head, body } = render(JsonLd, { props: { json: serializeJsonLd(profile) } });
       expect(body).not.toContain('ld+json');
       const { text, rest } = block(head);
       expect(text).toBeDefined();
@@ -62,7 +65,32 @@ describe('JsonLd.svelte', () => {
       logo: { '@type': 'ImageObject', url: 'https://scorpion.example/a/b/api/internal/files/abc' },
       contactPoint: { '@type': 'ContactPoint', email: 'info@example.org', contactType: 'support' },
     };
-    const { head } = render(JsonLd, { props: { profile } });
+    const { head } = render(JsonLd, { props: { json: serializeJsonLd(profile) } });
     expect(JSON.parse(block(head).text!)).toEqual(profile);
+  });
+
+  it('writes the profile of a service, hostile text in a contributed property included', () => {
+    const profile = {
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      '@id': 'https://scorpion.example/a/b/services/1',
+      name: '</script><script>alert(1)</script>',
+      serviceType: ['<!-- x -->', 'a & b\u2028'],
+      provider: { '@type': 'Organization', name: '</SCRIPT >' },
+    };
+    const { head } = render(JsonLd, { props: { json: serializeJsonLd(profile) } });
+    const { text, rest } = block(head);
+    expect(JSON.parse(text!)).toEqual(profile);
+    expect(rest).not.toMatch(/<script/i);
+  });
+
+  it.each([
+    ['a string that was not escaped', '{"name":"</script><script>alert(1)</script>"}'],
+    ['a string with an ampersand', '{"name":"a & b"}'],
+    ['a line separator', '{"name":"a\u2028b"}'],
+    ['text that is not JSON', 'alert(1)'],
+    ['an empty string', ''],
+  ])('refuses %s: it is not the output of serializeJsonLd', (_name, json) => {
+    expect(() => render(JsonLd, { props: { json } }).head).toThrow();
   });
 });

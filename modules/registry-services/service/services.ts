@@ -19,6 +19,7 @@ import { ids, mountPath, type Db, type ModuleContext } from '@scorpion/kernel';
 import type {
   OrganisationRecord,
   OrganisationsPublic,
+  SchemaOrgProfile,
 } from '@scorpion/registry-organisations/public';
 import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { ResolvedConfig } from '../config/validate.ts';
@@ -26,6 +27,7 @@ import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/sch
 import { settingsSchema } from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import { SlugTaken } from './errors.ts';
+import type { PublicationMail } from './publication-mail.ts';
 import { escapeLike } from './fields.ts';
 import {
   allows,
@@ -36,6 +38,7 @@ import {
   type AccessLevel,
 } from './field-rules.ts';
 import {
+  BRAND_ROLE,
   OWNER_ROLE,
   PERMISSION_CREATE,
   PERMISSION_EDIT,
@@ -46,7 +49,13 @@ import {
   PERMISSION_READ_CONTACT,
   RESOURCE_TYPE,
 } from './permissions.ts';
-import type { FieldEnv, OrgRoleEntry } from './registries.ts';
+import type {
+  FieldEnv,
+  FieldSchemaOrgProperty,
+  OrgRoleEntry,
+  ProfileContributorEntry,
+} from './registries.ts';
+import { toSchemaOrg, type Contribution, type ServiceProfile } from './schema-org.ts';
 
 export {
   PERMISSION_CREATE,
@@ -130,6 +139,39 @@ export interface ServiceRecord {
   values: Record<string, unknown>;
 }
 
+/** An organisation on a public record. `public` is always true: an organisation of a public service is public (ADR-0036). */
+export interface PublicOrganisationRef {
+  id: string;
+  name: string;
+  public: true;
+}
+
+/**
+ * What an anonymous reader gets of a public service (ADR-0036 part 2): a pinned list of fields, no contact
+ * point, no audit column, no `published_*`, no configured value, no `editableFields`.
+ */
+export interface PublicServiceRecord {
+  id: string;
+  slug: string;
+  name: string;
+  /** Below the base path (`/api/internal/files/{hash}`); absent without an icon. */
+  logoUrl?: string;
+  description: string | null;
+  url: string | null;
+  sameAs: string[];
+  license: string | null;
+  stage: string;
+  provider: PublicOrganisationRef;
+  consortia: PublicOrganisationRef[];
+}
+
+/** A public service as another module's public page lists it. */
+export interface PublicServiceLink {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export interface RoleView {
   id: string;
   label: string;
@@ -178,6 +220,21 @@ export interface ServicesService {
     id: string,
     publication: { public: boolean },
   ) => Promise<ServiceView>;
+  /**
+   * The Schema.org `Service` profile for a signed-in reader; needs `…service.read`. Any service, private ones
+   * included, and never the contact point.
+   */
+  schemaOrg: (actor: Actor, id: string) => Promise<ServiceProfile>;
+  /**
+   * The public record of a service by id or slug (an old slug works). `undefined` for a service that is not
+   * public, for `allowPublic` off and for a ref nobody has: the caller answers all three alike. The flag is
+   * read in the same statement as the record.
+   */
+  getPublicAsSystem: (ref: string) => Promise<PublicServiceRecord | undefined>;
+  /** The profile of a public service; `undefined` exactly when {@link getPublicAsSystem} is. */
+  schemaOrgPublicAsSystem: (ref: string) => Promise<ServiceProfile | undefined>;
+  /** The public services an organisation is the provider or a consortium of, by name; empty with `allowPublic` off. */
+  listPublicByOrganisationAsSystem: (organisationId: string) => Promise<PublicServiceLink[]>;
   /** The SPDX search for the licence field; needs `…service.read`. */
   searchLicences: (actor: Actor, query: string, limit?: number) => Promise<SpdxLicense[]>;
   listRoles: (actor: Actor, locale?: string) => Promise<RoleView[]>;
@@ -212,11 +269,18 @@ export interface ServicesDeps {
   settings: Pick<SettingsService, 'validateTerm'>;
   organisations: Pick<
     OrganisationsPublic,
-    'findByIdsAsSystem' | 'isManagerAsSystem' | 'listApprovedOrganisationIdsAsSystem'
+    | 'findByIdsAsSystem'
+    | 'isManagerAsSystem'
+    | 'listApprovedOrganisationIdsAsSystem'
+    | 'toSchemaOrgAsSystem'
   >;
   spdx: Spdx;
   config: ResolvedConfig;
   roles: readonly OrgRoleEntry[];
+  /** The notice to the provider on a publication; absent in a unit test that does not need it. */
+  publicationMail?: PublicationMail;
+  /** The entries of `service.profileContributor`. */
+  contributors?: readonly ProfileContributorEntry[];
 }
 
 export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): ServicesService {
@@ -604,6 +668,115 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     .filter((r) => r.field.storage.kind === 'organisations' && r.field.storage.role === OWNER_ROLE)
     .map((r) => r.field.key);
 
+  // ----- the profile and the public reads (ADR-0036 part 2) --------------------------------------------
+
+  const contributors = [...(deps.contributors ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+  const schemaFields = deps.config.fields.flatMap((resolved) =>
+    resolved.field.storage.kind === 'value' && resolved.field.schemaOrg !== undefined
+      ? [
+          {
+            key: resolved.field.key,
+            property: resolved.field.schemaOrg as FieldSchemaOrgProperty,
+          },
+        ]
+      : [],
+  );
+
+  /** The profile of one service from its row, its links and its values; never the contact point. */
+  async function profileOf(
+    row: Row,
+    links: readonly { role: string; id: string }[],
+    values: Record<string, unknown>,
+  ): Promise<ServiceProfile> {
+    const profiles = new Map<string, SchemaOrgProfile>();
+    for (const id of new Set(links.map((link) => link.id))) {
+      const profile = await deps.organisations.toSchemaOrgAsSystem(id, { includeContact: false });
+      if (profile) profiles.set(id, profile);
+    }
+    const organisations = links
+      .filter((link) => profiles.has(link.id))
+      .map((link) => ({ role: link.role, profile: profiles.get(link.id)! }))
+      .sort(
+        (a, b) =>
+          roleOrder(a.role) - roleOrder(b.role) ||
+          a.profile.name.localeCompare(b.profile.name) ||
+          a.profile['@id'].localeCompare(b.profile['@id']),
+      );
+    const contributions: Contribution[] = [];
+    for (const entry of contributors) {
+      try {
+        const properties = await entry.contribute(
+          { id: row.id, slug: row.slug, name: row.name, values },
+          { db },
+        );
+        contributions.push({ id: entry.id, properties });
+      } catch (error) {
+        // A broken contributor must not take the profile (and the public page) down with it.
+        ctx.log.warn({ err: error, contributor: entry.id }, 'a profile contributor failed');
+      }
+    }
+    const licence = row.license ? await deps.spdx.find(row.license) : undefined;
+    return toSchemaOrg(
+      {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        description: row.description,
+        url: row.url,
+        sameAs: row.sameAs,
+        iconHash: row.iconHash,
+        licenseId: licence?.id ?? null,
+        values,
+      },
+      {
+        origin: ctx.config.ORIGIN,
+        basePath: base,
+        organisations,
+        contributors: contributions,
+        fields: schemaFields,
+        onRejected: (contributor, property) =>
+          ctx.log.warn(
+            { contributor, property },
+            'a profile contributor offered a property that is not allowed',
+          ),
+      },
+    );
+  }
+
+  /**
+   * The row of a public service for an id or a slug (current or old), with its organisation links and its
+   * configured values, in ONE statement: the flag, the record and the links come from one snapshot, so a
+   * publication racing this read gives a complete record or nothing.
+   */
+  async function publicRow(ref: string) {
+    if (!(await settingsNow()).allowPublic) return undefined;
+    const text = ref.trim();
+    if (text === '' || text.length > 200) return undefined;
+    // The subselects name their tables outright: Drizzle leaves the table off a column of a single-table query,
+    // and an unqualified `id` inside a subselect would be the subselect's own.
+    const related = {
+      links: sql<{ role: string; id: string }[]>`coalesce((
+        select json_agg(json_build_object('role', so.role, 'id', so.organisation_id) order by so.id)
+        from svc_service_organisation so where so.service_id = svc_service.id), '[]'::json)`,
+      values: sql<Record<string, unknown>>`coalesce((
+        select jsonb_object_agg(fv.field_key, fv.value)
+        from svc_field_value fv where fv.service_id = svc_service.id), '{}'::jsonb)`,
+    };
+    if (z.uuid().safeParse(text).success) {
+      const [hit] = await db
+        .select({ row: service, ...related })
+        .from(service)
+        .where(and(eq(service.id, text), eq(service.public, true)));
+      return hit;
+    }
+    const [hit] = await db
+      .select({ row: service, ...related })
+      .from(slugHistory)
+      .innerJoin(service, eq(service.id, slugHistory.serviceId))
+      .where(and(sql`lower(${slugHistory.slug}) = lower(${text})`, eq(service.public, true)));
+    return hit;
+  }
+
   return {
     async list(actor, filter, page) {
       await deps.authz.require(actor, PERMISSION_READ);
@@ -959,9 +1132,100 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
           publication.public ? 'registry.service.published@1' : 'registry.service.unpublished@1',
           { serviceId: id, actorId: by },
         );
+        // The notice is in the same transaction: a rollback sends nothing.
+        if (deps.publicationMail) {
+          const [owner] = await tx
+            .select({ organisationId: serviceOrganisation.organisationId })
+            .from(serviceOrganisation)
+            .where(
+              and(eq(serviceOrganisation.serviceId, id), eq(serviceOrganisation.role, OWNER_ROLE)),
+            );
+          await deps.publicationMail.notify(tx, {
+            serviceId: id,
+            serviceName: updated!.name,
+            providerId: owner?.organisationId,
+            createdBy: updated!.createdBy,
+            actorId: by,
+            state: publication.public ? 'public' : 'private',
+          });
+        }
         return updated!;
       });
       return (await views(actor, [row]))[0]!;
+    },
+
+    async schemaOrg(actor, id) {
+      await deps.authz.require(actor, PERMISSION_READ);
+      requireId(id);
+      const row = await load(db, id);
+      const [links, values] = await Promise.all([organisationsOf([id]), valuesOf([id])]);
+      return profileOf(
+        row,
+        (links.get(id) ?? []).map(({ role, id: organisationId }) => ({ role, id: organisationId })),
+        values.get(id) ?? {},
+      );
+    },
+
+    async getPublicAsSystem(ref) {
+      const hit = await publicRow(ref);
+      if (!hit) return undefined;
+      const owner = hit.links.find((link) => link.role === OWNER_ROLE);
+      if (!owner) return undefined; // cannot happen (`min: 1`); nothing to show without an owner
+      const consortia = hit.links.filter((link) => link.role === BRAND_ROLE);
+      const names = new Map(
+        (await deps.organisations.findByIdsAsSystem([owner.id, ...consortia.map((c) => c.id)])).map(
+          (organisation) => [organisation.id, organisation.name],
+        ),
+      );
+      const reference = (id: string): PublicOrganisationRef => ({
+        id,
+        name: names.get(id) ?? '',
+        public: true,
+      });
+      const { row } = hit;
+      return {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        ...(row.iconHash && { logoUrl: iconPath(row.iconHash) }),
+        description: row.description,
+        url: row.url,
+        sameAs: row.sameAs,
+        license: row.license,
+        stage: row.stage,
+        provider: reference(owner.id),
+        consortia: consortia
+          .map((c) => reference(c.id))
+          .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+      };
+    },
+
+    async schemaOrgPublicAsSystem(ref) {
+      const hit = await publicRow(ref);
+      return hit && profileOf(hit.row, hit.links, hit.values);
+    },
+
+    async listPublicByOrganisationAsSystem(organisationId) {
+      if (!z.uuid().safeParse(organisationId).success) return [];
+      if (!(await settingsNow()).allowPublic) return [];
+      const rows = await db
+        .selectDistinct({
+          id: service.id,
+          slug: service.slug,
+          name: service.name,
+          sortName: sql<string>`lower(${service.name})`,
+        })
+        .from(service)
+        .innerJoin(serviceOrganisation, eq(serviceOrganisation.serviceId, service.id))
+        .where(
+          and(
+            eq(service.public, true),
+            eq(serviceOrganisation.organisationId, organisationId),
+            inArray(serviceOrganisation.role, [OWNER_ROLE, BRAND_ROLE]),
+          ),
+        )
+        .orderBy(asc(sql`lower(${service.name})`), asc(service.id));
+      return rows.map(({ id, slug, name }) => ({ id, slug, name }));
     },
 
     async searchLicences(actor, query, limit) {

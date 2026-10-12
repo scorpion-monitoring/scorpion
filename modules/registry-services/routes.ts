@@ -1,9 +1,10 @@
 // The HTTP routes of registry.services (internal API). Thin: Zod parses, one service call, the result is
 // mapped. Every route has a permission; the service checks it again (CLAUDE.md, security rules). The
 // delegated routes (`PATCH /services/{id}` and the icon) carry the plain `…service.read` and the service
-// decides with the policy `service.member` (ADR-0034, ADR-0036). There is no public route and no screen yet.
+// decides with the policy `service.member` (ADR-0034, ADR-0036). The public routes (`/public/…`) read only what a Reviewer made public (ADR-0036 part 2).
 import {
   createRoute,
+  NotFound,
   listEnvelope,
   paginate,
   paginationQuery,
@@ -13,6 +14,8 @@ import {
 } from '@scorpion/contracts';
 import { MAX_UPLOAD_BYTES } from '@scorpion/core-blob/public';
 import type { RouteRegistrar } from '@scorpion/kernel';
+import { serializeJsonLd } from '@scorpion/registry-organisations/public';
+import { CONTRIBUTABLE_PROPERTIES } from './service/schema-org.ts';
 import {
   PERMISSION_CREATE,
   PERMISSION_PUBLISH,
@@ -151,6 +154,70 @@ export const patchServiceBody = z.looseObject({
     .describe('Both parts or neither; `null` in both clears the contact point.'),
 });
 
+const organisationNodeSchema = z.object({
+  '@type': z.string(),
+  '@id': z.string(),
+  name: z.string(),
+  url: z.string(),
+});
+const propertyValueSchema = z.union([z.string(), z.array(z.string())]);
+
+/** The Schema.org `Service` profile (plan §3). The names are the whole list; a property without a value is absent. */
+const schemaOrgSchema = z.object({
+  '@context': z.literal('https://schema.org'),
+  '@type': z.literal('Service'),
+  '@id': z
+    .string()
+    .describe('The absolute URL of the service by id; stable across a rename of the slug.'),
+  name: z.string(),
+  alternateName: z.string().describe('The slug.'),
+  description: z.string().optional(),
+  url: z.string().optional().describe("The service's own address."),
+  sameAs: z.array(z.string()).optional(),
+  logo: z.object({ '@type': z.literal('ImageObject'), url: z.string() }).optional(),
+  license: z.string().optional().describe('The SPDX licence page, for an id the list knows.'),
+  provider: organisationNodeSchema.optional(),
+  brand: z.array(organisationNodeSchema).optional().describe('The consortia.'),
+  ...Object.fromEntries(
+    CONTRIBUTABLE_PROPERTIES.map((name) => [name, propertyValueSchema.optional()]),
+  ),
+});
+
+/**
+ * The public service record (ADR-0036 part 2): a pinned list. A test walks this schema and fails when a field is
+ * added to it without the ADR and the field table, and when a private field (contact point, `editableFields`,
+ * `allowedActions`, `values`, `public`, an audit column, `published_*`) appears.
+ */
+const publicOrganisationRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  public: z.literal(true).describe('An organisation of a public service is public.'),
+});
+export const publicServiceSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  logoUrl: z.string().optional().describe('Below the base path. Absent without an icon.'),
+  description: z.string().nullable(),
+  url: z.string().nullable(),
+  sameAs: z.array(z.string()),
+  license: z.string().nullable().describe('An SPDX licence id.'),
+  stage: z.string().describe('A term of the `stage` vocabulary.'),
+  provider: publicOrganisationRefSchema,
+  consortia: z.array(publicOrganisationRefSchema),
+});
+
+/** The cache lifetime of a public answer, in seconds: the only delay before an unpublish is seen (ADR-0036). */
+export const PUBLIC_MAX_AGE_SECONDS = 60;
+export const PUBLIC_CACHE_CONTROL = `public, max-age=${PUBLIC_MAX_AGE_SECONDS}`;
+
+const publicRefParam = z.object({
+  ref: z.string().max(200).describe('The id or the slug (an old slug works) of a public service.'),
+});
+const PUBLIC_NOT_FOUND = 'There is no such service.';
+const PUBLIC_REASON =
+  'Anyone may read a service that a Reviewer or an administrator made public; for every other service, an unknown one, and when public reads are switched off (`service.allowPublic`), the answer is the same 404, so existence is not revealed.';
+
 const imageBody = {
   required: true as const,
   description:
@@ -217,6 +284,56 @@ export const getServiceRoute = createRoute({
   responses: {
     200: ok('One service.', serviceSchema),
     404: { description: 'No such service.' },
+  },
+});
+
+export const getServiceSchemaOrgRoute = createRoute({
+  method: 'get',
+  path: '/services/{id}/schema-org',
+  permission: PERMISSION_READ,
+  request: { params: idParam },
+  responses: {
+    200: {
+      description:
+        'The service as a Schema.org `Service` (JSON-LD), private services included, never the contact point or the stage. `Cache-Control: private, no-cache`.',
+      content: { 'application/ld+json': { schema: schemaOrgSchema } },
+    },
+    404: { description: 'No such service.' },
+  },
+});
+
+export const getPublicServiceRoute = createRoute({
+  method: 'get',
+  path: '/public/services/{ref}',
+  public: true,
+  publicReason: PUBLIC_REASON,
+  request: { params: publicRefParam },
+  responses: {
+    200: {
+      description: `The public record of the service. \`Cache-Control: ${PUBLIC_CACHE_CONTROL}\`: an unpublish takes effect here after at most that long.`,
+      content: { 'application/json': { schema: publicServiceSchema } },
+    },
+    404: {
+      description:
+        'No such service, not public, or public reads are switched off. The body is the same for all three.',
+    },
+  },
+});
+
+export const getPublicServiceSchemaOrgRoute = createRoute({
+  method: 'get',
+  path: '/public/services/{ref}/schema-org',
+  public: true,
+  publicReason: PUBLIC_REASON,
+  request: { params: publicRefParam },
+  responses: {
+    200: {
+      description: `The public service as a Schema.org \`Service\` (JSON-LD). \`Cache-Control: ${PUBLIC_CACHE_CONTROL}\`.`,
+      content: { 'application/ld+json': { schema: schemaOrgSchema } },
+    },
+    404: {
+      description: 'As for the public record: the same body for every service that is not public.',
+    },
   },
 });
 
@@ -435,6 +552,55 @@ export function registerServiceRoutes(r: RouteRegistrar, service: ServicesServic
   r.internal(getServiceRoute, (async (c) => {
     return c.json(serviceOut(await service.get(c.get('actor'), c.req.valid('param').id)), 200);
   }) satisfies RouteHandler<typeof getServiceRoute, AppEnv>);
+
+  r.internal(getServiceSchemaOrgRoute, (async (c) => {
+    const profile = await service.schemaOrg(c.get('actor'), c.req.valid('param').id);
+    // The only way the profile becomes a string (`serializeJsonLd`), also for a plain API answer.
+    return new Response(serializeJsonLd(profile), {
+      status: 200,
+      headers: {
+        'content-type': 'application/ld+json; charset=utf-8',
+        'cache-control': 'private, no-cache',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }) satisfies RouteHandler<typeof getServiceSchemaOrgRoute, AppEnv>);
+
+  r.internal(getPublicServiceRoute, (async (c) => {
+    const record = await service.getPublicAsSystem(c.req.valid('param').ref);
+    if (!record) throw new NotFound(PUBLIC_NOT_FOUND);
+    // Field by field on purpose: a field added to the record later is not public by accident.
+    return c.json(
+      {
+        id: record.id,
+        slug: record.slug,
+        name: record.name,
+        ...(record.logoUrl !== undefined && { logoUrl: record.logoUrl }),
+        description: record.description,
+        url: record.url,
+        sameAs: record.sameAs,
+        license: record.license,
+        stage: record.stage,
+        provider: record.provider,
+        consortia: record.consortia,
+      },
+      200,
+      { 'cache-control': PUBLIC_CACHE_CONTROL },
+    );
+  }) satisfies RouteHandler<typeof getPublicServiceRoute, AppEnv>);
+
+  r.internal(getPublicServiceSchemaOrgRoute, (async (c) => {
+    const profile = await service.schemaOrgPublicAsSystem(c.req.valid('param').ref);
+    if (!profile) throw new NotFound(PUBLIC_NOT_FOUND);
+    return new Response(serializeJsonLd(profile), {
+      status: 200,
+      headers: {
+        'content-type': 'application/ld+json; charset=utf-8',
+        'cache-control': PUBLIC_CACHE_CONTROL,
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }) satisfies RouteHandler<typeof getPublicServiceSchemaOrgRoute, AppEnv>);
 
   r.internal(createServiceRoute, (async (c) => {
     return c.json(serviceOut(await service.create(c.get('actor'), c.req.valid('json'))), 201);

@@ -247,6 +247,7 @@ export function fixtureContributor(options: {
   dependsOnOrganisations?: boolean;
   types?: readonly unknown[];
   usages?: readonly unknown[];
+  publicReferences?: readonly unknown[];
 }): FixtureModule {
   const id = options.id ?? 'fixture.funders';
   const name = `@scorpion/${id.replaceAll('.', '-')}`;
@@ -257,6 +258,7 @@ export function fixtureContributor(options: {
       contributes: {
         ...(options.types && { 'org.type': options.types }),
         ...(options.usages && { 'org.usage': options.usages }),
+        ...(options.publicReferences && { 'org.publicReference': options.publicReferences }),
       },
     },
     packageJson: {

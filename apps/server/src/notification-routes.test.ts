@@ -269,11 +269,12 @@ describe('what a mail leaves in the inbox', () => {
       'administration',
       'membership',
       'onboarding',
+      'registry-service', // M7 sprint 3: the publication notice
       'reminders',
       'security',
       'system',
     ]);
-    expect(body.metadata.totalCount).toBe(7);
+    expect(body.metadata.totalCount).toBe(8);
     expect(byName.security).toMatchObject({ mandatory: true });
     expect(byName.account).toMatchObject({ mandatory: false });
     for (const category of body.result) {

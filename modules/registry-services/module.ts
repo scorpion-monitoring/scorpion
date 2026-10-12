@@ -8,7 +8,9 @@ import { createSpdx, createStubSpdx, type Spdx } from '@scorpion/integrations';
 import { defineModule } from '@scorpion/kernel';
 import {
   ORG_TYPE_REGISTRY,
+  ORG_PUBLIC_REFERENCE_REGISTRY,
   ORG_USAGE_REGISTRY,
+  type OrgPublicReferenceEntry,
   type OrgTypeEntry,
   type OrgUsageEntry,
 } from '@scorpion/registry-organisations/public';
@@ -52,7 +54,9 @@ import {
   type ProfileContributorEntry,
   type WizardStepEntry,
 } from './service/registries.ts';
+import { createPublicationMail } from './service/publication-mail.ts';
 import { createServicesService, type ServicesService } from './service/services.ts';
+import { TEMPLATES } from './templates/registry.ts';
 import { settingsSchema, type ServicesSettings } from './settings-schema.ts';
 
 export { settingsSchema, type ServicesSettings } from './settings-schema.ts';
@@ -105,6 +109,8 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
   let stageInUse: ((termKey: string) => Promise<boolean>) | undefined;
   // The same for the policy, which needs the database and registry.organisations.
   let policy: MemberPolicy | undefined;
+  // The same for the public services an organisation is named by (the contribution to `org.publicReference`).
+  let publicServices: ServicesService['listPublicByOrganisationAsSystem'] | undefined;
   const policyOrThrow = () => {
     if (!policy) throw new Error('registry.services: the member policy was asked before start');
     return policy;
@@ -210,6 +216,15 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
           },
         } satisfies OrgUsageEntry,
       ],
+      // The notice to the provider when a service is made public or private again.
+      'notify.template': TEMPLATES,
+      // An organisation has a public profile exactly when a public service names it (ADR-0036 part 2).
+      [ORG_PUBLIC_REFERENCE_REGISTRY]: [
+        {
+          id: 'registry.services',
+          list: (organisationId) => publicServices?.(organisationId) ?? Promise.resolve([]),
+        } satisfies OrgPublicReferenceEntry,
+      ],
       // A service uses its stage: a term that a service has cannot be deleted, only deactivated.
       [VOCABULARY_REGISTRY]: [
         {
@@ -255,7 +270,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         ctx.registry(FIELD_TYPE_REGISTRY) as readonly FieldTypeEntry[],
       );
       uniqueById(FACET_REGISTRY, ctx.registry(FACET_REGISTRY) as readonly FacetEntry[]);
-      uniqueById(
+      const profileContributors = uniqueById(
         PROFILE_CONTRIBUTOR_REGISTRY,
         ctx.registry(PROFILE_CONTRIBUTOR_REGISTRY) as readonly ProfileContributorEntry[],
       );
@@ -292,7 +307,15 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         spdx,
         config: resolved,
         roles,
+        contributors: profileContributors,
+        publicationMail: createPublicationMail(ctx, {
+          identity: ctx.deps['core.identity'],
+          notifications: ctx.deps['core.notifications'],
+          settings: ctx.deps['core.settings'],
+          organisations: ctx.deps['registry.organisations'],
+        }),
       });
+      publicServices = services.listPublicByOrganisationAsSystem;
       stageInUse = async (termKey) => {
         const [row] = await ctx.db
           .select({ id: serviceTable.id })
