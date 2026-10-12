@@ -179,7 +179,9 @@ describe('schemaOrg: configured fields and contributors', () => {
     const { serializeJsonLd } = await import('@scorpion/registry-organisations/public');
     const json = serializeJsonLd(await w.services.schemaOrg(w.people.plain, w.svc.id));
     expect(json).not.toMatch(/[<>&]/);
-    expect(JSON.parse(json).slogan).toBe('</script><script>alert(1)</script>');
+    expect((JSON.parse(json) as { slogan: string }).slogan).toBe(
+      '</script><script>alert(1)</script>',
+    );
   });
 
   it('does not touch the database for an organisation of another service (the nodes are the service’s own)', async () => {

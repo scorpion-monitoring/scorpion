@@ -44,9 +44,9 @@ describe('registry.service-publication', () => {
   it('says what changed and for whom, and never names a person or says who decided', () => {
     for (const locale of ['en', 'de'] as const) {
       for (const state of ['public', 'private'] as const) {
-        const mail = servicePublication.render(sample('Galaxy', state) as never, locale, BRANDING);
+        const mail = servicePublication.render(sample('Galaxy', state), locale, BRANDING);
         // The footer holds the instance's own contact address (branding); no other address may be in the mail.
-        const text = `${mail.subject}\n${mail.text}`.replaceAll(BRANDING.contactEmail, '');
+        const text = `${mail.subject}\n${mail.text}`.replaceAll('help@example.org', '');
         expect(text).toContain('Galaxy');
         expect(text).not.toMatch(/reviewer|administrator|gutachter|verwalter/i);
         expect(text).not.toMatch(/@/);

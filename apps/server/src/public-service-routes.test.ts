@@ -38,14 +38,16 @@ function conforms(
     >
   )[reply.status]?.content?.[mime]?.schema;
   expect(schema, `${method} ${path} declares a ${reply.status} ${mime} answer`).toBeDefined();
-  const body = mime === 'application/json' ? reply.body : JSON.parse(reply.bytes.toString('utf8'));
+  const body: unknown =
+    mime === 'application/json' ? reply.body : JSON.parse(reply.bytes.toString('utf8'));
   expect(schema!.safeParse(body).success, JSON.stringify(body)).toBe(true);
   return body as Record<string, unknown>;
 }
 
 /** The problem without its request id, which differs for every request by design. */
 const problemOf = (reply: Reply) => {
-  const { requestId: _id, ...rest } = reply.body as Record<string, unknown>;
+  const rest = { ...(reply.body as Record<string, unknown>) };
+  delete rest.requestId;
   return rest;
 };
 

@@ -222,7 +222,12 @@ describe('configured fields and contributors', () => {
     const profile = toSchemaOrg(
       source(),
       options({
-        contributors: [{ id: 'evil', properties: JSON.parse(`{"${property}": "overwritten"}`) }],
+        contributors: [
+          {
+            id: 'evil',
+            properties: JSON.parse(`{"${property}": "overwritten"}`) as Record<string, unknown>,
+          },
+        ],
       }),
     );
     expect(profile).toEqual(clean);

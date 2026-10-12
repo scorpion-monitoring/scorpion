@@ -43,18 +43,18 @@ describe('getPublicAsSystem', () => {
   });
 
   it.each([
-    ['a private service', async (w: Awaited<ReturnType<typeof world>>) => w.svc.id],
-    ['an unknown id', async () => ABSENT],
-    ['an unknown slug', async () => 'nobody-has-this'],
-    ['a ref that is neither', async () => '../../etc/passwd'],
-    ['an empty ref', async () => ''],
-    ['a ref that is too long', async () => 'x'.repeat(201)],
+    ['a private service', (w: Awaited<ReturnType<typeof world>>) => w.svc.id],
+    ['an unknown id', () => ABSENT],
+    ['an unknown slug', () => 'nobody-has-this'],
+    ['a ref that is neither', () => '../../etc/passwd'],
+    ['an empty ref', () => ''],
+    ['a ref that is too long', () => 'x'.repeat(201)],
   ])(
     'answers %s with undefined, with nothing to tell it from another [ASVS-8.2.1]',
     async (_n, ref) => {
       const w = await world(h);
-      expect(await w.services.getPublicAsSystem(await ref(w))).toBeUndefined();
-      expect(await w.services.schemaOrgPublicAsSystem(await ref(w))).toBeUndefined();
+      expect(await w.services.getPublicAsSystem(ref(w))).toBeUndefined();
+      expect(await w.services.schemaOrgPublicAsSystem(ref(w))).toBeUndefined();
     },
   );
 
@@ -106,7 +106,11 @@ describe('getPublicAsSystem', () => {
       consortia: [z.id, a.id, w.consortium.id],
     });
     const record = (await w.services.getPublicAsSystem(w.svc.id))!;
-    expect(record.provider).toEqual({ id: w.provider.id, name: expect.any(String), public: true });
+    expect(record.provider).toEqual({
+      id: w.provider.id,
+      name: expect.any(String) as string,
+      public: true,
+    });
     expect(record.consortia.map((c) => c.name)).toEqual(
       [...record.consortia.map((c) => c.name)].sort((x, y) => x.localeCompare(y)),
     );
@@ -123,7 +127,9 @@ describe('getPublicAsSystem', () => {
 describe('getPublicAsSystem racing a publication', () => {
   it('gives a whole record or nothing while a service is switched back and forth, never a partial one [ASVS-8.2.1]', async () => {
     const w = await world(h);
-    const reads: (Awaited<ReturnType<typeof w.services.getPublicAsSystem>> | 'gone')[] = [];
+    const reads: (
+      NonNullable<Awaited<ReturnType<typeof w.services.getPublicAsSystem>>> | 'gone'
+    )[] = [];
     const read = async () => {
       const record = await w.services.getPublicAsSystem(w.svc.id);
       reads.push(record ?? 'gone');

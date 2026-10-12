@@ -14,7 +14,8 @@ const app = useIdentityApp();
 const ABSENT = '018f3b7e-0000-7000-8000-000000000000';
 /** A problem without the request id, which is different for every request by design. */
 const bodyOf = (body: unknown) => {
-  const { requestId: _requestId, ...rest } = body as Record<string, unknown>;
+  const rest = { ...(body as Record<string, unknown>) };
+  delete rest.requestId;
   return rest;
 };
 
