@@ -5,35 +5,58 @@ contact point, a provider and any consortia, and the extension points through wh
 organisation roles, facets and Schema.org properties. It is the second registry module and the first that other modules extend through
 several registries ([ADR-0035](../../docs/adr/0035-service-model.md), [m7-sprint-plan.md](../../docs/m7-sprint-plan.md)).
 
-Status: M7 sprint 1 (the module, the tables, the five registries, the two config files and their validator, the SPDX licence list, the
-service record with `create`, `get`, `getBySlug` and `list`, the trusted reads, the routes below and the `registry` and `full`
-profiles). The access rules for members and managers, `update`, the slug rename, the icon and the publication flag (sprint 2), the
+Status: M7 sprints 1 and 2. Sprint 1: the module, the tables, the five registries, the two config files and their validator, the SPDX
+licence list, the service record with `create`, `get`, `getBySlug` and `list`, the trusted reads and the `registry` and `full` profiles.
+Sprint 2 ([ADR-0036](../../docs/adr/0036-service-access.md)): the policy `service.member`, the scoped permissions, the three groups of
+editors, `update`, the slug rename with its history, the icon, the publication flag and the visibility of the contact point. The
 Schema.org profile and the public reads (sprint 3), the catalogue (sprint 4) and the screens (sprints 5 and 6) follow.
 
 ## Manifest
 
-| Part         | Value                                                                                                                                                                                                                                                                                                                 |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id           | `registry.services`                                                                                                                                                                                                                                                                                                   |
-| table prefix | `svc_` (set in the manifest; ADR-0004): `svc_service`, `svc_service_organisation`, `svc_field_value`, `svc_slug_history`, `svc_license_cache`                                                                                                                                                                         |
-| dependencies | `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob`, `registry.organisations` and the package `@scorpion/integrations` (SPDX); `core.ui-shell` as an optional peer (the module starts without the shell). `core.audit` observes it (see "Events")                                       |
-| routes       | internal API, see "Routes"                                                                                                                                                                                                                                                                                            |
-| ui           | none yet (sprint 4 adds the `ui` entry)                                                                                                                                                                                                                                                                               |
-| events       | emits `registry.service.created@1`                                                                                                                                                                                                                                                                                    |
-| registries   | declares `service.orgRole`, `service.fieldType`, `service.wizardStep`, `service.facet`, `service.profileContributor`; contributes the seeds to the first, second and fourth, `org.usage` (registry.organisations), the `usage` of the `stage` vocabulary (core.settings) and the default roles to `authz.defaultRole` |
-| settings     | `exposeContactPoint` and `allowPublic` (see "Settings"), shown by the generic settings form                                                                                                                                                                                                                           |
+| Part         | Value                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id           | `registry.services`                                                                                                                                                                                                                                                                                                                                                          |
+| table prefix | `svc_` (set in the manifest; ADR-0004): `svc_service`, `svc_service_organisation`, `svc_field_value`, `svc_slug_history`, `svc_license_cache`                                                                                                                                                                                                                                |
+| dependencies | `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob`, `registry.organisations` and the package `@scorpion/integrations` (SPDX); `core.ui-shell` as an optional peer (the module starts without the shell). `core.audit` observes it (see "Events")                                                                                              |
+| routes       | internal API, see "Routes"                                                                                                                                                                                                                                                                                                                                                   |
+| ui           | none yet (sprint 4 adds the `ui` entry)                                                                                                                                                                                                                                                                                                                                      |
+| events       | emits `registry.service.created@1`, `.updated@1`, `.slugChanged@1`, `.published@1` and `.unpublished@1`                                                                                                                                                                                                                                                                      |
+| registries   | declares `service.orgRole`, `service.fieldType`, `service.wizardStep`, `service.facet`, `service.profileContributor`; contributes the seeds to the first, second and fourth, `org.usage` (registry.organisations), the `usage` of the `stage` vocabulary (core.settings), the default roles to `authz.defaultRole` and the policy `service.member` to `authz.resourcePolicy` |
+| settings     | `exposeContactPoint` and `allowPublic` (see "Settings"), shown by the generic settings form                                                                                                                                                                                                                                                                                  |
 
 ### Permissions
 
-| Permission                         | Allows                                                                             | Held by default by    |
-| ---------------------------------- | ---------------------------------------------------------------------------------- | --------------------- |
-| `registry.services.service.read`   | Read services, search the licence list and list the organisation roles             | Admin, User, Reviewer |
-| `registry.services.service.manage` | Create services (sprint 2 adds the member rules, `update` and the identity fields) | Admin                 |
+| Permission                                | Scope     | Allows                                                                                                                                | Held by default by                                                        |
+| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `registry.services.service.read`          | plain     | Read services, search the licence list and list the organisation roles; also what the delegated routes name at the route              | Admin, User, Reviewer                                                     |
+| `registry.services.service.create`        | plain     | Create a service. The service then needs an Admin or an approved member of the chosen provider                                        | Admin, User                                                               |
+| `registry.services.service.manage`        | plain     | Every field of any service, as Admin; never restricted                                                                                | Admin                                                                     |
+| `registry.services.service.publish`       | plain     | Make a service public or private again                                                                                                | Admin, Reviewer                                                           |
+| `registry.services.service.edit`          | `service` | Name, licence, stage, description, URL, `sameAs`, the contact point, the icon, the consortia and the configured fields of one service | Admin; the approved **members** (managers too) of that service's provider |
+| `registry.services.service.edit-identity` | `service` | The slug and the provider of one service                                                                                              | Admin; the approved **managers** of that service's provider               |
+| `registry.services.service.read-contact`  | `service` | Always see the contact point of one service, whatever the setting says                                                                | Admin; the approved members (managers too) of that service's provider     |
 
-Admin holds every declared permission by resolution (ADR-0014); `user` and `reviewer` get `read` through `authz.defaultRole`. The
-service checks the permission again on every method (`ctx.authz.require`). Sprint 2 adds the scoped permissions (`edit`,
-`edit-identity`, `read-contact`), `create` and `publish`, and the policy `service.member` (ADR-0036); sprint 1 has no scoped
-permission.
+Admin holds every declared permission by resolution (ADR-0014); `user` gets `read` and `create`, `reviewer` gets `read` and `publish`
+through `authz.defaultRole`. The service checks the permission again on every method (`ctx.authz.require`).
+
+### The policy `service.member` and the three groups (ADR-0036)
+
+The policy loads the service's **provider** from `svc_service_organisation` and asks `registry.organisations`
+(`isApprovedMemberAsSystem`, `isManagerAsSystem`) at **every call**: nothing is cached, so a removal, a demotion or a move of the service
+is seen at the next call. A requested, rejected or left membership, a membership of another organisation and a consortium grant nothing.
+
+| Group                            | Writes                                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Approved member of the provider  | name, licence, stage, description, URL, `sameAs`, the contact point, the icon, the consortia and the configured fields |
+| Approved manager of the provider | all of those, and the **slug** and the **provider** (a move only to an organisation the manager also manages)          |
+| Admin                            | everything                                                                                                             |
+| Reviewer and Admin               | the publication flag, and nothing else (a Reviewer is no editor)                                                       |
+
+**Field rules** (`service/field-rules.ts`): `requiredAccess(fields)` returns `identity` for the slug and the provider and `edit` for every
+other configured field (a field a deployment adds is an `edit` field); a mixed request needs both; `allows(level, needed)` decides;
+`editableFields(level, keys)` draws the same line for `GET /services/{id}`. A request that names a field its caller may not write is
+**refused whole**: 403, the problem names the fields ("These fields can only be changed by a manager of the provider or an
+administrator: slug.") and never a value, nothing is written and no event is sent. The order is 404, 403, 422.
 
 ## The record
 
@@ -52,13 +75,39 @@ A **slug** is letters, digits, `.`, `_` and `-`, at most 64, starting with a let
 
 ## Service layer (`service/services.ts`)
 
-Every method takes the `actor`. Sprint 1: `create` (`…service.manage`; one transaction for the service row, the slug history row, the
-organisation links, the configured field values and the event), `get`, `getBySlug` (an old slug answers the current record with
-`redirectedFrom`), `list` (`q`, sort by `name`, `slug` or `stage`, `dir`, pages; ties by id), `searchLicences` and `listRoles` (all need
-`…service.read`). The input of `create` is the **nested form object** the wizard edits: every value is addressed by the JSON pointer
+Every method takes the `actor`. `create` (`…service.create`, and an Admin or an approved member of the chosen provider, checked before the
+body is parsed; one transaction for the service row, the slug history row, the organisation links, the configured field values and the
+event), `get`, `getBySlug` (an old slug answers the current record with `redirectedFrom`, the old slug as it was stored), `list` (`q`, sort by
+`name`, `slug` or `stage`, `dir`, pages; ties by id), `searchLicences` and `listRoles` (all need `…service.read`). Sprint 2 adds `update`,
+`setIcon`, `clearIcon` and `setPublication`, below. `get` and the methods that return a record also return `editableFields` and
+`allowedActions` for the caller. The input of `create` is the **nested form object** the wizard edits: every value is addressed by the JSON pointer
 of its field (`/name`, `/contact/type`) and validated by the Zod schema of its field type; an unknown key, a bad value, an unknown
 organisation, a wrong organisation type, a missing provider, an unknown stage or an unknown licence is **422** with one entry per field
 (never a 500), a taken slug is **409** (`slug-taken`, naming the field only). A create that fails leaves no row in any table.
+
+**`update(actor, id, patch)`** takes a partial nested object: the fields it names change, the others are not touched, `null` clears an
+optional field (the contact point as a pair), no default applies, at least one field is needed, the icon and `public` are not fields of
+a patch. The row is locked, only the columns that changed are written (two editors on different fields both stick; on one field the last
+write wins), the consortia replace the links of their role (by id, scoped to the service), a configured field that is not a column is
+upserted into `svc_field_value`, and one transaction holds all of it with the event. Nothing changed means nothing written and no event.
+
+**Slug rename.** Naming a new `slug` writes the old one to `svc_slug_history` (it keeps resolving through `getBySlug` and is never given to
+another service) and the new one to the row, in that transaction. A slug the service already holds in the history (a return to an old
+one, a change of case) is reused. A clash on either unique index is **409** `slug-taken` naming the field only; two renames to one slug,
+and a rename racing a create, are decided by the index: one wins.
+
+**Icon.** `setIcon` and `clearIcon` work as the organisation's logo: the `…service.edit` check runs **before** `blob.put`, so a denied
+caller leaves no file; a raster is re-encoded, an SVG sanitised, the limits are the blob store's; `setReference` holds the new file and
+releases the old one inside the transaction that also sets the columns and sends the event. The block that shows it is `ImageBlock` in
+`packages/ui-kit` (the screen comes in sprint 6).
+
+**Publication.** `setPublication(actor, id, { public })` needs `…service.publish` (Reviewers and Admin; a manager or a member of the provider
+gets 403 and sees `public` in the record). It sets `public`, `published_at` and `published_by` together under the row lock; setting the
+state the service already has answers 200 without an event; a publication while `allowPublic` is off is **409**; an unpublication is always
+allowed.
+
+**Contact point.** In the record only for Admin and the provider's members and managers (the scoped `…service.read-contact`), and for every
+other signed-in person while `exposeContactPoint` is on; never in a list row, an event, an audit entry, a log line, a mail or a trusted read.
 
 **Trusted reads** for M8, M9 and M13 on `public.ts`, with the `AsSystem` suffix and no permission check: `findByIdsAsSystem`,
 `findBySlugAsSystem`, `listByOrganisationAsSystem`, `existsAsSystem`. They return the descriptive fields and the organisation ids,
@@ -66,14 +115,18 @@ never the contact point or the audit columns.
 
 ## Routes (internal API, `/api/internal`)
 
-| Route                          | Permission                         | Notes                                                                                                                        |
-| ------------------------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `GET /services`                | `registry.services.service.read`   | `q`, `sort`, `dir`, `page`, `pageSize`; the legacy envelope, 0-based pages; a row has no contact point, description or links |
-| `GET /services/{id}`           | `registry.services.service.read`   | the record; the contact point only for those the setting and the role allow                                                  |
-| `GET /services/by-slug/{slug}` | `registry.services.service.read`   | an old slug answers the current record with `redirectedFrom`                                                                 |
-| `POST /services`               | `registry.services.service.manage` | `audit: true`, 201; body at most 64 KB; 409 for a taken slug; 422 for everything that refers to nothing                      |
-| `GET /licenses`                | `registry.services.service.read`   | the SPDX search for the licence field; deprecated ids are marked                                                             |
-| `GET /service-roles`           | `registry.services.service.read`   | the `service.orgRole` entries, for the form                                                                                  |
+| Route                            | Permission                          | Notes                                                                                                                                                                   |
+| -------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /services`                  | `registry.services.service.read`    | `q`, `sort`, `dir`, `page`, `pageSize`; the legacy envelope, 0-based pages; a row has no contact point, description or links                                            |
+| `GET /services/{id}`             | `registry.services.service.read`    | the record with `editableFields` and `allowedActions` for the caller; the contact point only for those the table names                                                  |
+| `GET /services/by-slug/{slug}`   | `registry.services.service.read`    | an old slug answers the current record with `redirectedFrom`                                                                                                            |
+| `POST /services`                 | `registry.services.service.create`  | `audit: true`, 201; body at most 64 KB; **403 from the service** for a caller who is neither Admin nor a member of the provider; 409 for a taken slug; 422 for the rest |
+| `PATCH /services/{id}`           | `registry.services.service.read`    | **delegated** (ADR-0034): the service decides; `audit: true`; 403 refuses the whole request; 409 `slug-taken`; 422                                                      |
+| `PUT /services/{id}/icon`        | `registry.services.service.read`    | **delegated**; the raw image as the body; `strict` rate limit; 403 before any file is stored; 413 above the upload ceiling; 422 for a bad image                         |
+| `DELETE /services/{id}/icon`     | `registry.services.service.read`    | **delegated**; 404 when there is no icon                                                                                                                                |
+| `PUT /services/{id}/publication` | `registry.services.service.publish` | `{ public: boolean }`; `audit: true`; 409 when `allowPublic` is off                                                                                                     |
+| `GET /licenses`                  | `registry.services.service.read`    | the SPDX search for the licence field; deprecated ids are marked                                                                                                        |
+| `GET /service-roles`             | `registry.services.service.read`    | the `service.orgRole` entries, for the form                                                                                                                             |
 
 ## Configuration (`config/fields.ts`, `config/steps.ts`)
 
@@ -133,19 +186,23 @@ entry of each kind fails at load with the module's name in the message.
 
 ## Settings
 
-| Setting              | Default | Effect                                                                                                                                                            |
-| -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exposeContactPoint` | on      | On: every signed-in person sees a service's contact point. Off: only administrators (sprint 2: and the provider's members). Never public, never in a list         |
-| `allowPublic`        | on      | Declared in sprint 1, effective from sprint 2: on, Reviewers and Admin may make a service public; off, every public address answers 404 and publishing is refused |
+| Setting              | Default | Effect                                                                                                                                                                                           |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exposeContactPoint` | on      | On: every signed-in person sees a service's contact point. Off: only administrators and the provider's members. Never public, never in a list                                                    |
+| `allowPublic`        | on      | Effective for publication in sprint 2: on, Reviewers and Admin may make a service public; off, a publication is 409 (an unpublication is allowed). The public routes of sprint 3 will answer 404 |
 
 ## Events
 
-| Event                        | Payload                      | Audit                                           |
-| ---------------------------- | ---------------------------- | ----------------------------------------------- |
-| `registry.service.created@1` | `{ serviceId, by, actorId }` | logged, not critical (follows `channels.admin`) |
+| Event                            | Payload                                                          | Audit                                                           |
+| -------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| `registry.service.created@1`     | `{ serviceId, by: admin \| member, actorId }`                    | logged, not critical (follows `channels.admin`)                 |
+| `registry.service.updated@1`     | `{ serviceId, fields, by: admin \| manager \| member, actorId }` | logged, not critical; `by` is the highest group the change used |
+| `registry.service.slugChanged@1` | `{ serviceId, actorId }`                                         | **critical**: an address that others link to changed            |
+| `registry.service.published@1`   | `{ serviceId, actorId }`                                         | **critical**: it changes who can read the service               |
+| `registry.service.unpublished@1` | `{ serviceId, actorId }`                                         | **critical**                                                    |
 
-Ids and `by` only: never a name, an address or a URL (a test checks the payload). `core.audit` lists this module as an optional peer
-and holds the decision in `decisions.ts`.
+`fields` are the keys of the configured fields that changed. Ids, `by` and field keys only: never a name, an address or a URL (a test
+checks the payloads). `core.audit` lists this module as an optional peer and holds the decisions in `decisions.ts`.
 
 ## SPDX licence list
 
