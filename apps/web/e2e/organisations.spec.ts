@@ -511,6 +511,7 @@ test.describe('journey 4: managers decide for their own organisation', () => {
     );
     await erinApi.dispose();
     await mailTo(basePath, ADMIN.email, 'registry.membership-requested'); // the administrators are told
+    // Other journeys of the run made other administrators; the point is that no manager is mailed.
     await expect
       .poll(async () => {
         const mails = await withDb(basePath, (client) => mailbox(client).all());
@@ -518,10 +519,16 @@ test.describe('journey 4: managers decide for their own organisation', () => {
           .filter(
             (m) => m.template === 'registry.membership-requested' && m.text.includes(erin.username),
           )
-          .map((m) => m.to)
-          .sort();
+          .map((m) => m.to);
       })
-      .toEqual([ADMIN.email]);
+      .toContain(ADMIN.email);
+    const mailed = (await withDb(basePath, (client) => mailbox(client).all()))
+      .filter(
+        (m) => m.template === 'registry.membership-requested' && m.text.includes(erin.username),
+      )
+      .map((m) => m.to);
+    expect(mailed).not.toContain(`${alice.username}@example.org`);
+    expect(mailed).not.toContain(`${second.username}@example.org`);
     await api.dispose();
   });
 });
