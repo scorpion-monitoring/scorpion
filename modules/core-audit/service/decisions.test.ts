@@ -83,6 +83,39 @@ describe('the audit decision for every declared event', () => {
     expect(logged.subject(payload)).toEqual({ type: 'service', id: 'svc-1' });
   });
 
+  it('marks a new slug, a publication and an unpublication of a service as critical, an update as an ordinary admin event', () => {
+    const logged = (name: string) =>
+      EVENT_DECISIONS[name] as {
+        decision: string;
+        critical: boolean;
+        actor: (payload: Record<string, unknown>) => unknown;
+        subject: (payload: Record<string, unknown>) => unknown;
+      };
+    for (const name of [
+      'registry.service.slugChanged@1',
+      'registry.service.published@1',
+      'registry.service.unpublished@1',
+    ]) {
+      expect(logged(name).decision, name).toBe('log');
+      expect(logged(name).critical, name).toBe(true);
+      expect(logged(name).actor({ serviceId: 'svc-1', actorId: 'user-1' }), name).toEqual({
+        kind: 'user',
+        userId: 'user-1',
+      });
+      expect(logged(name).subject({ serviceId: 'svc-1', actorId: 'user-1' }), name).toEqual({
+        type: 'service',
+        id: 'svc-1',
+      });
+    }
+    // The three groups (`by: admin | manager | member`) follow `channels.admin` alike: the payload says who.
+    const updated = logged('registry.service.updated@1');
+    expect(updated.decision).toBe('log');
+    expect(updated.critical).toBe(false);
+    expect(
+      updated.subject({ serviceId: 'svc-1', fields: ['name'], by: 'member', actorId: 'u' }),
+    ).toEqual({ type: 'service', id: 'svc-1' });
+  });
+
   it('marks a membership that ends as critical when an Admin or a manager ended it, not when the person left', () => {
     const left = EVENT_DECISIONS['registry.membership.left@1'];
     expect(left?.decision).toBe('log');

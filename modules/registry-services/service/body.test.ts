@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { FIELDS } from '../config/fields.ts';
 import { STEPS } from '../config/steps.ts';
 import { validateServicesConfig } from '../config/validate.ts';
-import { dotted, unknownPointers, validateBody, valueAt } from './body.ts';
+import {
+  dotted,
+  fieldKeysOfInput,
+  unknownPointers,
+  validateBody,
+  validatePatch,
+  valueAt,
+} from './body.ts';
 import { SEED_FIELD_TYPES } from './field-types.ts';
 import { SEED_ORG_ROLES, type FieldEnv } from './registries.ts';
 
@@ -201,5 +208,80 @@ describe('the pointer helpers', () => {
     ).toEqual(['/contact/other', '/extra']);
     // A parent that is not an object is itself unknown.
     expect(unknownPointers({ contact: 'text' }, paths)).toEqual(['/contact']);
+  });
+});
+
+describe('fieldKeysOfInput', () => {
+  it.each([
+    [{ name: 'x' }, ['name']],
+    [{ description: null }, ['description']],
+    [{ contact: { email: 'a@example.org' } }, ['contactEmail']],
+    [{ contact: { email: null, type: null }, slug: 's' }, ['slug', 'contactEmail', 'contactType']],
+    [{ provider, consortia: [] }, ['provider', 'consortia']],
+    [{ nonsense: 1 }, []],
+    [{}, []],
+    ['text', []],
+    [null, []],
+    [[], []],
+  ])('names the configured fields of %j', (input, keys) => {
+    expect(fieldKeysOfInput(config, input)).toEqual(keys);
+  });
+});
+
+describe('validatePatch', () => {
+  const patch = async (body: unknown) => Object.fromEntries(await validatePatch(config, body, env));
+  const problems = async (body: unknown) => {
+    try {
+      await validatePatch(config, body, env);
+    } catch (error) {
+      return (error as { errors: { in: string; path: string; message: string }[] }).errors;
+    }
+    throw new Error('the patch was accepted');
+  };
+
+  it('returns only the fields it names, and no default', async () => {
+    expect(await patch({ name: 'New' })).toEqual({ name: 'New' });
+    expect(await patch({ description: 'x', license: 'mit' })).toEqual({
+      description: 'x',
+      license: 'MIT',
+    });
+  });
+
+  it.each([
+    [{ description: null }, { description: null }],
+    [
+      { url: null, sameAs: null },
+      { url: null, sameAs: null },
+    ],
+    [{ license: null }, { license: null }],
+    [{ consortia: null }, { consortia: null }],
+    [{ contact: { email: null, type: null } }, { contactEmail: null, contactType: null }],
+    [{ description: '' }, { description: null }],
+  ])('clears an optional field: %j', async (body, expected) => {
+    expect(await patch(body)).toEqual(expected);
+  });
+
+  it.each([
+    [{ name: null }, 'name', 'This field is required.'],
+    [{ slug: null }, 'slug', 'This field is required.'],
+    [{ stage: null }, 'stage', 'This field is required.'],
+    [{ provider: null }, 'provider', 'This field is required.'],
+    [{ name: '' }, 'name', undefined],
+    [{ stage: 'NOPE' }, 'stage', undefined],
+    [{ license: 'nope' }, 'license', undefined],
+    [{ icon: 'x' }, 'icon', 'The icon is changed through the icon route.'],
+    [{ icon: null }, 'icon', 'The icon is changed through the icon route.'],
+    [{ nonsense: 1 }, 'nonsense', 'This field is not known.'],
+    [{}, '', 'Name at least one field to change.'],
+  ])('refuses %j at %j', async (body, path, message) => {
+    const found = await problems(body);
+    expect(found.map((p) => p.path)).toContain(path);
+    if (message) expect(found.find((p) => p.path === path)!.message).toBe(message);
+  });
+
+  it('reports every problem at once, by field, and refuses a body that is not an object', async () => {
+    const found = await problems({ name: '', stage: 'NOPE', url: 'ftp://x' });
+    expect(found.map((p) => p.path).sort()).toEqual(['name', 'stage', 'url']);
+    expect((await problems('text'))[0]).toMatchObject({ in: 'body', path: '' });
   });
 });

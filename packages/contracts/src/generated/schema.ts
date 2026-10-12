@@ -8840,6 +8840,10 @@ export interface paths {
                             createdBy?: string | null;
                             /** @description Administrators only. */
                             updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
                         };
                     };
                 };
@@ -8852,14 +8856,12 @@ export interface paths {
                         "application/problem+json": components["schemas"]["Problem"];
                     };
                 };
-                /** @description Not allowed. */
+                /** @description The caller is neither an administrator nor a member of the provider. */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
+                    content?: never;
                 };
                 /** @description The slug is taken, or was used by another service once. */
                 409: {
@@ -9140,6 +9142,10 @@ export interface paths {
                             createdBy?: string | null;
                             /** @description Administrators only. */
                             updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
                         };
                     };
                 };
@@ -9259,6 +9265,10 @@ export interface paths {
                             createdBy?: string | null;
                             /** @description Administrators only. */
                             updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
                         };
                     };
                 };
@@ -9308,6 +9318,514 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Managers of the provider and administrators only. */
+                        slug?: string;
+                        name?: string;
+                        license?: string | null;
+                        stage?: string;
+                        description?: string | null;
+                        url?: string | null;
+                        sameAs?: string[] | null;
+                        /**
+                         * Format: uuid
+                         * @description Managers of the provider and administrators only; a manager may move the service only to an organisation they manage.
+                         */
+                        provider?: string;
+                        consortia?: string[] | null;
+                        /** @description Both parts or neither; `null` in both clears the contact point. */
+                        contact?: {
+                            email?: string | null;
+                            type?: string | null;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description The service with its changes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not change a field the request names. The whole request is refused, nothing is written, and the problem names fields, never values. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The new slug is taken, or was used by another service once. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input, an unknown organisation, stage or licence, or no field named. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/services/{id}/icon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description The image as the request body (PNG, JPEG, WebP, GIF or SVG). Its `Content-Type` is ignored: the type is determined from the content, and the file is checked and rewritten before it is stored. */
+            requestBody: {
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            responses: {
+                /** @description The service with its new icon. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not edit this service. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The body is larger than the upload ceiling. */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The file is empty, too big, not a supported image, or damaged. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The service without its icon. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not edit this service. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service, or it has no icon. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/{id}/publication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        public: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description The service. Setting the state it already has changes nothing and sends no event. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Making a service public is switched off (`service.allowPublic`). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;

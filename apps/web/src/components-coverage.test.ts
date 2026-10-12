@@ -36,6 +36,10 @@ const PARTS_OF: Record<string, string> = { FieldShell: 'SchemaForm', SchemaField
 const THROUGH_PAGES = [
   'Alert',
   'Dialog',
+  // Moved from the organisation module's `LogoBlock` (M7 sprint 2, Decision 18) with its behaviour unchanged:
+  // the logo journeys of `e2e/organisations.spec.ts` upload, replace and remove through it, and
+  // `e2e/accessibility-organisations.spec.ts` runs axe over the pages that hold it.
+  'ImageBlock',
   'ReauthDialog',
   'SafeHtml',
   'SubmitButton',

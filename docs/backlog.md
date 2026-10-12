@@ -309,7 +309,19 @@ Found while using the instance; not yet investigated.
 - **The SPDX list is refreshed by hand in the repository.** The bundled fallback is regenerated with `node packages/integrations/scripts/generate-spdx.ts` after the pin in `spdx-pin.ts` moves; nothing reminds the maintainer when a new SPDX release appears. A scheduled workflow that opens a pull request, or a Dependabot-style check, is not built. The live list is fetched at most once a day and cached in `svc_license_cache`.
 - **A custom licence** (`LicenseRef-…`) and an expression such as `MIT OR Apache-2.0` are refused: only one SPDX id is accepted (plan §12).
 - **The field type `check` cannot ask for more than a vocabulary term and an SPDX id.** `FieldEnv` is closed on purpose; a contributed type that needs another lookup (an ORCID, a ROR id, an EDAM term) extends the interface with an ADR, or does its work inside its own module's route.
-- **`create` is Admin-only until sprint 2** (plan §5 item 8); the event carries `by: 'admin' | 'member'` already so the payload does not change.
+- **`create` is Admin-only until sprint 2** (plan §5 item 8); the event carries `by: 'admin' | 'member'` already so the payload does not change. _Done in sprint 2: an Admin or an approved member of the chosen provider._
+
+## Services follow-ups (M7 sprint 2)
+
+- **Nobody owns a service by having created it.** A creator who later leaves the provider loses the right to edit, as the policy reads the provider's membership at every call (ADR-0036). A "created by" owner, or an explicit list of editors per service, is not planned; the provider's managers and Admin can always step in.
+- **The policy costs two reads per scoped check, and a record asks up to three.** `policy.ts` loads the provider and asks `registry.organisations` on every call (no cache, so a demotion is seen at the next call). A record view asks `edit`, `edit-identity` and `read-contact` once each. That is fine for one record; a list of rows with `editableFields` would need a batched policy read or a per-request memo, and the catalogue (sprint 4) deliberately has no such column.
+- **A `PATCH` replaces a list as a whole.** `sameAs` and `consortia` are replaced by the list in the body (`null` empties them); there is no add or remove of one item, and two editors who change the same list at once get the last write. Per-item operations are not planned.
+- **The contact point is cleared as a pair, with both parts `null`.** `contact: null` as a whole is not accepted (the nested object is addressed by the pointers of its two fields); the form of sprint 6 sends both. Revisit if an API client finds it awkward.
+- **The body of `PATCH /services/{id}` documents the shipped fields only,** like the create body: a deployment's own configured fields are accepted at their paths and validated by the service, but are not typed in the generated client.
+- **`by` in `registry.service.updated@1` is the highest group the request needed, not the person's role.** A manager who edits only descriptive fields is recorded as `member`; the actor id says who. Someone who wants "all edits by managers" in the critical channel changes the decision in `core.audit` and adds `by` to the payload rule; the plan keeps every update ordinary.
+- **A change of case in a slug rewrites the spelling in the history.** `Foo` to `foo` updates the history row instead of adding one (the index is case-insensitive), so `redirectedFrom` shows the new spelling. Nothing links to the old spelling in a way that matters; a second row per spelling is not worth a second index.
+- **The identity fields are a table in code (`IDENTITY_FIELDS`).** A deployment that wants another field to need a manager (a `license` that only managers set, say) changes `field-rules.ts`; making it configuration would let a bad config weaken the rule, so it stays code.
+- **An inbox item to the provider's managers when an Admin or another manager changes the identity, or when a Reviewer publishes,** is sprint 3's notice for the publication only; for the identity it is in the plan's list of things left out (§12).
 
 ## Service wizard follow-ups (M7 plan)
 

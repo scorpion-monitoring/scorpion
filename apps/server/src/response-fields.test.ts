@@ -228,12 +228,18 @@ const CONTACT_ROUTES: Record<string, readonly string[]> = {
   'DELETE /organisations/{id}/logo': ['contactEmail', 'contactType'],
   // The profile nests `contactType` inside `contactPoint`.
   'GET /organisations/{id}/schema-org': ['contactPoint', 'contactType'],
-  // A service has the same kind of contact point (M7 sprint 1): the record serves it to Admin and, by the
-  // setting `exposeContactPoint`, to other signed-in persons; sprint 2 adds the provider's members. Never in a
-  // list row, an event or the Schema.org profile (a `Service` has no contact point).
+  // A service has the same kind of contact point (M7): the record serves it to Admin and the members of its
+  // provider always (the scoped `service.read-contact`), and to other signed-in persons by the setting
+  // `exposeContactPoint`. Every route that returns the record may carry it (the edit, the icon and the
+  // publication routes answer with the record). Never in a list row, an event or the Schema.org profile (a
+  // `Service` has no contact point).
   'GET /services/{id}': ['contactEmail', 'contactType'],
   'GET /services/by-slug/{slug}': ['contactEmail', 'contactType'],
   'POST /services': ['contactEmail', 'contactType'],
+  'PATCH /services/{id}': ['contactEmail', 'contactType'],
+  'PUT /services/{id}/icon': ['contactEmail', 'contactType'],
+  'DELETE /services/{id}/icon': ['contactEmail', 'contactType'],
+  'PUT /services/{id}/publication': ['contactEmail', 'contactType'],
 };
 /** The instance's own contact address (branding settings), a different thing that happens to share a name. */
 const NOT_THE_ORGANISATIONS = ['GET /branding'];
@@ -282,6 +288,7 @@ describe('the contact point of an organisation', () => {
     const { kernel } = await app.start();
     const mustNot = [
       'GET /organisations',
+      'GET /services',
       'GET /organisations/{id}/members',
       'GET /memberships',
       'GET /account/memberships',

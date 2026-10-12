@@ -26,19 +26,48 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the two plain permissions of sprint 1', () => {
+  it('has the id, the table prefix, four plain permissions and three scoped to the service (ADR-0036)', () => {
     expect(manifest.id).toBe('registry.services');
     expect(manifest.tablePrefix).toBe('svc_');
-    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+    const permissions = manifest.permissions ?? {};
+    expect(
+      Object.entries(permissions)
+        .filter(([, p]) => !p.scope)
+        .map(([id]) => id)
+        .sort(),
+    ).toEqual([
+      'registry.services.service.create',
       'registry.services.service.manage',
+      'registry.services.service.publish',
       'registry.services.service.read',
     ]);
-    // Sprint 2 adds the scoped permissions; none exists yet.
-    expect(Object.values(manifest.permissions ?? {}).filter((p) => p.scope)).toEqual([]);
+    expect(
+      Object.entries(permissions)
+        .filter(([, p]) => p.scope)
+        .map(([id, p]) => [id, p.scope])
+        .sort(),
+    ).toEqual([
+      ['registry.services.service.edit', 'service'],
+      ['registry.services.service.edit-identity', 'service'],
+      ['registry.services.service.read-contact', 'service'],
+    ]);
   });
 
-  it('declares one event with ids only', () => {
-    expect(Object.keys(manifest.events?.emits ?? {})).toEqual(['registry.service.created@1']);
+  it('declares the five events with ids and field names only', () => {
+    expect(Object.keys(manifest.events?.emits ?? {})).toEqual([
+      'registry.service.created@1',
+      'registry.service.updated@1',
+      'registry.service.slugChanged@1',
+      'registry.service.published@1',
+      'registry.service.unpublished@1',
+    ]);
+  });
+
+  it('registers the policy service.member for the resource type service', () => {
+    const policies = (manifest.contributes?.['authz.resourcePolicy'] ?? []) as {
+      resourceType: string;
+    }[];
+    expect(policies.map((p) => p.resourceType)).toEqual(['service']);
   });
 
   it('declares the five registries and contributes the seeds, org.usage and the stage usage', () => {
@@ -73,8 +102,14 @@ describe('the manifest', () => {
     ]);
     expect((contributes['vocabulary'] as { id: string }[]).map((v) => v.id)).toEqual(['stage']);
     expect(contributes['authz.defaultRole']).toEqual([
-      { role: 'user', permissions: ['registry.services.service.read'] },
-      { role: 'reviewer', permissions: ['registry.services.service.read'] },
+      {
+        role: 'user',
+        permissions: ['registry.services.service.read', 'registry.services.service.create'],
+      },
+      {
+        role: 'reviewer',
+        permissions: ['registry.services.service.read', 'registry.services.service.publish'],
+      },
     ]);
   });
 
@@ -175,6 +210,9 @@ describe('no hard-coded vocabulary', () => {
   const DATA = new Set([
     'service/registries.ts',
     'service/facets.ts',
+    // The key of the owning role and the keys of the identity fields: data, not a message.
+    'service/permissions.ts',
+    'service/field-rules.ts',
     'config/fields.ts',
     'config/steps.ts',
   ]);
