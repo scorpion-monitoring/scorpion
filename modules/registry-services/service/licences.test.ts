@@ -61,9 +61,10 @@ describe('the licence cache port', () => {
       fetchedAt: now + 1,
       licenses: [{ id: 'X-1.0', name: 'X', osiApproved: false, deprecated: false }],
     });
-    expect((await s.pool.query('select count(*)::int as n from svc_license_cache')).rows[0].n).toBe(
-      1,
-    );
+    expect(
+      (await s.pool.query<{ n: number }>('select count(*)::int as n from svc_license_cache'))
+        .rows[0]!.n,
+    ).toBe(1);
     expect(await cache.read()).toEqual({
       version: '2.0.0',
       fetchedAt: now + 1,

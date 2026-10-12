@@ -1,6 +1,13 @@
 // Every method of the service layer against real Postgres: the real authoriser decides, events travel
 // through the real outbox. Each method has a denied case; the multi-row write has rollback cases.
-import { Forbidden, Invalid, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
+import {
+  DomainError,
+  Forbidden,
+  Invalid,
+  NotFound,
+  Unauthorized,
+  type Actor,
+} from '@scorpion/contracts';
 import { makeOrganisation, makeService } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { breakOutbox, useServices } from '../test/harness.ts';
@@ -8,6 +15,16 @@ import { breakOutbox, useServices } from '../test/harness.ts';
 const h = useServices();
 const anonymous: Actor = { kind: 'anonymous' };
 const PAGE = { page: 0, pageSize: 50 };
+
+/** The error a promise rejects with; the test fails when it resolves. */
+async function rejection(promise: Promise<unknown>): Promise<DomainError> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as DomainError;
+  }
+  throw new Error('the call resolved; it should have been refused');
+}
 
 let sequence = 0;
 /** A slug and a name that no other test of this file uses. */
@@ -143,7 +160,7 @@ describe('create', () => {
     const { services, admin, body, pool } = await setup();
     const first = body({ slug: 'dup-slug' });
     await services.create(admin, first);
-    const error = await services.create(admin, body({ slug: change('dup-slug') })).catch((e) => e);
+    const error = await rejection(services.create(admin, body({ slug: change('dup-slug') })));
     expect(error).toMatchObject({
       status: 409,
       type: 'slug-taken',
@@ -200,14 +217,15 @@ describe('create', () => {
 
     it('an organisation of a type the role does not accept, naming the role from the registry', async () => {
       const { services, admin, body, consortium } = await setup();
-      const error = await services.create(admin, body({ provider: consortium.id })).catch((e) => e);
+      const error = await rejection(services.create(admin, body({ provider: consortium.id })));
       expect(error).toMatchObject({ status: 422, errors: [{ path: 'provider' }] });
-      expect(error.errors[0].message).toBe('This organisation cannot take the role "Provider".');
+      expect(error.errors?.[0]?.message).toBe('This organisation cannot take the role "Provider".');
     });
 
     it('a missing provider, and a provider given twice is the same single value', async () => {
       const { services, admin, body } = await setup();
-      const { provider: _omitted, ...without } = body();
+      const without: Record<string, unknown> = body();
+      delete without.provider;
       await expect(services.create(admin, without)).rejects.toMatchObject({
         status: 422,
         errors: [{ path: 'provider', message: 'This field is required.' }],
@@ -246,18 +264,18 @@ describe('create', () => {
 
     it('a bad slug, name, URL, link and contact point, all at once', async () => {
       const { services, admin, provider } = await setup();
-      const error = await services
-        .create(admin, {
+      const error = await rejection(
+        services.create(admin, {
           slug: '123e4567-e89b-42d3-a456-426614174000',
           name: '',
           provider: provider.id,
           url: 'javascript:alert(1)',
           sameAs: ['ftp://x'],
           contact: { email: 'a@b.example' },
-        })
-        .catch((e) => e);
+        }),
+      );
       expect(error).toBeInstanceOf(Invalid);
-      expect(error.errors.map((e: { path: string }) => e.path).sort()).toEqual([
+      expect((error.errors ?? []).map((e) => e.path).sort()).toEqual([
         'contact.type',
         'name',
         'sameAs',

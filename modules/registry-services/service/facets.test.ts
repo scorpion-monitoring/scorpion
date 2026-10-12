@@ -27,7 +27,7 @@ async function world() {
   return { ...s, db: s.kernel.db, p1, p2, c1, c2, none, one, two };
 }
 const byKey = (values: { key: string | null; count: number }[]) =>
-  Object.fromEntries(values.map((v) => [v.key, v.count]));
+  Object.fromEntries(values.map((v) => [String(v.key), v.count]));
 
 describe('the seeded facets', () => {
   it('count each service once per consortium and the services with none under null', async () => {

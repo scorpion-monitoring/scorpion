@@ -46,11 +46,7 @@ const problemsOf = (overrides: Overrides): string[] => {
 /** The shipped fields with the field of `key` changed. */
 const withField = (key: string, patch: Partial<FieldConfig> | ((f: FieldConfig) => FieldConfig)) =>
   FIELDS.map((f) =>
-    f.key !== key
-      ? f
-      : typeof patch === 'function'
-        ? patch(f)
-        : ({ ...f, ...patch } as FieldConfig),
+    f.key !== key ? f : typeof patch === 'function' ? patch(f) : { ...f, ...patch },
   );
 const withStep = (id: string, patch: Partial<StepConfig>) =>
   STEPS.map((s) => (s.id === id ? { ...s, ...patch } : s));

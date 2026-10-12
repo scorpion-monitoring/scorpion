@@ -112,7 +112,9 @@ describe('the manifest', () => {
 });
 
 describe('the tables', () => {
-  const tables = Object.values(schema).filter((value): value is PgTable => is(value, PgTable));
+  const tables = Object.values(schema as Record<string, unknown>).filter(
+    (value): value is PgTable => is(value, PgTable),
+  );
 
   it('are the five of ADR-0035, every one with the prefix svc_', () => {
     expect(tables.map((t) => getTableName(t)).sort()).toEqual([

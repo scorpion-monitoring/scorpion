@@ -1,26 +1,51 @@
 // The contributions to other modules' registries, with the real entries: `org.usage` (an organisation
 // with services cannot be deleted and its type cannot change) and the `usage` of the `stage` vocabulary.
-import type { OrganisationsService } from '@scorpion/registry-organisations/module';
-import type { SettingsInternalsBundle } from '@scorpion/core-settings/module';
+import type { Actor, DomainError } from '@scorpion/contracts';
 import { makeOrganisation, makeService } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { useServices } from '../test/harness.ts';
 
 const h = useServices();
 
+/** What the tests use of the organisation service and of the vocabularies; the services are reached through the kernel. */
+interface OrganisationsAdmin {
+  delete(actor: Actor, id: string): Promise<void>;
+  update(actor: Actor, id: string, input: unknown): Promise<{ type: string }>;
+}
+interface Vocabularies {
+  createTerm(actor: Actor, vocabulary: string, input: unknown): Promise<unknown>;
+  removeTerm(actor: Actor, vocabulary: string, key: string): Promise<{ outcome: string }>;
+}
+type Started = Awaited<ReturnType<typeof h.start>>;
+const organisationsOf = (s: Started): OrganisationsAdmin => {
+  const service: unknown = s.kernel.services.get('registry.organisations');
+  return service as OrganisationsAdmin;
+};
+const vocabulariesOf = (s: Started): Vocabularies => {
+  const settings: unknown = s.kernel.services.get('core.settings');
+  return (settings as { vocabularies: Vocabularies }).vocabularies;
+};
+
+async function rejection(promise: Promise<unknown>): Promise<DomainError> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as DomainError;
+  }
+  throw new Error('the call resolved; it should have been refused');
+}
+
 describe('org.usage', () => {
   it('blocks the delete of an organisation that a service uses, naming this module, in every role', async () => {
     const s = await h.start();
     const admin = await s.actor('admin');
-    const organisations = s.kernel.services.get(
-      'registry.organisations',
-    ) as unknown as OrganisationsService;
+    const organisations = organisationsOf(s);
     const provider = await makeOrganisation(s.pool, { type: 'provider' });
     const consortium = await makeOrganisation(s.pool, { type: 'consortium' });
     const spare = await makeOrganisation(s.pool, { type: 'provider' });
     await makeService(s.pool, { provider: provider.id, consortia: [consortium.id] });
     for (const used of [provider, consortium]) {
-      const error = await organisations.delete(admin, used.id).catch((e) => e);
+      const error = await rejection(organisations.delete(admin, used.id));
       expect(error).toMatchObject({ status: 409, type: 'organisation-in-use' });
       expect(error.message).toContain('registry.services');
     }
@@ -32,9 +57,7 @@ describe('org.usage', () => {
   it('blocks a change of type while a service refers to the organisation, and allows it without one', async () => {
     const s = await h.start();
     const admin = await s.actor('admin');
-    const organisations = s.kernel.services.get(
-      'registry.organisations',
-    ) as unknown as OrganisationsService;
+    const organisations = organisationsOf(s);
     const used = await makeOrganisation(s.pool, { type: 'provider' });
     const free = await makeOrganisation(s.pool, { type: 'provider' });
     await makeService(s.pool, { provider: used.id });
@@ -52,9 +75,7 @@ describe('org.usage', () => {
   it('lets the organisation go once the last service link is gone', async () => {
     const s = await h.start();
     const admin = await s.actor('admin');
-    const organisations = s.kernel.services.get(
-      'registry.organisations',
-    ) as unknown as OrganisationsService;
+    const organisations = organisationsOf(s);
     const org = await makeOrganisation(s.pool, { type: 'provider' });
     const service = await makeService(s.pool, { provider: org.id });
     await expect(organisations.delete(admin, org.id)).rejects.toMatchObject({ status: 409 });
@@ -67,8 +88,7 @@ describe('the usage of the stage vocabulary', () => {
   it('deactivates a term that a service uses instead of deleting it, and refuses it for new services', async () => {
     const s = await h.start();
     const admin = await s.actor('admin');
-    const vocabularies = (s.kernel.services.get('core.settings') as SettingsInternalsBundle)
-      .vocabularies;
+    const vocabularies = vocabulariesOf(s);
     const provider = await makeOrganisation(s.pool, { type: 'provider' });
     await vocabularies.createTerm(admin, 'stage', { key: 'BETA', labels: { en: 'Beta' } });
     await vocabularies.createTerm(admin, 'stage', { key: 'ALPHA', labels: { en: 'Alpha' } });
@@ -95,8 +115,7 @@ describe('the usage of the stage vocabulary', () => {
   it('accepts a term an administrator adds, and every seeded stage', async () => {
     const s = await h.start();
     const admin = await s.actor('admin');
-    const vocabularies = (s.kernel.services.get('core.settings') as SettingsInternalsBundle)
-      .vocabularies;
+    const vocabularies = vocabulariesOf(s);
     const provider = await makeOrganisation(s.pool, { type: 'provider' });
     await vocabularies.createTerm(admin, 'stage', { key: 'PILOT', labels: { en: 'Pilot' } });
     for (const stage of ['DEV', 'DEMO', 'PROD', 'TERM', 'PILOT']) {

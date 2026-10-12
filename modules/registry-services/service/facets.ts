@@ -19,7 +19,7 @@ function columnFacet(
   return {
     id,
     ...entry,
-    where: (selected) => (selected.length > 0 ? inArray(column, [...selected]) : sql`false`) as SQL,
+    where: (selected) => (selected.length > 0 ? inArray(column, [...selected]) : sql`false`),
     async values(scope: SQL | undefined, db: Db) {
       const rows = await db
         .select({ key: column, count: sql<number>`count(*)::int` })
