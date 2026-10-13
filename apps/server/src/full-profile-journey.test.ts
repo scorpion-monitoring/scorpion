@@ -132,6 +132,7 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
       'core.ui-shell',
       'registry.organisations',
       'registry.services',
+      'public-api',
     ]);
 
     // 1. The first administrator, as `scorpion create-admin` makes it: Admin, given by the system.
