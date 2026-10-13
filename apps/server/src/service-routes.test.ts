@@ -465,3 +465,62 @@ describe('GET /licenses and GET /service-roles', () => {
     expect((await s.get('/service-roles')).status).toBe(401);
   });
 });
+
+describe('GET /services/schema', () => {
+  it('answers a plain user with the steps, fields, limits, roles and defaults, parsed with the route’s own schema', async () => {
+    const { s, user } = await world();
+    const reply = await s.get('/services/schema', as(user));
+    expect(reply.status).toBe(200);
+    const body = reply.body as {
+      steps: { id: string; fields: { key: string; widget: string }[]; schema: unknown }[];
+      limits: { sameAs: number };
+      roles: { id: string }[];
+      defaults: unknown;
+      devConsole: boolean;
+    };
+    expect(body.steps.map((step) => step.id)).toEqual(['basics', 'provision', 'contact']);
+    expect(body.steps[0]!.fields.map((field) => field.widget)).toEqual([
+      'text',
+      'text',
+      'license',
+      'select',
+      'image',
+      'text',
+      'text',
+      'text',
+    ]);
+    expect(body.limits.sameAs).toBe(20);
+    expect(body.roles.map((role) => role.id)).toEqual(['provider', 'consortium']);
+    expect(body.defaults).toEqual({ stage: 'DEV', sameAs: [], consortia: [] });
+    // The e2e and test stacks run outside production: the console may be shown.
+    expect(body.devConsole).toBe(true);
+    conforms(s, reply, 'GET', '/services/schema');
+  });
+
+  it('is not read as the id of a service, takes a locale and refuses anything else', async () => {
+    const { s, user } = await world();
+    const german = await s.get('/services/schema?locale=de', as(user));
+    expect(german.status).toBe(200);
+    for (const bad of ['?z=1', '?locale=' + 'x'.repeat(36)]) {
+      expect((await s.get(`/services/schema${bad}`, as(user))).status, bad).toBe(422);
+    }
+  });
+
+  it('is denied to an anonymous caller (401), a person without roles (403) and a Reviewer, who may not create', async () => {
+    const { s } = await world();
+    expect((await s.get('/services/schema')).status).toBe(401);
+    expect(
+      (await s.get('/services/schema', as(await s.signedIn('nobody', { roles: [] })))).status,
+    ).toBe(403);
+    expect(
+      (await s.get('/services/schema', as(await s.signedIn('rev', { roles: ['reviewer'] }))))
+        .status,
+    ).toBe(403);
+  });
+
+  it('holds no value of any person or service', async () => {
+    const { s, user, provider } = await world();
+    const reply = await s.get('/services/schema', as(user));
+    expect(JSON.stringify(reply.body)).not.toContain(provider.id);
+  });
+});

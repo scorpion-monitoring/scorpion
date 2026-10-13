@@ -595,7 +595,7 @@ const createSchemaSchema = z.object({
     description: z.number().int(),
     url: z.number().int(),
     email: z.number().int(),
-    contactType: z.number().int(),
+    contactKind: z.number().int().describe('The kind of the contact point, such as `support`.'),
     bodyBytes: z.number().int(),
   }),
   fieldTypes: z.array(

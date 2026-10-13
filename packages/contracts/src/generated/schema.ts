@@ -9367,6 +9367,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/services/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The steps, fields, limits and registry data of the create wizard. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description In the order of the wizard. */
+                            steps: {
+                                id: string;
+                                order: number;
+                                /** @description A key of the message catalogue. */
+                                title: string;
+                                /** @description Keys of the paragraphs above the fields. */
+                                intro: string[];
+                                component?: string;
+                                /** @description The step comes from another module. */
+                                contributed: boolean;
+                                fields: {
+                                    key: string;
+                                    /** @description A JSON pointer into the one nested form object: `/contact/type`. */
+                                    path: string;
+                                    /** @description A key of the registry `service.fieldType`. */
+                                    type: string;
+                                    /** @description The widget the page draws the field with. */
+                                    widget: string;
+                                    /** @description A key of the message catalogue. */
+                                    label: string;
+                                    /** @description A key of the message catalogue. */
+                                    help?: string;
+                                    required: boolean;
+                                    default?: unknown;
+                                    config: {
+                                        [key: string]: unknown;
+                                    };
+                                    /** @description For an organisation field: the key of its role in `service.orgRole`. */
+                                    role?: string;
+                                    /** @description Not part of the create body: the value is set afterwards. */
+                                    deferred: boolean;
+                                    choices?: {
+                                        value: string;
+                                        /** @description Text that is ready to show, in the language asked for. */
+                                        label?: string;
+                                        /** @description A key of the message catalogue, for an option the config lists. */
+                                        labelKey?: string;
+                                    }[];
+                                }[];
+                                /** @description A JSON Schema (an object with the fields at their pointers). The browser checks a step against it before it lets the person go on; the server validates the same fields with the Zod schemas of the same field types. */
+                                schema: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            limits: {
+                                sameAs: number;
+                                slug: number;
+                                name: number;
+                                description: number;
+                                url: number;
+                                email: number;
+                                /** @description The kind of the contact point, such as `support`. */
+                                contactKind: number;
+                                bodyBytes: number;
+                            };
+                            fieldTypes: {
+                                id: string;
+                                widget: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                            }[];
+                            roles: {
+                                id: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                /** @description The organisation types that may take the role. */
+                                orgTypes: string[];
+                                min: number;
+                                max: number;
+                                order: number;
+                                label: string;
+                                memberOnly: boolean;
+                            }[];
+                            /** @description The object a new form starts from. */
+                            defaults: {
+                                [key: string]: unknown;
+                            };
+                            /** @description True only when the server does not run in production: the JSON console may be shown. */
+                            devConsole: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/services/by-slug/{slug}": {
         parameters: {
             query?: never;

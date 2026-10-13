@@ -34,7 +34,7 @@ export interface SchemaLimits {
   description: number;
   url: number;
   email: number;
-  contactType: number;
+  contactKind: number;
   /** The most a create body may weigh, in bytes. */
   bodyBytes: number;
 }
@@ -46,7 +46,7 @@ export const SCHEMA_LIMITS: SchemaLimits = {
   description: MAX_DESCRIPTION_LENGTH,
   url: MAX_URL_LENGTH,
   email: MAX_EMAIL_LENGTH,
-  contactType: MAX_CONTACT_TYPE_LENGTH,
+  contactKind: MAX_CONTACT_TYPE_LENGTH,
   bodyBytes: MAX_CREATE_BODY_BYTES,
 };
 

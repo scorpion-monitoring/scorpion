@@ -169,6 +169,7 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /services/{id}/schema-org`                 | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /services/by-slug/{slug}`                  | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /services/facets`                          | registry.services      | `registry.services.service.read`             | default    | no             |
+| `GET /services/schema`                          | registry.services      | `registry.services.service.create`           | default    | no             |
 | `PATCH /services/{id}`                          | registry.services      | `registry.services.service.read`             | default    | yes            |
 | `POST /services`                                | registry.services      | `registry.services.service.create`           | default    | yes            |
 | `PUT /services/{id}/icon`                       | registry.services      | `registry.services.service.read`             | strict     | yes            |

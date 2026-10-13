@@ -158,7 +158,7 @@ describe('the schema of the shipped configuration', () => {
       description: 4000,
       url: 500,
       email: 254,
-      contactType: 64,
+      contactKind: 64,
       bodyBytes: MAX_CREATE_BODY_BYTES,
     });
     expect(schema.limits).toBe(SCHEMA_LIMITS);
