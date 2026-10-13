@@ -1096,7 +1096,7 @@ test.describe('journey 5: a plain User and an anonymous visitor', () => {
     expect(navigation.status()).toBe(200);
     const body = await navigation.text();
     expect(body).not.toMatch(/admin/i);
-    expect(JSON.parse(body).routes as string[]).toEqual(
+    expect((JSON.parse(body) as { routes: string[] }).routes).toEqual(
       expect.arrayContaining(['/services', '/services/:slug', '/public/services/:slug']),
     );
 
