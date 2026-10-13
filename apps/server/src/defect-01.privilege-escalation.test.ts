@@ -301,6 +301,10 @@ const SAMPLES: Record<
   // registry.services (M7 sprint 1). Reading services, the licence list and the organisation roles is every
   // signed-in person's (the forms need them); creating is every User's by the permission, and the service adds the rule that the provider is theirs.
   'GET /services': { kind: 'self', sample: () => ({ method: 'GET', path: '/services' }) },
+  'GET /services/facets': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/services/facets' }),
+  },
   'GET /services/{id}': {
     kind: 'self',
     sample: ({ id }) => ({ method: 'GET', path: `/services/${id}` }),

@@ -59,10 +59,15 @@ describe('GET /services', () => {
     }
     const reply = await s.get('/services?page=1&pageSize=2', as(user));
     expect(reply.status).toBe(200);
-    const body = reply.body as Page<{ name: string; organisations: { role: string }[] }>;
+    const body = reply.body as Page<{
+      name: string;
+      provider: { id: string } | null;
+      consortia: unknown[];
+    }>;
     expect(body.metadata).toEqual({ currentPage: 1, pageSize: 2, totalCount: 3, totalPages: 2 });
     expect(body.result.map((r) => r.name)).toEqual(['C']);
-    expect(body.result[0]!.organisations.map((o) => o.role)).toEqual(['provider']);
+    expect(body.result[0]!.provider?.id).toBe(provider.id);
+    expect(body.result[0]!.consortia).toEqual([]);
     conforms(s, reply, 'GET', '/services');
   });
 
@@ -107,6 +112,137 @@ describe('GET /services', () => {
   it('answers 401 to an anonymous caller', async () => {
     const { s } = await world();
     expect((await s.get('/services')).status).toBe(401);
+  });
+});
+
+interface Row {
+  id: string;
+  name: string;
+  provider: { id: string; name: string } | null;
+  consortia: { id: string }[];
+}
+interface FacetAnswer {
+  id: string;
+  label: string;
+  values: { key: string; label: string; count: number; selected: boolean; empty?: true }[];
+}
+
+describe('GET /services with filters, and GET /services/facets', () => {
+  async function filled() {
+    const w = await world();
+    const { s, provider, consortium } = w;
+    const consortium2 = await makeOrganisation(s.kernel.pool, { type: 'consortium' });
+    const provider2 = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const none = await makeService(s.kernel.pool, { name: 'None', provider: provider.id });
+    const two = await makeService(s.kernel.pool, {
+      name: 'Two',
+      provider: provider2.id,
+      stage: 'DEV',
+      license: 'MIT',
+      consortia: [consortium.id, consortium2.id],
+    });
+    return { ...w, consortium2, provider2, none, two };
+  }
+
+  it('filters by repeated values (OR within, AND across), each service once, and conforms to its schema', async () => {
+    const { s, user, consortium, consortium2, provider2, none, two } = await filled();
+    const rows = async (query: string) => {
+      const reply = await s.get(`/services${query}`, as(user));
+      expect(reply.status, query).toBe(200);
+      conforms(s, reply, 'GET', '/services');
+      return (reply.body as Page<Row>).result;
+    };
+    const both = await rows(`?consortium=${consortium.id}&consortium=${consortium2.id}`);
+    expect(both.map((r) => r.id)).toEqual([two.id]);
+    expect(both[0]!.consortia.map((c) => c.id).sort()).toEqual(
+      [consortium.id, consortium2.id].sort(),
+    );
+    expect((await rows('?consortium=:none')).map((r) => r.id)).toEqual([none.id]);
+    expect((await rows(`?provider=${provider2.id}&stage=DEV`)).map((r) => r.id)).toEqual([two.id]);
+    expect(await rows(`?provider=${provider2.id}&stage=PROD`)).toEqual([]);
+    expect((await rows('?license=:none')).map((r) => r.id)).toEqual([none.id]);
+    expect((await rows('?sort=provider&dir=desc')).map((r) => r.name)).toHaveLength(2);
+  });
+
+  it('answers 422, not an empty list, for an unknown organisation, stage, licence, facet or a value that is too long', async () => {
+    const { s, user } = await filled();
+    for (const bad of [
+      '?consortium=00000000-0000-4000-8000-000000000000',
+      '?consortium=not-an-id',
+      '?provider=:none',
+      '?stage=NOPE',
+      '?license=Not-A-Licence',
+      '?colour=red',
+      `?stage=${'x'.repeat(101)}`,
+    ]) {
+      for (const path of ['/services', '/services/facets']) {
+        const reply = await s.get(`${path}${bad}`, as(user));
+        expect(reply.status, `${path}${bad}`).toBe(422);
+        expect((reply.body as Problem).errors?.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('answers the facets with counts over the set the other facets leave, in the locale asked for', async () => {
+    const { s, user, consortium, consortium2, provider2 } = await filled();
+    const reply = await s.get(`/services/facets?stage=DEV&locale=de`, as(user));
+    expect(reply.status).toBe(200);
+    conforms(s, reply, 'GET', '/services/facets');
+    const body = reply.body as Page<FacetAnswer>;
+    expect(body.result.map((f) => f.id)).toEqual(['consortium', 'stage', 'license', 'provider']);
+    const facet = (id: string) => body.result.find((f) => f.id === id)!;
+    expect(facet('stage').label).toBe('Stufe');
+    // The stage facet ignores its own choice: both stages are counted, DEV is selected.
+    expect(
+      Object.fromEntries(facet('stage').values.map((v) => [v.key, [v.count, v.selected]])),
+    ).toEqual({
+      PROD: [1, false],
+      DEV: [1, true],
+    });
+    // The others count over stage DEV only.
+    expect(
+      facet('consortium')
+        .values.map((v) => [v.key, v.count])
+        .sort(),
+    ).toEqual(
+      [
+        [consortium.id, 1],
+        [consortium2.id, 1],
+      ].sort(),
+    );
+    expect(facet('provider').values.map((v) => [v.key, v.count])).toEqual([[provider2.id, 1]]);
+    expect(facet('license').values.map((v) => [v.key, v.count])).toEqual([['MIT', 1]]);
+    expect(facet('provider').values[0]!.label).toBeTruthy();
+  });
+
+  it('shows a chosen value with count 0 and the services with none under their own label', async () => {
+    const { s, user, consortium, consortium2 } = await filled();
+    const reply = await s.get(
+      `/services/facets?consortium=${consortium.id}&consortium=:none&stage=PROD`,
+      as(user),
+    );
+    const consortia = (reply.body as Page<FacetAnswer>).result.find((f) => f.id === 'consortium')!;
+    // The consortium facet counts over stage PROD only: nothing there has a consortium, one has none.
+    expect(consortia.values.find((v) => v.key === consortium.id)).toMatchObject({
+      count: 0,
+      selected: true,
+    });
+    expect(consortia.values.find((v) => v.key === consortium2.id)).toBeUndefined();
+    expect(consortia.values.find((v) => v.empty)).toMatchObject({
+      key: ':none',
+      label: 'No consortium',
+      count: 1,
+      selected: true,
+    });
+  });
+
+  it('answers 401 to an anonymous caller and 403 to a person without a role, and reads nothing', async () => {
+    const { s, user } = await filled();
+    expect((await s.get('/services/facets')).status).toBe(401);
+    const nobody = await s.signedIn('nobody', { roles: [] });
+    expect((await s.get('/services/facets', as(nobody))).status).toBe(403);
+    expect((await s.get('/services', as(nobody))).status).toBe(403);
+    expect((await s.get('/services/facets', as(user))).status).toBe(200);
   });
 });
 

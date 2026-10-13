@@ -8840,8 +8840,18 @@ export interface paths {
                     pageSize?: string;
                     /** @description Matches the slug or the name, without case. */
                     q?: string;
-                    /** @description Default `name`. */
-                    sort?: "name" | "slug" | "stage";
+                    /** @description Organisation ids; repeat to choose several (OR). `:none` stands for the services that have none. */
+                    consortium?: string | string[];
+                    /** @description Terms of the `stage` vocabulary; repeat to choose several (OR). */
+                    stage?: string | string[];
+                    /** @description SPDX licence ids; repeat to choose several (OR). `:none` stands for the services with no licence. */
+                    license?: string | string[];
+                    /** @description Organisation ids; repeat to choose several (OR). */
+                    provider?: string | string[];
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                    /** @description Default `name`. `provider` sorts by the provider's name. */
+                    sort?: "name" | "slug" | "stage" | "provider";
                     /** @description Default `asc`. Ties are broken by id. */
                     dir?: "asc" | "desc";
                 };
@@ -8851,7 +8861,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Services in the order asked for, then by id. */
+                /** @description Services in the order asked for, then by id; each service once, with its provider and its consortia (none, one or many). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -8875,9 +8885,12 @@ export interface paths {
                                 /** @description Where the icon is served, below the base path. Absent without an icon. */
                                 iconUrl?: string;
                                 public: boolean;
-                                organisations: {
-                                    /** @description A key of the registry `service.orgRole`. */
-                                    role: string;
+                                provider: {
+                                    id: string;
+                                    abbreviation: string;
+                                    name: string;
+                                } | null;
+                                consortia: {
                                     id: string;
                                     abbreviation: string;
                                     name: string;
@@ -8904,14 +8917,12 @@ export interface paths {
                         "application/problem+json": components["schemas"]["Problem"];
                     };
                 };
-                /** @description The input is not valid. */
+                /** @description A filter that is not a facet, or a value that names nothing (an unknown organisation, stage or licence). */
                 422: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
+                    content?: never;
                 };
                 /** @description Unexpected error. */
                 500: {
@@ -9055,6 +9066,116 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Matches the slug or the name, without case. */
+                    q?: string;
+                    /** @description Organisation ids; repeat to choose several (OR). `:none` stands for the services that have none. */
+                    consortium?: string | string[];
+                    /** @description Terms of the `stage` vocabulary; repeat to choose several (OR). */
+                    stage?: string | string[];
+                    /** @description SPDX licence ids; repeat to choose several (OR). `:none` stands for the services with no licence. */
+                    license?: string | string[];
+                    /** @description Organisation ids; repeat to choose several (OR). */
+                    provider?: string | string[];
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The facets by `order`, all on page 0. The counts of a facet are over the services that the search and every other facet leave; a value with no service shows only when it is chosen. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** @description A key of the registry `service.facet`; also the name of its filter. */
+                                id: string;
+                                label: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                values: {
+                                    /** @description What to send as the filter; `:none` for the services with none. */
+                                    key: string;
+                                    label: string;
+                                    count: number;
+                                    selected: boolean;
+                                    /**
+                                     * @description Set on the value that stands for "none".
+                                     * @enum {boolean}
+                                     */
+                                    empty?: true;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description As for the list. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
