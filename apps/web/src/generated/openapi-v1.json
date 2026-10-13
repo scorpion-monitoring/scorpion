@@ -6,9 +6,98 @@
     "description": "The public API, version 1."
   },
   "components": {
-    "schemas": {},
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "A URI reference that identifies the problem type.",
+            "example": "about:blank"
+          },
+          "title": {
+            "type": "string",
+            "example": "Not Found"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Quote this when you report a problem."
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "in": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "message"
+              ]
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status"
+        ]
+      }
+    },
     "parameters": {}
   },
-  "paths": {},
+  "paths": {
+    "/openapi.json": {
+      "get": {
+        "public": true,
+        "publicReason": "The description of the public API (routes, schemas, permission names) is documentation: it is committed to the repository and shown on the public page /docs, and holds no record.",
+        "summary": "The OpenAPI description of this API",
+        "description": "The OpenAPI 3.1 document of the public API (v1) of this instance, built from the routes that are loaded. The server URL is the address this request came to.",
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-public": true
+      }
+    }
+  },
   "webhooks": {}
 }

@@ -101,6 +101,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/public-api':
+        specifier: workspace:*
+        version: link:../../modules/public-api
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../../modules/registry-organisations
@@ -455,6 +458,25 @@ importers:
       '@scorpion/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+
+  modules/public-api:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
 
   modules/registry-organisations:
     dependencies:
