@@ -146,7 +146,8 @@ test.describe('the create wizard by keyboard', () => {
     await expect(step2).toBeFocused();
     const operated = page.getByLabel(/^Operated by/);
     await tabTo(page, operated);
-    await page.keyboard.press('ArrowDown');
+    // A closed choice is changed by typing the start of an option's text.
+    await page.keyboard.type(provider.name.slice(0, 6));
     await expect(operated).toHaveValue(provider.id);
     await tabTo(page, page.getByRole('button', { name: 'Next' }));
     await page.keyboard.press('Enter');
