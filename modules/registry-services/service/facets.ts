@@ -163,8 +163,16 @@ export const SEED_FACETS: FacetEntry[] = [
       order: 30,
       emptyLabel: { en: 'Unknown', de: 'Unbekannt' },
     }),
-    async unknownOf(keys, env) {
-      const found = await Promise.all(keys.map((key) => env.findLicence(key)));
+    // A licence a service has can always be chosen, even when SPDX no longer lists it: the facet counts it.
+    async unknownOf(keys, env, db) {
+      const held = await db
+        .selectDistinct({ key: service.license })
+        .from(service)
+        .where(inArray(service.license, [...keys]));
+      const stored = new Set(held.map((row) => row.key));
+      const found = await Promise.all(
+        keys.map(async (key) => stored.has(key) || (await env.findLicence(key)) !== undefined),
+      );
       return keys.filter((_key, index) => !found[index]);
     },
   },

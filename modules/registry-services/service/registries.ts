@@ -244,7 +244,7 @@ export const facetEntrySchema = z.strictObject({
   emptyLabel: labels.optional(),
   where: fn<(selection: FacetSelection, serviceId: SQL) => SQL>(),
   values: fn<(matching: SQL, db: Db) => Promise<FacetValue[]>>(),
-  unknownOf: fn<(keys: readonly string[], env: FacetEnv) => Promise<string[]>>().optional(),
+  unknownOf: fn<(keys: readonly string[], env: FacetEnv, db: Db) => Promise<string[]>>().optional(),
   labelsOf:
     fn<(keys: readonly string[], env: FacetEnv) => Promise<Map<string, string>>>().optional(),
 });

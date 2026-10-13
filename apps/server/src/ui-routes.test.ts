@@ -3,6 +3,7 @@
 // about public pages and links a failing test, on the committed `full` profile.
 import { PUBLIC_PAGES, REGISTRIES } from '@scorpion/core-ui-shell/public';
 import { describe, expect, it } from 'vitest';
+import { iconShapes } from '@scorpion/contracts/icons';
 import { sources } from './generated/profile.ts';
 
 type Entry = { module: string; value: Record<string, unknown> };
@@ -82,5 +83,16 @@ describe('the pages of the full profile', () => {
       ).toContain(path);
       expect(browser, path).not.toContain(path);
     }
+  });
+});
+
+describe('the navigation icons of the full profile', () => {
+  it('are all drawn: an entry that names an icon the shell lacks would show the fallback dot', () => {
+    const missing = contributions('ui.nav')
+      .filter(({ value }) => typeof value.icon === 'string' && !(value.icon in iconShapes))
+      .map(
+        ({ module, value }) => `${module}: ${value.id as string} names "${value.icon as string}"`,
+      );
+    expect(missing).toEqual([]);
   });
 });

@@ -163,7 +163,7 @@ export function createCatalogue(deps: CatalogueDeps) {
         });
         continue;
       }
-      const unknown = (await facet.unknownOf?.(keys, env)) ?? [];
+      const unknown = (await facet.unknownOf?.(keys, env, db)) ?? [];
       for (const value of unknown) {
         problems.push({ in: 'query', path: id, message: `"${value}" is not a known value.` });
       }
