@@ -304,9 +304,7 @@ describe('a facet another module contributes', () => {
     labels: { en: 'Category', de: 'Kategorie' },
     order: 50,
     emptyLabel: { en: 'Uncategorized', de: 'Ohne Kategorie' },
-    async labelsOf(keys) {
-      return new Map(keys.map((key) => [key, key.toUpperCase()]));
-    },
+    labelsOf: (keys) => Promise.resolve(new Map(keys.map((key) => [key, key.toUpperCase()]))),
   });
   // A facet with its own condition and no table: the first letter of the name.
   const letter: FacetEntry = {
@@ -324,9 +322,7 @@ describe('a facet another module contributes', () => {
       );
       return rows.rows;
     },
-    async unknownOf(keys) {
-      return keys.filter((key) => !/^[A-Z]$/.test(key));
-    },
+    unknownOf: (keys) => Promise.resolve(keys.filter((key) => !/^[A-Z]$/.test(key))),
   };
 
   async function start() {

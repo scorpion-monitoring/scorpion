@@ -259,7 +259,9 @@ export function createCatalogue(deps: CatalogueDeps) {
               ...selection.keys,
             ]),
           ];
-          const labels = (keys.length > 0 && (await facet.labelsOf?.(keys, env))) || new Map();
+          const labels: Map<string, string> =
+            (keys.length > 0 ? await facet.labelsOf?.(keys, env) : undefined) ??
+            new Map<string, string>();
           const values: CatalogueFacetValue[] = keys.map((key) => ({
             key,
             label: labels.get(key) ?? key,

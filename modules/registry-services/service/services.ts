@@ -483,7 +483,7 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         const terms = await deps.settings.listTerms(vocabulary, { includeInactive: true, locale });
         return new Map(terms.map((term) => [term.key, term.label]));
       },
-      findLicence: fieldEnv.findLicence,
+      findLicence: (id) => fieldEnv.findLicence(id),
     }),
   });
 

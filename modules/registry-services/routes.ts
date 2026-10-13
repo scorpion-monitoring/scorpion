@@ -566,7 +566,10 @@ function filtersOf(params: Record<string, unknown>): Record<string, string[]> {
   const filters: Record<string, string[]> = {};
   for (const [name, value] of Object.entries(params)) {
     if (NOT_FILTERS.has(name) || value === undefined) continue;
-    filters[name] = Array.isArray(value) ? value.map(String) : [String(value)];
+    // The schema allows a text or a list of texts; anything else is not a filter value and the service refuses it.
+    filters[name] = (Array.isArray(value) ? value : [value]).map((entry) =>
+      typeof entry === 'string' ? entry : '',
+    );
   }
   return filters;
 }
