@@ -6,6 +6,7 @@ import type { Db } from './db.ts';
 import type { Logger } from './logger.ts';
 import type { JobsApi } from './jobs.ts';
 import type { EventsApi } from './outbox.ts';
+import type { RegisteredRoute } from './routes.ts';
 import type { SettingsPort } from './settings.ts';
 import type { z } from 'zod';
 
@@ -67,4 +68,10 @@ export interface ModuleContext<
    * to any module; `core.settings` validates what an administrator writes against it.
    */
   readonly settingsSchemas: ReadonlyMap<string, z.ZodType>;
+  /**
+   * The routes every loaded module registered, on both surfaces. Empty until `routes()` of every
+   * module has returned, so call it from a handler, never from `routes()` itself. Read-only and open
+   * to any module; `public-api` builds the runtime OpenAPI document from it.
+   */
+  readonly routes: () => readonly RegisteredRoute[];
 }

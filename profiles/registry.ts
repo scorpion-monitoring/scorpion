@@ -7,7 +7,8 @@ import { defineProfile } from '@scorpion/kernel';
 // Modules (architecture.md, "Deployment profiles and operations"):
 //   Core: core.identity, core.authz, core.settings, core.blob, core.notifications,
 //     core.audit, core.ui-shell
-//   Registry: registry.organisations (M6), registry.services (M7); M8 adds public-api
+//   Registry: registry.organisations (M6), registry.services (M7)
+//   API: public-api (M8)
 export default defineProfile({
   name: 'registry',
   modules: [
@@ -20,5 +21,6 @@ export default defineProfile({
     'core.ui-shell',
     'registry.organisations',
     'registry.services',
+    'public-api',
   ],
 });

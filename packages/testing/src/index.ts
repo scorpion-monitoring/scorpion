@@ -70,3 +70,16 @@ export {
 } from './mailpit.ts';
 export { startSmtpServer, type ReceivedMail, type TestSmtpServer } from './smtp-server.ts';
 export { tablesContaining } from './grep.ts';
+export {
+  expectEnvelope,
+  expectReplyMatchesRoute,
+  expectStableOrder,
+  findContractTestFiles,
+  pathOf,
+  v1ContractTests,
+  v1RoutesWithoutContractTest,
+  type Envelope,
+  type V1ContractContext,
+  type V1Reply,
+  type V1Request,
+} from './v1-contract.ts';

@@ -139,6 +139,7 @@ the same file answers 401 and 403 on every non-public route.
 | `PUT /secrets/{name}`                           | core.settings          | `core.settings.secret.write`                 | strict     | yes            |
 | `PUT /settings/{module}`                        | core.settings          | `core.settings.write`                        | default    | yes, with body |
 | `GET /ui/navigation`                            | core.ui-shell          | **public**                                   | default    | no             |
+| `GET /openapi.json`                             | public-api             | **public**                                   | default    | no             |
 | `DELETE /organisations/{id}`                    | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
 | `DELETE /organisations/{id}/logo`               | registry.organisations | `registry.organisations.organisation.read`   | default    | yes            |
 | `DELETE /organisations/{id}/membership`         | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
@@ -227,6 +228,24 @@ The pages of the web app follow the same rule ([ADR-0027](../adr/0027-web-shell-
 when its module says why and `PUBLIC_PAGES` of `core.ui-shell` lists it, and the server decides who may open a page from the same list that
 builds the navigation. The sign-in, registration, recovery and first-admin pages are public; the profile needs
 `core.identity.profile.read`. Public pages call only routes that are public or need the session the page checks for itself.
+
+## The public API (v1)
+
+Routes under `/api/v1` are the ones programs call ([ADR-0037](../adr/0037-public-api.md)). They follow the rules of every route, with these additions:
+
+- **A v1 route is never public**, with one named exception: `GET /api/v1/openapi.json` (module `public-api`) describes the API (routes, schemas, the
+  permission each route needs) and holds no record; it is also committed to the repository and drawn by the public page `/docs`. A walker
+  (`public-api-full-profile.test.ts`) fails when any other v1 route is `public: true`, and when a v1 path appears that nobody listed.
+- **A call needs a token.** `Authorization: Bearer` or `X-API-Key`; the token passes only for a permission that its scopes name **and** its owner holds
+  (ADR-0015), checked at every call against the database. A session cookie is accepted on v1 as on any route (a person on the instance's own pages), and
+  it never makes a response readable to another origin: `Access-Control-Allow-Credentials` is never sent.
+- **CORS** is an allow-list of origins in the `public-api` setting `corsOrigins` (empty: same origin only). Only `/api/v1` answers a preflight, the
+  header is the caller's own origin and never `*`, and `/api/internal` never carries a CORS header.
+- **Every v1 call with `audit: true` is recorded** in the `api` channel of the audit trail, denied (401, 403) and limited (429) calls included, with the route
+  template, the status and the id of the token (never the token). A call the rate limit turns away is recorded without the token id: the limit runs before the
+  token is checked, so that a flood of guesses costs no hash each. The spec route is not audited.
+- **A v1 read never returns what the module's internal read hides.** No v1 data route exists yet; the v1 rows of the field tables below arrive with the
+  first ones (providers and services, M8 sprint 2), and `response-fields.test.ts` walks their schemas then.
 
 ## Rules on one resource
 

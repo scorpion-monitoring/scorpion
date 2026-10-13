@@ -1,6 +1,6 @@
 # M8 Sprint Plan: `public-api` v1 read and the documentation
 
-Status: **draft for the maintainer**, 2026-10-13. Nothing here is decided; the open questions are in §13 and each carries a recommendation. Decisions the plan takes itself are marked "proposed".
+Status: **decided**, 2026-10-13. The maintainer answered the eight questions of §10 (the answers are recorded there); nothing is open. Decisions the plan took itself are marked "proposed".
 Scope source: [implementation.md](implementation.md) §4, M8, [architecture.md](architecture.md) (the `public-api` row of the module table, the API surfaces table, "One route definition"), FEATURES §3.16 and defect 15 ([FEATURES.md](FEATURES.md) §5).
 
 M8 is size M in `implementation.md`. This plan has **three sprints (about three weeks for one developer)**, because M8 is the first milestone since M4b that changes an ASVS-scoped path (`apps/server/src/pipeline/**`, for the CORS allow-list) and the first that makes a public contract that CI guards for breaking changes. Gate 2 follows it.
@@ -72,7 +72,7 @@ Work items
 3. **The module** `modules/public-api` (`module.ts`, `public.ts`, README): serves `GET /api/v1/openapi.json` built at runtime from the v1 routes of the loaded modules (the same generator as `openapi-generate.ts`, so the committed document and the runtime one cannot differ; a test compares them for the full profile). The server URL is the request's origin plus the base path.
 4. **CORS allow-list** (the pipeline step, ASVS-scoped): origins from a `core.settings` value of `public-api` (empty by default: same origin only). Only `/api/v1/*` answers a preflight; an origin not in the list gets no CORS header (the request itself is judged by the token as usual); `Access-Control-Allow-Origin` is the origin itself, never `*`, and never `Allow-Credentials` (a v1 call carries a token, not a cookie; a cookie session on `/api/v1` stays refused if it is today). A change to the list takes effect without a restart.
 5. **The audit writer:** a v1 call (allowed, denied or rate limited) is one `api`-channel entry with the route template, status and the token's id (never the token), with the retention that exists. The first v1 route with `audit: true` proves the backlog item on `surface`.
-6. **Per-token and per-address limits proved for v1** with a test, without changing a limit: a token is limited by its own bucket, so two tokens from one address do not share one and one token from two addresses does not escape (`pipeline/rate-limit.ts` already keys both; the test makes the claim on the v1 surface).
+6. **Per-token and per-address limits proved for v1** with a test, without changing a limit: a token is limited by its own bucket, so two tokens from one address do not share one and one token from two addresses does not escape (`pipeline/rate-limit.ts` already keys both; the test makes the claim on the v1 surface; **the prototype showed it was not true as written, see Decision 5 amended**).
 7. **The contract-test harness** in `packages/testing`: given a v1 route, call it with a factory token and validate the response (status, body, headers, the envelope, the sort) against the route's own schema from the spec; a route without a contract test fails a walker (as `response-fields.test.ts` does for the internal API). Categories and indicators of M9 plug into it.
 8. **Settings and messages:** the `public-api` settings (the allow-list, the spec's title and contact), their schema, README and the settings page text (en and de).
 
@@ -91,7 +91,7 @@ Work items
 1. **`GET /api/v1/providers`** in `registry.organisations`: all providers or, with `is_member=true`, those the token's owner is an approved member of, and, with `is_member=false`, **the others** (both correct, tested against a brute-force count of generated data). Permission `registry.organisations.v1.read` (or the existing read permission, Decision 1). A parameter that is not a boolean is 422. The envelope, 0-based pages, sort by abbreviation then id, `totalCount` over the filtered set.
 2. **`GET /api/v1/services`** in `registry.services`: filters `service` (abbreviations) and `provider` (abbreviations) as in the legacy API, plus the catalogue's own filters where they are cheap (stage, licence); **`consortia` filled** (the case that was always empty), one row per service whatever its number of consortia, a service with none shows `[]`; sort by abbreviation (slug), then id. It calls the catalogue query function; no new query.
 3. **What a row carries** is pinned in the plan before code (a table in the sprint's pull request): the legacy fields (abbreviation, name, the provider, the consortia, the stage by its term key) and nothing the internal read hides; **the contact point never**; a service that is not public is returned to a holder who may read it internally, with its `public` flag. The field tables of `docs/security/authorization.md` get the v1 rows; the walker covers them.
-4. **A `GET /api/v1/services/{id}` and the Schema.org profile in v1** only if Decision 3 says yes (otherwise the backlog line stays).
+4. **`GET /api/v1/services/{id}` and `GET /api/v1/services/{id}/schema-org`** (Decision 3): the same builder and escaping as the internal route, no contact point; contract tests like the other routes.
 5. **Contract tests** for every route with the harness of sprint 1: the envelope, the stable order across pages, empty and last page, a bad filter (422), an unknown provider abbreviation (an empty list or 422, decided in the ADR addendum and tested), a token without the scope (403), no token (401), the `X-API-Key` alias.
 6. **Regression tests for defect 15:** `defect-15.v1-reads.test.ts` (`is_member=false`, `consortia`, and the `totalCount` that counts the filtered set), never weakened.
 7. **Docs of the routes:** each v1 route has a summary, a description of its sort and paging, and an example; the generated spec is regenerated and committed (`pnpm openapi:generate`); the module READMEs list the routes.
@@ -152,16 +152,18 @@ Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e` 
 - The contract-test harness and the walker for v1 routes; the spec diff in CI against the last release tag.
 - A v1 section in the field tables of `docs/security/authorization.md`.
 
-## 10. Decisions to take (open questions)
+## 10. Decisions taken
 
-1. **Which permission does a v1 read need?** _Recommendation:_ one permission per route family (`registry.organisations.v1.read`, `registry.services.v1.read`), granted to the role `user` by default, so a token's scope can name exactly what it reads and an administrator can withdraw the API without touching the screens. The alternative reuses `…organisation.read` and `…service.read`, which gives a token everything the screen reads and no way to scope it.
-2. **Is any v1 read anonymous?** _Recommendation:_ no. v1 always needs a token; the anonymous reads are the M7 public records. This keeps the audit and the per-token limit meaningful.
-3. **Do v1 services carry the Schema.org profile and the public flag?** _Recommendation:_ the flag yes (a client must know what is public), the Schema.org profile as a separate `GET /api/v1/services/{id}/schema-org` in sprint 2 only if the maintainer wants it for M8; otherwise it stays in the backlog. The row never carries the contact point.
-4. **Swagger UI or the existing `/docs` renderer?** _Recommendation:_ extend the renderer that exists (a try-it-out is a small form) and add no dependency; Swagger UI is a large dependency that wants CSP relaxations the shell does not have. If the maintainer prefers Swagger UI, the pull request names the dependency, pins it, and the CSP and the Scorecard consequences are checked first.
-5. **Is the change of the rate limits part of M8?** _Recommendation:_ no; M8 only proves per-token limits for v1. The layout's repeated calls (the measured cause of the 429s) are cheaper to fix in the web shell and need no pipeline change; schedule that between M8 and M9 as its own pull request.
-6. **How is the spec diff done?** _Recommendation:_ a development dependency such as `oasdiff` (a binary, run in CI from a pinned container or release asset) is the most complete; a small script of our own (paths, methods, required request fields, response fields, enums) is enough for a spec of this size and adds nothing to supply chain. Start with the script, record the gaps in the backlog, and revisit when v1 grows in M9 to M11.
-7. **The staging dry run of Gate 2.** The maintainer runs it (or says it is deferred to Gate 3, where M13 exists); the plan does not block the release on it.
-8. **Version after M7.** If `0.9.0` is tagged, the M8 release is `0.10.0`. Confirm.
+Answered by the maintainer on 2026-10-13.
+
+1. **Permission of a v1 read:** one per route family (`registry.organisations.v1.read`, `registry.services.v1.read`), granted to the role `user` by default, so a token's scope names exactly what it reads and an administrator can withdraw the API without touching the screens.
+2. **No anonymous v1 read.** v1 always needs a token; the anonymous reads are the M7 public records. **One exception, decided in sprint 1:** `GET /api/v1/openapi.json` (the description of the API, no record) is `public: true` with a reason; a walker fails any other public v1 route.
+3. **v1 services carry the public flag and the Schema.org profile in M8:** the flag in the row, and `GET /api/v1/services/{id}/schema-org` in sprint 2 (the same builder and escaping as the internal route, never the contact point). The backlog line "A public read of `services` in v1" is closed by sprint 2.
+4. **`/docs` extends the existing renderer** (a small try-it-out form); no Swagger UI, no new dependency, no CSP relaxation.
+5. **The change of the rate limits is not part of M8** (a separate pull request with V7 and V8 entries, between M8 and M9); M8 only proves per-token limits for v1. **Amended 2026-10-13 (sprint 1):** the prototype showed that two tokens behind one address share the address bucket, so the claim of §4 item 6 did not hold. The maintainer chose to change `pipeline/rate-limit.ts` in sprint 1 over wording the claim down: the address bucket of a token call is separate and ten times larger, nothing else about a limit changes ([ADR-0037](adr/0037-public-api.md), decision 1). The review of the limits against the calls per page stays a separate pull request.
+6. **The spec diff is a small script of our own** (paths, methods, required request fields, response fields, enums), with its gaps recorded in the backlog; revisit when v1 grows in M9 to M11.
+7. **The staging dry run of Gate 2 is the maintainer's** and does not block the release.
+8. **The M8 release is `0.10.0`.**
 
 ## 11. Risks
 

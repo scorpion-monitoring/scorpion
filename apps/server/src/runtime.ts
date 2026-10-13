@@ -14,6 +14,7 @@ import {
   type Profile,
 } from '@scorpion/kernel';
 import { createApp } from './app.ts';
+import { corsOriginsOf } from './pipeline/cors.ts';
 import { limitsFromSettings } from './pipeline/rate-limit.ts';
 import { createMetrics, type Metrics } from './metrics.ts';
 import type { ReadinessResult, SystemProbes } from './system-routes.ts';
@@ -138,6 +139,7 @@ export function startServer(options: RuntimeOptions): RunningServer {
     rateLimiter: kernel.rateLimiter,
     audit: kernel.audit,
     storedRateLimits: storedRateLimits(kernel),
+    corsOrigins: corsOriginsOf(kernel),
   };
 
   let current = createApp({ ...common, routes: [], authorizer: kernel.authorizer, booting: true });

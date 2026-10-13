@@ -17,7 +17,7 @@ const audited = (audit: unknown) =>
 
 describe('docs/security/authorization.md', () => {
   it('lists every route of the live registry with its permission [ASVS-8.1.1]', async () => {
-    const { kernel } = await app.start();
+    const { kernel } = await app.start({ publicApi: true });
     const rows = kernel.routes
       .map(({ module, surface, route }) => ({
         key: `${route.method.toUpperCase()} ${route.path}`,

@@ -29,6 +29,8 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
+import publicApiModule from '@scorpion/public-api/module';
+import publicApiPackage from '@scorpion/public-api/package.json' with { type: 'json' };
 import organisationsModule from '@scorpion/registry-organisations/module';
 import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
@@ -55,6 +57,7 @@ import {
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createApp, SURFACE_PREFIX, type AppOptions } from '../app.ts';
 import { createMetrics } from '../metrics.ts';
+import { corsOriginsOf } from '../pipeline/cors.ts';
 import { limitsFromSettings } from '../pipeline/rate-limit.ts';
 
 export const API = SURFACE_PREFIX.internal;
@@ -115,6 +118,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   organisations?: boolean;
   /** false: the profile has no registry.services (default: it is there, as in `full`; it needs the organisations). */
   services?: boolean;
+  /** true: the profile has public-api (the CORS allow-list, the runtime spec); default: it has not. */
+  publicApi?: boolean;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
@@ -138,20 +143,30 @@ export interface RequestOptions {
   csrf?: string;
   headers?: Record<string, string>;
   peer?: string;
+  /** Call the public API (`/api/v1`) instead of the internal one. */
+  v1?: boolean;
 }
 
-export function useIdentityApp() {
+/**
+ * `shared: true` keeps the applications a test started until the end of the file instead of stopping
+ * them after each test: for a suite that starts one application and asks it many things (the
+ * contract tests of a v1 route).
+ */
+export function useIdentityApp(options: { shared?: boolean } = {}) {
   let server: StartedPostgres;
   const open: Kernel[] = [];
   beforeAll(async () => {
     server = await startPostgres();
   }, 120_000);
-  afterEach(async () => {
+  const stopKernels = async () => {
     await Promise.all(open.splice(0).map((kernel) => kernel.stop()));
-  });
+  };
+  if (!options.shared) afterEach(stopKernels);
   afterAll(async () => {
     await server?.stop();
   });
+  // Registered after the server's: hooks after a suite run last-in first-out, so the kernels stop first.
+  if (options.shared) afterAll(stopKernels);
 
   return {
     async start(options: AppOptionsForTest = {}) {
@@ -182,6 +197,7 @@ export function useIdentityApp() {
             ...(options.organisations === false || options.services === false
               ? []
               : ['registry.services']),
+            ...(options.publicApi ? ['public-api'] : []),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -215,6 +231,9 @@ export function useIdentityApp() {
           ...(options.organisations === false || options.services === false
             ? []
             : [{ manifest: servicesModule, packageJson: servicesPackage }]),
+          ...(options.publicApi
+            ? [{ manifest: publicApiModule, packageJson: publicApiPackage }]
+            : []),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
@@ -236,6 +255,7 @@ export function useIdentityApp() {
           'core.ui-shell': '@scorpion/core-ui-shell',
           'registry.organisations': '@scorpion/registry-organisations',
           'registry.services': '@scorpion/registry-services',
+          'public-api': '@scorpion/public-api',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,
@@ -281,6 +301,7 @@ export function useIdentityApp() {
         storedRateLimits: options.storedRateLimits
           ? async () => limitsFromSettings(await kernel.settingsOf('core.settings').get())
           : undefined,
+        corsOrigins: corsOriginsOf(kernel),
         probes: {
           readiness: () =>
             Promise.resolve({
@@ -304,7 +325,7 @@ export function useIdentityApp() {
         if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
         if (options.csrf !== undefined) headers['x-csrf-token'] = options.csrf;
         const res = await app.request(
-          `${mountPath(kernel.config)}${API}${path}`,
+          `${mountPath(kernel.config)}${options.v1 ? SURFACE_PREFIX.v1 : API}${path}`,
           {
             method,
             headers,
@@ -341,7 +362,7 @@ export function useIdentityApp() {
         const headers: Record<string, string> = { ...options.headers };
         if (options.cookie !== undefined) headers.cookie = `${COOKIE}=${options.cookie}`;
         const res = await app.request(
-          `${mountPath(kernel.config)}${API}${path}`,
+          `${mountPath(kernel.config)}${options.v1 ? SURFACE_PREFIX.v1 : API}${path}`,
           { method: 'GET', headers },
           { incoming: { socket: { remoteAddress: options.peer ?? '203.0.113.7' } } },
         );
@@ -417,6 +438,9 @@ export function useIdentityApp() {
         stream,
         signedIn,
         get: (path: string, options?: RequestOptions) => call('GET', path, options),
+        /** A call of the public API (`/api/v1`). */
+        getV1: (path: string, options: RequestOptions = {}) =>
+          call('GET', path, { ...options, v1: true }),
         post: (path: string, options?: RequestOptions) => call('POST', path, options),
         /** Everything written to the log so far, as one string. */
         logText: () => lines.join(''),
