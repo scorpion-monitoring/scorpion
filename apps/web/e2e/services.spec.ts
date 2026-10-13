@@ -188,10 +188,7 @@ test.describe('journey 2: the catalogue', () => {
   }) => {
     const api = await adminApi(playwright, baseURL, at);
     const c = await seedCatalogue(api);
-    await signInThroughPage(page, at, {
-      username: 'root',
-      password: 'a long password for the admin',
-    });
+    await signInThroughPage(page, at, admin);
     await page.goto(at(`/services?q=${c.tag}`));
     // The licence facet: one service has MIT, the others have none ("Unknown").
     await expect(choice(page, /^MIT \(1\)/)).toBeVisible();
@@ -211,10 +208,7 @@ test.describe('journey 2: the catalogue', () => {
     page,
     at,
   }) => {
-    await signInThroughPage(page, at, {
-      username: 'root',
-      password: 'a long password for the admin',
-    });
+    await signInThroughPage(page, at, admin);
     const response = await page.goto(at('/services?f.stage=NO-SUCH-STAGE'));
     expect(response?.status()).toBe(422);
   });
