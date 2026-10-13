@@ -171,7 +171,7 @@ export const SEED_FACETS: FacetEntry[] = [
         .where(inArray(service.license, [...keys]));
       const stored = new Set(held.map((row) => row.key));
       const found = await Promise.all(
-        keys.map((key) => (stored.has(key) ? true : env.findLicence(key))),
+        keys.map(async (key) => stored.has(key) || (await env.findLicence(key)) !== undefined),
       );
       return keys.filter((_key, index) => !found[index]);
     },
