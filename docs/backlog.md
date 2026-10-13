@@ -155,6 +155,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 
 ## End-to-end test follow-ups (0.7.0 release)
 
+- **Two e2e flakes in shard 1/3 of CI, seen on the M7 sprint 7 pull request and the 0.9.0 release pull request** (both passed on a re-run of the failed job, and in a full local run of 426 tests). `profile.spec.ts` "follows the preference of a person over the browser…" timed out on `getByLabel('Username')` of the login page after a sign-out, and `organisations.spec.ts` journey 2 saw 5 rows after "Next" where the second page has 1 (the URL had changed, the table had not within 5 s). Neither touches code of sprint 7. Both wait on a page that reloads the layout's four calls plus the page's own; if they come back, give the failing step a wait on the response, not a longer timeout, and look at the load of the runner.
 - **Only `page.goto` waits for hydration.** A click that loads another page with a full reload, or a form that redirects, is not covered by the wait (`hydrated(page)` in `apps/web/e2e/support/fixtures.ts` can be called by hand). Look at the first failure of any E2E test that types or presses a key right after a navigation before looking elsewhere.
 - **A retry is only as good as its fixtures.** `createUser` now accepts the account of a failed first attempt (409 on a retry), but a test that changes the account before it fails (password, email) leaves a different state for the retry. Prefer tests that create what they change.
 
