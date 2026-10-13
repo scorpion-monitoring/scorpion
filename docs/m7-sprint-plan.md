@@ -56,7 +56,7 @@ State on 2026-10-12 (checked against `dev`):
 - **A module with events** is added as an optional peer of `core.audit` and gets entries in `decisions.ts` in the same sprint; `decisions.test.ts` fails otherwise.
 - Use the factories in `packages/testing`; add `makeService` (with organisations, field values, an icon, `public`) there. Never hand-write fixture SQL.
 - Update the module README in the same commit as every manifest change. A test never calls a third party (SPDX is stubbed; the bundled list is the fallback). No new runtime dependency is expected; if one appears, the pull request description names it and says why.
-- Every pull request carries a changeset (package `scorpion`), written for operators and API users. Sprints 1 to 5 are `minor`; the release turns them into `0.9.0`.
+- Every pull request carries a changeset (package `scorpion`), written for operators and API users. Sprints 1 to 6 are `minor`; sprint 7 is `patch` or `--empty`; the release turns them into `0.9.0`.
 
 ## 3. Mapping of the service to schema.org
 
@@ -84,16 +84,17 @@ A property with no value is **omitted**, never `null` or an empty string. The ou
 
 ## 4. Sprint overview
 
-| Sprint | Branch                               | Theme                                                                                                                                                                          | Closes                     |
-| ------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| 1      | `feature/m7-services-core`           | Module, tables, the five registries, the two config files, the SPDX adapter, the service record with its organisation roles, create in one transaction, the `registry` profile | none                       |
-| 2      | `feature/m7-services-access`         | The policy `service.member`, scoped permissions, the three edit groups, `update`, slug rename with history, the icon, contact visibility, the publication flag                 | defect 14 (ownership, 422) |
-| 3      | `feature/m7-services-profile`        | The Schema.org builder and routes, the public reads (service and organisation), notices, the move of the one audited `{@html}` component                                       | none                       |
-| 4      | `feature/m7-services-catalogue`      | The read model, facets over the filtered set, sort and pages, the catalogue screen                                                                                             | defect 2                   |
-| 5      | `feature/m7-services-wizard`         | The create wizard from the config, client and server validation from one schema, the dev console, the license search                                                           | none                       |
-| 6      | `feature/m7-services-detail-release` | The detail and edit pages, publish and unpublish, the public pages, journeys, accessibility, release `0.9.0`                                                                   | none                       |
+| Sprint | Branch                          | Theme                                                                                                                                                                          | Closes                     |
+| ------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| 1      | `feature/m7-services-core`      | Module, tables, the five registries, the two config files, the SPDX adapter, the service record with its organisation roles, create in one transaction, the `registry` profile | none                       |
+| 2      | `feature/m7-services-access`    | The policy `service.member`, scoped permissions, the three edit groups, `update`, slug rename with history, the icon, contact visibility, the publication flag                 | defect 14 (ownership, 422) |
+| 3      | `feature/m7-services-profile`   | The Schema.org builder and routes, the public reads (service and organisation), notices, the move of the one audited `{@html}` component                                       | none                       |
+| 4      | `feature/m7-services-catalogue` | The read model, facets over the filtered set, sort and pages, the catalogue screen                                                                                             | defect 2                   |
+| 5      | `feature/m7-services-wizard`    | The create wizard from the config, client and server validation from one schema, the dev console, the license search                                                           | none                       |
+| 6      | `feature/m7-services-detail`    | The detail and edit pages, publish and unpublish, the public pages, journeys, accessibility                                                                                    | none                       |
+| 7      | `feature/m7-services-release`   | Small fixes that ride along (icons, the collapsed sidebar, the licence filter), the request measurement, the backlog close-out, release `0.9.0`                                | none                       |
 
-Order matters. Sprint 1 settles the conventions every later module copies (the registries, the config validation, the adapter shape) and gives M8 and M9 something to call. Sprint 2 holds the rights before any screen or profile can use them. Sprint 3 does the public surface early, because it is the riskiest piece (anonymous reads, a pipeline that must not change) and needs the policy of sprint 2. Sprint 4 is the read model that closes defect 2. Sprints 5 and 6 are the screens, the journeys and the release; sprint 6 holds the least new design. If the schedule is a problem, trim in this order: the public organisation page (the route stays), the notice to the provider on publication (sprint 3), the dev console (sprint 5).
+Order matters. Sprint 1 settles the conventions every later module copies (the registries, the config validation, the adapter shape) and gives M8 and M9 something to call. Sprint 2 holds the rights before any screen or profile can use them. Sprint 3 does the public surface early, because it is the riskiest piece (anonymous reads, a pipeline that must not change) and needs the policy of sprint 2. Sprint 4 is the read model that closes defect 2. Sprints 5 and 6 are the screens and the journeys; sprint 6 holds the least new design. Sprint 7 is small on purpose: what rides along with the release, and the release itself. If the schedule is a problem, trim in this order: the items of sprint 7 other than the release, the public organisation page (the route stays), the notice to the provider on publication (sprint 3), the dev console (sprint 5).
 
 Module graph after M7: `registry.services` depends on `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob` and `registry.organisations`, with `core.ui-shell` and `core.audit` as optional peers. `registry.organisations` gains no dependency on it (the `org.usage` entry is a contribution). `kpi.framework` (M9) will depend on it and contribute to its registries. No cycle is possible.
 
@@ -230,9 +231,9 @@ Tests (sprint 5): unit tests of the step ordering and `applies`, of the schema e
 
 Definition of done: journey 1 passes and a member creates a service through the wizard under both base paths; a failure loses no input and leaves no row; a contributed step works; `pnpm check`, `pnpm test` pass.
 
-## 10. Sprint 6: detail and edit pages, public pages, journeys, release
+## 10. Sprint 6: detail and edit pages, public pages, journeys
 
-**Branch:** `feature/m7-services-detail-release`. **Goal:** every route has a screen; a member edits their service in the browser, a manager renames it, a Reviewer makes it public, anyone can read a public service and its JSON-LD; the journeys pass under both base paths; `0.9.0` is released.
+**Branch:** `feature/m7-services-detail`. **Goal:** every route has a screen; a member edits their service in the browser, a manager renames it, a Reviewer makes it public, anyone can read a public service and its JSON-LD; the journeys pass under both base paths. The release is sprint 7.
 
 What sprint 5 left for this sprint (built, tested and documented in the sprint 5 pull request; reuse it, do not rebuild it):
 
@@ -257,11 +258,30 @@ Work items
    4. a Reviewer makes the service public, the provider's manager gets the inbox item, an anonymous browser reads `/public/services/:slug` (JSON-LD parses, names the service, carries the logo URL under the base path, has no contact point, no CSP violation) and `/public/organisations/:id`; the Reviewer unpublishes and the next anonymous request is 404; a manager and a member have no publish button and a direct `PUT` answers 403; with `service.allowPublic` switched off on the settings form every public address is 404 and the button explains why;
    5. a plain User sees the catalogue and the detail page but no edit, publish or administration entry, and gets 403 on every write route; an anonymous visitor sees only the public pages and the sign-in page and 404 on a private service; the answer of `GET /ui/navigation` for a plain User holds no administration entry and the check of ASVS 7.4.4 stays green;
    6. an organisation that has a service cannot be deleted by an Admin (the `409` is shown naming the module), which closes the `org.usage` journey that M6 could only test with a fixture.
-9. **Release `0.9.0`** as in CONTRIBUTING.md "Releases" (the flow of M6): confirm with the maintainer that `assessed_commit` of the four chapters is bumped on the release branch (**ask first**; §0 item 4), `release/0.9.0` from `dev`, `pnpm changeset status` and `pnpm changeset version` (it must announce `0.9.0`; if it announces anything else, stop and ask), a pull request into `main` with the label `asvs-no-impact` and a true reason line if the check asks (`pnpm security:asvs --release` runs), the annotated tag `v0.9.0` whose push builds and publishes `0.9.0-full`, `0.9.0-core-only` and `0.9.0-registry`, and the merge-back into `dev` on a `feature/…` branch. No deploy.
+9. **Measure the requests per page** (the input of sprint 7 item 4): see §10a. Nothing is released in this sprint.
 
 Tests (sprint 6): component and page tests with the shell harness for the own states (a member, a manager, a Reviewer, an Admin, a plain User), the buttons drawn from `allowedActions`, the read-only identity fields, the public pages with no private field, the hidden controls; `ui.test.ts` for the new paths and `PUBLIC_PAGES`; unit tests of the form-to-patch mapping; the journeys; axe; the keyboard run.
 
-Definition of done: the journeys pass in CI under both base paths; no serious axe violation; `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e` and `pnpm security:asvs` are green on `dev` after the merge; `0.9.0` is tagged, its three images are in ghcr, and `main` is merged back.
+Definition of done: the journeys pass in CI under both base paths; no serious axe violation; `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e` and `pnpm security:asvs` are green on `dev` after the merge.
+
+## 10a. Sprint 7: what rides along, and the release
+
+**Branch:** `feature/m7-services-release`. **Goal:** `0.9.0` goes out with the small things that sit next to the M7 screens and cost little, and with a backlog that says what is true. The sprint is short; nothing in it may touch an ASVS-scoped path, so the release re-assessment stays what sprint 6 left it.
+
+Work items
+
+1. **The navigation icons.** `inbox`, `mail` and `settings` are used by `ui.nav` entries and are not in `Icon.svelte`, so those entries show the fallback dot. Draw the three (the same 24 x 24 outline style; the icon stays out of the accessible name) and add a test that fails when a `ui.nav` entry of the full profile names an icon the table lacks. No new dependency; the icon library of the maintainer's observation stays in the backlog.
+2. **The collapsed sidebar** shows a horizontal scrollbar: hide the overflow of the collapsed layout (or do not render the labels) and cover it with a Playwright check that the collapsed sidebar has no horizontal scroll, in both themes.
+3. **The licence filter and a stored licence** (backlog, sprint 4). `unknownOf` of the `license` facet must accept a licence that a service has, even when SPDX no longer lists it, so a value the catalogue counts can always be chosen. Test: a service with a licence the stub does not know is counted, chosen and returned.
+4. **The requests of a page, measured.** Count the API calls that the catalogue, the service page (view and edit), the dashboard and an administration page make on load and on one interaction (a filter click, a sort), under a signed-in User, with the inbox bell and the cards included. Write the numbers and the rate-limit groups they fall into in `docs/backlog.md` ("Too many 429s"). **No change to `apps/server/src/pipeline/**`** and no change to a limit: that is a separate pull request with its own ASVS entries (V7, V8) and a test that the public endpoints stay limited. If the catalogue's three calls per load are the worst case, say so and consider whether `GET /account/permissions` can be replaced by what the navigation already holds; do not change the navigation contract in this sprint.
+5. **The backlog close-out** (below) and the items of §12 that sprint 6 did not add.
+6. **Release `0.9.0`** as in CONTRIBUTING.md "Releases" (the flow of M6): confirm with the maintainer that `assessed_commit` of the four chapters is bumped on the release branch (**ask first**; §0 item 4), `release/0.9.0` from `dev`, `pnpm changeset status` and `pnpm changeset version` (it must announce `0.9.0`; if it announces anything else, stop and ask), a pull request into `main` with the label `asvs-no-impact` and a true reason line if the check asks (`pnpm security:asvs --release` runs), the annotated tag `v0.9.0` whose push builds and publishes `0.9.0-full`, `0.9.0-core-only` and `0.9.0-registry`, and the merge-back into `dev` on a `feature/…` branch. No deploy. Check that the tag matches the root `package.json` version (the publish job is in `ci.yml`; the backlog entry asked for the check).
+
+Left for later on purpose (backlog): the change of the rate limits, avatars in the member lists, the icon library, a sort on `GET /organisations`, logos in list rows, signed images.
+
+Tests (sprint 7): the icon test of item 1, the sidebar check of item 2, the facet case of item 3; the measurement is a table in the backlog, not a test.
+
+Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e` and `pnpm security:asvs` are green on `dev` after the merge; `0.9.0` is tagged, its three images are in ghcr, and `main` is merged back; the backlog says what is true.
 
 ## 11. Acceptance (from implementation.md) mapped to tests
 

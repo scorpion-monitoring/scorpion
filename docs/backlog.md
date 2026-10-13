@@ -15,13 +15,13 @@
   start, not before migrations.
 - Make the image build's lockfile step reproducible: it reuses every locked version, but it does
   rewrite `pnpm-lock.yaml` inside the build stage for non-`full` profiles.
-- Release image workflow: CI builds only throwaway `scorpion:ci-<profile>` images and has no tag
+- ~~Release image workflow~~ Done: `ci.yml` has a `v*` tag trigger and the `Publish (full | core-only | registry)` jobs (M7 sprint 7 checks that the tag matches the root `package.json` version). (was: CI builds only throwaway `scorpion:ci-<profile>` images and has no tag
   trigger, so the release step "build the profile images as `scorpion:<x.y.z>-<profile>`"
   (CONTRIBUTING.md, "Releases") is manual (`pnpm build --profile <name> --tag scorpion:<x.y.z>-<name>`).
   Add a workflow that runs on `v*` tags: check that the tag matches the root `package.json` version,
   build every release profile (not `fixture-ab`) with `docker/Dockerfile`, run the same smoke tests as
   CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
-  repository secrets) needs a decision first; record it in an ADR.
+  repository secrets) needs a decision first; record it in an ADR.)
 
 ## Audit follow-ups (M4 sprint 4)
 
@@ -213,7 +213,7 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-
 - ~~**A batch lookup of users in `core.identity`.**~~ Done in M6 sprint 4 (same PR): `users.findByIds(ids)` (one query per 1000 ids; unknown and
   malformed ids left out). The member lists, the request mails (managers and administrators) and the "no manager" notice use it. Counting only
   active accounts in `memberCount` can use it now; not done (see above).
-- **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). A flag on `createRoute()` that lets the pipeline pass a
+- **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). _Settled in M7 (Decision 12): `service.edit` uses the pattern of M6, so the flag was not built; it stays deferred._ A flag on `createRoute()` that lets the pipeline pass a
   caller who lacks the permission globally, with the service re-check as the guard, would make a delegated route visible to the pipeline instead of
   looking like an ordinary read. It touches `packages/contracts/src/route.ts` and `apps/server/src/pipeline/**` (both ASVS-scoped). Build it in M7 only
   if `service.edit` cannot use the pattern of M6 (a plain permission on the route, the scoped check in the service).
@@ -275,12 +275,13 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found.
 
 Found while using the instance; not yet investigated.
 
-- **Horizontal scrollbar in the collapsed sidebar.** With the sidebar collapsed, a horizontal scrollbar appears. Probably the expanded content
+- **Horizontal scrollbar in the collapsed sidebar.** _Scheduled: M7 sprint 7 item 2._ With the sidebar collapsed, a horizontal scrollbar appears. Probably the expanded content
   overflows the narrow width; the labels need `overflow-x: hidden` or the collapsed layout must not render them.
 - **Too many 429s when administering the instance.** Clicking through the administration screens quickly hits the rate limit within seconds.
   The limits (`default` and `strict` groups, `apps/server/src/pipeline/rate-limit.ts`, and the settings that feed them) need a review against
   what an administrator's screens call per page (several requests per page load, plus the inbox bell and the dashboard cards). Measure the
   requests per page first, then raise the `default` group or key it so that a signed-in person is not counted like an anonymous caller. The
+  catalogue (M7 sprint 4) makes three API calls per load (the list, the facets and `GET /account/permissions`) and repeats them on every filter click, so it is likely to be the worst page; M7 sprint 7 measures the calls per page and records the numbers here, and changes nothing in the pipeline. The
   pipeline is an ASVS-scoped path (V7, V8): the change needs the chapter files or the `asvs-no-impact` line and a test that the public
   endpoints (login, register, token use) stay limited.
 - **Account pictures are not used anywhere.** A person can upload an avatar (`PUT /account/avatar`, shown on the profile page), but it appears
@@ -296,15 +297,15 @@ Found while using the instance; not yet investigated.
   dependency and fits the CLAUDE.md rule to justify new dependencies), keep the `name` string of `ui.nav` entries working through a mapping (an
   unknown name still falls back to a dot), and check that the icons stay out of the accessible name (`aria-hidden`). A side finding: nav
   entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
-  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table.
+  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table. _Scheduled: M7 sprint 7 item 1 draws the three missing icons and adds that test; the library stays open._
 
 ## Services follow-ups (M7 sprint 1)
 
-- **Facet semantics are sprint 4's.** The `service.facet` entry carries `where(selected)` (the condition for a selection) and `values(scope, db)` (counts over the services a scope matches); the four seeded facets implement both and are tested, but the catalogue (sprint 4) decides which filters it passes as `scope` (Decision 13: all the other facets and the search). If sprint 4 finds the shape too narrow for the M9 category facet (a value held in `svc_field_value`), change the entry before M9 contributes one.
+- ~~**Facet semantics are sprint 4's.**~~ Done in M7 sprint 4: the entry shape changed (ADR-0035 addendum) and `fieldValueFacet()` serves a value in `svc_field_value`. (was: The `service.facet` entry carries `where(selected)` (the condition for a selection) and `values(scope, db)` (counts over the services a scope matches); the four seeded facets implement both and are tested, but the catalogue (sprint 4) decides which filters it passes as `scope` (Decision 13: all the other facets and the search). If sprint 4 finds the shape too narrow for the M9 category facet (a value held in `svc_field_value`), change the entry before M9 contributes one.)
 - **The OpenAPI body of `POST /services` documents the shipped fields only.** A deployment's own configured fields are accepted at their paths (the body is a loose object) and validated by the service, but they are not typed in the generated client. `GET /services/schema` (sprint 5) gives the browser the full schema; a generated per-profile OpenAPI body is not planned.
 - **The slug history holds the current slug too** (ADR-0035), so one unique index decides whether a slug is free; the plan wrote "the old slug is written to `svc_slug_history` on a rename". A rename (sprint 2) adds a row and keeps the old ones. A view of the history per service is not built.
-- **Message keys of the config have no catalogue yet.** The steps and fields name keys such as `services.field.slug.label`; the texts (en and de) arrive with the wizard (sprint 5), where a missing key fails the build. A contributed step uses the same convention.
-- **`./ui` is not exported yet.** The module has no screen in sprint 1; sprint 4 adds the `ui` entry and the `ui.routes` registrations (the profile generator picks it up).
+- **Message keys of the config have no catalogue yet.** The steps and fields name keys such as `services.field.slug.label`; the texts (en and de) arrive with the wizard (M7 sprint 5, still open), where a missing key fails the build. A contributed step uses the same convention.
+- ~~**`./ui` is not exported yet.**~~ Done in M7 sprint 4: the `ui` entry, `ui.routes` and `ui.nav`. (was: The module had no screen in sprint 1.)
 - **`core.audit` is the observer, as in M6.** Plan §2 lists `core.audit` as an optional peer of `registry.services`; the module follows `registry.organisations` instead: `core-audit` lists `registry.services` as an optional peer and holds the decisions, so the dependency graph has no cycle.
 - **The SPDX list is refreshed by hand in the repository.** The bundled fallback is regenerated with `node packages/integrations/scripts/generate-spdx.ts` after the pin in `spdx-pin.ts` moves; nothing reminds the maintainer when a new SPDX release appears. A scheduled workflow that opens a pull request, or a Dependabot-style check, is not built. The live list is fetched at most once a day and cached in `svc_license_cache`.
 - **A custom licence** (`LicenseRef-…`) and an expression such as `MIT OR Apache-2.0` are refused: only one SPDX id is accepted (plan §12).
@@ -341,7 +342,7 @@ Found while using the instance; not yet investigated.
 
 - **The facet entry shape changed in sprint 4** (ADR-0035 addendum): `where(selection, serviceId)` and `values(matching, db)` replace `where(selected)` and `values(scope, db)`, and `unknownOf` and `labelsOf` are new. No contributor existed yet, so nothing broke. M9's category should use `fieldValueFacet()`; if its values need a label from `kpi.framework` it brings a `labelsOf`.
 - **The facet lists are not capped.** A facet draws every value with a service in the set: a few hundred providers would make a long list. Not a problem at today's numbers; when it is, a "show more" and a search inside a facet belong to `Facets` in `packages/ui-kit` (the API already returns the values by count).
-- **A stored licence that SPDX no longer lists** shows in the licence facet (it is counted) and is a 422 when chosen as a filter (`unknownOf` asks the SPDX list; a deprecated id is accepted, a removed one is not). Make `unknownOf` for the licence accept what a service has, if it ever happens.
+- **A stored licence that SPDX no longer lists** shows in the licence facet (it is counted) and is a 422 when chosen as a filter (`unknownOf` asks the SPDX list; a deprecated id is accepted, a removed one is not). Make `unknownOf` for the licence accept what a service has, if it ever happens. _Scheduled: M7 sprint 7 item 3._
 - **The sort by stage is by the term key** (`DEV`, `DEMO`, `PROD`, `TERM`), not by the vocabulary's order or label. Sorting by the vocabulary's `sortOrder` needs the terms in the query (as the provider sort does with the names); not built.
 - **The sort by provider asks the organisation module for every provider's name** (one call, then the order is given to the query as a position list). Fine for hundreds of providers; with thousands, an `org`-side ordering or a denormalised name in a read model is the fix.
 - **Performance, as measured.** `service/catalogue.test.ts` pages 300 generated services and counts four facets under two active filters (rows, total, the organisation links and one count per facet) in about 45 ms on a local Testcontainers database (the test allows 2 s); the indexes on `stage`, `license`, `lower(name)` and the organisation links cover the filters. No index on `svc_field_value (field_key)` alone is added: the unique index `(service_id, field_key)` serves the `exists`. A profile of 10k services has not been measured; if it is slow, the next step is a materialised read model refreshed on the service events, as the plan says.
@@ -481,7 +482,7 @@ What the response-side audit and the walker (`apps/server/src/response-fields.te
 - **The walker reads declared schemas, not payloads.** No pipeline step validates a response against its schema, so a service that returned an extra field would not be seen. Services build named fields and the route tests for tokens, secrets, settings and the audit trail read real responses, but nothing checks every route. The contract tests of M8 (`pnpm test:contract`, every public route against its OpenAPI schema) should also fail on a forbidden name in a real response body.
 - **Free-form values cannot be walked.** `values` of a setting and `value` of a preference are `z.unknown()` records, so a secret-named key inside them is not seen by the walker. The guard in "Secret hygiene checks" above (a settings schema with a secret-looking key is refused at start-up) would close that; do it with that item.
 - **The route matrix is regenerated by hand.** `authorization-doc.test.ts` fails when `docs/security/authorization.md` differs from the live registry, but regenerating needs Docker and an environment variable (the header of the test says how). A `pnpm` command that boots the kernel without a database would make that quicker.
-- **Rows for the registry modules.** `docs/security/authorization.md` gets the field tables of the services, KPIs and organisations when M6 and M7 add them; the generated route table needs no change, and the walker covers their responses from the first route.
+- **Rows for the registry modules.** Done for organisations (M6) and services (M7); the KPIs' field tables are still to come with M9 to M11. `docs/security/authorization.md` gets them when those modules add them; the generated route table needs no change, and the walker covers their responses from the first route.
 - **The assessment's accepted weaknesses, in one place.** Each is written in the note of its ASVS entry; this list keeps them from being forgotten. None has a milestone.
   - **No second factor of our own (6.3.3).** See "Credentials follow-ups": TOTP, WebAuthn and recovery codes.
   - **The breach check fails open and can be switched off** (6.2.4, 6.2.12): a breached password is accepted when the service does not answer or `passwordBreachCheck` is `off`. The offline floor above narrows it.
