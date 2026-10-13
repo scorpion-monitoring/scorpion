@@ -22,7 +22,7 @@
     type JsonSchema,
     type WizardStep as KitStep,
   } from '@scorpion/ui-kit';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { errorMap } from './check-messages.ts';
   import DevConsole from './DevConsole.svelte';
   import {
@@ -145,7 +145,7 @@
       created = { id: saved.id, slug: saved.slug, name: saved.name, iconUrl: saved.iconUrl };
       found = noErrors();
       toaster.success(t('services.done.toast', { name: saved.name }));
-      await Promise.resolve();
+      await tick();
       doneHeading?.focus();
     } catch (error) {
       // A network failure reads as status 0: a message on the form and nothing lost.

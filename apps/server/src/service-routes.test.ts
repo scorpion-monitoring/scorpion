@@ -3,7 +3,7 @@
 // answer is also parsed with the response schema of its route, so the generated OpenAPI document and the
 // real answer cannot differ. The service rules are in modules/registry-services/service/services.test.ts.
 import { makeOrganisation, makeService } from '@scorpion/testing';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIdentityApp, type Reply } from './testing/identity-app.ts';
 
 const app = useIdentityApp();
@@ -467,6 +467,8 @@ describe('GET /licenses and GET /service-roles', () => {
 });
 
 describe('GET /services/schema', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it('answers a plain user with the steps, fields, limits, roles and defaults, parsed with the route’s own schema', async () => {
     const { s, user } = await world();
     const reply = await s.get('/services/schema', as(user));
@@ -516,6 +518,17 @@ describe('GET /services/schema', () => {
       (await s.get('/services/schema', as(await s.signedIn('rev', { roles: ['reviewer'] }))))
         .status,
     ).toBe(403);
+  });
+
+  it('never offers the JSON console on a server that runs in production', async () => {
+    // The flag is decided when the server starts, from NODE_ENV: a production process answers `false`, so the
+    // page (which draws the console only for `true`) has none in its DOM.
+    vi.stubEnv('NODE_ENV', 'production');
+    const { s, user } = await world();
+    const reply = await s.get('/services/schema', as(user));
+    expect(reply.status).toBe(200);
+    expect((reply.body as { devConsole: boolean }).devConsole).toBe(false);
+    conforms(s, reply, 'GET', '/services/schema');
   });
 
   it('holds no value of any person or service', async () => {
