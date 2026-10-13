@@ -16,6 +16,7 @@ import { MAX_UPLOAD_BYTES } from '@scorpion/core-blob/public';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import { serializeJsonLd } from '@scorpion/registry-organisations/public';
 import type { CatalogueRow } from './service/catalogue.ts';
+import { MAX_CREATE_BODY_BYTES } from './service/create-schema.ts';
 import { CONTRIBUTABLE_PROPERTIES } from './service/schema-org.ts';
 import {
   PERMISSION_CREATE,
@@ -34,8 +35,7 @@ const ok = <T extends z.ZodType>(description: string, schema: T) => ({
 });
 const idParam = z.object({ id: z.uuid() });
 
-/** The most a create body may weigh: the longest values are 4000 characters, the lists are short. */
-export const MAX_CREATE_BODY_BYTES = 64 * 1024;
+export { MAX_CREATE_BODY_BYTES };
 
 const organisationSchema = z.object({
   role: z.string().describe('A key of the registry `service.orgRole`.'),
@@ -544,6 +544,96 @@ export const listLicencesRoute = createRoute({
   },
 });
 
+const choiceSchema = z.object({
+  value: z.string(),
+  label: z.string().optional().describe('Text that is ready to show, in the language asked for.'),
+  labelKey: z
+    .string()
+    .optional()
+    .describe('A key of the message catalogue, for an option the config lists.'),
+});
+
+const schemaFieldSchema = z.object({
+  key: z.string(),
+  path: z.string().describe('A JSON pointer into the one nested form object: `/contact/type`.'),
+  type: z.string().describe('A key of the registry `service.fieldType`.'),
+  widget: z.string().describe('The widget the page draws the field with.'),
+  label: z.string().describe('A key of the message catalogue.'),
+  help: z.string().optional().describe('A key of the message catalogue.'),
+  required: z.boolean(),
+  default: z.unknown().optional(),
+  config: z.record(z.string(), z.unknown()),
+  role: z
+    .string()
+    .optional()
+    .describe('For an organisation field: the key of its role in `service.orgRole`.'),
+  deferred: z.boolean().describe('Not part of the create body: the value is set afterwards.'),
+  choices: z.array(choiceSchema).optional(),
+});
+
+const schemaStepSchema = z.object({
+  id: z.string(),
+  order: z.number().int(),
+  title: z.string().describe('A key of the message catalogue.'),
+  intro: z.array(z.string()).describe('Keys of the paragraphs above the fields.'),
+  component: z.string().optional(),
+  contributed: z.boolean().describe('The step comes from another module.'),
+  fields: z.array(schemaFieldSchema),
+  schema: z
+    .record(z.string(), z.unknown())
+    .describe(
+      'A JSON Schema (an object with the fields at their pointers). The browser checks a step against it before it lets the person go on; the server validates the same fields with the Zod schemas of the same field types.',
+    ),
+});
+
+const createSchemaSchema = z.object({
+  steps: z.array(schemaStepSchema).describe('In the order of the wizard.'),
+  limits: z.object({
+    sameAs: z.number().int(),
+    slug: z.number().int(),
+    name: z.number().int(),
+    description: z.number().int(),
+    url: z.number().int(),
+    email: z.number().int(),
+    contactType: z.number().int(),
+    bodyBytes: z.number().int(),
+  }),
+  fieldTypes: z.array(
+    z.object({
+      id: z.string(),
+      widget: z.string(),
+      labels: z.object({ en: z.string(), de: z.string().optional() }),
+    }),
+  ),
+  roles: z.array(
+    roleSchema.omit({ label: true }).extend({ label: z.string(), memberOnly: z.boolean() }),
+  ),
+  defaults: z.record(z.string(), z.unknown()).describe('The object a new form starts from.'),
+  devConsole: z
+    .boolean()
+    .describe(
+      'True only when the server does not run in production: the JSON console may be shown.',
+    ),
+});
+
+export const getCreateSchemaRoute = createRoute({
+  method: 'get',
+  path: '/services/schema',
+  // The schema serves the wizard, whose page needs this permission; it holds nothing of any person or service.
+  permission: PERMISSION_CREATE,
+  request: {
+    query: z.strictObject({
+      locale: z.string().max(35).optional().describe('The locale of the labels. Default `en`.'),
+    }),
+  },
+  responses: {
+    200: ok(
+      'The steps, fields, limits and registry data of the create wizard.',
+      createSchemaSchema,
+    ),
+  },
+});
+
 export const listServiceRolesRoute = createRoute({
   method: 'get',
   path: '/service-roles',
@@ -669,6 +759,11 @@ export function registerServiceRoutes(r: RouteRegistrar, service: ServicesServic
       200,
     );
   }) satisfies RouteHandler<typeof listServiceRolesRoute, AppEnv>);
+
+  // Before `/services/{id}`: a path with one more segment is never an id.
+  r.internal(getCreateSchemaRoute, (async (c) => {
+    return c.json(await service.createSchema(c.get('actor'), c.req.valid('query').locale), 200);
+  }) satisfies RouteHandler<typeof getCreateSchemaRoute, AppEnv>);
 
   r.internal(getServiceBySlugRoute, (async (c) => {
     return c.json(

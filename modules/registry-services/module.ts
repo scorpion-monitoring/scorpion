@@ -86,7 +86,15 @@ export interface ServicesModuleOptions {
   config?: ServicesConfig;
   /** Replaces the SPDX adapter. The default is the stub when `NODE_ENV=test`, else the live list with its cache. */
   spdx?: Spdx;
+  /** Overrides whether the schema offers the JSON console. The default is `NODE_ENV !== 'production'`. */
+  devConsole?: boolean;
 }
+
+/**
+ * Whether the create wizard may offer its JSON console: only when the server does not run in production. A
+ * production image never carries it, whatever the page's own build says (ADR-0035 addendum of sprint 5).
+ */
+export const devConsoleAllowed = (nodeEnv: string | undefined): boolean => nodeEnv !== 'production';
 
 /** Throws for an id that two contributors give: the module refuses to start rather than pick one. */
 function uniqueById<T extends { id: string }>(registry: string, entries: readonly T[]): T[] {
@@ -319,6 +327,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         roles,
         contributors: profileContributors,
         facets,
+        devConsole: options.devConsole ?? devConsoleAllowed(process.env.NODE_ENV),
         publicationMail: createPublicationMail(ctx, {
           identity: ctx.deps['core.identity'],
           notifications: ctx.deps['core.notifications'],

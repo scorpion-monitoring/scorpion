@@ -10,7 +10,7 @@ import {
   TEXT_PARSERS,
   type TextFormat,
 } from './fields.ts';
-import type { FieldTypeEntry } from './registries.ts';
+import type { Choice, ChoiceEnv, FieldTypeEntry } from './registries.ts';
 
 type Config = Record<string, unknown>;
 
@@ -41,6 +41,30 @@ const MAX_LENGTH_OF: Record<TextFormat, number> = {
   email: 254,
   'contact-type': 64,
 };
+
+// What the browser checks of a text, as a JSON Schema `pattern`: the shape of what the parsers accept, never
+// stricter (a browser that blocks a value the server takes is a bug), and the server still judges. The
+// agreement table of `create-schema.test.ts` feeds both the same values.
+const NO_CONTROL = '^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f]*$';
+const EMAIL_LABEL = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
+const PATTERN_OF: Partial<Record<TextFormat, string>> = {
+  plain: NO_CONTROL,
+  name: NO_CONTROL,
+  description: NO_CONTROL,
+  'contact-type': NO_CONTROL,
+  slug: '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$',
+  url: '^[hH][tT][tT][pP][sS]?://[^/\\\\?#\\s]\\S*$',
+  email: `^(?!\\.)(?![^@]*\\.(?:@|$))(?![^@]*\\.\\.)[A-Za-z0-9.!#$%&'*+/=?^_\`{|}~-]{1,64}@${EMAIL_LABEL}(?:\\.${EMAIL_LABEL})+$`,
+};
+
+/** The formats whose parser refuses an empty text (a description may be empty: it means "not set"). */
+const NON_EMPTY: ReadonlySet<TextFormat> = new Set([
+  'plain',
+  'slug',
+  'name',
+  'url',
+  'contact-type',
+]);
 
 const textConfig = z
   .strictObject({
@@ -80,10 +104,12 @@ const text: FieldTypeEntry = {
     const { format, multiple } = textConfig.parse(config);
     const one = {
       type: 'string',
+      ...(NON_EMPTY.has(format) && { minLength: 1 }),
       maxLength: MAX_LENGTH_OF[format],
+      ...(PATTERN_OF[format] && { pattern: PATTERN_OF[format] }),
+      // `format` tells the browser which control to draw; the `pattern` is what it checks.
       ...(format === 'url' && { format: 'uri' }),
       ...(format === 'email' && { format: 'email' }),
-      ...(format === 'slug' && { pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }),
     };
     return multiple ? { type: 'array', maxItems: MAX_SAME_AS, items: one } : one;
   },
@@ -113,6 +139,14 @@ function oneOption(config: Config): z.ZodType<string> {
   return z.enum(options.map((option) => option.value) as [string, ...string[]]);
 }
 
+/** The options of a select: the active terms of its vocabulary, or the fixed list of its config. */
+async function choicesOf(config: Config, env: ChoiceEnv): Promise<Choice[]> {
+  const { vocabulary, options } = selectConfig.parse(config);
+  if (options) return options.map((option) => ({ value: option.value, labelKey: option.label }));
+  const terms = await env.terms(vocabulary!);
+  return terms.map((term) => ({ value: term.key, label: term.label }));
+}
+
 const select: FieldTypeEntry = {
   id: 'select',
   labels: { en: 'Choice', de: 'Auswahl' },
@@ -126,6 +160,7 @@ const select: FieldTypeEntry = {
       ? { type: 'string', enum: options.map((option) => option.value) }
       : { type: 'string', minLength: 1, maxLength: 64 };
   },
+  choices: choicesOf,
   async check(value, config, env) {
     const { vocabulary } = selectConfig.parse(config);
     if (vocabulary === undefined || typeof value !== 'string') return undefined;
@@ -159,6 +194,7 @@ const multiSelect: FieldTypeEntry = {
         : { type: 'string', minLength: 1, maxLength: 64 },
     };
   },
+  choices: choicesOf,
   async check(value, config, env) {
     const { vocabulary } = selectConfig.parse(config);
     if (vocabulary === undefined || !Array.isArray(value)) return undefined;
@@ -190,6 +226,10 @@ const license: FieldTypeEntry = {
   schemaOrg: true,
 };
 
+/** What `z.uuid()` accepts (RFC 4122 versions 1 to 8), as the browser checks it. */
+const UUID_PATTERN =
+  '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$';
+
 const organisationConfig = z.strictObject({ multiple: z.boolean().optional() });
 
 const organisation: FieldTypeEntry = {
@@ -204,7 +244,7 @@ const organisation: FieldTypeEntry = {
   },
   jsonSchema(config) {
     const { multiple } = organisationConfig.parse(config);
-    const one = { type: 'string', format: 'uuid' };
+    const one = { type: 'string', format: 'uuid', pattern: UUID_PATTERN };
     return multiple ? { type: 'array', maxItems: 100, items: one } : one;
   },
 };

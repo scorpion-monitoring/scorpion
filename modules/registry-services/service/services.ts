@@ -32,6 +32,7 @@ import {
   type CatalogueQuery,
   type CatalogueRow,
 } from './catalogue.ts';
+import { buildCreateSchema, type CreateSchema } from './create-schema.ts';
 import { SlugTaken } from './errors.ts';
 import type { PublicationMail } from './publication-mail.ts';
 import {
@@ -56,6 +57,8 @@ import {
 } from './permissions.ts';
 import {
   CATALOGUE_SORT_KEYS,
+  type Choice,
+  type ChoiceEnv,
   type FacetEntry,
   type FieldEnv,
   type FieldSchemaOrgProperty,
@@ -250,6 +253,12 @@ export interface ServicesService {
   /** The SPDX search for the licence field; needs `…service.read`. */
   searchLicences: (actor: Actor, query: string, limit?: number) => Promise<SpdxLicense[]>;
   listRoles: (actor: Actor, locale?: string) => Promise<RoleView[]>;
+  /**
+   * What the create wizard draws itself from: the steps, the fields with their widgets, one JSON Schema per
+   * step, the limits and the registry data the widgets need. Needs `…service.create`, the permission of the
+   * wizard. It holds nothing of any person or service; the server still judges every value of a create.
+   */
+  createSchema: (actor: Actor, locale?: string) => Promise<CreateSchema>;
 
   // Trusted reads for other modules (ADR-0015): no permission check, no caller named. A route that
   // uses one must check the permission itself.
@@ -295,6 +304,8 @@ export interface ServicesDeps {
   contributors?: readonly ProfileContributorEntry[];
   /** The entries of `service.facet`; the catalogue is empty of facets without them. */
   facets?: readonly FacetEntry[];
+  /** Whether the schema tells the wizard to offer the JSON console (never in production). Default: no. */
+  devConsole?: boolean;
 }
 
 export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): ServicesService {
@@ -1236,6 +1247,27 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     async searchLicences(actor, query, limit) {
       await deps.authz.require(actor, PERMISSION_READ);
       return deps.spdx.search(query, limit === undefined ? undefined : { limit });
+    },
+
+    async createSchema(actor, locale = 'en') {
+      await deps.authz.require(actor, PERMISSION_CREATE);
+      const choices = new Map<string, Choice[]>();
+      const env: ChoiceEnv = {
+        async terms(vocabulary) {
+          const terms = await deps.settings.listTerms(vocabulary, { locale });
+          return terms.map((term) => ({ key: term.key, label: term.label }));
+        },
+      };
+      for (const resolved of deps.config.fields) {
+        if (resolved.type.choices) {
+          choices.set(resolved.field.key, await resolved.type.choices(resolved.config, env));
+        }
+      }
+      return buildCreateSchema(deps.config, deps.roles, {
+        choices,
+        locale,
+        devConsole: deps.devConsole === true,
+      });
     },
 
     async listRoles(actor, locale = 'en') {

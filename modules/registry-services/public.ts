@@ -12,6 +12,8 @@ export {
   ORG_ROLE_REGISTRY,
   PROFILE_CONTRIBUTOR_REGISTRY,
   WIZARD_STEP_REGISTRY,
+  type Choice,
+  type ChoiceEnv,
   type FacetEntry,
   type FacetEnv,
   type FacetSelection,

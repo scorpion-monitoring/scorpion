@@ -49,6 +49,8 @@ export interface ServicesStartOptions {
   /** Replaces the shipped `config/fields.ts` and `config/steps.ts`. */
   config?: ServicesConfig;
   spdx?: Spdx;
+  /** Overrides whether the create schema offers the JSON console (default: not in production). */
+  devConsole?: boolean;
   /** Collects every log line the kernel writes (trace level). */
   logLines?: string[];
 }
@@ -122,6 +124,7 @@ export function useServices(): ServicesHarness {
           manifest: createServicesModule({
             ...(options.config && { config: options.config }),
             ...(options.spdx && { spdx: options.spdx }),
+            ...(options.devConsole !== undefined && { devConsole: options.devConsole }),
           }),
           packageJson,
         },

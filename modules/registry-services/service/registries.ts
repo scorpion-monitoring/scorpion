@@ -87,6 +87,21 @@ export interface FieldEnv {
   findLicence(id: string): Promise<{ id: string } | undefined>;
 }
 
+/** What `choices` may ask about other data: the active terms of a vocabulary, labelled for the caller's locale. */
+export interface ChoiceEnv {
+  terms(vocabulary: string): Promise<{ key: string; label: string }[]>;
+}
+
+/**
+ * One option of a choice field. Give `label` (text that is ready to show, a vocabulary term in the caller's
+ * language) or `labelKey` (a message key of the UI catalogue, from a fixed list in the config).
+ */
+export interface Choice {
+  value: string;
+  label?: string;
+  labelKey?: string;
+}
+
 /** What a `check` answers: a problem text, a replacement for the value (a canonical form), or nothing. */
 export type FieldCheckResult = { problem: string } | { value: unknown } | undefined;
 
@@ -111,6 +126,11 @@ export const fieldTypeEntrySchema = z.strictObject({
     fn<
       (value: unknown, config: Record<string, unknown>, env: FieldEnv) => Promise<FieldCheckResult>
     >().optional(),
+  /**
+   * The options a choice field offers, for the widget (the schema route sends them with the field). Absent
+   * for a type that is not a choice.
+   */
+  choices: fn<(config: Record<string, unknown>, env: ChoiceEnv) => Promise<Choice[]>>().optional(),
   /** Maps the validated value to what is stored (`svc_field_value.value`); the identity when absent. */
   toValue: fn<(value: unknown, config: Record<string, unknown>) => unknown>().optional(),
   /** Whether a value of this type may map to a Schema.org property (a string or a URL). */

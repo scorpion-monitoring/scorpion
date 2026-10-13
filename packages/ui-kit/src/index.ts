@@ -104,3 +104,4 @@ export {
   type FieldNode,
   type JsonSchema,
 } from './schema-form.ts';
+export { checkJsonSchema, type SchemaIssue } from './json-schema-check.ts';
