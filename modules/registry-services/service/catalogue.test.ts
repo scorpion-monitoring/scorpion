@@ -39,7 +39,7 @@ async function world() {
   return { ...s, admin, p1, p2, c1, c2, none, one, two };
 }
 
-describe('the catalogue (prototype of sprint 4)', () => {
+describe('the catalogue', () => {
   it('returns each service once with two consortia, none, or one, under two active facet filters', async () => {
     const { services, admin, p1, p2, c1, c2, none, one, two } = await world();
     const all = await services.list(admin, {}, { page: 0, pageSize: 100 });
@@ -109,11 +109,29 @@ describe('the catalogue (prototype of sprint 4)', () => {
     ).toBe(422);
   });
 
-  it('is refused to anybody without the read permission', async () => {
-    const { services } = await world();
-    expect((await rejection(services.list(anonymous, {}, { page: 0, pageSize: 10 }))).status).toBe(
-      401,
+  it('answers 422 for ":none" on a facet that has no label for it, for too many values and for a value that is too long', async () => {
+    const { services, admin } = await world();
+    const filters = (f: Record<string, string[]>) => services.list(admin, { filters: f }, PAGE);
+    expect((await rejection(filters({ stage: [FACET_EMPTY] }))).status).toBe(422);
+    expect(
+      (await rejection(filters({ stage: Array.from({ length: 51 }, (_v, i) => `T${i}`) }))).status,
+    ).toBe(422);
+    expect((await rejection(filters({ stage: ['x'.repeat(101)] }))).status).toBe(422);
+    expect((await rejection(services.facets(admin, { filters: { stage: [''] } }))).status).toBe(
+      422,
     );
+    // ... and the services with none are a choice where the entry has a label for them.
+    expect((await filters({ license: [FACET_EMPTY] })).total).toBe(1);
+  });
+
+  it('is refused to an anonymous caller (401) and to a person without a role (403), for the rows and the facets', async () => {
+    const { services, actor } = await world();
+    const page = { page: 0, pageSize: 10 };
+    expect((await rejection(services.list(anonymous, {}, page))).status).toBe(401);
+    expect((await rejection(services.facets(anonymous, {}))).status).toBe(401);
+    const nobody = await actor();
+    expect((await rejection(services.list(nobody, {}, page))).status).toBe(403);
+    expect((await rejection(services.facets(nobody, {}))).status).toBe(403);
   });
 });
 
@@ -294,8 +312,8 @@ describe('a few hundred services', () => {
     expect(consortiumCounts).toEqual(wanted);
     expect(counts(facets, 'provider')).toEqual(tally(expected, (d) => [d.provider]));
     expect(counts(facets, 'license')).toEqual(tally(expected, (d) => [d.license ?? FACET_EMPTY]));
-    // A few hundred services and four facets answer well inside a second on a test database.
-    expect(elapsed).toBeLessThan(5000);
+    // A few hundred services and four facets answer in about 45 ms on a local test database (the test allows 2 s).
+    expect(elapsed).toBeLessThan(2000);
   });
 });
 

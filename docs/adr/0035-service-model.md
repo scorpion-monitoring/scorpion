@@ -63,13 +63,13 @@ per step** (the same field list bound below a nested path, so M9 or M15 can reus
 All are declared by `registry.services`; the loader validates every entry with Zod and names the contributing module in the message
 (`composition.ts`); a module may contribute only if it declares `registry.services` as a dependency.
 
-| Registry                     | Entry                                                                                                                                                                                           |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`; seeded `provider` (1..1) and `consortium` (0..20)                                                                                                  |
-| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), check?, toValue?, schemaOrg? }`; seeded `text`, `select`, `multi-select`, `license`, `organisation`, `image` |
-| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies? }`; the module's own steps are its config                                                                                              |
-| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selected), values(scope, db) }`; seeded `consortium`, `stage`, `license`, `provider`                                                                   |
-| `service.profileContributor` | `{ id, contribute(service, ctx) }`; the allow-list of properties is enforced when the profile is built (sprint 3)                                                                               |
+| Registry                     | Entry                                                                                                                                                                                                             |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`; seeded `provider` (1..1) and `consortium` (0..20)                                                                                                                    |
+| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), check?, toValue?, schemaOrg? }`; seeded `text`, `select`, `multi-select`, `license`, `organisation`, `image`                   |
+| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies? }`; the module's own steps are its config                                                                                                                |
+| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf? }`; seeded `consortium`, `stage`, `license`, `provider` (shape changed in sprint 4, see the addendum) |
+| `service.profileContributor` | `{ id, contribute(service, ctx) }`; the allow-list of properties is enforced when the profile is built (sprint 3)                                                                                                 |
 
 A contributing module must provide, for a field type: a Zod schema for the value and for its config, the JSON Schema of both, the
 widget name the UI maps, and, if the value refers to other data, a `check` that returns a problem text. A role's `orgTypes` must be
@@ -100,3 +100,55 @@ marked.
 - The slug history is a registry of every slug, which keeps the uniqueness rule in one index; it costs one row per rename.
 - The catalogue's performance rests on indexes on the filter columns; a materialised read model is a backlog item if a profile with
   thousands of services shows a problem.
+
+## Addendum (M7 sprint 4): the catalogue
+
+**`list` is the catalogue.** `ServicesService.list` is replaced by the catalogue query function (`service/catalogue.ts`); there is one code
+path for one list. It takes the search, the chosen facet values by facet id, the sort (`name`, `slug`, `stage`, `provider`) and the page, and
+returns rows `{ id, slug, name, stage, license, iconUrl?, public, provider, consortia[] }` and the total. `ServiceSummary` (with a flat
+`organisations` list) stays as the base of the record. `GET /services` is an internal route, so its row changed shape with it (the flat
+`organisations` list became `provider` and `consortia`); nothing outside this repository consumes it yet, and the public API v1 (M8) reads
+the trusted reads, not this route.
+
+**One query per concern.** The rows (one `select` over `svc_service`, with `limit` and `offset`), the total (one `count`), the organisation
+links of the page (two queries for any number of rows, through the organisation module's public read for the names) and one count per
+facet. No query per row. A service is a row of `svc_service` and nothing is joined to it: a facet's condition is an `exists` on the links,
+so a service with no consortium is in the result, a service with two is in it once, and it is never in a consortium it does not belong to
+(defect 2, `apps/server/src/defect-02.service-consortium.test.ts`).
+
+**Facet semantics (Decision 13).** Each facet counts over the set that the search and _every other_ facet leave: OR within a facet, AND
+across facets, so a person sees what one more choice would give. A value that no service has in that set is shown with count 0 only when it
+is chosen. The services that have no value are one more value, `:none` (`FACET_EMPTY`), labelled by the entry's `emptyLabel` (`Unknown`
+for a licence, `Uncategorized` for the category of M9); a facet without an `emptyLabel` has no such value and refuses `:none` with a 422.
+A value that names nothing is a 422 and never an empty list that hides a typo: an organisation that does not exist, a stage term nobody
+declared, a licence SPDX does not list, a filter that is no registered facet.
+
+**The facet entry shape was too narrow, and is changed.** Sprint 1 gave an entry `where(selected)` and `values(scope, db)` with `scope` a
+condition on `svc_service`. A module that contributes a facet (M9's category) cannot name `svc_service` and must not read
+`svc_field_value` itself, so that shape forced it to break the table rule or to be a seed of this module. The entry now is:
+
+- `where(selection, serviceId)`: the condition for the chosen values, with `selection = { keys, empty }` (the choice of "none" is separate
+  from the keys) and `serviceId` the service's id column to correlate with; no table is named by the contributor;
+- `values(matching, db)`: the values over the services whose id is in `matching`, a subquery of ids (the search and the other facets'
+  conditions), counted once per service, `key: null` for the services with none;
+- `unknownOf(keys, env)` (optional): the keys that name nothing, for the 422;
+- `labelsOf(keys, env)` (optional): a label per key (an organisation's name, a vocabulary term's label in the caller's locale); a key
+  without one is shown as it is.
+
+`fieldValueFacet(id, fieldKey, entry)` (exported by `public.ts`) builds an entry for a value kept in `svc_field_value`, a text or a list of
+texts, so the category of M9 is one call and no SQL. A fixture module proves the extension with such an entry and with an entry that
+brings its own SQL (`service/catalogue.test.ts`).
+
+**The sort by provider** sorts by the provider's _name_, which lives in the organisation module. The catalogue asks it for the names of the
+providers that exist (one call), orders them, and sorts the services by the position of their provider in that list; no foreign table is
+named and no query runs per row. Ties are broken by the id, in either direction, so the order is stable across pages.
+
+**Performance.** Indexes exist on `stage`, `license`, `lower(name)` and on the organisation links by organisation and role. The facet
+conditions use `exists` on `(service_id, organisation_id, role)`, which the unique index covers. `catalogue.test.ts` pages and counts 300
+generated services with two active filters and four facets in about 45 ms on a local Testcontainers database (the test allows 2 s); a materialised read model stays a
+backlog item for a profile of thousands.
+
+**The UI half.** `registry.services` has a `ui` entry (`./ui`) and registers `ui.routes` and `ui.nav` without the shell present (it is an
+optional peer; the module starts without it, as the shell-less test of the harness shows). `/services/new` and `/services/:slug` are
+registered on the server and listed in `NOT_OFFERED`; the catalogue links to them only when they are offered, and `ui/ui.test.ts` and
+`apps/server/src/ui-routes.test.ts` keep the two halves in agreement.
