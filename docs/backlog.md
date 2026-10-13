@@ -379,6 +379,28 @@ Found while using the instance; not yet investigated.
 - **The messages of the config are English and German only,** like the rest of the catalogue; a contributed step brings its own keys (`t(key)` shows the key
   when a language lacks it, and the contributing module's own catalogue test is where that is caught).
 
+## Services follow-ups (M7 sprint 6)
+
+- **A bare layout for the public pages.** The pages draw nothing from a session, but the shell's layout around them still draws the sidebar and the header
+  from the visitor's own session (an anonymous visitor sees the public navigation, a signed-in one theirs). A public page that must look the same for
+  everybody, or be embedded, needs a layout without the sidebar; a change to the shell, with its own test.
+- **A public label for the stage.** The public service page shows the stage as its vocabulary term (`PROD`), because the labels are behind
+  `GET /services/schema` (a permission) and the public record carries the term only. A public route for the labels of one vocabulary (or the label in the
+  public record, which is an additive change of v1 and of the pinned list) would let the page say "In production". Needs an ADR note: it makes the
+  vocabulary's label public.
+- **No Make public button while `service.allowPublic` is off.** The API offers `publish` only while the flag is on, so a page that is reloaded shows no
+  button and no reason; the explanation appears only for a page that was open when the flag changed (the 409). A Reviewer who wonders why nothing can
+  be made public has to read the settings. If it matters, `allowedActions` cannot carry it (it lists what may be done); a separate field on the record
+  (`publishBlockedBy: 'allowPublic'`) would, as an additive change.
+- **The service page makes four calls for every reader** (the record, the profile, the schema for the stage label, the licence name), and a manager's form
+  adds `GET /account/memberships` or `/organisations` and `GET /account/permissions`. The count belongs to the measurement of sprint 7 (item 4); the
+  stage label could come with the record, and the licence name from the SPDX cache.
+- **The edit form has no draft and no conflict check.** Two people editing one service: the last save wins, field by field (a patch names only what
+  changed), and nothing says that the record changed under the form. An `updatedAt` precondition (`If-Unmodified-Since`-style) is not built.
+- **The public organisation page lists services by name only,** as the public record does (`{ id, slug, name }`): no stage, no licence, no icon.
+- **A public service has no link back to a list.** There is no public catalogue (plan §12); the public pages link to each other through the provider and the
+  groups only.
+
 ## Service wizard follow-ups (M7 plan)
 
 - **Field-level conditions and a base path per step.** The wizard config of M7 has `applies` per step only. A `showIf` on a field (show it when another field has a value) and a base path per step (the same field list bound below a nested path, so M9's category step or M15's onboarding fields can reuse a step) are not planned. Source: the maintainer's ISA Wizard questionnaire, which has the base-path idea (`isaLvl + path`) and no conditions; see Decision 21 of [m7-sprint-plan.md](m7-sprint-plan.md).

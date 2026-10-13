@@ -1,6 +1,6 @@
 # ADR-0036: service access: the policy `service.member`, three groups, the slug history
 
-- Status: Accepted (part 1: sprint 2; part 2, the anonymous reads: sprint 3)
+- Status: Accepted (part 1: sprint 2; part 2, the anonymous reads: sprint 3; part 3, the pages: sprint 6)
 - Date: 2026-10-12
 
 ## Context
@@ -163,6 +163,33 @@ beyond the recipient's own. A rollback sends nothing.
 - An operator who sets `service.allowPublic` to off ends every anonymous read at once, without unpublishing; a later switch on restores them.
 - A shared cache can show a service for up to a minute after an unpublish. The plan accepts it; a `no-store` mode would be a setting (backlog).
 - The V8 chapter (8.2.1, 8.2.3, 8.3.1) carries the claims with tagged tests; no file in a scoped path changed.
+
+## Part 3: the pages (M7 sprint 6)
+
+The screens add no route and change no pipeline: the service page asks `GET /services/by-slug/{slug}` (or `/services/{id}`),
+`GET /services/{id}/schema-org`, `GET /services/schema` and `GET /licenses`, the public pages ask the four routes of part 2, and the page that
+needs more (the organisations to choose from) asks routes that exist (`GET /account/memberships`, `GET /organisations`).
+
+**The page decides nothing.** Its buttons are `allowedActions`, its form fields are `editableFields` (the fields of `GET /services/schema` whose key
+is listed), and the fields of the schema that are not listed are shown as text with the reason when the caller may change others. A save sends only what
+changed (`patchBody`: an emptied optional field is `null`, an emptied list is `[]`, the contact point travels as the pair). The server judges the
+request again: a 403 for a stale page is shown in words and keeps what was typed, a 409 for the short name sits on its field without the value, a 409
+for `service.allowPublic` off is shown in words and disables the button with the reason. The Publish button exists only while the API offers `publish`
+(the flag on): after a reload with the flag off there is none, and the 409 is how a page that was already open learns it.
+
+**An id and an old slug redirect** to the current address with a redirect thrown by the load, never returned (defect 12). A loader cannot import
+SvelteKit, so `UiLoadContext` has `redirect(path)`: the path is below the base path, the shell adds the base (ADR-0027 addendum).
+
+**The public pages** (`/public/services/:slug`, `/public/organisations/:id`) are `public: true` in `ui.routes`, are named in `PUBLIC_PAGES` and have a
+reason. **Nothing in them is drawn from a role or a session.** Three tests hold that: the page renders in a harness where reading the session or the
+navigation throws; the output is byte-identical for an anonymous visitor and four kinds of signed-in visitor; and the source of both pages names none of
+`session(`, `navigation(`, `allowedActions`, `editableFields`, `contactEmail`, `myMembership`, `roles`, `api.`. A record that is not public answers the
+API's one 404, which the shell shows as the page of an address nobody has (`+error.svelte` writes the same words for every 404); the journey compares
+the text of the unknown address, of a private service and of a switched-off instance. The shell's layout still draws the sidebar and the header from the
+visitor's own session, as it does for every page; that is the shell's, not the page's (backlog: a bare layout for public pages).
+
+**The stage is shown as its term** on the public page: the vocabulary's labels are behind a permission and the public record carries the term only
+(backlog: a public label for the stage).
 
 ## Consequences
 
