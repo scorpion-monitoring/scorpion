@@ -328,20 +328,21 @@ export default defineModule<MyService, 'kpi.framework', 'kpi.impact'>({
 
 ## `ctx`: what a module receives
 
-| Member                | What it gives you                                                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `ctx.moduleId`        | The id of the module.                                                                                                                 |
-| `ctx.db`              | Drizzle over one shared `pg` pool. `ctx.db.tx(fn)` runs `fn(tx)` in one transaction.                                                  |
-| `ctx.log`             | A pino logger with `module` bound (and `jobId` inside a job). Secrets are redacted.                                                   |
-| `ctx.config`          | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`, `TRUSTED_PROXIES`.   |
-| `ctx.events`          | `emit(name, payload)` into the outbox.                                                                                                |
-| `ctx.jobs`            | `enqueue(name, data?)`.                                                                                                               |
-| `ctx.audit`           | `(entry) => Promise<void>`: one audit entry, in the caller's transaction; a no-op without `core.audit` ([below](#audit)).             |
-| `ctx.registry(name)`  | The validated entries of a registry of this module or of a dependency (frozen).                                                       |
-| `ctx.deps`            | The public service objects of the declared dependencies.                                                                              |
-| `ctx.permissions`     | Every permission the loaded manifests declare (`id`, `module`, `scope`, `description`), read-only. `core.authz` validates against it. |
-| `ctx.settings`        | `get()`: the module's own settings, validated by its manifest `settings` schema, defaults applied ([below](#settings)).               |
-| `ctx.settingsSchemas` | The `settings` schema of every loaded module that has one, by module id, read-only. `core.settings` validates writes against it.      |
+| Member                | What it gives you                                                                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.moduleId`        | The id of the module.                                                                                                                                                                  |
+| `ctx.db`              | Drizzle over one shared `pg` pool. `ctx.db.tx(fn)` runs `fn(tx)` in one transaction.                                                                                                   |
+| `ctx.log`             | A pino logger with `module` bound (and `jobId` inside a job). Secrets are redacted.                                                                                                    |
+| `ctx.config`          | The validated environment: `DATABASE_URL`, `PROFILE`, `PORT`, `BASE_PATH`, `LOG_LEVEL`, `WORKER_MODE`, `ORIGIN`, `TRUSTED_PROXIES`.                                                    |
+| `ctx.events`          | `emit(name, payload)` into the outbox.                                                                                                                                                 |
+| `ctx.jobs`            | `enqueue(name, data?)`.                                                                                                                                                                |
+| `ctx.audit`           | `(entry) => Promise<void>`: one audit entry, in the caller's transaction; a no-op without `core.audit` ([below](#audit)).                                                              |
+| `ctx.registry(name)`  | The validated entries of a registry of this module or of a dependency (frozen).                                                                                                        |
+| `ctx.deps`            | The public service objects of the declared dependencies.                                                                                                                               |
+| `ctx.permissions`     | Every permission the loaded manifests declare (`id`, `module`, `scope`, `description`), read-only. `core.authz` validates against it.                                                  |
+| `ctx.settings`        | `get()`: the module's own settings, validated by its manifest `settings` schema, defaults applied ([below](#settings)).                                                                |
+| `ctx.settingsSchemas` | The `settings` schema of every loaded module that has one, by module id, read-only. `core.settings` validates writes against it.                                                       |
+| `ctx.routes()`        | The routes every loaded module registered, on both surfaces; empty until all `routes()` have returned, so call it from a handler. `public-api` builds its document from it (ADR-0037). |
 
 `ctx.deps` reaches nothing else: asking for the id of a module that is not a declared dependency
 throws (`Module "x" cannot reach "y"`), also for a dependency of a dependency. An absent optional

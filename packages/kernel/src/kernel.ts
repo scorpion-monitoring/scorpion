@@ -297,6 +297,7 @@ export function createKernel(options: KernelOptions): Kernel {
       permissions: allPermissions,
       settings: settingsPortFor(module.id),
       settingsSchemas,
+      routes: () => routes,
       registry(name) {
         const registry = composition.registries.get(name);
         if (!registry)
