@@ -10,6 +10,8 @@ export interface UiLoadContext {
   /** The values of the `:param` segments of the matched path. */
   params: Readonly<Record<string, string>>;
   url: URL;
+  /** The caller's language (`en`, `de`): for an API answer that carries labels in one language. Never a reason to choose what to show. */
+  locale: string;
   /** The typed client of this request: it forwards the caller's cookie and the client address. */
   api: ApiClient;
   /** The OpenAPI document of the public API (v1) of this build, for the documentation page. */
