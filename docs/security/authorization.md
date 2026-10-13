@@ -458,6 +458,26 @@ an empty result; the catalogue lists only what every signed-in person may read a
 | `id`, `label`, `labels`                                | every signed-in person | From the registry `service.facet`.                                                                                                |
 | `values`: `key`, `label`, `count`, `selected`, `empty` | every signed-in person | A count is a number of services every signed-in person may list; a label is a term's label, an organisation's name or an SPDX id. |
 
+### The create body and the schema of the create wizard (signed-in)
+
+`POST /services` takes the nested object of the wizard and `GET /services/schema` tells the wizard what that object may hold. The schema
+route needs `…service.create`, which every User holds (an anonymous caller gets 401, a person without roles 403, and a Reviewer, who holds
+`read` and `publish` only, 403); the answer holds **nothing of any person or service** (no organisation, no id, no name, no address): the steps,
+the fields with their widgets and message keys, one JSON Schema per step, the limits, the registry entries of the roles and field types in use
+and the active terms of the vocabularies a choice field names. `devConsole` is `true` only while the server does not run in production, so a
+production answer never offers the JSON console. The server judges every value of a create again: the schema is for the browser's convenience,
+not a second authority.
+
+| What `POST /services` may carry                                    | Who may send it                                                                                                       | Notes                                                                                                                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `slug`, `name`, `license`, `stage`, `description`, `url`, `sameAs` | Admin, and an approved member of the chosen provider                                                                  | As in the record. `stage` and `license` are checked against the vocabulary and the SPDX list (422).                                              |
+| `provider`                                                         | Admin for any organisation of the role's type; everybody else only for an organisation they are an approved member of | A non-member gets 403 **before** the body is parsed, so nothing is learnt from a 422; an unknown or wrongly typed organisation is 422 for Admin. |
+| `consortia`                                                        | the same callers                                                                                                      | Any registered organisation of the role's type: a member may put a service in any group (Decision 5).                                            |
+| `contact` (`email`, `type`)                                        | the same callers                                                                                                      | Both parts or neither. A role address, never a person's.                                                                                         |
+| `icon`                                                             | **nobody in the body**                                                                                                | The icon is uploaded after the service exists (`PUT /services/{id}/icon`, `…service.edit`); a body that carries it is a 422.                     |
+| a key no configured field owns                                     | **nobody**                                                                                                            | 422 "This field is not known", never ignored.                                                                                                    |
+| a field a contributing module adds (a step)                        | the same callers                                                                                                      | Validated by the entry's own schema and `check`; a failure leaves no service, link, value or event (one transaction).                            |
+
 ### Public service record and public organisation record (anonymous)
 
 What an anonymous reader gets, and nothing else (ADR-0036 part 2). Both are separate response schemas, not the record of the signed-in

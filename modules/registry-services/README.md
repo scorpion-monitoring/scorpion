@@ -156,6 +156,7 @@ service and the new state and carries the link `<origin><base path>/services/<id
 | --------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /services`                         | `registry.services.service.read`    | the catalogue: `q`, repeatable filters by facet id (`consortium`, `stage`, `license`, `provider`, a contributed facet), `sort` (`name`, `slug`, `stage`, `provider`), `dir`, `page`, `pageSize` (at most 100), `locale`; the legacy envelope, 0-based pages; a row has no contact point, description or links; 422 for a filter that names nothing |
 | `GET /services/facets`                  | `registry.services.service.read`    | the facets with their values and counts over the set the other facets and the search leave; the same filters and `locale`; all on page 0                                                                                                                                                                                                           |
+| `GET /services/schema`                  | `registry.services.service.create`  | the schema of the create wizard: the steps and fields with their widgets and message keys, one JSON Schema per step, the limits, the roles and field types in use, the defaults and `devConsole`; nothing of any person or service; `locale`                                                                                                       |
 | `GET /services/{id}`                    | `registry.services.service.read`    | the record with `editableFields` and `allowedActions` for the caller; the contact point only for those the table names                                                                                                                                                                                                                             |
 | `GET /services/by-slug/{slug}`          | `registry.services.service.read`    | an old slug answers the current record with `redirectedFrom`                                                                                                                                                                                                                                                                                       |
 | `POST /services`                        | `registry.services.service.create`  | `audit: true`, 201; body at most 64 KB; **403 from the service** for a caller who is neither Admin nor a member of the provider; 409 for a taken slug; 422 for the rest                                                                                                                                                                            |
@@ -189,6 +190,49 @@ returns the page of rows and the total, `facets(actor, query, locale)` the facet
   page. The link to a service page and to the wizard appear only when those pages are offered (`ui/offered.ts`) and, for the wizard, when
   the API says the caller may create.
 
+## The create wizard (sprint 5)
+
+`/services/new` (`…service.create`) is a wizard over the steps of the configuration and of the registry `service.wizardStep`. It draws
+itself from `GET /services/schema` and holds no field, step, limit or type of its own.
+
+- **The schema route** (`service/create-schema.ts`, a pure function of the resolved configuration, the registries and the options the service
+  resolved) answers the steps in order (this module's and the contributed ones; `applies` is a function and is **not** sent), for each field its
+  key, JSON pointer, field type, widget, label and help message keys, `required`, `default`, `config`, the role of an organisation field, the
+  options of a choice field and whether the value is `deferred` (the icon), **one JSON Schema per step**, the named limits, the
+  roles with their bounds, the field types in use, the `defaults` object (generated from the fields: a `default`, `[]` for a list) and
+  `devConsole`. It names `…service.create` because the wizard is its only reader; it holds nothing of any person or service.
+- **One generator, no drift.** The JSON Schema of a field is `fieldType.jsonSchema(config)`, the Zod schema the server validates with is
+  `fieldType.schema(config)` of the same entry; `service/create-schema.test.ts` feeds both the same table of bodies (bounds, patterns,
+  the pair rule of the contact point, a key nobody knows, the icon) and fails when their verdicts differ. A value only the server can judge
+  because it needs data (a licence, a stage, a reserved slug) is marked in the table: the browser lets it through and the server answers 422
+  on the field. The browser never refuses what the server accepts. The browser's checker is `@scorpion/ui-kit/json-schema` (the keywords the
+  generated schemas use; a keyword it cannot check is reported, never skipped).
+- **The form** is one nested object addressed by the fields' JSON pointers (a Svelte 5 `$state` object bound through `SchemaField`; no store
+  library, Decision 21). `ui/form-state.ts` holds the pure rules: the body the form sends (texts trimmed, an emptied optional field left out,
+  an emptied list `[]`, a contact point with no part left out, the icon never), the check of a step with its JSON Schema, which step shows
+  an error, and what a failed request puts on which field. Each step is checked before the person goes on; `POST /services` is called once for
+  the whole object, and a failure shows the field errors, goes to the first step that has one and loses nothing. A reload or a link asks first.
+- **Widgets.** The page maps a field type's `widget` name to a control through one table (`ui/widgets.ts`): `text` (the form's own control:
+  a line, a paragraph for the `description` format, a list of lines), `select` (the options come with the field: the active terms of a
+  vocabulary in the person's language, or the config's list), `multi-select`, `license` (a search of `GET /licenses`; "OSI approved" and
+  "deprecated" in words), `organisation` (below) and `image` (a note: the icon is uploaded after the service exists, because the stored file
+  refers to the service's id; the screen after the creation offers `ImageBlock`). A widget nobody registered is **not** skipped: the field is
+  replaced by an error, the step cannot be left, and `wizard-page.test.ts` fails for a seeded type without a widget.
+- **Organisations.** The loader asks the API: for the owning role (`memberOnly` in the schema) the caller's approved memberships of the role's
+  types, for an administrator (who holds `…service.manage`) and for every other role all organisations of the role's types. Nothing is guessed
+  from a role in the browser, and the server checks the choice again (403 for a provider the caller is not a member of, 422 for an unknown
+  organisation). The lists are cut at 100 rows and the field says so.
+- **Words.** The labels of the owning and group fields are "Operated by" and "Part of" (`Betrieben von`, `Gehört zu`): the messages of a screen
+  name no role (`ui.test.ts` fails on the words "provider" and "consortium"). A stage is the vocabulary's label. The config's keys need real
+  texts in both languages (`ui.test.ts`). A 409 for the slug is shown on the slug field in the catalogue's words, without the value.
+- **The JSON console** is a textarea beside the wizard, edited in both directions through the same object and checked like a field edit (the
+  step schemas, plus a key no field owns). It exists only when the schema says `devConsole: true`, which the server derives from
+  `NODE_ENV !== 'production'` when it starts; the page does not draw it otherwise, so a production page has no console in its DOM.
+- **Another module** adds a step through the registry, a field type with its widget name, and, for the browser, the control and the condition
+  of its step through `ui/wizard-extensions.ts` (`registerFieldWidget`, `registerStepApplies`). How the `ui` entry of a contributing module
+  reaches that file is M9's to settle (see the backlog); the fixture of the page tests calls it directly. A step that `applies` hides must not
+  have required fields: the server validates every configured field.
+
 ## Configuration (`config/fields.ts`, `config/steps.ts`)
 
 Typed TypeScript, the successors of `service_schema.json` and `steps.json`, validated when the module starts. A **field** has a `key`,
@@ -212,13 +256,13 @@ same function. A change to these files means a rebuild.
 All five are declared here; the loader validates each entry with Zod and names the contributing module when one is wrong, and only a
 module that declares `registry.services` as a dependency may contribute.
 
-| Registry                     | Entry                                                                                                              | This module contributes                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`                                                                        | `provider` (1..1, type `provider`), `consortium` (0..20, type `consortium`) |
-| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), check?, toValue?, schemaOrg? }` | `text`, `select`, `multi-select`, `license`, `organisation`, `image`        |
-| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies? }`                                                        | none (its own steps are `config/steps.ts`)                                  |
-| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf? }`     | `consortium`, `stage`, `license`, `provider`                                |
-| `service.profileContributor` | `{ id, contribute(service, ctx) }`                                                                                 | none (the Schema.org builder enforces the allow-list)                       |
+| Registry                     | Entry                                                                                                                        | This module contributes                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`                                                                                  | `provider` (1..1, type `provider`), `consortium` (0..20, type `consortium`) |
+| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), choices?, check?, toValue?, schemaOrg? }` | `text`, `select`, `multi-select`, `license`, `organisation`, `image`        |
+| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies? }`                                                                  | none (its own steps are `config/steps.ts`)                                  |
+| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf? }`               | `consortium`, `stage`, `license`, `provider`                                |
+| `service.profileContributor` | `{ id, contribute(service, ctx) }`                                                                                           | none (the Schema.org builder enforces the allow-list)                       |
 
 It also contributes `org.publicReference` (the public services an organisation is named by; see the public reads), `notify.template`, and `org.usage` (an organisation with `svc_service_organisation` rows cannot be deleted and its type cannot change,
 the 409 names `registry.services`) and the `usage` of the `stage` vocabulary (a term a service has is deactivated, never deleted).
@@ -230,11 +274,17 @@ its manifest; nothing in this module changes.
 
 - **A field type** (`service.fieldType`): give `id`, `labels`, the `widget` the UI maps it to, the `storages` it may use, a Zod
   `configSchema` for the config of a field of this type, `schema(config)` (the Zod schema of one value, used in the browser and on the
-  server), `jsonSchema(config)` and, when the value refers to other data, `check(value, config, env)` returning `{ problem }`, `{ value }`
-  (a canonical form) or nothing. `env` offers `vocabularyHas` and `findLicence`.
+  server), `jsonSchema(config)` (the same rules as the browser's schema: the agreement test of `create-schema.test.ts` shows where they
+  differ), `choices(config, env)` for a choice field (the options the schema route sends with it) and, when the value refers to other data,
+  `check(value, config, env)` returning `{ problem }`, `{ value }` (a canonical form) or nothing. `env` offers `vocabularyHas` and
+  `findLicence`. The `widget` name needs a control in the browser: this module's six are in `ui/widgets.ts`; a contributed one is registered
+  with `registerFieldWidget(name, component)` (`ui/wizard-extensions.ts`), and a page that lacks it says so and cannot be completed.
 - **A wizard step** (`service.wizardStep`): `id`, `order` (not one the config already uses), a `title` message key, `intro` keys and
   `fields` (field definitions as in `config/fields.ts`, with keys and pointers that are not taken), or a `component`. Values of a
-  contributed field with `storage: { kind: 'value' }` land in `svc_field_value`.
+  contributed field with `storage: { kind: 'value' }` land in `svc_field_value`. The step appears in the schema in its order, with its
+  fields' JSON Schema; its values are validated by the type's own `schema` and `check` on the server, and a failure in any of them, also
+  inside the transaction, leaves no service, link, value or event. `applies(form)` is a function the browser asks (`registerStepApplies`);
+  the server ignores it and the schema route does not send it.
 - **An organisation role** (`service.orgRole`): `id`, `labels`, the `org.type` ids that may take it (they must be registered), `min`
   and `max`; a field with `storage: { kind: 'organisations', role }` writes it.
 - **A facet** (`service.facet`): `id`, `labels`, `order`, `emptyLabel` for the services with no value, `where(selection, serviceId)` and

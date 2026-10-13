@@ -59,6 +59,24 @@
   }
   $effect(() => () => clearTimeout(timer));
 
+  // The widget is drawn again each time the person comes back to its step, and a value can arrive from the
+  // console: the name of a chosen id is asked of the list when this widget does not know it.
+  $effect(() => {
+    const id = chosenId;
+    if (id === undefined || known?.id === id) return;
+    void (async () => {
+      try {
+        const found = await unwrap(
+          api.GET('/licenses', { params: { query: { q: id, limit: 5 } } }),
+        );
+        const hit = found.result.find((licence) => licence.id.toLowerCase() === id.toLowerCase());
+        if (hit && chosenId === id) known = hit;
+      } catch {
+        // The id is shown as it is; the server judges it on create.
+      }
+    })();
+  });
+
   function choose(licence: Licence) {
     known = licence;
     onchange(licence.id);

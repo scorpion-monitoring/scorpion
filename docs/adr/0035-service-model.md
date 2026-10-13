@@ -152,3 +152,26 @@ backlog item for a profile of thousands.
 optional peer; the module starts without it, as the shell-less test of the harness shows). `/services/new` and `/services/:slug` are
 registered on the server and listed in `NOT_OFFERED`; the catalogue links to them only when they are offered, and `ui/ui.test.ts` and
 `apps/server/src/ui-routes.test.ts` keep the two halves in agreement.
+
+## Addendum (M7 sprint 5): the schema route and the one-generator rule
+
+- **`GET /services/schema` tells the create wizard what to draw.** It is a pure function of the resolved configuration and the registries
+  (`service/create-schema.ts`) plus the options the service resolves (the active terms of a vocabulary a choice field names), so the page holds no
+  field, step, limit or type. It names `…service.create`, the permission of the wizard page, and holds nothing of any person or service. The
+  alternative, `…service.read`, would have given it to Reviewers, who cannot use it.
+- **One generator.** The schema of a field is the field type's `jsonSchema(config)`, and the server validates with the same entry's
+  `schema(config)`. A third representation (generating the JSON Schema from the Zod one) was not built: Zod's own conversion cannot express the
+  transforms and parsers of the organisation's field rules. The two functions of an entry are held together by a test that feeds both the same
+  table of values (`create-schema.test.ts`), which already found one drift (the id of an organisation); the browser's schema is never stricter than
+  the server's, and what only the server can judge (it needs data) is marked in the table. The browser checks with a small checker of the keywords
+  the generated schemas use (`@scorpion/ui-kit/json-schema`): no schema library was added, and a keyword the checker does not know is reported.
+- **`applies` stays in the browser.** It is a function and cannot travel in the schema. The page asks it through `ui/wizard-extensions.ts`; the server
+  ignores it, so a step that `applies` hides must have no required field. How the `ui` entry of a contributing module reaches the extension file (its
+  widget and its condition) is left to M9: the shell forwards routes, messages and widgets of a `ui` entry, and a fourth export is a change to the
+  shell that M9 can justify with a real contributor.
+- **The dev console** is shown only when the schema says `devConsole: true`, which the server computes from `NODE_ENV !== 'production'` at start
+  (`devConsoleAllowed`); the page does not draw it otherwise.
+- **A base path per step** (the same field list bound below a nested path, so a step can be reused) stays recorded as a later option (Decision 21 of the
+  M7 plan); the pointers of the fields are absolute today.
+- **The choice fields** carry their options: a field type's optional `choices(config, env)` returns them, so the page has no `if (type === 'select')`
+  and a contributed choice type needs no change here.
