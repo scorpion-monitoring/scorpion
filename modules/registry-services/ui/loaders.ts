@@ -117,3 +117,114 @@ export async function loadNewService({ api, locale }: UiLoadContext): Promise<Wi
   );
   return { schema, organisations: Object.fromEntries(entries) };
 }
+
+// ----- the service page ---------------------------------------------------------------------------------
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The slug of a service is never shaped like an id, so a segment that is one names a service by id. */
+const isId = (segment: string) => UUID.test(segment);
+
+/** The address of the page of a service. */
+const pageOf = (slug: string) => `/services/${encodeURIComponent(slug)}`;
+
+/**
+ * The organisations a role may be changed to, for this caller, as the API lists them. The owning role (which
+ * the schema marks `memberOnly`): only organisations the caller manages, an administrator any of the role's
+ * types; a move is the one change that needs more than the right to edit. Every other role: all organisations
+ * of its types, because a member may change them. The server checks the choice again.
+ */
+async function choicesFor(
+  api: UiLoadContext['api'],
+  role: WizardSchema['roles'][number],
+  admin: boolean,
+): Promise<OrganisationChoices> {
+  if (role.memberOnly && !admin) {
+    const own = await unwrap(api.GET('/account/memberships', { params: { query: WHOLE } }));
+    const wanted = new Set(role.orgTypes);
+    return {
+      options: own.result
+        .filter(
+          (row) =>
+            row.state === 'approved' && row.role === 'manager' && wanted.has(row.organisation.type),
+        )
+        .map(({ organisation }) => ({
+          id: organisation.id,
+          abbreviation: organisation.abbreviation,
+          name: organisation.name,
+        })),
+      truncated: own.metadata.totalCount > own.result.length,
+    };
+  }
+  return organisationsFor(api, role, true);
+}
+
+/** The licence of a record as words: the name from the SPDX list, the id when the list has no such entry. */
+async function licenceOf(api: UiLoadContext['api'], id: string | null) {
+  if (id === null) return null;
+  const found = await unwrap(api.GET('/licenses', { params: { query: { q: id, limit: 20 } } }));
+  const own = found.result.find((licence) => licence.id === id);
+  return { id, name: own?.name ?? id, deprecated: own?.deprecated ?? false };
+}
+
+/**
+ * The service page: the record (an id and an old slug answer with a redirect to the current address, thrown as
+ * the shell's redirect, never returned), the Schema.org profile for the block in the head, the schema of the
+ * fields (labels of the stage, the form's fields and the roles), the licence as words, and, only when the
+ * API's `editableFields` says the caller may change something, the organisations the form may choose from.
+ */
+export async function loadService({ api, params, locale, redirect }: UiLoadContext) {
+  const segment = params.slug!;
+  const service = await unwrap(
+    isId(segment)
+      ? api.GET('/services/{id}', { params: { path: { id: segment } } })
+      : api.GET('/services/by-slug/{slug}', { params: { path: { slug: segment } } }),
+  );
+  if (service.slug !== segment) redirect(pageOf(service.slug));
+  const path = { id: service.id };
+  const [profile, schema, licence] = await Promise.all([
+    unwrap(api.GET('/services/{id}/schema-org', { params: { path } })),
+    unwrap(api.GET('/services/schema', { params: { query: { locale } } })),
+    licenceOf(api, service.license),
+  ]);
+  const fields = schema.steps.flatMap((step) => step.fields);
+  // The roles whose organisations the form lists: those of the organisation fields the caller may change.
+  const wanted = new Set(
+    fields.flatMap((field) =>
+      field.role && service.editableFields.includes(field.key) ? [field.role] : [],
+    ),
+  );
+  const admin =
+    wanted.size > 0 &&
+    [...wanted].some((id) => schema.roles.find((role) => role.id === id)?.memberOnly)
+      ? (await heldPermissions(api)).has(MANAGE)
+      : false;
+  const entries = await Promise.all(
+    schema.roles
+      .filter((role) => wanted.has(role.id))
+      .map(async (role) => [role.id, await choicesFor(api, role, admin)] as const),
+  );
+  return { service, profile, schema, licence, organisations: Object.fromEntries(entries) };
+}
+
+export type ServiceData = Awaited<ReturnType<typeof loadService>>;
+
+// ----- the public pages -----------------------------------------------------------------------------------
+
+/**
+ * The public page of a service: the public record and its profile, asked of the public routes with no more
+ * than the request itself. A service that is not public, an unknown one and a switched-off instance all come
+ * back as the API's one 404, which the shell shows as the page of an address nobody has. An id or an old slug is
+ * sent on to the current address.
+ */
+export async function loadPublicService({ api, params, redirect }: UiLoadContext) {
+  const ref = params.slug!;
+  const path = { ref };
+  const [service, profile] = await Promise.all([
+    unwrap(api.GET('/public/services/{ref}', { params: { path } })),
+    unwrap(api.GET('/public/services/{ref}/schema-org', { params: { path } })),
+  ]);
+  if (service.slug !== ref) redirect(`/public/services/${encodeURIComponent(service.slug)}`);
+  return { service, profile };
+}
+
+export type PublicServiceData = Awaited<ReturnType<typeof loadPublicService>>;

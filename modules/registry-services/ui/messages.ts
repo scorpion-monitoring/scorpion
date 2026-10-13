@@ -122,6 +122,53 @@ export const messages: UiMessages = {
     'services.field.contactEmail.help':
       'A role address such as helpdesk@example.org, not a personal one.',
     'services.field.contactType.label': 'Kind of contact',
+
+    'services.detail.public': 'Public',
+    'services.detail.private': 'Private',
+    'services.detail.publicHelp': 'Anyone, signed in or not, can read this service.',
+    'services.detail.privateHelp': 'Only signed-in people can read this service.',
+    'services.detail.shortName': 'Short name',
+    'services.detail.stage': 'Stage',
+    'services.detail.license': 'Licence',
+    'services.detail.licenseDeprecated': '(deprecated)',
+    'services.detail.url': 'Web address',
+    'services.detail.sameAs': 'Further links',
+    'services.detail.contact': 'Contact',
+    'services.detail.publicPage': 'Open the public page',
+    'services.detail.actions': 'Actions for this service',
+
+    'services.edit': 'Edit',
+    'services.edit.title': 'Edit {name}',
+    'services.edit.save': 'Save changes',
+    'services.edit.cancel': 'Cancel',
+    'services.edit.nothing': 'Nothing has changed yet.',
+    'services.edit.saved': 'Your changes were saved.',
+    'services.edit.renamed': '{name} now has the short name {slug}. The old address still works.',
+    'services.edit.fixFields': 'Some answers need attention before you can save.',
+    'services.edit.forbidden':
+      'You are not allowed to make this change. This page may be out of date; nothing was saved and what you entered is still here.',
+    'services.edit.identity': 'Only a manager of the {owner} or an administrator can change these.',
+    'services.edit.fixed': 'Fixed values',
+    'services.edit.noWidget':
+      'The field "{field}" cannot be shown here (no control for "{widget}"), so it cannot be changed on this page.',
+
+    'services.publish': 'Make public',
+    'services.publish.title': 'Make {name} public?',
+    'services.publish.message':
+      "Anyone, signed in or not, can then read this service's name, description, links, who operates it and what it is part of. The contact point is never public.",
+    'services.publish.confirm': 'Make public',
+    'services.publish.done': '{name} is now public.',
+    'services.publish.off':
+      'Making services public is switched off on this instance, so this service cannot be made public now.',
+    'services.publish.offHint': 'Switched off on this instance.',
+    'services.unpublish': 'Make private',
+    'services.unpublish.title': 'Make {name} private?',
+    'services.unpublish.message':
+      'Only signed-in people can then read this service. Its public address answers as if the service did not exist, within a minute.',
+    'services.unpublish.confirm': 'Make private',
+    'services.unpublish.done': '{name} is now private.',
+    'services.publish.forbidden':
+      'You are not allowed to change this. This page may be out of date; nothing was changed.',
   },
   de: {
     'nav.services': 'Dienste',
@@ -244,5 +291,55 @@ export const messages: UiMessages = {
     'services.field.contactEmail.help':
       'Eine Funktionsadresse wie helpdesk@example.org, keine persönliche.',
     'services.field.contactType.label': 'Art des Kontakts',
+
+    'services.detail.public': 'Öffentlich',
+    'services.detail.private': 'Nicht öffentlich',
+    'services.detail.publicHelp': 'Jeder, angemeldet oder nicht, kann diesen Dienst lesen.',
+    'services.detail.privateHelp': 'Nur angemeldete Personen können diesen Dienst lesen.',
+    'services.detail.shortName': 'Kurzname',
+    'services.detail.stage': 'Stufe',
+    'services.detail.license': 'Lizenz',
+    'services.detail.licenseDeprecated': '(veraltet)',
+    'services.detail.url': 'Webadresse',
+    'services.detail.sameAs': 'Weitere Links',
+    'services.detail.contact': 'Kontakt',
+    'services.detail.publicPage': 'Öffentliche Seite öffnen',
+    'services.detail.actions': 'Aktionen für diesen Dienst',
+
+    'services.edit': 'Bearbeiten',
+    'services.edit.title': '{name} bearbeiten',
+    'services.edit.save': 'Änderungen speichern',
+    'services.edit.cancel': 'Abbrechen',
+    'services.edit.nothing': 'Noch nichts geändert.',
+    'services.edit.saved': 'Ihre Änderungen wurden gespeichert.',
+    'services.edit.renamed':
+      '{name} hat jetzt den Kurznamen {slug}. Die alte Adresse funktioniert weiterhin.',
+    'services.edit.fixFields':
+      'Einige Angaben brauchen Aufmerksamkeit, bevor Sie speichern können.',
+    'services.edit.forbidden':
+      'Sie dürfen diese Änderung nicht vornehmen. Die Seite ist möglicherweise veraltet; nichts wurde gespeichert, Ihre Eingaben sind noch da.',
+    'services.edit.identity':
+      'Nur wer den {owner} verwaltet, oder ein Administrator kann diese Angaben ändern.',
+    'services.edit.fixed': 'Feste Angaben',
+    'services.edit.noWidget':
+      'Das Feld „{field}“ kann hier nicht angezeigt werden (kein Eingabeelement für „{widget}“); es lässt sich auf dieser Seite nicht ändern.',
+
+    'services.publish': 'Öffentlich machen',
+    'services.publish.title': '{name} öffentlich machen?',
+    'services.publish.message':
+      'Jeder, angemeldet oder nicht, kann dann Name, Beschreibung und Links dieses Dienstes lesen, wer ihn betreibt und wozu er gehört. Die Kontaktstelle ist nie öffentlich.',
+    'services.publish.confirm': 'Öffentlich machen',
+    'services.publish.done': '{name} ist jetzt öffentlich.',
+    'services.publish.off':
+      'Dienste öffentlich zu machen ist auf dieser Instanz abgeschaltet; dieser Dienst kann jetzt nicht öffentlich gemacht werden.',
+    'services.publish.offHint': 'Auf dieser Instanz abgeschaltet.',
+    'services.unpublish': 'Nicht öffentlich machen',
+    'services.unpublish.title': '{name} nicht mehr öffentlich machen?',
+    'services.unpublish.message':
+      'Nur angemeldete Personen können diesen Dienst dann lesen. Seine öffentliche Adresse antwortet binnen einer Minute, als gäbe es den Dienst nicht.',
+    'services.unpublish.confirm': 'Nicht öffentlich machen',
+    'services.unpublish.done': '{name} ist jetzt nicht mehr öffentlich.',
+    'services.publish.forbidden':
+      'Sie dürfen das nicht ändern. Die Seite ist möglicherweise veraltet; nichts wurde geändert.',
   },
 };

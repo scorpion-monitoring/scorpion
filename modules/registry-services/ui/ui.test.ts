@@ -23,11 +23,16 @@ describe('the pages of registry.services', () => {
     expect(notOffered).toEqual(NOT_OFFERED);
   });
 
-  it('offer the wizard since sprint 5 and not yet the service page', () => {
-    expect(NOT_OFFERED).toEqual(['/services/:slug']);
-    expect(routes.map((route) => route.path).sort()).toEqual(['/services', '/services/new']);
+  it('offer every page since sprint 6: the catalogue, the wizard, the service page and the public page', () => {
+    expect(NOT_OFFERED).toEqual([]);
+    expect(routes.map((route) => route.path).sort()).toEqual([
+      '/public/services/:slug',
+      '/services',
+      '/services/:slug',
+      '/services/new',
+    ]);
     expect(isOffered('/services/new')).toBe(true);
-    expect(isOffered('/services/:slug')).toBe(false);
+    expect(isOffered('/services/:slug')).toBe(true);
     // The wizard needs the permission of the create route, which the API checks again.
     expect(SERVICE_ROUTES.find((route) => route.path === '/services/new')?.permission).toBe(
       'registry.services.service.create',
@@ -40,10 +45,12 @@ describe('the pages of registry.services', () => {
     expect(typeof manifest.ui).toBe('function');
   });
 
-  it('need a permission the module declares, and none is public', () => {
+  it('need a permission the module declares, except the one public page, which says why it is public', () => {
     const declared = new Set(Object.keys(manifest.permissions ?? {}));
-    for (const route of SERVICE_ROUTES) {
-      expect(route.public, route.path).toBeFalsy();
+    const open = SERVICE_ROUTES.filter((route) => route.public === true);
+    expect(open.map((route) => route.path)).toEqual(['/public/services/:slug']);
+    expect(open[0]!.publicReason).toMatch(/draws nothing from a session or a role/);
+    for (const route of SERVICE_ROUTES.filter((entry) => entry.public !== true)) {
       expect(declared.has(route.permission!), route.path).toBe(true);
     }
   });
@@ -56,6 +63,7 @@ describe('the pages of registry.services', () => {
       '/services': 'registry.services.service.read',
       '/services/new': 'registry.services.service.create',
       '/services/:slug': 'registry.services.service.read',
+      '/public/services/:slug': undefined,
     });
   });
 
