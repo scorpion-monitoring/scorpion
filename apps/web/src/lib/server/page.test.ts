@@ -22,6 +22,15 @@ const routes: [string, UiRoute][] = [
     },
   ],
   [
+    '/moved/:id',
+    {
+      path: '/moved/:id',
+      component,
+      // What a loader does for an id or an old slug: it names the page below the base path and the shell adds the base.
+      load: ({ params, redirect }) => redirect(`/moved/new-${params.id}`),
+    },
+  ],
+  [
     '/boom',
     {
       path: '/boom',
@@ -99,6 +108,21 @@ describe('loadPage', () => {
     });
     expect(calls.at(-1)?.params).toEqual({ id: '42' });
   });
+
+  it.each([
+    ['/', '/moved/new-7'],
+    ['/a/b', '/a/b/moved/new-7'],
+  ])(
+    'lets a load redirect with the path below the base path, under %s (defect 12: thrown, not returned)',
+    async (basePath, location) => {
+      const { result, thrown } = await outcome(
+        table,
+        request('/moved/7', { signedIn: true, routes: ['/', '/moved/:id'], basePath }),
+      );
+      expect(result).toBeUndefined();
+      expect(isRedirect(thrown) && [thrown.status, thrown.location]).toEqual([303, location]);
+    },
+  );
 
   it("gives a load the caller's language, English when it is not known or cannot be read", async () => {
     const open = { signedIn: true, routes: ['/', '/admin/users/:id'] };
