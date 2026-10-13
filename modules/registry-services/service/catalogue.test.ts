@@ -109,6 +109,41 @@ describe('the catalogue', () => {
     ).toBe(422);
   });
 
+  it('counts, accepts and returns a licence a service has even when the SPDX list does not know it', async () => {
+    const { services, admin, p1, none, pool } = await world();
+    // `makeService` writes the column as it is, as a list that has since dropped the id would leave it.
+    const gone = await makeService(pool, {
+      provider: p1.id,
+      license: 'Retired-1.0',
+      name: uniq('retired'),
+    });
+    const counts = Object.fromEntries(
+      (await services.facets(admin, {}))
+        .find((f) => f.id === 'license')!
+        .values.map((v) => [v.key, v.count]),
+    );
+    expect(counts['Retired-1.0']).toBe(1);
+
+    const chosen = await services.list(
+      admin,
+      { filters: { license: ['Retired-1.0'] } },
+      { page: 0, pageSize: 10 },
+    );
+    expect(chosen.services.map((row) => row.id)).toEqual([gone.id]);
+    expect(chosen.services[0]!.license).toBe('Retired-1.0');
+    // A value nobody has and SPDX does not list is still a typo, and a known one still passes.
+    const typo = await rejection(
+      services.list(admin, { filters: { license: ['Retired-2.0'] } }, { page: 0, pageSize: 10 }),
+    );
+    expect(typo.status).toBe(422);
+    const mit = await services.list(
+      admin,
+      { filters: { license: ['MIT'] } },
+      { page: 0, pageSize: 10 },
+    );
+    expect(mit.services.map((row) => row.id)).toContain(none.id);
+  });
+
   it('answers 422 for ":none" on a facet that has no label for it, for too many values and for a value that is too long', async () => {
     const { services, admin } = await world();
     const filters = (f: Record<string, string[]>) => services.list(admin, { filters: f }, PAGE);

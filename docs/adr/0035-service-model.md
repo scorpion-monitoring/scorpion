@@ -131,7 +131,7 @@ condition on `svc_service`. A module that contributes a facet (M9's category) ca
   from the keys) and `serviceId` the service's id column to correlate with; no table is named by the contributor;
 - `values(matching, db)`: the values over the services whose id is in `matching`, a subquery of ids (the search and the other facets'
   conditions), counted once per service, `key: null` for the services with none;
-- `unknownOf(keys, env)` (optional): the keys that name nothing, for the 422;
+- `unknownOf(keys, env, db)` (optional; `db` added in sprint 7 so the licence facet accepts a value a service has): the keys that name nothing, for the 422;
 - `labelsOf(keys, env)` (optional): a label per key (an organisation's name, a vocabulary term's label in the caller's locale); a key
   without one is shown as it is.
 
