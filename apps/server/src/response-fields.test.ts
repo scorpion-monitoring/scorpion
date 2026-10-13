@@ -289,6 +289,7 @@ describe('the contact point of an organisation', () => {
     const mustNot = [
       'GET /organisations',
       'GET /services',
+      'GET /services/facets',
       'GET /organisations/{id}/members',
       'GET /memberships',
       'GET /account/memberships',

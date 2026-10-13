@@ -15,6 +15,7 @@ import {
 import { MAX_UPLOAD_BYTES } from '@scorpion/core-blob/public';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import { serializeJsonLd } from '@scorpion/registry-organisations/public';
+import type { CatalogueRow } from './service/catalogue.ts';
 import { CONTRIBUTABLE_PROPERTIES } from './service/schema-org.ts';
 import {
   PERMISSION_CREATE,
@@ -55,6 +56,33 @@ const summarySchema = z.object({
     .describe('Where the icon is served, below the base path. Absent without an icon.'),
   public: z.boolean(),
   organisations: z.array(organisationSchema),
+});
+
+const catalogueOrganisationSchema = z.object({
+  id: z.string(),
+  abbreviation: z.string(),
+  name: z.string(),
+});
+
+/** A row of the catalogue: never the contact point, `sameAs` or the description. */
+const catalogueRowSchema = summarySchema.omit({ organisations: true }).extend({
+  provider: catalogueOrganisationSchema.nullable(),
+  consortia: z.array(catalogueOrganisationSchema),
+});
+
+const facetSchema = z.object({
+  id: z.string().describe('A key of the registry `service.facet`; also the name of its filter.'),
+  label: z.string(),
+  labels: z.object({ en: z.string(), de: z.string().optional() }),
+  values: z.array(
+    z.object({
+      key: z.string().describe('What to send as the filter; `:none` for the services with none.'),
+      label: z.string(),
+      count: z.number().int(),
+      selected: z.boolean(),
+      empty: z.literal(true).optional().describe('Set on the value that stands for "none".'),
+    }),
+  ),
 });
 
 const serviceSchema = summarySchema.extend({
@@ -246,19 +274,76 @@ const licenceSchema = z.object({
   deprecated: z.boolean().describe('A deprecated id is accepted for a service, and marked.'),
 });
 
+/** What a repeated query parameter arrives as: one text, or a list when it is given more than once. */
+const filterParam = z.union([z.string().max(100), z.array(z.string().max(100)).max(50)]).optional();
+
+/** The parameters that are not filters; everything else a request names is a facet of the registry `service.facet`. */
+const NOT_FILTERS = new Set([
+  ...Object.keys(paginationQuery().shape),
+  'q',
+  'sort',
+  'dir',
+  'locale',
+]);
+
+const filtersShape = {
+  q: z.string().max(100).optional().describe('Matches the slug or the name, without case.'),
+  consortium: filterParam.describe(
+    'Organisation ids; repeat to choose several (OR). `:none` stands for the services that have none.',
+  ),
+  stage: filterParam.describe('Terms of the `stage` vocabulary; repeat to choose several (OR).'),
+  license: filterParam.describe(
+    'SPDX licence ids; repeat to choose several (OR). `:none` stands for the services with no licence.',
+  ),
+  provider: filterParam.describe('Organisation ids; repeat to choose several (OR).'),
+  locale: z.string().max(35).optional().describe('The locale of the labels. Default `en`.'),
+};
+
+/**
+ * The query of the catalogue and of its facets. Beyond the four filters named here, the id of any facet another
+ * module contributes is a filter too; a name that is no facet is a 422, and so is a value that names nothing.
+ */
+const catalogueQuery = z.looseObject({
+  ...filtersShape,
+  sort: z
+    .enum(SORT_KEYS)
+    .optional()
+    .describe("Default `name`. `provider` sorts by the provider's name."),
+  dir: z.enum(['asc', 'desc']).optional().describe('Default `asc`. Ties are broken by id.'),
+});
+
+const facetsQuery = z.looseObject(filtersShape);
+
 export const listServicesRoute = createRoute({
   method: 'get',
   path: '/services',
   permission: PERMISSION_READ,
   request: {
-    query: paginationQuery().extend({
-      q: z.string().max(100).optional().describe('Matches the slug or the name, without case.'),
-      sort: z.enum(SORT_KEYS).optional().describe('Default `name`.'),
-      dir: z.enum(['asc', 'desc']).optional().describe('Default `asc`. Ties are broken by id.'),
-    }),
+    query: z.looseObject({ ...paginationQuery().shape, ...catalogueQuery.shape }),
   },
   responses: {
-    200: ok('Services in the order asked for, then by id.', listEnvelope(summarySchema)),
+    200: ok(
+      'Services in the order asked for, then by id; each service once, with its provider and its consortia (none, one or many).',
+      listEnvelope(catalogueRowSchema),
+    ),
+    422: {
+      description:
+        'A filter that is not a facet, or a value that names nothing (an unknown organisation, stage or licence).',
+    },
+  },
+});
+
+export const listServiceFacetsRoute = createRoute({
+  method: 'get',
+  path: '/services/facets',
+  permission: PERMISSION_READ,
+  request: { query: facetsQuery },
+  responses: {
+    200: ok(
+      'The facets by `order`, all on page 0. The counts of a facet are over the services that the search and every other facet leave; a value with no service shows only when it is chosen.',
+      listEnvelope(facetSchema),
+    ),
+    422: { description: 'As for the list.' },
   },
 });
 
@@ -476,6 +561,35 @@ export const listServiceRolesRoute = createRoute({
   },
 });
 
+/** The filters of a request: every parameter that is not the search, the sort or the page, as a list of values. */
+function filtersOf(params: Record<string, unknown>): Record<string, string[]> {
+  const filters: Record<string, string[]> = {};
+  for (const [name, value] of Object.entries(params)) {
+    if (NOT_FILTERS.has(name) || value === undefined) continue;
+    // The schema allows a text or a list of texts; anything else is not a filter value and the service refuses it.
+    filters[name] = (Array.isArray(value) ? value : [value]).map((entry) =>
+      typeof entry === 'string' ? entry : '',
+    );
+  }
+  return filters;
+}
+
+const rowOut = (s: CatalogueRow) => ({
+  id: s.id,
+  slug: s.slug,
+  name: s.name,
+  stage: s.stage,
+  license: s.license,
+  ...(s.iconUrl !== undefined && { iconUrl: s.iconUrl }),
+  public: s.public,
+  provider: s.provider && {
+    id: s.provider.id,
+    abbreviation: s.provider.abbreviation,
+    name: s.provider.name,
+  },
+  consortia: s.consortia.map(({ id, abbreviation, name }) => ({ id, abbreviation, name })),
+});
+
 const summaryOut = (s: ServiceSummary) => ({
   id: s.id,
   slug: s.slug,
@@ -520,10 +634,24 @@ const roleOut = (r: RoleView) => ({
 
 export function registerServiceRoutes(r: RouteRegistrar, service: ServicesService) {
   r.internal(listServicesRoute, (async (c) => {
-    const { page, pageSize, ...filter } = c.req.valid('query');
-    const { services, total } = await service.list(c.get('actor'), filter, { page, pageSize });
-    return c.json(paginate({ page, pageSize }, total, services.map(summaryOut)), 200);
+    const { page, pageSize, locale, q, sort, dir, ...rest } = c.req.valid('query');
+    const { services, total } = await service.list(
+      c.get('actor'),
+      { q, sort, dir, filters: filtersOf(rest) },
+      { page, pageSize },
+      locale,
+    );
+    return c.json(paginate({ page, pageSize }, total, services.map(rowOut)), 200);
   }) satisfies RouteHandler<typeof listServicesRoute, AppEnv>);
+
+  r.internal(listServiceFacetsRoute, (async (c) => {
+    const { locale, q, ...rest } = c.req.valid('query');
+    const facets = await service.facets(c.get('actor'), { q, filters: filtersOf(rest) }, locale);
+    return c.json(
+      paginate({ page: 0, pageSize: Math.max(facets.length, 1) }, facets.length, facets),
+      200,
+    );
+  }) satisfies RouteHandler<typeof listServiceFacetsRoute, AppEnv>);
 
   r.internal(listLicencesRoute, (async (c) => {
     const { q, limit } = c.req.valid('query');

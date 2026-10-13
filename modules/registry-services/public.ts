@@ -5,6 +5,7 @@
 // uses one must check its own permission first. They return the descriptive fields and the organisation
 // ids, never the contact point or the audit columns.
 export {
+  FACET_EMPTY,
   FACET_REGISTRY,
   FIELD_SCHEMA_ORG_PROPERTIES,
   FIELD_TYPE_REGISTRY,
@@ -12,6 +13,8 @@ export {
   PROFILE_CONTRIBUTOR_REGISTRY,
   WIZARD_STEP_REGISTRY,
   type FacetEntry,
+  type FacetEnv,
+  type FacetSelection,
   type FacetValue,
   type FieldCheckResult,
   type FieldConfig,
@@ -24,6 +27,7 @@ export {
   type StorageKind,
   type WizardStepEntry,
 } from './service/registries.ts';
+export { fieldValueFacet } from './service/facets.ts';
 export type { ServiceRecord } from './service/services.ts';
 
 import type { ServicesService } from './service/services.ts';

@@ -168,6 +168,7 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /services/{id}`                            | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /services/{id}/schema-org`                 | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /services/by-slug/{slug}`                  | registry.services      | `registry.services.service.read`             | default    | no             |
+| `GET /services/facets`                          | registry.services      | `registry.services.service.read`             | default    | no             |
 | `PATCH /services/{id}`                          | registry.services      | `registry.services.service.read`             | default    | yes            |
 | `POST /services`                                | registry.services      | `registry.services.service.create`           | default    | yes            |
 | `PUT /services/{id}/icon`                       | registry.services      | `registry.services.service.read`             | strict     | yes            |
@@ -435,6 +436,26 @@ functions. A field is named by its key in `config/fields.ts`.
 | `allowedActions`                              | the caller: `edit` when `editableFields` is not empty, `publish` for a Reviewer or Admin on a private service while `service.allowPublic` is on, `unpublish` for them on a public one                                                                    | nobody (computed)                                                                                                                                                                                                | For drawing buttons. The routes still check.                                                                                                                                                                 |
 | `createdAt`, `updatedAt`                      | every signed-in person                                                                                                                                                                                                                                   | nobody (set by the service)                                                                                                                                                                                      |                                                                                                                                                                                                              |
 | `createdBy`, `updatedBy`                      | Admin (holder of `…service.manage`) only                                                                                                                                                                                                                 | nobody (set by the service)                                                                                                                                                                                      | Ids of users, set on every write.                                                                                                                                                                            |
+
+### Catalogue row and facets of services (signed-in)
+
+`GET /services` (a page of the catalogue) and `GET /services/facets` (its facets) need `…service.read`, which every signed-in person holds;
+nothing in them is public, and an anonymous caller gets 401. A row of the catalogue is a separate response schema, not the record with
+fields removed; `response-fields.test.ts` fails when either schema names a contact field. A filter value that names nothing is 422, so a typo never reads as
+an empty result; the catalogue lists only what every signed-in person may read anyway.
+
+| Catalogue row (`GET /services`)                                                                                                                 | Who reads it           | Notes                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `id`, `slug`, `name`, `stage`, `license`                                                                                                        | every signed-in person | As in the record. `stage` is a term of the `stage` vocabulary, `license` an SPDX id or null.                  |
+| `iconUrl`                                                                                                                                       | every signed-in person | The file is public by its unguessable hash, as in the record.                                                 |
+| `public`                                                                                                                                        | every signed-in person | As in the record.                                                                                             |
+| `provider`, `consortia` (`id`, `abbreviation`, `name`)                                                                                          | every signed-in person | The organisations on the service, by role. No member, no contact point and no other field of an organisation. |
+| contact point, `description`, `url`, `sameAs`, `values`, `editableFields`, `allowedActions`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | **never in a row**     | Only in the record (`GET /services/{id}`).                                                                    |
+
+| Facet (`GET /services/facets`)                         | Who reads it           | Notes                                                                                                                             |
+| ------------------------------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `label`, `labels`                                | every signed-in person | From the registry `service.facet`.                                                                                                |
+| `values`: `key`, `label`, `count`, `selected`, `empty` | every signed-in person | A count is a number of services every signed-in person may list; a label is a term's label, an organisation's name or an SPDX id. |
 
 ### Public service record and public organisation record (anonymous)
 

@@ -21,6 +21,8 @@ export interface PageRequest {
   navigation: () => Promise<Navigation>;
   /** Whether the instance has no administrator yet. Without it (a test, a profile without sign-in) it is never so. */
   needsFirstAdmin?: () => Promise<boolean>;
+  /** The caller's language, for a page whose API call returns labels in one language. English when absent. */
+  locale?: () => Promise<string>;
   publicApi: Parameters<NonNullable<UiRoute['load']>>[0]['publicApi'];
 }
 
@@ -86,6 +88,7 @@ async function runPage(
     const data: unknown = await page.route.load?.({
       params,
       url: request.url,
+      locale: (await request.locale?.().catch(() => undefined)) ?? 'en',
       api: request.api,
       publicApi: request.publicApi,
     });

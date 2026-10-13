@@ -99,6 +99,10 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/organisations/:id',
         // M6 sprint 5: the member and manager screen (the manager part draws itself from the API).
         '/account/organisations',
+        // M7 sprint 4: the catalogue, and the two pages registered ahead of their screens (every User may read and create).
+        '/services',
+        '/services/new',
+        '/services/:slug',
       ),
     );
     expect(body.nav.map((entry) => entry.id)).toContain('account.profile');
@@ -134,6 +138,10 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/profile',
         '/inbox',
         '/profile/notifications',
+        // M7 sprint 4: the catalogue, and the two pages registered ahead of their screens (every User may read and create).
+        '/services',
+        '/services/new',
+        '/services/:slug',
         // The administration of M5 sprint 3: users and pending approvals (core.identity), roles and settings (the shell).
         '/admin/users',
         '/admin/users/:id',
@@ -161,6 +169,7 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     );
     expect(body.nav.map((entry) => entry.id)).toEqual([
       'home',
+      'services',
       'docs',
       'account.profile',
       'account.inbox',

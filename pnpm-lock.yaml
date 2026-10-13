@@ -160,6 +160,9 @@ importers:
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../../modules/registry-organisations
+      '@scorpion/registry-services':
+        specifier: workspace:*
+        version: link:../../modules/registry-services
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
@@ -547,6 +550,9 @@ importers:
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1

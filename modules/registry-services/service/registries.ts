@@ -168,16 +168,53 @@ export type WizardStepEntry = z.output<typeof wizardStepEntrySchema>;
 
 // ----- service.facet -----------------------------------------------------------------------------
 
+/**
+ * The value that stands for "the services that have none" in an address and in an answer (`?license=:none`).
+ * It cannot be an id: a colon is in no organisation id, SPDX id or vocabulary key.
+ */
+export const FACET_EMPTY = ':none';
+
+/** What was chosen in one facet: values (OR) and, with `empty`, the services that have none. */
+export interface FacetSelection {
+  keys: readonly string[];
+  empty: boolean;
+}
+
 /** One value of a facet with the number of services that have it; `key: null` counts the services with none. */
 export interface FacetValue {
   key: string | null;
   count: number;
 }
 
+/** What an entry may ask to name its values: the names of organisations and the terms of a vocabulary. */
+export interface FacetEnv {
+  /** The locale of the labels asked for. */
+  locale: string;
+  /** The names of the organisations with these ids (an unknown id is absent). */
+  organisationNames(ids: readonly string[]): Promise<Map<string, string>>;
+  /** The labels of the terms of a vocabulary, active or not, by key. */
+  termLabels(vocabulary: string): Promise<Map<string, string>>;
+  /** The SPDX licence with this id (any case): its canonical id, or `undefined`. */
+  findLicence(id: string): Promise<{ id: string } | undefined>;
+}
+
 /**
- * A facet of the catalogue (sprint 4). `where(selected)` is the condition on `svc_service` rows (an alias
- * is not needed) for the selected values (OR within the facet); `values(scope, db)` counts the values over
- * the services that match `scope` (the search and the other facets' conditions, already built).
+ * A facet of the catalogue (ADR-0035). An entry never names a table of this module: the catalogue hands it
+ * the column to correlate with and the set of services to count over.
+ *
+ * - `where(selection, serviceId)`: the condition on a service, `serviceId` being its id column, for the
+ *   values chosen (OR within the facet; `empty` adds the services that have none).
+ * - `values(matching, db)`: the values of the facet over the services whose id is in `matching` (a
+ *   subquery of ids: the search and every *other* facet's condition, already built), with the number of
+ *   services that have each, once per service; `key: null` counts the services that have none. A value
+ *   no service has in this set is left out: the catalogue adds a selected one with count 0.
+ * - `unknownOf(keys, env)`: the keys that name nothing (an organisation that does not exist, a term nobody
+ *   declared, a licence SPDX does not list); the catalogue answers 422 for them instead of an empty list
+ *   that hides a typo. An entry without it accepts any key.
+ * - `labelsOf(keys, env)`: a label for each key it can name (an organisation's name, a term's label); a
+ *   key without one is shown as it is.
+ *
+ * A value kept in `svc_field_value` needs no SQL from the contributor: `fieldValueFacet()` in `public.ts`.
  */
 export const facetEntrySchema = z.strictObject({
   id: key,
@@ -185,10 +222,22 @@ export const facetEntrySchema = z.strictObject({
   order,
   /** The label of the services that have no value (`Unknown`, `Uncategorized`). */
   emptyLabel: labels.optional(),
-  where: fn<(selected: readonly string[]) => SQL>(),
-  values: fn<(scope: SQL | undefined, db: Db) => Promise<FacetValue[]>>(),
+  where: fn<(selection: FacetSelection, serviceId: SQL) => SQL>(),
+  values: fn<(matching: SQL, db: Db) => Promise<FacetValue[]>>(),
+  unknownOf: fn<(keys: readonly string[], env: FacetEnv) => Promise<string[]>>().optional(),
+  labelsOf:
+    fn<(keys: readonly string[], env: FacetEnv) => Promise<Map<string, string>>>().optional(),
 });
 export type FacetEntry = z.output<typeof facetEntrySchema>;
+
+/**
+ * The sorts of the catalogue: the stored columns and the owning organisation's name (`owner`; the API
+ * calls it `provider`, as the role is named in the registry `service.orgRole`).
+ */
+export const CATALOGUE_SORT_KEYS = ['name', 'slug', 'stage', 'provider'] as const;
+export type CatalogueSort = (typeof CATALOGUE_SORT_KEYS)[number];
+/** The sort by the owning organisation's name. */
+export const SORT_BY_OWNER: CatalogueSort = 'provider';
 
 // ----- service.profileContributor ----------------------------------------------------------------
 
