@@ -167,10 +167,26 @@
     return (node ?? { type: 'string' }) as JsonSchema;
   }
 
+  /**
+   * The form draws a string as a box of several lines when its limit is long. Only the `description` format is
+   * written in paragraphs; a web address or a name is one line whatever its limit, so the limit is left to the
+   * check (the step's schema) and not to the control.
+   */
+  function oneLine(schema: JsonSchema, field: WizardField): JsonSchema {
+    const long = typeof schema.maxLength === 'number' && schema.maxLength > 300;
+    if (!long || field.config.format === 'description') return schema;
+    return Object.fromEntries(Object.entries(schema).filter(([key]) => key !== 'maxLength'));
+  }
+
   function nodeOf(step: WizardStep, field: WizardField): FieldNode {
-    const property = propertyOf(step, field);
+    const property = oneLine(propertyOf(step, field), field);
+    const items = property.items;
     const decorated: JsonSchema = {
       ...property,
+      ...(typeof items === 'object' &&
+        items !== null && {
+          items: oneLine(items as JsonSchema, field),
+        }),
       title: t(field.label),
       ...(field.help !== undefined && { description: t(field.help) }),
       widget: field.widget,

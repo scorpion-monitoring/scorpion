@@ -338,7 +338,7 @@ describe('what the server said', () => {
         title: 'x',
         status,
         ...(errors && { errors: errors.map((e) => ({ in: 'body', ...e })) }),
-      } as never),
+      }),
     );
 
   it('puts a 422 on the fields it names, by pointer, an item of a list and a nested field included', () => {
