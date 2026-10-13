@@ -79,6 +79,9 @@
   const errors = $derived(shownErrors(found, current));
   let general = $state<string[]>([]);
   let busy = $state(false);
+  // The Edit button has gone: the keyboard continues at the form, where the person is working now.
+  let heading = $state<HTMLElement>();
+  $effect(() => heading?.focus());
 
   async function save() {
     general = [];
@@ -132,7 +135,7 @@
 </script>
 
 <section class="flex flex-col gap-6" aria-labelledby="service-edit-title">
-  <h2 id="service-edit-title" class="text-xl font-semibold">
+  <h2 id="service-edit-title" class="text-xl font-semibold" tabindex="-1" bind:this={heading}>
     {t('services.edit.title', { name: service.name })}
   </h2>
 

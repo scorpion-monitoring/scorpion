@@ -2,8 +2,9 @@
 // through the API as the administrator, and a catalogue of known shape. Each journey makes its own data
 // under a tag of its own (the specs of a run share one database, and a retry must not meet what its first
 // try left), and searches for the tag so that the counts it asserts are its own.
-import { expect } from './fixtures.ts';
-import { unique, type AdminApi } from './admin.ts';
+import { activeUser, unique, type AdminApi } from './admin.ts';
+import { withDb } from './db.ts';
+import { expect, type Credentials } from './fixtures.ts';
 import { makeOrg, uniqueAbbreviation, type Org } from './members.ts';
 
 /** A consortium with this abbreviation. */
@@ -90,4 +91,35 @@ export async function seedCatalogue(api: AdminApi, tag = unique('cat')): Promise
     );
   }
   return { tag, providers, consortia, zeta, alpha, fillers, total: 24 };
+}
+
+/** An active account with the Reviewer role (it may make a service public; it is no member of anything). */
+export async function makeReviewer(
+  api: AdminApi,
+  at: (path: string) => string,
+  who: Credentials,
+): Promise<string> {
+  const id = await activeUser(api, at, who);
+  const given = await api.send('POST', `/users/${id}/roles`, { role: 'reviewer' });
+  expect(given.status, JSON.stringify(given.body)).toBe(200);
+  return id;
+}
+
+/** The audit entries of the event `action` about one service, oldest first. */
+export async function serviceEvents(
+  basePath: string,
+  action: string,
+  serviceId: string,
+): Promise<{ payload: Record<string, unknown>; userId: string | null }[]> {
+  return withDb(basePath, async (client) => {
+    const { rows } = await client.query<{
+      payload: Record<string, unknown>;
+      user_id: string | null;
+    }>(
+      `select payload, user_id from audit_event
+       where source = 'event' and action = $1 and payload->>'serviceId' = $2 order by occurred_at, id`,
+      [action, serviceId],
+    );
+    return rows.map((row) => ({ payload: row.payload, userId: row.user_id }));
+  });
 }

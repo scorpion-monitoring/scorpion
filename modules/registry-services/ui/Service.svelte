@@ -50,6 +50,7 @@
   let status = $state<string>();
   let failed = $state<string>();
   let statusLine = $state<HTMLElement>();
+  let editButton = $state<HTMLElement>();
   let confirming = $state<'publish' | 'unpublish'>();
   let publishOff = $state(false);
   let busy = $state(false);
@@ -88,6 +89,13 @@
     } finally {
       busy = false;
     }
+  }
+
+  /** Leaving the form without saving: the keyboard goes back to the button that opened it. */
+  async function cancelEdit() {
+    editing = false;
+    await tick();
+    editButton?.focus();
   }
 
   async function saved(record: ServiceData['service']) {
@@ -160,7 +168,12 @@
       aria-label={t('services.detail.actions')}
     >
       {#if can('edit')}
-        <button type="button" class="btn btn-sm btn-primary" onclick={() => (editing = true)}>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          bind:this={editButton}
+          onclick={() => (editing = true)}
+        >
           {t('services.edit')}
         </button>
       {/if}
@@ -195,12 +208,7 @@
   {/if}
 
   {#if editing}
-    <ServiceEdit
-      {data}
-      oncancel={() => (editing = false)}
-      onsaved={saved}
-      onicon={() => void refresh()}
-    />
+    <ServiceEdit {data} oncancel={cancelEdit} onsaved={saved} onicon={() => void refresh()} />
   {:else}
     {#if service.description}
       <p class="whitespace-pre-line">{service.description}</p>
