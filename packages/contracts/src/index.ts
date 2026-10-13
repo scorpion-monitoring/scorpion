@@ -21,7 +21,13 @@ export {
   type PageQuery,
   type PaginationLimits,
 } from './envelope.ts';
-export { generateOpenApiDocument, type OpenApiDocument, type OpenApiInfo } from './openapi.ts';
+export {
+  generateOpenApiDocument,
+  generateV1Document,
+  V1_DOCUMENT_DEFAULTS,
+  type OpenApiDocument,
+  type OpenApiInfo,
+} from './openapi.ts';
 export {
   PROBLEM_CONTENT_TYPE,
   problemFor,

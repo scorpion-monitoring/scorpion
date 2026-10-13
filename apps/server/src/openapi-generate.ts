@@ -10,8 +10,8 @@
 // `--check` reports a file that differs instead of writing it (`pnpm check` runs it); `--web-only` writes the v1 document alone.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { generateOpenApiDocument, type AppRoute } from '@scorpion/contracts';
-import type { ModuleManifest } from '@scorpion/kernel';
+import { generateOpenApiDocument, generateV1Document } from '@scorpion/contracts';
+import { collectRoutes } from './collect-routes.ts';
 import { profileName, sources } from './generated/profile.ts';
 
 const root = resolve(import.meta.dirname, '../../..');
@@ -20,46 +20,12 @@ const check = process.argv.includes('--check');
 // committed `full` profile and need a development dependency that an image does not install.
 const webOnly = process.argv.includes('--web-only');
 
-/** Something that can be called, indexed and awaited without doing anything: a service that never runs. */
-function standIn(): unknown {
-  const target = function () {};
-  return new Proxy(target, {
-    get: (_, property) => (property === 'then' ? undefined : standIn()),
-    apply: () => standIn(),
-  });
-}
-
-function collectRoutes(manifests: readonly ModuleManifest[]) {
-  const internal: AppRoute[] = [];
-  const v1: AppRoute[] = [];
-  for (const manifest of manifests) {
-    manifest.routes?.(
-      {
-        internal: (route) => internal.push(route),
-        public: (_version, route) => v1.push(route),
-        service: () => standIn() as never,
-      },
-      standIn() as never,
-    );
-  }
-  return { internal, v1 };
-}
-
 const { internal, v1 } = collectRoutes(sources.map((source) => source.manifest));
 
 const outputs = new Map<string, string>();
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
-outputs.set(
-  'apps/web/src/generated/openapi-v1.json',
-  json(
-    generateOpenApiDocument(v1, {
-      title: 'Public API',
-      version: '1',
-      description: 'The public API, version 1.',
-    }),
-  ),
-);
+outputs.set('apps/web/src/generated/openapi-v1.json', json(generateV1Document(v1)));
 
 if (profileName === 'full' && !webOnly) {
   const { default: openapiTS, astToString } = await import('openapi-typescript');

@@ -5,13 +5,20 @@ export interface OpenApiInfo {
   title: string;
   version: string;
   description?: string;
+  /** Who to ask about the API: OpenAPI's `info.contact`; empty fields are left out. */
+  contact?: { name?: string; email?: string; url?: string };
   /** Server URLs, for example the origin plus the base path plus `/api/v1`. */
   servers?: string[];
 }
 
 export interface OpenApiDocument {
   openapi: string;
-  info: { title: string; version: string; description?: string };
+  info: {
+    title: string;
+    version: string;
+    description?: string;
+    contact?: { name?: string; email?: string; url?: string };
+  };
   servers?: { url: string }[];
   paths?: Record<string, Record<string, unknown>>;
   components?: Record<string, unknown>;
@@ -32,7 +39,12 @@ export function generateOpenApiDocument(
   }
   const document = app.getOpenAPI31Document({
     openapi: '3.1.0',
-    info: { title: info.title, version: info.version, description: info.description },
+    info: {
+      title: info.title,
+      version: info.version,
+      description: info.description,
+      ...(info.contact && Object.keys(info.contact).length > 0 ? { contact: info.contact } : {}),
+    },
     servers: info.servers?.map((url) => ({ url })),
   });
   // Record who may call what, next to the standard OpenAPI fields.
@@ -47,4 +59,28 @@ export function generateOpenApiDocument(
     }
   }
   return document as unknown as OpenApiDocument;
+}
+
+/**
+ * The title and description of the public API's document when no administrator changed them. The
+ * committed document (`pnpm openapi:generate`) and the runtime one (`public-api`) both start here, so
+ * with default settings they are the same document.
+ */
+export const V1_DOCUMENT_DEFAULTS = {
+  title: 'Public API',
+  description: 'The public API, version 1.',
+} as const;
+
+/** The OpenAPI document of the public API (v1) for the given routes. */
+export function generateV1Document(
+  routes: readonly AppRoute[],
+  info: Partial<Pick<OpenApiInfo, 'title' | 'description' | 'contact' | 'servers'>> = {},
+): OpenApiDocument {
+  return generateOpenApiDocument(routes, {
+    title: info.title || V1_DOCUMENT_DEFAULTS.title,
+    version: '1',
+    description: info.description || V1_DOCUMENT_DEFAULTS.description,
+    contact: info.contact,
+    servers: info.servers,
+  });
 }
