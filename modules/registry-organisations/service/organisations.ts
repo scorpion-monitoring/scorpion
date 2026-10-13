@@ -41,9 +41,12 @@ import { settingsSchema } from '../settings-schema.ts';
 import { toSchemaOrg, type SchemaOrgProfile } from './schema-org.ts';
 import {
   ORG_TYPE_REGISTRY,
+  ORG_PUBLIC_REFERENCE_REGISTRY,
   ORG_USAGE_REGISTRY,
+  type OrgPublicReferenceEntry,
   type OrgTypeEntry,
   type OrgUsageEntry,
+  type PublicReference,
 } from './registries.ts';
 
 import {
@@ -107,6 +110,24 @@ export interface OrganisationView extends OrganisationSummary {
   updatedBy?: string | null;
 }
 
+/**
+ * What an anonymous reader gets of an organisation that a public service refers to (ADR-0036 part 2): a pinned
+ * list of fields. No type, no contact point, no member count, no audit column.
+ */
+export interface PublicOrganisationRecord {
+  id: string;
+  name: string;
+  abbreviation: string;
+  /** Below the base path (`/api/internal/files/{hash}`); absent without a logo. */
+  logoUrl?: string;
+  description: string | null;
+  website: string | null;
+  rorId: string | null;
+  sameAs: string[];
+  /** The public records that name it (services), by name. */
+  services: PublicReference[];
+}
+
 export interface TypeView {
   id: string;
   label: string;
@@ -148,6 +169,13 @@ export interface OrganisationsService {
    * `canSeeContact` says so. Needs `…organisation.read`.
    */
   schemaOrg: (actor: Actor, id: string) => Promise<SchemaOrgProfile>;
+  /**
+   * The public record of an organisation, or `undefined` when no public record refers to it, when it does not
+   * exist, or when the id is no UUID: the caller answers all of these alike (ADR-0036 part 2).
+   */
+  getPublicAsSystem: (id: string) => Promise<PublicOrganisationRecord | undefined>;
+  /** The profile without a contact point, under the same rule as {@link getPublicAsSystem}. */
+  schemaOrgPublicAsSystem: (id: string) => Promise<SchemaOrgProfile | undefined>;
   /** Needs `…organisation.manage`, or `…organisation.edit` on that organisation. `bytes` is the raw image. */
   setLogo: (actor: Actor, id: string, bytes: Uint8Array) => Promise<OrganisationView>;
   /** Needs `…organisation.manage`, or `…organisation.edit` on that organisation. `NotFound` when there is no logo. */
@@ -215,6 +243,15 @@ export function createOrganisationsService(
     types.set(entry.id, entry);
   }
   const usages = ctx.registry(ORG_USAGE_REGISTRY) as readonly OrgUsageEntry[];
+  const publicReferences = ctx.registry(
+    ORG_PUBLIC_REFERENCE_REGISTRY,
+  ) as readonly OrgPublicReferenceEntry[];
+
+  /** The public records that name the organisation, from every contributor, by name then id. */
+  async function publicReferencesOf(id: string): Promise<PublicReference[]> {
+    const lists = await Promise.all(publicReferences.map((entry) => entry.list(id)));
+    return lists.flat().sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  }
 
   const base = mountPath(ctx.config);
   const logoPath = (hash: string) => `${base}/api/internal/files/${hash}`;
@@ -695,6 +732,33 @@ export function createOrganisationsService(
 
     listTypesAsSystem() {
       return Promise.resolve(typeViews('en'));
+    },
+
+    async getPublicAsSystem(id) {
+      if (!z.uuid().safeParse(id).success) return undefined;
+      // The references first: with none the organisation is not public, whatever else is true of it.
+      const services = await publicReferencesOf(id);
+      if (services.length === 0) return undefined;
+      const [row] = await db.select().from(organisation).where(eq(organisation.id, id));
+      if (!row) return undefined;
+      return {
+        id: row.id,
+        name: row.name,
+        abbreviation: row.abbreviation,
+        ...(row.logoHash && { logoUrl: logoPath(row.logoHash) }),
+        description: row.description,
+        website: row.website,
+        rorId: row.rorId,
+        sameAs: row.sameAs,
+        services,
+      };
+    },
+
+    async schemaOrgPublicAsSystem(id) {
+      if (!z.uuid().safeParse(id).success) return undefined;
+      if ((await publicReferencesOf(id)).length === 0) return undefined;
+      const [row] = await db.select().from(organisation).where(eq(organisation.id, id));
+      return row && profile(row, false);
     },
 
     async toSchemaOrgAsSystem(id, options) {

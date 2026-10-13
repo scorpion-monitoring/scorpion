@@ -32,6 +32,9 @@
       "path": "./modules/registry-organisations"
     },
     {
+      "path": "./modules/registry-services"
+    },
+    {
       "path": "./packages/contracts"
     },
     {

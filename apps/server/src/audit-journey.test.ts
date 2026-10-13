@@ -116,8 +116,12 @@ describe('the full journey of M4', () => {
       subjectId: 'reviewer',
       payload: {
         added: ['core.audit.read', 'core.identity.me.read'],
-        // The default grant of registry.organisations (the test profile has it) is not in the list.
-        removed: ['registry.organisations.organisation.read'],
+        // The default grants of registry.organisations and registry.services (the test profile has them) are not in the list.
+        removed: [
+          'registry.organisations.organisation.read',
+          'registry.services.service.publish',
+          'registry.services.service.read',
+        ],
       },
     });
     expect(byAction.get('settings.changed@1')).toMatchObject({

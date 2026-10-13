@@ -7509,6 +7509,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/organisations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public organisation record. `Cache-Control: public, max-age=60`: an unpublished service takes effect here after at most that long. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            abbreviation: string;
+                            /** @description Below the base path. Absent without a logo. */
+                            logoUrl?: string;
+                            description: string | null;
+                            website: string | null;
+                            /** @description The bare ROR id, for example `02skbsp27`. */
+                            rorId: string | null;
+                            sameAs: string[];
+                            /** @description The public services that name this organisation as provider or consortium, by name. */
+                            services: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description No such organisation, or none that a public service names. The body is the same for both. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/organisations/{id}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The organisation as a Schema.org JSON-LD profile, without a contact point. `Cache-Control: public, max-age=60`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @description The `schemaType` of the organisation type. */
+                            "@type": string;
+                            /** @description The absolute URL of the organisation page. */
+                            "@id": string;
+                            name: string;
+                            /** @description The abbreviation. */
+                            alternateName?: string;
+                            description?: string;
+                            /** @description The organisation's website, else its own page. */
+                            url: string;
+                            identifier?: {
+                                /** @enum {string} */
+                                "@type": "PropertyValue";
+                                /** @enum {string} */
+                                propertyID: "ROR";
+                                value: string;
+                            };
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                        };
+                    };
+                };
+                /** @description As for the public record: the same body for every organisation that is not public. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organisations/{id}/logo": {
         parameters: {
             query?: never;
@@ -8651,6 +8818,1783 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                    /** @description Matches the slug or the name, without case. */
+                    q?: string;
+                    /** @description Organisation ids; repeat to choose several (OR). `:none` stands for the services that have none. */
+                    consortium?: string | string[];
+                    /** @description Terms of the `stage` vocabulary; repeat to choose several (OR). */
+                    stage?: string | string[];
+                    /** @description SPDX licence ids; repeat to choose several (OR). `:none` stands for the services with no licence. */
+                    license?: string | string[];
+                    /** @description Organisation ids; repeat to choose several (OR). */
+                    provider?: string | string[];
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                    /** @description Default `name`. `provider` sorts by the provider's name. */
+                    sort?: "name" | "slug" | "stage" | "provider";
+                    /** @description Default `asc`. Ties are broken by id. */
+                    dir?: "asc" | "desc";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Services in the order asked for, then by id; each service once, with its provider and its consortia (none, one or many). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @description A term of the `stage` vocabulary. */
+                                stage: string;
+                                /** @description An SPDX licence id. */
+                                license: string | null;
+                                /** @description Where the icon is served, below the base path. Absent without an icon. */
+                                iconUrl?: string;
+                                public: boolean;
+                                provider: {
+                                    id: string;
+                                    abbreviation: string;
+                                    name: string;
+                                } | null;
+                                consortia: {
+                                    id: string;
+                                    abbreviation: string;
+                                    name: string;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description A filter that is not a facet, or a value that names nothing (an unknown organisation, stage or licence). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Letters, digits, ".", "_" and "-"; not shaped like a UUID. */
+                        slug: string;
+                        name: string;
+                        /** @description An SPDX licence id, for example `Apache-2.0`. */
+                        license?: string;
+                        /** @description A term of the `stage` vocabulary. Default `DEV`. */
+                        stage?: string;
+                        description?: string;
+                        url?: string;
+                        sameAs?: string[];
+                        /**
+                         * Format: uuid
+                         * @description The id of an organisation that may take the role `provider`.
+                         */
+                        provider: string;
+                        consortia?: string[];
+                        /** @description Both parts or neither. */
+                        contact?: {
+                            email?: string;
+                            type?: string;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description The service, created with its organisations in one transaction. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller is neither an administrator nor a member of the provider. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The slug is taken, or was used by another service once. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input: an unknown or wrong-typed organisation, stage or licence, a missing provider, a bad slug. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Matches the slug or the name, without case. */
+                    q?: string;
+                    /** @description Organisation ids; repeat to choose several (OR). `:none` stands for the services that have none. */
+                    consortium?: string | string[];
+                    /** @description Terms of the `stage` vocabulary; repeat to choose several (OR). */
+                    stage?: string | string[];
+                    /** @description SPDX licence ids; repeat to choose several (OR). `:none` stands for the services with no licence. */
+                    license?: string | string[];
+                    /** @description Organisation ids; repeat to choose several (OR). */
+                    provider?: string | string[];
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The facets by `order`, all on page 0. The counts of a facet are over the services that the search and every other facet leave; a value with no service shows only when it is chosen. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** @description A key of the registry `service.facet`; also the name of its filter. */
+                                id: string;
+                                label: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                values: {
+                                    /** @description What to send as the filter; `:none` for the services with none. */
+                                    key: string;
+                                    label: string;
+                                    count: number;
+                                    selected: boolean;
+                                    /**
+                                     * @description Set on the value that stands for "none".
+                                     * @enum {boolean}
+                                     */
+                                    empty?: true;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description As for the list. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/licenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Matches the SPDX id or the name, without case. */
+                    q?: string;
+                    /** @description Default 20. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description SPDX licences for the licence field: exact id first, then prefix, then the rest; all on page 0. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                name: string;
+                                osiApproved: boolean;
+                                /** @description A deprecated id is accepted for a service, and marked. */
+                                deprecated: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The locale of `label`. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The roles an organisation can play on a service, by `order`, all on page 0. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                /** @description The label for the requested locale, `en` by default. */
+                                label: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                /** @description The organisation types that may take the role. */
+                                orgTypes: string[];
+                                min: number;
+                                max: number;
+                                order: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The steps, fields, limits and registry data of the create wizard. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description In the order of the wizard. */
+                            steps: {
+                                id: string;
+                                order: number;
+                                /** @description A key of the message catalogue. */
+                                title: string;
+                                /** @description Keys of the paragraphs above the fields. */
+                                intro: string[];
+                                component?: string;
+                                /** @description The step comes from another module. */
+                                contributed: boolean;
+                                fields: {
+                                    key: string;
+                                    /** @description A JSON pointer into the one nested form object: `/contact/type`. */
+                                    path: string;
+                                    /** @description A key of the registry `service.fieldType`. */
+                                    type: string;
+                                    /** @description The widget the page draws the field with. */
+                                    widget: string;
+                                    /** @description A key of the message catalogue. */
+                                    label: string;
+                                    /** @description A key of the message catalogue. */
+                                    help?: string;
+                                    required: boolean;
+                                    default?: unknown;
+                                    config: {
+                                        [key: string]: unknown;
+                                    };
+                                    /** @description For an organisation field: the key of its role in `service.orgRole`. */
+                                    role?: string;
+                                    /** @description For a field stored in a column of the service: its name, such as `slug`. */
+                                    column?: string;
+                                    /** @description Not part of the create body: the value is set afterwards. */
+                                    deferred: boolean;
+                                    choices?: {
+                                        value: string;
+                                        /** @description Text that is ready to show, in the language asked for. */
+                                        label?: string;
+                                        /** @description A key of the message catalogue, for an option the config lists. */
+                                        labelKey?: string;
+                                    }[];
+                                }[];
+                                /** @description A JSON Schema (an object with the fields at their pointers). The browser checks a step against it before it lets the person go on; the server validates the same fields with the Zod schemas of the same field types. */
+                                schema: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            limits: {
+                                sameAs: number;
+                                slug: number;
+                                name: number;
+                                description: number;
+                                url: number;
+                                email: number;
+                                /** @description The kind of the contact point, such as `support`. */
+                                contactKind: number;
+                                bodyBytes: number;
+                            };
+                            fieldTypes: {
+                                id: string;
+                                widget: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                            }[];
+                            roles: {
+                                id: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                /** @description The organisation types that may take the role. */
+                                orgTypes: string[];
+                                min: number;
+                                max: number;
+                                order: number;
+                                label: string;
+                                memberOnly: boolean;
+                            }[];
+                            /** @description The object a new form starts from. */
+                            defaults: {
+                                [key: string]: unknown;
+                            };
+                            /** @description True only when the server does not run in production: the JSON console may be shown. */
+                            devConsole: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/by-slug/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The service. An old slug answers the current record with `redirectedFrom`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No service has or had this slug. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One service. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Managers of the provider and administrators only. */
+                        slug?: string;
+                        name?: string;
+                        license?: string | null;
+                        stage?: string;
+                        description?: string | null;
+                        url?: string | null;
+                        sameAs?: string[] | null;
+                        /**
+                         * Format: uuid
+                         * @description Managers of the provider and administrators only; a manager may move the service only to an organisation they manage.
+                         */
+                        provider?: string;
+                        consortia?: string[] | null;
+                        /** @description Both parts or neither; `null` in both clears the contact point. */
+                        contact?: {
+                            email?: string | null;
+                            type?: string | null;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description The service with its changes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not change a field the request names. The whole request is refused, nothing is written, and the problem names fields, never values. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The new slug is taken, or was used by another service once. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input, an unknown organisation, stage or licence, or no field named. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/services/{id}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The service as a Schema.org `Service` (JSON-LD), private services included, never the contact point or the stage. `Cache-Control: private, no-cache`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @enum {string} */
+                            "@type": "Service";
+                            /** @description The absolute URL of the service by id; stable across a rename of the slug. */
+                            "@id": string;
+                            name: string;
+                            /** @description The slug. */
+                            alternateName: string;
+                            description?: string;
+                            /** @description The service's own address. */
+                            url?: string;
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                            /** @description The SPDX licence page, for an id the list knows. */
+                            license?: string;
+                            provider?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            };
+                            /** @description The consortia. */
+                            brand?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            }[];
+                            serviceType?: string | string[];
+                            category?: string | string[];
+                            audience?: string | string[];
+                            areaServed?: string | string[];
+                            termsOfService?: string | string[];
+                            slogan?: string | string[];
+                            serviceOutput?: string | string[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/services/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id or the slug (an old slug works) of a public service. */
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public record of the service. `Cache-Control: public, max-age=60`: an unpublish takes effect here after at most that long. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description Below the base path. Absent without an icon. */
+                            logoUrl?: string;
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            provider: {
+                                id: string;
+                                name: string;
+                                /**
+                                 * @description An organisation of a public service is public.
+                                 * @enum {boolean}
+                                 */
+                                public: true;
+                            };
+                            consortia: {
+                                id: string;
+                                name: string;
+                                /**
+                                 * @description An organisation of a public service is public.
+                                 * @enum {boolean}
+                                 */
+                                public: true;
+                            }[];
+                        };
+                    };
+                };
+                /** @description No such service, not public, or public reads are switched off. The body is the same for all three. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/services/{ref}/schema-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id or the slug (an old slug works) of a public service. */
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public service as a Schema.org `Service` (JSON-LD). `Cache-Control: public, max-age=60`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @enum {string} */
+                            "@context": "https://schema.org";
+                            /** @enum {string} */
+                            "@type": "Service";
+                            /** @description The absolute URL of the service by id; stable across a rename of the slug. */
+                            "@id": string;
+                            name: string;
+                            /** @description The slug. */
+                            alternateName: string;
+                            description?: string;
+                            /** @description The service's own address. */
+                            url?: string;
+                            sameAs?: string[];
+                            logo?: {
+                                /** @enum {string} */
+                                "@type": "ImageObject";
+                                url: string;
+                            };
+                            /** @description The SPDX licence page, for an id the list knows. */
+                            license?: string;
+                            provider?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            };
+                            /** @description The consortia. */
+                            brand?: {
+                                "@type": string;
+                                "@id": string;
+                                name: string;
+                                url: string;
+                            }[];
+                            serviceType?: string | string[];
+                            category?: string | string[];
+                            audience?: string | string[];
+                            areaServed?: string | string[];
+                            termsOfService?: string | string[];
+                            slogan?: string | string[];
+                            serviceOutput?: string | string[];
+                        };
+                    };
+                };
+                /** @description As for the public record: the same body for every service that is not public. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/{id}/icon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description The image as the request body (PNG, JPEG, WebP, GIF or SVG). Its `Content-Type` is ignored: the type is determined from the content, and the file is checked and rewritten before it is stored. */
+            requestBody: {
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            responses: {
+                /** @description The service with its new icon. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not edit this service. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The body is larger than the upload ceiling. */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The file is empty, too big, not a supported image, or damaged. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The service without its icon. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not edit this service. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service, or it has no icon. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/{id}/publication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        public: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description The service. Setting the state it already has changes nothing and sends no event. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** @description A term of the `stage` vocabulary. */
+                            stage: string;
+                            /** @description An SPDX licence id. */
+                            license: string | null;
+                            /** @description Where the icon is served, below the base path. Absent without an icon. */
+                            iconUrl?: string;
+                            public: boolean;
+                            organisations: {
+                                /** @description A key of the registry `service.orgRole`. */
+                                role: string;
+                                id: string;
+                                abbreviation: string;
+                                name: string;
+                            }[];
+                            description: string | null;
+                            url: string | null;
+                            sameAs: string[];
+                            /** @description The values of the configured fields that are not columns, by field key. */
+                            values: {
+                                [key: string]: unknown;
+                            };
+                            /** @description The service's role address, not a user's. Present only for a reader who may see it. */
+                            contactEmail?: string | null;
+                            /** @description Present only with `contactEmail`. */
+                            contactType?: string | null;
+                            /** @description Present when the slug asked for is an old one; the record is under its current slug. */
+                            redirectedFrom?: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** @description Administrators only. */
+                            createdBy?: string | null;
+                            /** @description Administrators only. */
+                            updatedBy?: string | null;
+                            /** @description The keys of the fields the caller may write on this service: everything for an administrator, everything for a manager of the provider, everything but `slug` and `provider` for another member of it, nothing for anybody else. Screens draw their form from this; the server still refuses what is not allowed. */
+                            editableFields: string[];
+                            /** @description What the caller may do with this service now. Screens draw their buttons from this. */
+                            allowedActions: ("edit" | "publish" | "unpublish")[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Making a service public is switched off (`service.allowPublic`). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

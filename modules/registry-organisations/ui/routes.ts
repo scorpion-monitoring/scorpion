@@ -13,6 +13,12 @@ export const ORGANISATION_ROUTES: RouteEntry[] = [
   // draws itself only when `GET /memberships/summary` says `manages: true`.
   { path: '/account/organisations', permission: 'registry.organisations.organisation.read' },
   { path: '/admin/memberships', permission: 'registry.organisations.organisation.manage' },
+  {
+    path: '/public/organisations/:id',
+    public: true,
+    publicReason:
+      'Anyone may read the public profile of an organisation that a public service names. The page only calls the public routes, which answer 404 for every other organisation, so existence is not revealed; it draws nothing from a session or a role.',
+  },
 ];
 
 export const ORGANISATION_NAV: NavEntry[] = [

@@ -9,7 +9,7 @@
 //  2. The scenarios: what a plain User, an anonymous caller, a user without roles and a token
 //     with a broader scope than its owner's permissions can and cannot do.
 import { randomUUID } from 'node:crypto';
-import { makeInboxItem, makeOrganisation, makeRole } from '@scorpion/testing';
+import { makeInboxItem, makeOrganisation, makeRole, makeService } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { ALL_USER_SCOPES, PASSWORD, useIdentityApp, type Reply } from './testing/identity-app.ts';
 
@@ -26,8 +26,9 @@ interface Sample {
 
 /**
  * `admin`: a plain User (the role `user`) must get 403, and the handler must not run. (A route that is
- * DELEGATED, ADR-0034, carries the plain `…organisation.read` and the service refuses; its sample names a
- * real organisation, because the service answers 404 for an unknown one before it answers 403.)
+ * DELEGATED, ADR-0034, carries the plain `…organisation.read` or `…service.read` and the service refuses; its
+ * sample names a real organisation or service, because the service answers 404 for an unknown one before it
+ * answers 403.)
  * `self`: the routes a plain User uses on their own account. They act on the caller only (no user id
  * in the input), so they are protected by the role: a user without roles gets 403.
  * Every entry also answers 401 to an anonymous caller and 403 to a user without any role.
@@ -42,7 +43,7 @@ const SAMPLES: Record<
     own?: boolean;
     /** An event stream: a plain User's success is read as the start of a stream and closed, not read to the end. */
     streaming?: boolean;
-    sample: (ids: { id: string; organisation: string }) => Sample;
+    sample: (ids: { id: string; organisation: string; service: string }) => Sample;
   }
 > = {
   'POST /auth/logout': { kind: 'self', sample: () => ({ method: 'POST', path: '/auth/logout' }) },
@@ -297,6 +298,82 @@ const SAMPLES: Record<
     kind: 'admin',
     sample: ({ id }) => ({ method: 'DELETE', path: `/organisations/${id}` }),
   },
+  // registry.services (M7 sprint 1). Reading services, the licence list and the organisation roles is every
+  // signed-in person's (the forms need them); creating is every User's by the permission, and the service adds the rule that the provider is theirs.
+  'GET /services': { kind: 'self', sample: () => ({ method: 'GET', path: '/services' }) },
+  'GET /services/facets': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/services/facets' }),
+  },
+  'GET /services/{id}': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'GET', path: `/services/${id}` }),
+  },
+  'GET /services/by-slug/{slug}': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/services/by-slug/galaxy' }),
+  },
+  // M7 sprint 3: the profile for a signed-in reader names the plain `…service.read` (any service, never the contact
+  // point). The four anonymous routes under `/public/` are public with a reason: they are listed in
+  // `public-records.test.ts`, which also pins their fields, and proved in `public-service-routes.test.ts`.
+  'GET /services/{id}/schema-org': {
+    kind: 'self',
+    sample: ({ id }) => ({ method: 'GET', path: `/services/${id}/schema-org` }),
+  },
+  'GET /licenses': { kind: 'self', sample: () => ({ method: 'GET', path: '/licenses?q=mit' }) },
+  // M7 sprint 5: the schema of the create wizard names `…service.create`, held by every User, and carries
+  // nothing of any person or service (limits, field types, roles and the options of a vocabulary).
+  'GET /services/schema': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/services/schema' }),
+  },
+  'GET /service-roles': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/service-roles' }),
+  },
+  // `create` is held by every User, and the SERVICE then requires an Admin or an approved member of the chosen
+  // provider (the sample names an organisation the plain User is not a member of): 403 from the service.
+  'POST /services': {
+    kind: 'admin',
+    sample: ({ organisation }) => ({
+      method: 'POST',
+      path: '/services',
+      body: { slug: 'evil', name: 'Evil', provider: organisation },
+    }),
+  },
+  // M7 sprint 2 (ADR-0034, ADR-0036): PATCH and the icon routes are DELEGATED, as the organisation's: they name
+  // the plain `…service.read`, a plain User passes the pipeline and the SERVICE refuses with 403 (the sample
+  // names a real service, because an unknown one is 404 first). The publication route names `…service.publish`
+  // (Admin and Reviewer), so a plain User is stopped at the route. The cases of a member, a manager, another
+  // organisation and a token are in service-editing-routes.test.ts.
+  'PATCH /services/{id}': {
+    kind: 'admin',
+    sample: ({ service }) => ({
+      method: 'PATCH',
+      path: `/services/${service}`,
+      body: { description: 'defaced' },
+    }),
+  },
+  'PUT /services/{id}/icon': {
+    kind: 'admin',
+    sample: ({ service }) => ({
+      method: 'PUT',
+      path: `/services/${service}/icon`,
+      body: 'not an image',
+    }),
+  },
+  'DELETE /services/{id}/icon': {
+    kind: 'admin',
+    sample: ({ service }) => ({ method: 'DELETE', path: `/services/${service}/icon` }),
+  },
+  'PUT /services/{id}/publication': {
+    kind: 'admin',
+    sample: ({ service }) => ({
+      method: 'PUT',
+      path: `/services/${service}/publication`,
+      body: { public: true },
+    }),
+  },
   // M6 sprint 3 (ADR-0034): membership. Asking, withdrawing and the own list are the caller's own
   // (`…membership.request`, role `user`). The rest are DELEGATED: the route names the plain
   // `…organisation.read` that every signed-in person holds, so a plain User passes the pipeline, and the
@@ -504,7 +581,7 @@ describe('defect 1: the route table', () => {
     const s = await start();
     const roleless = await s.signedIn('norole', { roles: [] });
     for (const [key, { sample }] of Object.entries(SAMPLES)) {
-      const request = sample({ id: FOREIGN, organisation: FOREIGN });
+      const request = sample({ id: FOREIGN, organisation: FOREIGN, service: FOREIGN });
       const anonymous = await send(s, request);
       expect(anonymous.status, `${key}: anonymous`).toBe(401);
       expect(problem(anonymous), key).toContain('application/problem+json');
@@ -519,6 +596,16 @@ describe('defect 1: the route table', () => {
     const plain = await s.signedIn('plain');
     const victim = await register(s, 'victim');
     const organisationId = (await makeOrganisation(s.kernel.pool)).id;
+    // A real service: a delegated service route answers 404 for an unknown one before it answers 403.
+    const serviceId = (await makeService(s.kernel.pool, { provider: organisationId })).id;
+    const serviceTables = ['svc_service', 'svc_service_organisation', 'svc_slug_history'];
+    const snapshot = async () =>
+      Promise.all(
+        serviceTables.map(async (table) =>
+          JSON.stringify((await s.kernel.pool.query(`select * from ${table} order by id`)).rows),
+        ),
+      );
+    const servicesBefore = await snapshot();
     const before = await s.kernel.pool.query(
       'select count(*)::int as n from authz_role_assignment',
     );
@@ -526,7 +613,7 @@ describe('defect 1: the route table', () => {
       if (kind !== 'admin') continue;
       const reply = await send(
         s,
-        sample({ id: victim, organisation: organisationId }),
+        sample({ id: victim, organisation: organisationId, service: serviceId }),
         session(plain),
       );
       expect(reply.status, key).toBe(403);
@@ -548,6 +635,16 @@ describe('defect 1: the route table', () => {
     expect(
       (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'settings.%'")).rows,
     ).toEqual([]);
+    // ... nor the services: a refused create, edit, icon or publication left every row as it was (the one
+    // fixture service, its link and its slug), and no icon file was stored.
+    expect(await snapshot()).toEqual(servicesBefore);
+    expect(
+      (
+        await s.kernel.pool.query(
+          "select 1 from kernel_outbox where name like 'registry.service.%'",
+        )
+      ).rows,
+    ).toEqual([]);
     // ... nor the vocabularies: the seeded terms are as they were.
     expect(
       (
@@ -566,7 +663,7 @@ describe('defect 1: the route table', () => {
       const who = await s.signedIn(`selfservice${n++}`);
       if (streaming) {
         const opened = await s.stream(
-          sample({ id: FOREIGN, organisation: FOREIGN }).path,
+          sample({ id: FOREIGN, organisation: FOREIGN, service: FOREIGN }).path,
           session(who),
         );
         expect(opened.status, key).toBe(200);
@@ -575,7 +672,11 @@ describe('defect 1: the route table', () => {
       }
       // An item id is the caller's own, or the answer is 403 by design (see notification-routes.test.ts).
       const id = own ? (await makeInboxItem(s.kernel.pool, { userId: who.user.id })).id : FOREIGN;
-      const reply = await send(s, sample({ id, organisation: FOREIGN }), session(who));
+      const reply = await send(
+        s,
+        sample({ id, organisation: FOREIGN, service: FOREIGN }),
+        session(who),
+      );
       expect([401, 403], key).not.toContain(reply.status);
     }
   });
@@ -616,11 +717,24 @@ describe('defect 1: the route table', () => {
       'registry.organisations.membership.manage-roles',
       'registry.organisations.membership.remove',
       'registry.organisations.organisation.edit',
+      // ... and of registry.services, with the plain `create`, `manage` and `publish`.
+      'registry.services.service.edit',
+      'registry.services.service.edit-identity',
+      'registry.services.service.read-contact',
+      'registry.services.service.manage',
+      'registry.services.service.publish',
     ];
-    // A token holds at most 20 scopes, so the widest one the owner can make is two tokens.
-    const wide = [[...ALL_USER_SCOPES, ...permissions.slice(0, 10)], permissions.slice(10)];
+    // A token holds at most 20 scopes, so the widest the owner can make is a few tokens.
+    const rest = permissions.slice(10);
+    const wide = [
+      [...ALL_USER_SCOPES, ...permissions.slice(0, 10)],
+      ...Array.from({ length: Math.ceil(rest.length / 20) }, (_, i) =>
+        rest.slice(i * 20, i * 20 + 20),
+      ),
+    ];
     const victim = await register(s, 'victim');
     const organisationId = (await makeOrganisation(s.kernel.pool)).id;
+    const serviceId = (await makeService(s.kernel.pool, { provider: organisationId })).id;
     for (const [index, scopes] of wide.entries()) {
       const made = await s.post('/tokens', {
         ...session(plain),
@@ -630,7 +744,7 @@ describe('defect 1: the route table', () => {
       const { token } = made.body as { token: string };
       for (const [key, { kind, sample }] of Object.entries(SAMPLES)) {
         if (kind !== 'admin') continue;
-        const request = sample({ id: victim, organisation: organisationId });
+        const request = sample({ id: victim, organisation: organisationId, service: serviceId });
         const reply = await s.call(request.method, request.path, {
           headers: bearer(token),
           body: request.body,

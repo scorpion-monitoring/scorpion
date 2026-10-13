@@ -104,6 +104,8 @@ export const messages: UiMessages = {
 
     'organisation.logo.title': 'Logo',
     'organisation.logo.alt': 'Logo of {name}',
+    'organisation.public.services': 'Services',
+    'organisation.public.noServices': 'No public service is listed.',
     'organisation.logo.none': 'No logo yet.',
     'organisation.logo.afterCreate': 'You can add a logo once the organisation exists.',
     'organisation.logo.choose': 'Upload a logo',
@@ -325,6 +327,8 @@ export const messages: UiMessages = {
 
     'organisation.logo.title': 'Logo',
     'organisation.logo.alt': 'Logo von {name}',
+    'organisation.public.services': 'Dienste',
+    'organisation.public.noServices': 'Es ist kein öffentlicher Dienst aufgeführt.',
     'organisation.logo.none': 'Noch kein Logo.',
     'organisation.logo.afterCreate':
       'Ein Logo lässt sich hinzufügen, sobald die Organisation angelegt ist.',

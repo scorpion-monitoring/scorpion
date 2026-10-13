@@ -36,6 +36,15 @@ const PARTS_OF: Record<string, string> = { FieldShell: 'SchemaForm', SchemaField
 const THROUGH_PAGES = [
   'Alert',
   'Dialog',
+  // Moved from the organisation module's `LogoBlock` (M7 sprint 2, Decision 18) with its behaviour unchanged:
+  // the logo journeys of `e2e/organisations.spec.ts` upload, replace and remove through it, and
+  // `e2e/accessibility-organisations.spec.ts` runs axe over the pages that hold it.
+  'ImageBlock',
+  // The JSON-LD block (M7 sprint 3, moved from the organisation module with its test): a data block in the head,
+  // with no control and nothing to focus, so it has no keyboard test or axe check of its own. The hostile-input
+  // render test in `json-ld.test.ts` is its check, and the organisation page (and from sprint 6 the service page)
+  // that holds it is covered by the journeys and the axe runs over those pages.
+  'JsonLd',
   'ReauthDialog',
   'SafeHtml',
   'SubmitButton',

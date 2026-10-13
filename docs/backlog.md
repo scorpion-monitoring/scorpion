@@ -15,13 +15,13 @@
   start, not before migrations.
 - Make the image build's lockfile step reproducible: it reuses every locked version, but it does
   rewrite `pnpm-lock.yaml` inside the build stage for non-`full` profiles.
-- Release image workflow: CI builds only throwaway `scorpion:ci-<profile>` images and has no tag
+- ~~Release image workflow~~ Done: `ci.yml` has a `v*` tag trigger and the `Publish (full | core-only | registry)` jobs (M7 sprint 7 checks that the tag matches the root `package.json` version). (was: CI builds only throwaway `scorpion:ci-<profile>` images and has no tag
   trigger, so the release step "build the profile images as `scorpion:<x.y.z>-<profile>`"
   (CONTRIBUTING.md, "Releases") is manual (`pnpm build --profile <name> --tag scorpion:<x.y.z>-<name>`).
   Add a workflow that runs on `v*` tags: check that the tag matches the root `package.json` version,
   build every release profile (not `fixture-ab`) with `docker/Dockerfile`, run the same smoke tests as
   CI, tag `scorpion:<x.y.z>-<profile>` and push to a registry. The registry (and its credentials as
-  repository secrets) needs a decision first; record it in an ADR.
+  repository secrets) needs a decision first; record it in an ADR.)
 
 ## Audit follow-ups (M4 sprint 4)
 
@@ -198,7 +198,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 ## Organisations follow-ups (M6 sprint 1)
 
 - **Hierarchy.** `parentOrganization` and `subOrganization` (parent and child organisations), an `address` and a `foundingDate` are not modelled ([m6-sprint-plan.md](m6-sprint-plan.md) §3 and §11). The table has no parent column; add one with its own ADR when a milestone needs a tree.
-- **M7/M8: public read of the Schema.org profile of an organisation.** M7 adds a public route that serves `toSchemaOrg(..., includeContact: false)` for organisations referenced by at least one service (an `org.usage` count above zero); never the contact point; rate-limited; unreferenced organisations answer 404. M8 adds the same representation to public API v1 (additive). M6 builds no public read for "is referenced", so M7 adds the small one it needs (for example `isReferencedAsSystem(id)`). From the M6 follow-up decisions of 2026-10-09 (Decision 15).
+- ~~**M7/M8: public read of the Schema.org profile of an organisation.**~~ M7 part done in M7 sprint 3 (Decision 8 refined it, Decision 15 of M6): `GET /public/organisations/{id}` and `…/schema-org` answer for an organisation that is the provider or a consortium of at least one **public** service, through the registry `org.publicReference` (not `org.usage`: the usage count says "has services", the public rule says "has public ones"), never the contact point, rate limited, the same 404 for everything else. M8 still adds the same representation to public API v1 (additive).
 - ~~**Who may upload a logo through the blob store.**~~ Closed in M6 sprint 2: a module stores an image through its own route, its own permission and the blob service; `POST /files` and `core.blob.manage` stay for the branding logos of the settings and are not used here. `PUT /organisations/{id}/logo` needs `…organisation.manage` (sprint 4: the scoped `…organisation.edit`, checked in the service), and the service calls `blob.put` (which needs `core.blob.upload`, held by the role `user`) and then `setReference`. Nothing changed in `core.blob`.
 - **Logo extras (M6 sprint 2).** Logo variants (thumbnails of a fixed size), a logo fetched from a URL (an outgoing request, so SSRF rules and a timeout), and SVG-only logos (today a raster or an SVG is accepted and the blob store rewrites it; there is no way to require vector input) are not built. The logo hash is public by `GET /files/{hash}`; a private logo is not possible.
 - **`address` and `foundingDate`** (schema.org) are not stored or mapped; see the hierarchy entry above.
@@ -213,7 +213,7 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found. ADR-
 - ~~**A batch lookup of users in `core.identity`.**~~ Done in M6 sprint 4 (same PR): `users.findByIds(ids)` (one query per 1000 ids; unknown and
   malformed ids left out). The member lists, the request mails (managers and administrators) and the "no manager" notice use it. Counting only
   active accounts in `memberCount` can use it now; not done (see above).
-- **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). A flag on `createRoute()` that lets the pipeline pass a
+- **The `scoped` route flag** (ADR-0034, the alternative that was recorded and deferred). _Settled in M7 (Decision 12): `service.edit` uses the pattern of M6, so the flag was not built; it stays deferred._ A flag on `createRoute()` that lets the pipeline pass a
   caller who lacks the permission globally, with the service re-check as the guard, would make a delegated route visible to the pipeline instead of
   looking like an ordinary read. It touches `packages/contracts/src/route.ts` and `apps/server/src/pipeline/**` (both ASVS-scoped). Build it in M7 only
   if `service.edit` cannot use the pattern of M6 (a plain permission on the route, the scoped check in the service).
@@ -270,6 +270,205 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found.
 - **Not in M6 by decision (plan §11), kept here so they are not lost:** a funder or any other type (the `org.type` registry makes them
   possible; they arrive with the module that needs them), contact persons of an organisation, a logo from a URL, an import or export of
   organisations (M13 writes through the service) and a CSV of members.
+
+## Maintainer observations (after 0.8.0)
+
+Found while using the instance; not yet investigated.
+
+- ~~**Horizontal scrollbar in the collapsed sidebar.**~~ Done in M7 sprint 7: the navigation of the sidebar has `overflow-x: hidden`, and `shell.spec.ts` checks in both themes that the collapsed navigation takes no height for a scrollbar (it fails without the class). The tooltip of a collapsed link is clipped by that box, as it already was by the vertical scroll; a tooltip drawn outside the sidebar would need a portal and is not built. (was: With the sidebar collapsed, a horizontal scrollbar appears. Probably the expanded content
+  overflows the narrow width; the labels need `overflow-x: hidden` or the collapsed layout must not render them.)
+- **Too many 429s when administering the instance.** Clicking through the administration screens quickly hits the rate limit within seconds.
+  The limits (`default` and `strict` groups, `apps/server/src/pipeline/rate-limit.ts`, and the settings that feed them) need a review against
+  what an administrator's screens call per page (several requests per page load, plus the inbox bell and the dashboard cards). Measure the
+  requests per page first, then raise the `default` group or key it so that a signed-in person is not counted like an anonymous caller. The
+  catalogue (M7 sprint 4) makes three API calls per load (the list, the facets and `GET /account/permissions`) and repeats them on every filter click, so it is likely to be the worst page; M7 sprint 7 measured the calls per page (below) and changed nothing in the pipeline. The
+  pipeline is an ASVS-scoped path (V7, V8): the change needs the chapter files or the `asvs-no-impact` line and a test that the public
+  endpoints (login, register, token use) stay limited.
+
+  **Measured in M7 sprint 7** (nothing in the pipeline or in a limit changed). Method: the e2e stack with the API's request log on, a signed-in
+  person in a fresh browser, every `/api/` request counted at the API, whoever made it (the browser, or the web server's loaders, which forward
+  the caller's address). The measurement script was a throwaway Playwright spec; the numbers are from 0.9.0 on the `full` profile.
+  Every call below is a `GET` in the `default` group; none is `strict` (the strict group holds sign-in, registration, password, upload and
+  token routes, which no page load makes). The bucket is per client address, not per person (a session cookie is not a key), so the calls of
+  a browser and of the web server's loaders on its behalf, and of everybody behind one office address, draw from the same 120 and refill
+  at 2 a second.
+
+  | Page and step                                              | API calls | What they are                                                                                             |
+  | ---------------------------------------------------------- | --------: | --------------------------------------------------------------------------------------------------------- |
+  | Any page, the **layout** (every load and every navigation) |         4 | `ui/navigation`, `branding`, `auth/me`, `preferences` (the language), run again by the web server         |
+  | The shell, once per full page load                         |         2 | `notifications/inbox/unread-count` and the `inbox/stream` (the bell); none on a navigation inside the app |
+  | Dashboard, User                                            |         7 | layout 4, bell 2, `memberships/summary` (the card)                                                        |
+  | Dashboard, administrator                                   |         8 | layout 4, bell 2, `users/pending`, `notifications/status` (the cards)                                     |
+  | **Catalogue**, load                                        |         9 | layout 4, bell 2, `services`, `services/facets`, `account/permissions`                                    |
+  | **Catalogue**, a filter click or a sort click              |     **7** | layout 4, `services`, `services/facets`, `account/permissions`                                            |
+  | Catalogue, a click on "Services" in the sidebar            |         7 | the same                                                                                                  |
+  | Service page, view, User                                   |        10 | layout 4, bell 2, record, `services/{id}/schema-org`, `services/schema`, `licenses`                       |
+  | Service page, view, member                                 |        11 | the User's, plus `organisations`                                                                          |
+  | Service page, view, manager                                |        13 | the member's, plus `account/permissions`, `account/memberships`                                           |
+  | Service page, view, administrator                          |        13 | the User's, plus `account/permissions` and `organisations` twice                                          |
+  | Service page, a click on Edit (member, manager, admin)     |         1 | `licenses`                                                                                                |
+  | Administration, users, load                                |         7 | layout 4, bell 2, `users`                                                                                 |
+  | Administration, users, a sort click                        |         5 | layout 4, `users`                                                                                         |
+  | Administration, settings, load                             |         7 | layout 4, bell 2, `settings`                                                                              |
+
+  Reading it:
+
+  - **The layout is the cost of every click.** Four calls that answer the same thing each time (who is signed in, what the menu is, the
+    branding, the language) run again on every navigation, a filter or sort click included (the load of the catch-all route depends on the
+    address). That is more than half of what a click costs (4 of 7 in the catalogue, 4 of 5 on an administration table). At 2 a second
+    sustained, 5 to 7 calls a click is **about 17 to 24 clicks a minute** and a burst of 17 to 24 clicks from rest; a person clicking through
+    administration pages reads the rate limit within the minute, which is what the maintainer saw. This, not any one page, is where to look first.
+  - **The catalogue is the worst page per click** (7) and a manager's or an administrator's service page the worst per load (13), so the
+    catalogue's three calls are not the worst case by themselves: its own three are the smaller part.
+  - **`GET /account/permissions` can be replaced by what the navigation holds.** The catalogue asks it only to learn whether the caller may
+    create a service (`registry.services.service.create`), and `/services/new` is a page that the same permission gates, so
+    `navigation.routes.includes('/services/new')` gives the same answer with no call. The navigation is not in `UiLoadContext` today, so
+    this adds a field to the load context (not to the navigation contract) and is left for the pull request that deals with the limits.
+    The service page's form reads the same list for a manager and an administrator (the wizard's provider list does as well) and could
+    use the same shortcut or a single `GET /services/{id}` field (`allowedActions` already says what the caller may do).
+  - **Cheapest changes, in the order of what they save** (all outside this sprint): (1) the layout loads only what changed (`preferences`
+    only when the session changes, `branding` once per full load, the navigation once per session and again when roles change); the web
+    server can keep them for the length of the person's navigation or the browser can keep them in the page data, `invalidate` when a
+    save changes them. (2) The service page loads `licenses`, `services/schema` and `schema-org` only when a reader needs them (the
+    licence's name could come in the record, the stage label with the record as the sprint 6 entry says, the profile only for the
+    JSON-LD block). (3) The catalogue's `account/permissions`, as above. (4) Only then a change of limits: a higher `default` group, or a
+    bucket per signed-in person next to the address, with its own V7 and V8 entries and a test that login, register and token use
+    stay limited.
+
+- **Account pictures are not used anywhere.** A person can upload an avatar (`PUT /account/avatar`, shown on the profile page), but it appears
+  in no other place. Expected: the header's account menu and the member lists (the organisation page's member list and the manager's
+  member table). The member list route returns usernames and join dates only, so showing a picture needs an additive field (the avatar's
+  file hash, never an address) in the member list and the decider's row, an update of the membership field table in
+  `docs/security/authorization.md` and the walker in `response-fields.test.ts`, and a fallback (initials) for a person without one. The
+  header needs the avatar in `GET /auth/me` or `GET /account/profile` (check what the shell already loads).
+- **Use an icon library instead of hand-drawn SVGs.** The shell draws its icons from a small table of paths in
+  `apps/web/src/lib/components/Icon.svelte` (about 20 names; `Bell.svelte` of `core.notifications` has its own SVG). The maintainer recommends
+  [Tabler Icons](https://tabler.io/icons) (MIT, outline style on a 24 x 24 grid like the current ones). Decide how to ship it (the Svelte
+  package `@tabler/icons-svelte` imports per icon and tree-shakes, or the SVG set copied into the repository, which avoids a runtime
+  dependency and fits the CLAUDE.md rule to justify new dependencies), keep the `name` string of `ui.nav` entries working through a mapping (an
+  unknown name still falls back to a dot), and check that the icons stay out of the accessible name (`aria-hidden`). A side finding: nav
+  entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
+  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table. _Done in M7 sprint 7 for the side finding: `inbox`, `mail` and `settings` are drawn (the table moved to `packages/contracts/src/icons.ts`), and `apps/server/src/ui-routes.test.ts` fails when a `ui.nav` entry of the full profile names an icon the table lacks. The library itself stays open._
+
+## Services follow-ups (M7 sprint 1)
+
+- ~~**Facet semantics are sprint 4's.**~~ Done in M7 sprint 4: the entry shape changed (ADR-0035 addendum) and `fieldValueFacet()` serves a value in `svc_field_value`. (was: The `service.facet` entry carries `where(selected)` (the condition for a selection) and `values(scope, db)` (counts over the services a scope matches); the four seeded facets implement both and are tested, but the catalogue (sprint 4) decides which filters it passes as `scope` (Decision 13: all the other facets and the search). If sprint 4 finds the shape too narrow for the M9 category facet (a value held in `svc_field_value`), change the entry before M9 contributes one.)
+- **The OpenAPI body of `POST /services` documents the shipped fields only.** A deployment's own configured fields are accepted at their paths (the body is a loose object) and validated by the service, but they are not typed in the generated client. `GET /services/schema` (sprint 5) gives the browser the full schema; a generated per-profile OpenAPI body is not planned.
+- **The slug history holds the current slug too** (ADR-0035), so one unique index decides whether a slug is free; the plan wrote "the old slug is written to `svc_slug_history` on a rename". A rename (sprint 2) adds a row and keeps the old ones. A view of the history per service is not built.
+- ~~**Message keys of the config have no catalogue yet.**~~ Done in M7 sprint 5: the texts (en and de) of the config's keys are in `ui/messages.ts` and a missing key fails `ui.test.ts`. A contributed step uses the same convention. (was: the texts arrive with the wizard.)
+- ~~**`./ui` is not exported yet.**~~ Done in M7 sprint 4: the `ui` entry, `ui.routes` and `ui.nav`. (was: The module had no screen in sprint 1.)
+- **`core.audit` is the observer, as in M6.** Plan §2 lists `core.audit` as an optional peer of `registry.services`; the module follows `registry.organisations` instead: `core-audit` lists `registry.services` as an optional peer and holds the decisions, so the dependency graph has no cycle.
+- **The SPDX list is refreshed by hand in the repository.** The bundled fallback is regenerated with `node packages/integrations/scripts/generate-spdx.ts` after the pin in `spdx-pin.ts` moves; nothing reminds the maintainer when a new SPDX release appears. A scheduled workflow that opens a pull request, or a Dependabot-style check, is not built. The live list is fetched at most once a day and cached in `svc_license_cache`.
+- **A custom licence** (`LicenseRef-…`) and an expression such as `MIT OR Apache-2.0` are refused: only one SPDX id is accepted (plan §12).
+- **The field type `check` cannot ask for more than a vocabulary term and an SPDX id.** `FieldEnv` is closed on purpose; a contributed type that needs another lookup (an ORCID, a ROR id, an EDAM term) extends the interface with an ADR, or does its work inside its own module's route.
+- **`create` is Admin-only until sprint 2** (plan §5 item 8); the event carries `by: 'admin' | 'member'` already so the payload does not change. _Done in sprint 2: an Admin or an approved member of the chosen provider._
+
+## Services follow-ups (M7 sprint 2)
+
+- **Nobody owns a service by having created it.** A creator who later leaves the provider loses the right to edit, as the policy reads the provider's membership at every call (ADR-0036). A "created by" owner, or an explicit list of editors per service, is not planned; the provider's managers and Admin can always step in.
+- **The policy costs two reads per scoped check, and a record asks up to three.** `policy.ts` loads the provider and asks `registry.organisations` on every call (no cache, so a demotion is seen at the next call). A record view asks `edit`, `edit-identity` and `read-contact` once each. That is fine for one record; a list of rows with `editableFields` would need a batched policy read or a per-request memo, and the catalogue (sprint 4) deliberately has no such column.
+- **A `PATCH` replaces a list as a whole.** `sameAs` and `consortia` are replaced by the list in the body (`null` empties them); there is no add or remove of one item, and two editors who change the same list at once get the last write. Per-item operations are not planned.
+- **The contact point is cleared as a pair, with both parts `null`.** `contact: null` as a whole is not accepted (the nested object is addressed by the pointers of its two fields); the form of sprint 6 sends both. Revisit if an API client finds it awkward.
+- **The body of `PATCH /services/{id}` documents the shipped fields only,** like the create body: a deployment's own configured fields are accepted at their paths and validated by the service, but are not typed in the generated client.
+- **`by` in `registry.service.updated@1` is the highest group the request needed, not the person's role.** A manager who edits only descriptive fields is recorded as `member`; the actor id says who. Someone who wants "all edits by managers" in the critical channel changes the decision in `core.audit` and adds `by` to the payload rule; the plan keeps every update ordinary.
+- **A change of case in a slug rewrites the spelling in the history.** `Foo` to `foo` updates the history row instead of adding one (the index is case-insensitive), so `redirectedFrom` shows the new spelling. Nothing links to the old spelling in a way that matters; a second row per spelling is not worth a second index.
+- **The identity fields are a table in code (`IDENTITY_FIELDS`).** A deployment that wants another field to need a manager (a `license` that only managers set, say) changes `field-rules.ts`; making it configuration would let a bad config weaken the rule, so it stays code.
+- **An inbox item to the provider's managers when an Admin or another manager changes the identity, or when a Reviewer publishes,** is sprint 3's notice for the publication only; for the identity it is in the plan's list of things left out (§12). _Done in sprint 3 for the publication notice (`registry.service-publication`)._
+
+## Services follow-ups (M7 sprint 3)
+
+- **`license` is not a property of schema.org `Service`.** The plan maps the SPDX licence to `license` (§3); schema.org defines it on `CreativeWork` and `Product`, so an external validator reports a warning for a `Service` (`builder` test pins it as the one documented exception). Alternatives if it matters to a consumer: `termsOfService` with the licence page, or a `subjectOf` node of type `CreativeWork` with the `license`. Decide with the first consumer (M8 or a crawler report); the property is additive either way.
+- **The cache lifetime of a public answer is 60 seconds** (`Cache-Control: public, max-age=60`, a constant in each module's `routes.ts`). The server keeps no copy, so an unpublish is a 404 at the next request; a shared cache in front of the instance can still serve the old 200 for up to a minute. It is not a setting. If an operator needs `no-store` for a deployment, make it a setting of `registry.services` rather than a number in code. No `ETag`/conditional request is built for the public routes.
+- **The public routes are unauthenticated reads that hit Postgres.** They are rate limited by the `default` group (120 a minute per address) and one public read is one statement for the record plus one for the organisation names (and, for the profile, one per organisation node and the contributors). A CDN or a short in-process cache would absorb a crawler; not built. The prototype showed the pipeline needs no change.
+- **The public record has no `redirectedFrom`.** An old slug resolves, and the record carries the current slug, so the page of sprint 6 redirects by comparing the two. A caller that wants to know the old slug was used does not get told.
+- **A public record needs a provider.** `getPublicAsSystem` treats a service without a provider link as not public (it cannot exist through the service layer: the role has `min: 1`); a row written by hand without one is a 404.
+- **`public` on an organisation reference is always true.** The record names provider and consortia as `{ id, name, public }` (the pinned shape of the plan), and by Decision 8 an organisation of a public service is public, so the flag carries no information today. Keep it if a later rule can make an organisation of a public service private; drop it (a v2 of an internal route is cheap) if not.
+- **The record has an `id`.** The plan's list of pinned fields omits it; the page, the profile `@id` and the organisation's service list all need it, so it is in both public records and in the pinned lists of `public-records.test.ts`.
+- **`JsonLd` takes the serialised string, not the profile.** ui-kit cannot import `registry.organisations`, so the component's one input is the output of `serializeJsonLd` and it refuses (throws) a string that holds `<`, `>`, `&`, a line separator or is not JSON. The pages call `serializeJsonLd` themselves; the service page of sprint 6 does the same.
+- **The publication notice has no digest and no per-service opt-out.** It goes to the managers of the provider and the creator at the moment of publishing, once per change; a person switches the mail off through the category `registry-service`, the inbox item is always written. A person who is both a manager and the creator gets one item. No notice goes to the members of the provider (plan §7 item 6: managers and creator only) and none for a change of identity (§12).
+- **The notice reads the provider at send time.** A service moved between providers in the same moment as a publication notifies the managers of the provider it had when the publication committed.
+- **A contributor that throws is skipped and logged**, not an error: the profile (and the public page) must not depend on another module being healthy. A test fixture proves it; a metric for skipped contributors is not built.
+
+## Services follow-ups (M7 sprint 4)
+
+- **The facet entry shape changed in sprint 4** (ADR-0035 addendum): `where(selection, serviceId)` and `values(matching, db)` replace `where(selected)` and `values(scope, db)`, and `unknownOf` and `labelsOf` are new. No contributor existed yet, so nothing broke. M9's category should use `fieldValueFacet()`; if its values need a label from `kpi.framework` it brings a `labelsOf`.
+- **The facet lists are not capped.** A facet draws every value with a service in the set: a few hundred providers would make a long list. Not a problem at today's numbers; when it is, a "show more" and a search inside a facet belong to `Facets` in `packages/ui-kit` (the API already returns the values by count).
+- ~~**A stored licence that SPDX no longer lists**~~ Done in M7 sprint 7: `unknownOf` takes the database as a third argument and the licence facet accepts a value a service has (`catalogue.test.ts`: counted, chosen, returned; a value nobody has and SPDX does not list is still a 422). (was: it shows in the licence facet (it is counted) and is a 422 when chosen as a filter (`unknownOf` asks the SPDX list; a deprecated id is accepted, a removed one is not). Make `unknownOf` for the licence accept what a service has, if it ever happens.)
+- **The sort by stage is by the term key** (`DEV`, `DEMO`, `PROD`, `TERM`), not by the vocabulary's order or label. Sorting by the vocabulary's `sortOrder` needs the terms in the query (as the provider sort does with the names); not built.
+- **The sort by provider asks the organisation module for every provider's name** (one call, then the order is given to the query as a position list). Fine for hundreds of providers; with thousands, an `org`-side ordering or a denormalised name in a read model is the fix.
+- **Performance, as measured.** `service/catalogue.test.ts` pages 300 generated services and counts four facets under two active filters (rows, total, the organisation links and one count per facet) in about 45 ms on a local Testcontainers database (the test allows 2 s); the indexes on `stage`, `license`, `lower(name)` and the organisation links cover the filters. No index on `svc_field_value (field_key)` alone is added: the unique index `(service_id, field_key)` serves the `exists`. A profile of 10k services has not been measured; if it is slow, the next step is a materialised read model refreshed on the service events, as the plan says.
+- **The count of a facet is a count of services, not of rows.** A service with two consortia counts once in each; the sum of the consortium counts can exceed the total. That is the standard behaviour of a multi-valued facet and is documented in the README.
+- **The catalogue's `slug` sort is in the API and not in the table** (no column shows the slug). The screen offers name, provider and stage.
+- **Unknown query parameters of `GET /services` are filters**, so a misspelt `page_size` is a 422 naming it ("There is no filter") rather than being ignored. The OpenAPI document names the four seeded filters and the sort; a contributed facet's id is documented by the registry, not by the schema.
+- **`UiLoadContext` has a `locale`** (added in this sprint) for a page whose API call returns labels in one language. The other pages still take their labels from the registry entries' `labels` in the browser; they could use it too.
+- **The icon is 32 px in the table and loads the stored file as it is.** A thumbnail size (a query on the file route) would save bytes for large icons; the blob store re-encodes at upload but keeps one size.
+
+## Services follow-ups (M7 sprint 5)
+
+- **How a contributing module's `ui` entry reaches the wizard.** The server side is complete (a contributed step appears in the schema, its values are
+  stored and its failures roll back, proved with a fixture). In the browser the page offers `registerFieldWidget` and `registerStepApplies`
+  (`ui/wizard-extensions.ts`), but the shell forwards only routes, messages and widgets of a `ui` entry, so a contributing module has no way to call them
+  yet. M9's category step settles it: either a fourth export of the `ui` entry that the shell forwards, or the module's own widget list under the
+  existing `widgets` export. Until then the fixture of `wizard-page.test.ts` registers directly.
+- **A step that `applies` hides cannot have a required field,** because the server validates every configured field (the plan's `applies` is per step
+  and client side only). If M9 needs a conditionally required field, the server must learn the condition (a serialisable `showIf`, which is also the
+  field-level condition already in the backlog above).
+- **The browser's schema is looser than the server's where the server needs data or normalises.** A reserved or id-shaped slug, a licence SPDX does not
+  list, a stage nobody declared, a URL with credentials and a name that is long only before its white space is collapsed pass the browser's check and
+  are a 422 on the field. The other way round (a value the browser refuses and the server accepts) is a bug and the agreement table fails on it.
+- **The lists of organisations are the first 100.** A provider list for an administrator, or a consortium list, with more than 100 organisations is cut
+  and the field says so; a searchable organisation picker (the `GET /organisations?q=` call exists) belongs to the widget when a profile has that many.
+- **The licence widget has no keyboard model of a combobox.** The results are a list of buttons below the search (Tab and Enter reach and choose them),
+  announced with a status line; an arrow-key listbox would be quicker to use and is more to maintain. Revisit with the first accessibility report.
+- **The wizard does not create the icon in the same request.** The blob refers to the service by id, so the icon is a second request on the screen after the
+  creation (the same as the organisation's logo). A creation that fails leaves no icon to clean up; a person who closes the page before uploading adds it
+  from the service page (sprint 6).
+- **The wizard has no draft.** What is typed lives in the page: a reload asks first and then loses it. A draft in `localStorage` would keep a secret-free
+  form across a reload; not built.
+- **The JSON console edits the nested object as it is,** not what the server stores: a key it adds that no field owns is reported and the server would
+  answer 422. It is a development tool and has no history or schema hints.
+- **The messages of the config are English and German only,** like the rest of the catalogue; a contributed step brings its own keys (`t(key)` shows the key
+  when a language lacks it, and the contributing module's own catalogue test is where that is caught).
+
+## Services follow-ups (M7 sprint 6)
+
+- **A bare layout for the public pages.** The pages draw nothing from a session, but the shell's layout around them still draws the sidebar and the header
+  from the visitor's own session (an anonymous visitor sees the public navigation, a signed-in one theirs). A public page that must look the same for
+  everybody, or be embedded, needs a layout without the sidebar; a change to the shell, with its own test.
+- **A public label for the stage.** The public service page shows the stage as its vocabulary term (`PROD`), because the labels are behind
+  `GET /services/schema` (a permission) and the public record carries the term only. A public route for the labels of one vocabulary (or the label in the
+  public record, which is an additive change of v1 and of the pinned list) would let the page say "In production". Needs an ADR note: it makes the
+  vocabulary's label public.
+- **No Make public button while `service.allowPublic` is off.** The API offers `publish` only while the flag is on, so a page that is reloaded shows no
+  button and no reason; the explanation appears only for a page that was open when the flag changed (the 409). A Reviewer who wonders why nothing can
+  be made public has to read the settings. If it matters, `allowedActions` cannot carry it (it lists what may be done); a separate field on the record
+  (`publishBlockedBy: 'allowPublic'`) would, as an additive change.
+- **The service page makes four calls for every reader** (the record, the profile, the schema for the stage label, the licence name), and a manager's form
+  adds `GET /account/memberships` or `/organisations` and `GET /account/permissions`. Measured in M7 sprint 7: 10 for a User, 11 for a member, 13 for a manager
+  or an administrator (the table under "Too many 429s"). The stage label could come with the record, and the licence name from the SPDX cache.
+- **The edit form has no draft and no conflict check.** Two people editing one service: the last save wins, field by field (a patch names only what
+  changed), and nothing says that the record changed under the form. An `updatedAt` precondition (`If-Unmodified-Since`-style) is not built.
+- **The public organisation page lists services by name only,** as the public record does (`{ id, slug, name }`): no stage, no licence, no icon.
+- **A public service has no link back to a list.** There is no public catalogue (plan §12); the public pages link to each other through the provider and the
+  groups only.
+
+## Services follow-ups (M7 sprint 7)
+
+What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in the plan for it:
+
+- **Deleting a service.** `TERM` is the end of a service's life and no route deletes one. A delete needs a `service.usage` check that the KPI modules contribute (like `org.usage`); revisit with M9.
+- **Other schema.org properties and types.** A `service.type` registry (the builder takes the type as an argument), `offers`, `availableChannel`, `hoursAvailable`, `areaServed` and `audience` as stored fields (a configured field can map to a few of them), and a contact point in the JSON-LD (the property does not exist on `Service`) are not built.
+- **More than one provider per service,** and a custom licence reference (`LicenseRef-…`; see sprint 1).
+- **A review queue for member edits,** a request-and-approve flow for publication (a Reviewer or Admin sets the flag today) and a preview of the public page before publishing.
+- **A public catalogue,** public facets, anonymous search and a sitemap of public services. The public pages link to each other through the provider and the groups only.
+- **Transfer of a service between providers by someone who is not a manager** of both, and a per-service history view beyond the audit trail (and the slug history).
+- **A public read of `services` in v1** with the Schema.org representation (additive); M8.
+- **Logos and icons in list rows.** The catalogue shows the service icon; the organisation lists, the member tables and the public organisation page's service list show none.
+- **The layout's four calls on every navigation** and what to do about them are in "Too many 429s" above, with the numbers.
+
+## Service wizard follow-ups (M7 plan)
+
+- **Field-level conditions and a base path per step.** The wizard config of M7 has `applies` per step only. A `showIf` on a field (show it when another field has a value) and a base path per step (the same field list bound below a nested path, so M9's category step or M15's onboarding fields can reuse a step) are not planned. Source: the maintainer's ISA Wizard questionnaire, which has the base-path idea (`isaLvl + path`) and no conditions; see Decision 21 of [m7-sprint-plan.md](m7-sprint-plan.md).
 
 ## Later
 
@@ -330,7 +529,7 @@ From [m6-sprint-plan.md](m6-sprint-plan.md) §11 and what the sprint found.
 
 ## Vocabularies, blob store and branding follow-ups (M3 sprint 4)
 
-- **Usage checks for the built-in vocabularies.** `stage`, `thematic-category`, `necessity`, `sender-type` and `aggregate` have no `usage` check, so every term an administrator adds can be deleted. The module that starts storing a key (registry.services for `stage`, M7; kpi.framework for the rest, M8) adds its entry to the registry `vocabulary` and calls `validateTerm` when it saves.
+- **Usage checks for the built-in vocabularies.** `thematic-category`, `necessity`, `sender-type` and `aggregate` have no `usage` check, so every term an administrator adds can be deleted. The module that starts storing a key (kpi.framework, M9) adds its entry to the registry `vocabulary` and calls `validateTerm` when it saves. ~~`stage`~~ Done in M7 sprint 1: `registry.services` contributes the `usage` of `stage` (a term a service has is deactivated, not deleted) and `create` validates the stage through `validateTerm`.
 - **Vocabulary administration.** No import or export of terms, no list of locales to offer in the UI, no way to reorder many terms in one call, and no history beyond `settings.vocabulary.changed@1` (recorded by the audit trail since M4 sprint 4, without the labels). Administrators cannot declare a vocabulary; that stays with modules.
 - **A full Markdown parser.** Legal texts use a small in-house subset (`packages/sanitize`) because the sprint allowed no dependency beyond `sharp` and DOMPurify. Tables, nested lists, images and reference links need a CommonMark parser (for example `marked` or `markdown-it`) in front of the same DOMPurify step; it needs approval as a new runtime dependency. The bio (plain text today) could use it too.
 - **Legal texts per locale, and versions.** One text per page; no translations, no "accepted on" record, no history.
@@ -370,7 +569,7 @@ What the response-side audit and the walker (`apps/server/src/response-fields.te
 - **The walker reads declared schemas, not payloads.** No pipeline step validates a response against its schema, so a service that returned an extra field would not be seen. Services build named fields and the route tests for tokens, secrets, settings and the audit trail read real responses, but nothing checks every route. The contract tests of M8 (`pnpm test:contract`, every public route against its OpenAPI schema) should also fail on a forbidden name in a real response body.
 - **Free-form values cannot be walked.** `values` of a setting and `value` of a preference are `z.unknown()` records, so a secret-named key inside them is not seen by the walker. The guard in "Secret hygiene checks" above (a settings schema with a secret-looking key is refused at start-up) would close that; do it with that item.
 - **The route matrix is regenerated by hand.** `authorization-doc.test.ts` fails when `docs/security/authorization.md` differs from the live registry, but regenerating needs Docker and an environment variable (the header of the test says how). A `pnpm` command that boots the kernel without a database would make that quicker.
-- **Rows for the registry modules.** `docs/security/authorization.md` gets the field tables of the services, KPIs and organisations when M6 and M7 add them; the generated route table needs no change, and the walker covers their responses from the first route.
+- **Rows for the registry modules.** Done for organisations (M6) and services (M7); the KPIs' field tables are still to come with M9 to M11. `docs/security/authorization.md` gets them when those modules add them; the generated route table needs no change, and the walker covers their responses from the first route.
 - **The assessment's accepted weaknesses, in one place.** Each is written in the note of its ASVS entry; this list keeps them from being forgotten. None has a milestone.
   - **No second factor of our own (6.3.3).** See "Credentials follow-ups": TOTP, WebAuthn and recovery codes.
   - **The breach check fails open and can be switched off** (6.2.4, 6.2.12): a breached password is accepted when the service does not answer or `passwordBreachCheck` is `off`. The offline floor above narrows it.

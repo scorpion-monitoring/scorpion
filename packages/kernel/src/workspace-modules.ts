@@ -9,6 +9,7 @@ export const WORKSPACE_MODULES = {
   'core.settings': '@scorpion/core-settings',
   'core.ui-shell': '@scorpion/core-ui-shell',
   'registry.organisations': '@scorpion/registry-organisations',
+  'registry.services': '@scorpion/registry-services',
 } as const satisfies Record<string, string>;
 
 export type ModuleId = keyof typeof WORKSPACE_MODULES;

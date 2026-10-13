@@ -31,6 +31,7 @@
     "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
+    "@scorpion/registry-services": "workspace:*",
     "@scorpion/testing": "workspace:*",
     "@scorpion/ui-kit": "workspace:*",
     "@sveltejs/adapter-node": "^6.0.0",

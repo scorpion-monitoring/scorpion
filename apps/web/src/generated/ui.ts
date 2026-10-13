@@ -6,6 +6,7 @@ import * as ui1 from '@scorpion/core-identity/ui';
 import * as ui2 from '@scorpion/core-audit/ui';
 import * as ui3 from '@scorpion/core-ui-shell/ui';
 import * as ui4 from '@scorpion/registry-organisations/ui';
+import * as ui5 from '@scorpion/registry-services/ui';
 
 export const profileName = "full";
 
@@ -18,4 +19,5 @@ export const uiModules: UiModule[] = [
   { package: "@scorpion/core-audit", routes: ui2.default, messages: ui2.messages, widgets: ui2.widgets },
   { package: "@scorpion/core-ui-shell", routes: ui3.default, messages: ui3.messages, widgets: ui3.widgets },
   { package: "@scorpion/registry-organisations", routes: ui4.default, messages: ui4.messages, widgets: ui4.widgets },
+  { package: "@scorpion/registry-services", routes: ui5.default, messages: ui5.messages, widgets: ui5.widgets },
 ];

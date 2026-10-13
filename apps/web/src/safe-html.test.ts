@@ -1,5 +1,5 @@
 // `{@html}` renders a string as HTML, so it may appear in two places only: ui-kit's SafeHtml, for text the
-// server has sanitised (CLAUDE.md, security rules), and the JSON-LD block of the organisation page, whose only
+// server has sanitised (CLAUDE.md, security rules), and the JSON-LD block of the organisation and service pages, whose only
 // input is the output of `serializeJsonLd` (M6 plan, Decision 17). The ESLint rule `svelte/no-at-html-tags`
 // refuses it elsewhere (the exception for the second one is a `files` override of eslint.config.js that names
 // exactly that path); this scan also refuses a way around the rule (a disable comment).
@@ -28,7 +28,7 @@ describe('{@html}', () => {
       .filter((file) => /\{@html\b/.test(readFileSync(file, 'utf8')))
       .map((file) => relative(repo, file));
     expect(using.sort()).toEqual([
-      'modules/registry-organisations/ui/JsonLd.svelte',
+      'packages/ui-kit/src/JsonLd.svelte',
       'packages/ui-kit/src/SafeHtml.svelte',
     ]);
     const disabling = files

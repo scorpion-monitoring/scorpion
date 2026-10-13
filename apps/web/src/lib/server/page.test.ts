@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { loadPage, safeQuery, type PageRequest, type PageTable } from './page.ts';
 
 const component = () => Promise.reject(new Error('not rendered here'));
-const calls: { params: Record<string, string> }[] = [];
+const calls: { params: Record<string, string>; locale: string }[] = [];
 const routes: [string, UiRoute][] = [
   ['/', { path: '/', component }],
   ['/admin/users', { path: '/admin/users', component }],
@@ -15,10 +15,19 @@ const routes: [string, UiRoute][] = [
     {
       path: '/admin/users/:id',
       component,
-      load: ({ params }) => {
-        calls.push({ params });
+      load: ({ params, locale }) => {
+        calls.push({ params, locale });
         return { id: params.id };
       },
+    },
+  ],
+  [
+    '/moved/:id',
+    {
+      path: '/moved/:id',
+      component,
+      // What a loader does for an id or an old slug: it names the page below the base path and the shell adds the base.
+      load: ({ params, redirect }) => redirect(`/moved/new-${params.id}`),
     },
   ],
   [
@@ -98,6 +107,37 @@ describe('loadPage', () => {
       data: { id: '42' },
     });
     expect(calls.at(-1)?.params).toEqual({ id: '42' });
+  });
+
+  it.each([
+    ['/', '/moved/new-7'],
+    ['/a/b', '/a/b/moved/new-7'],
+  ])(
+    'lets a load redirect with the path below the base path, under %s (defect 12: thrown, not returned)',
+    async (basePath, location) => {
+      const { result, thrown } = await outcome(
+        table,
+        request('/moved/7', { signedIn: true, routes: ['/', '/moved/:id'], basePath }),
+      );
+      expect(result).toBeUndefined();
+      expect(isRedirect(thrown) && [thrown.status, thrown.location]).toEqual([303, location]);
+    },
+  );
+
+  it("gives a load the caller's language, English when it is not known or cannot be read", async () => {
+    const open = { signedIn: true, routes: ['/', '/admin/users/:id'] };
+    await outcome(table, {
+      ...request('/admin/users/1', open),
+      locale: () => Promise.resolve('de'),
+    });
+    expect(calls.at(-1)).toMatchObject({ locale: 'de' });
+    await outcome(table, request('/admin/users/1', open));
+    expect(calls.at(-1)).toMatchObject({ locale: 'en' });
+    await outcome(table, {
+      ...request('/admin/users/1', open),
+      locale: () => Promise.reject(new Error('the settings are down')),
+    });
+    expect(calls.at(-1)).toMatchObject({ locale: 'en' });
   });
 
   it('gives a page without a load the data null', async () => {

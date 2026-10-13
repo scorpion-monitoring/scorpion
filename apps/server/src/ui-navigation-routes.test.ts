@@ -36,7 +36,7 @@ const pages = defineModule({
   },
 });
 
-// What core.ui-shell and core.identity open to anybody (their public pages), and what a signed-in user
+// What core.ui-shell, core.identity and the registry modules open to anybody (their public pages), and what a signed-in user
 // holds on top. The fixture module's own pages are added by each test.
 const PUBLIC_PAGES = [
   '/',
@@ -45,6 +45,9 @@ const PUBLIC_PAGES = [
   '/legal/:page',
   '/link-sign-in',
   '/login',
+  // M7 sprint 6: what a Reviewer made public (registry.services, registry.organisations); anyone may open them.
+  '/public/organisations/:id',
+  '/public/services/:slug',
   '/register',
   '/reset-password',
   '/setup',
@@ -99,6 +102,10 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/organisations/:id',
         // M6 sprint 5: the member and manager screen (the manager part draws itself from the API).
         '/account/organisations',
+        // M7 sprint 4: the catalogue, and the two pages registered ahead of their screens (every User may read and create).
+        '/services',
+        '/services/new',
+        '/services/:slug',
       ),
     );
     expect(body.nav.map((entry) => entry.id)).toContain('account.profile');
@@ -134,6 +141,10 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
         '/profile',
         '/inbox',
         '/profile/notifications',
+        // M7 sprint 4: the catalogue, and the two pages registered ahead of their screens (every User may read and create).
+        '/services',
+        '/services/new',
+        '/services/:slug',
         // The administration of M5 sprint 3: users and pending approvals (core.identity), roles and settings (the shell).
         '/admin/users',
         '/admin/users/:id',
@@ -161,6 +172,7 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     );
     expect(body.nav.map((entry) => entry.id)).toEqual([
       'home',
+      'services',
       'docs',
       'account.profile',
       'account.inbox',

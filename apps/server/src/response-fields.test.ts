@@ -214,7 +214,7 @@ describe('event payloads never name a secret', () => {
   });
 });
 
-// The contact point of an organisation is the organisation's role address, not a user's (M6 sprint 2, field
+// The contact point of an organisation (and of a service, below) is the organisation's role address, not a user's (M6 sprint 2, field
 // table of docs/security/authorization.md). It may appear in the answers of exactly these routes, which
 // serve it only to the readers the table names: Admin and the managers of that organisation always, other
 // signed-in persons while `organisation.exposeContactPoint` is on. It is never in a list row, a member list,
@@ -228,6 +228,18 @@ const CONTACT_ROUTES: Record<string, readonly string[]> = {
   'DELETE /organisations/{id}/logo': ['contactEmail', 'contactType'],
   // The profile nests `contactType` inside `contactPoint`.
   'GET /organisations/{id}/schema-org': ['contactPoint', 'contactType'],
+  // A service has the same kind of contact point (M7): the record serves it to Admin and the members of its
+  // provider always (the scoped `service.read-contact`), and to other signed-in persons by the setting
+  // `exposeContactPoint`. Every route that returns the record may carry it (the edit, the icon and the
+  // publication routes answer with the record). Never in a list row, an event or the Schema.org profile (a
+  // `Service` has no contact point).
+  'GET /services/{id}': ['contactEmail', 'contactType'],
+  'GET /services/by-slug/{slug}': ['contactEmail', 'contactType'],
+  'POST /services': ['contactEmail', 'contactType'],
+  'PATCH /services/{id}': ['contactEmail', 'contactType'],
+  'PUT /services/{id}/icon': ['contactEmail', 'contactType'],
+  'DELETE /services/{id}/icon': ['contactEmail', 'contactType'],
+  'PUT /services/{id}/publication': ['contactEmail', 'contactType'],
 };
 /** The instance's own contact address (branding settings), a different thing that happens to share a name. */
 const NOT_THE_ORGANISATIONS = ['GET /branding'];
@@ -276,6 +288,8 @@ describe('the contact point of an organisation', () => {
     const { kernel } = await app.start();
     const mustNot = [
       'GET /organisations',
+      'GET /services',
+      'GET /services/facets',
       'GET /organisations/{id}/members',
       'GET /memberships',
       'GET /account/memberships',
@@ -367,5 +381,82 @@ describe('the fields of a membership', () => {
         ...ownRow,
       ].sort(),
     );
+  });
+});
+
+// The schema of the create wizard (M7 sprint 5, docs/security/authorization.md, "The create body and the schema
+// of the create wizard"). It tells the browser how to draw and check the form and holds nothing of any person
+// or service: the property names are pinned here, so a field that is added has to pass through this list and the
+// table, and none of them is a name that belongs to a person, an organisation or a record. `limits.email` and
+// `limits.contactKind` are numbers (the most characters a contact address and its kind may have), not contact data.
+const CREATE_SCHEMA_NAMES = [
+  'bodyBytes',
+  'choices',
+  'column',
+  'component',
+  'config',
+  'contactKind',
+  'contributed',
+  'default',
+  'defaults',
+  'description',
+  'de',
+  'deferred',
+  'devConsole',
+  'email',
+  'en',
+  'fieldTypes',
+  'fields',
+  'help',
+  'id',
+  'intro',
+  'key',
+  'label',
+  'labelKey',
+  'labels',
+  'limits',
+  'max',
+  'memberOnly',
+  'min',
+  'name',
+  'order',
+  'orgTypes',
+  'path',
+  'required',
+  'role',
+  'roles',
+  'sameAs',
+  'schema',
+  'slug',
+  'steps',
+  'title',
+  'type',
+  'url',
+  'value',
+  'widget',
+];
+
+describe('the schema of the create wizard', () => {
+  it('names exactly the properties the field table lists, and nothing of a person or a record', async () => {
+    const { kernel } = await app.start();
+    const entry = kernel.routes.find(
+      ({ route }) => `${route.method.toUpperCase()} ${route.path}` === 'GET /services/schema',
+    );
+    expect(entry, 'GET /services/schema').toBeDefined();
+    const names = new Set(
+      Object.entries((entry!.route as RouteLike).responses ?? {})
+        .filter(([status]) => status === '200')
+        .flatMap(([, response]) =>
+          Object.values(response?.content ?? {}).flatMap((content) =>
+            propertyNames(content.schema).map((at) => at.slice(at.lastIndexOf('.') + 1)),
+          ),
+        ),
+    );
+    expect([...names].sort()).toEqual([...CREATE_SCHEMA_NAMES].sort());
+    for (const name of names) {
+      expect(name).not.toMatch(
+        /user|owner|createdBy|updatedBy|password|secret|token|contactEmail|contactPoint/i,
+      );
+    }
   });
 });

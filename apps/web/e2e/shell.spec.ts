@@ -1,5 +1,13 @@
 import http from 'node:http';
-import { admin, expect, productName, saveSettings, signIn, test } from './support/fixtures.ts';
+import {
+  admin,
+  expect,
+  productName,
+  saveSettings,
+  signIn,
+  signInThroughPage,
+  test,
+} from './support/fixtures.ts';
 
 test.describe('the shell', () => {
   // `at()` refuses a path with `..` or an encoded slash (as `url()` does), which is what these requests need.
@@ -84,6 +92,30 @@ test.describe('the shell', () => {
     await expect(page.getByRole('button', { name: 'Expand the sidebar' })).toBeVisible();
     await page.getByRole('button', { name: 'Expand the sidebar' }).click();
     await expect(page.getByRole('button', { name: 'Collapse the sidebar' })).toBeVisible();
+  });
+
+  test('the collapsed sidebar has no horizontal scroll, in both themes', async ({ page, at }) => {
+    // The administrator's navigation has the most entries, including the ones with the longest labels.
+    await signInThroughPage(page, at, admin);
+    await page.goto(at('/'));
+    await page.getByRole('button', { name: 'Collapse the sidebar' }).click();
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('data-tip', 'Home');
+    try {
+      for (const theme of ['Light', 'Dark']) {
+        await page.getByRole('button', { name: theme }).click();
+        // A horizontal scrollbar takes height from the box; content that is cut off (the tooltip) does not count.
+        const sizes = await nav.evaluate((element) => ({
+          bar: Math.round(element.getBoundingClientRect().height - element.clientHeight),
+          overflowX: getComputedStyle(element).overflowX,
+        }));
+        expect(sizes.bar, `${theme}: the navigation has a scrollbar`).toBe(0);
+        expect(sizes.overflowX).toBe('hidden');
+      }
+    } finally {
+      await page.getByRole('button', { name: 'Expand the sidebar' }).click();
+      await page.getByRole('button', { name: 'System' }).click();
+    }
   });
 
   test('an unknown path is the error page with 404 and a way home under the base path', async ({

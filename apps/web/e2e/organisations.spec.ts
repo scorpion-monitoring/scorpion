@@ -10,6 +10,7 @@ import {
   rowOf,
   uniqueAbbreviation,
 } from './support/members.ts';
+import { jsonLd, watchCsp } from './support/page-checks.ts';
 import { uniqueRorId } from './support/ror.ts';
 import { admin, expect, saveSettings, signInThroughPage, test } from './support/fixtures.ts';
 import { ADMIN } from './support/stack.ts';
@@ -20,31 +21,6 @@ import { mailbox } from '@scorpion/testing';
 // meets what an earlier try left.
 
 const toast = (page: Page) => page.getByRole('region', { name: 'Notifications' });
-
-/** The profile in the `<script type="application/ld+json">` block of the head, parsed. */
-async function jsonLd(page: Page) {
-  const block = page.locator('head script[type="application/ld+json"]');
-  await expect(block).toHaveCount(1);
-  return JSON.parse((await block.textContent())!) as Record<string, unknown> & {
-    name: string;
-    logo?: { url: string };
-    contactPoint?: { email: string; contactType: string };
-    sameAs?: string[];
-  };
-}
-
-/** Collects the violations of the page's Content-Security-Policy, reported by the browser. */
-async function watchCsp(page: Page) {
-  await page.addInitScript(() => {
-    (window as unknown as { __csp: string[] }).__csp = [];
-    document.addEventListener('securitypolicyviolation', (event) =>
-      (window as unknown as { __csp: string[] }).__csp.push(
-        `${event.violatedDirective}: ${event.blockedURI}`,
-      ),
-    );
-  });
-  return () => page.evaluate(() => (window as unknown as { __csp: string[] }).__csp);
-}
 
 test.describe('journey 1: an Admin looks after the organisations', () => {
   test('creates a provider with every field and a logo, a consortium with the field errors shown, edits, replaces the logo, deletes; the page block parses', async ({

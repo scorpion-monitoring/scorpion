@@ -16,6 +16,7 @@ export const load: PageServerLoad = ({ locals, url }) =>
       session: () => locals.session(),
       navigation: () => locals.navigation(),
       needsFirstAdmin: () => locals.bootstrap(),
+      locale: () => locals.locale(),
       publicApi,
     },
   );

@@ -3,6 +3,7 @@
 // about public pages and links a failing test, on the committed `full` profile.
 import { PUBLIC_PAGES, REGISTRIES } from '@scorpion/core-ui-shell/public';
 import { describe, expect, it } from 'vitest';
+import { iconShapes } from '@scorpion/contracts/icons';
 import { sources } from './generated/profile.ts';
 
 type Entry = { module: string; value: Record<string, unknown> };
@@ -56,12 +57,42 @@ describe('the pages of the full profile', () => {
 
   it('have a page in the browser half for every path of the server half, and none without one', async () => {
     // The browser half of each module that has one, as the web app imports it.
+    // A module may register a page on the server before the page exists (`notOffered`, registry.services until
+    // its wizard and its service page arrive); that is the only difference allowed.
     const browser: string[] = [];
+    const notOffered: string[] = [];
     for (const { manifest } of sources) {
       if (!manifest.ui) continue;
-      const module = (await manifest.ui()) as { default: { path: string }[] };
+      const module = (await manifest.ui()) as {
+        default: { path: string }[];
+        notOffered?: string[];
+      };
       browser.push(...module.default.map((route) => route.path));
+      notOffered.push(...(module.notOffered ?? []));
     }
-    expect([...browser].sort()).toEqual(routes.map(({ value }) => value.path as string).sort());
+    expect([...browser].sort()).toEqual(
+      routes
+        .map(({ value }) => value.path as string)
+        .filter((path) => !notOffered.includes(path))
+        .sort(),
+    );
+    for (const path of notOffered) {
+      expect(
+        routes.map(({ value }) => value.path),
+        path,
+      ).toContain(path);
+      expect(browser, path).not.toContain(path);
+    }
+  });
+});
+
+describe('the navigation icons of the full profile', () => {
+  it('are all drawn: an entry that names an icon the shell lacks would show the fallback dot', () => {
+    const missing = contributions('ui.nav')
+      .filter(({ value }) => typeof value.icon === 'string' && !(value.icon in iconShapes))
+      .map(
+        ({ module, value }) => `${module}: ${value.id as string} names "${value.icon as string}"`,
+      );
+    expect(missing).toEqual([]);
   });
 });

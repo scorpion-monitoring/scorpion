@@ -2,6 +2,7 @@
 // result is mapped. Every route has a permission; the service checks it again (CLAUDE.md, security rules).
 import {
   createRoute,
+  NotFound,
   listEnvelope,
   paginate,
   paginationQuery,
@@ -113,6 +114,73 @@ const schemaOrgSchema = z.object({
     .describe(
       "Only for a reader who may see the contact point: the organisation's role address, not a user's.",
     ),
+});
+
+/**
+ * The public organisation record (ADR-0036 part 2): a pinned list. A test walks this schema and fails when a
+ * field is added to it without the ADR and the field table, and when a private field (type, contact point,
+ * member count, audit column) appears.
+ */
+export const publicOrganisationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  abbreviation: z.string(),
+  logoUrl: z.string().optional().describe('Below the base path. Absent without a logo.'),
+  description: z.string().nullable(),
+  website: z.string().nullable(),
+  rorId: z.string().nullable().describe('The bare ROR id, for example `02skbsp27`.'),
+  sameAs: z.array(z.string()),
+  services: z
+    .array(z.object({ id: z.string(), slug: z.string(), name: z.string() }))
+    .describe(
+      'The public services that name this organisation as provider or consortium, by name.',
+    ),
+});
+
+/** The cache lifetime of a public answer, in seconds: the only delay before an unpublish is seen (ADR-0036). */
+export const PUBLIC_MAX_AGE_SECONDS = 60;
+export const PUBLIC_CACHE_CONTROL = `public, max-age=${PUBLIC_MAX_AGE_SECONDS}`;
+
+/** Not a UUID is just another id nobody has: a 404 like any other, so a probe learns nothing. */
+const publicIdParam = z.object({ id: z.string().max(64) });
+const PUBLIC_NOT_FOUND = 'There is no such organisation.';
+const PUBLIC_REASON =
+  'Anyone may read the public profile of an organisation that a service made public by a Reviewer names as its provider or a consortium; for every other organisation, and when public reads are switched off, the answer is the 404 of an unknown id.';
+
+export const getPublicOrganisationRoute = createRoute({
+  method: 'get',
+  path: '/public/organisations/{id}',
+  public: true,
+  publicReason: PUBLIC_REASON,
+  request: { params: publicIdParam },
+  responses: {
+    200: {
+      description: `The public organisation record. \`Cache-Control: ${PUBLIC_CACHE_CONTROL}\`: an unpublished service takes effect here after at most that long.`,
+      content: { 'application/json': { schema: publicOrganisationSchema } },
+    },
+    404: {
+      description:
+        'No such organisation, or none that a public service names. The body is the same for both.',
+    },
+  },
+});
+
+export const getPublicSchemaOrgRoute = createRoute({
+  method: 'get',
+  path: '/public/organisations/{id}/schema-org',
+  public: true,
+  publicReason: PUBLIC_REASON,
+  request: { params: publicIdParam },
+  responses: {
+    200: {
+      description: `The organisation as a Schema.org JSON-LD profile, without a contact point. \`Cache-Control: ${PUBLIC_CACHE_CONTROL}\`.`,
+      content: { 'application/ld+json': { schema: schemaOrgSchema.omit({ contactPoint: true }) } },
+    },
+    404: {
+      description:
+        'As for the public record: the same body for every organisation that is not public.',
+    },
+  },
 });
 
 const imageBody = {
@@ -339,6 +407,25 @@ export function registerOrganisationRoutes(r: RouteRegistrar, service: Organisat
       },
     });
   }) satisfies RouteHandler<typeof getSchemaOrgRoute, AppEnv>);
+
+  r.internal(getPublicOrganisationRoute, (async (c) => {
+    const record = await service.getPublicAsSystem(c.req.valid('param').id);
+    if (!record) throw new NotFound(PUBLIC_NOT_FOUND);
+    return c.json(record, 200, { 'cache-control': PUBLIC_CACHE_CONTROL });
+  }) satisfies RouteHandler<typeof getPublicOrganisationRoute, AppEnv>);
+
+  r.internal(getPublicSchemaOrgRoute, (async (c) => {
+    const profile = await service.schemaOrgPublicAsSystem(c.req.valid('param').id);
+    if (!profile) throw new NotFound(PUBLIC_NOT_FOUND);
+    return new Response(serializeJsonLd(profile), {
+      status: 200,
+      headers: {
+        'content-type': 'application/ld+json; charset=utf-8',
+        'cache-control': PUBLIC_CACHE_CONTROL,
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }) satisfies RouteHandler<typeof getPublicSchemaOrgRoute, AppEnv>);
 
   r.internal(setLogoRoute, (async (c) => {
     // The body is capped by the route (`maxBodyBytes`); the service checks the caller first, then the file.

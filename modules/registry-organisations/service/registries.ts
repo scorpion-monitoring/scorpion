@@ -5,6 +5,7 @@ import type { DbTx } from '@scorpion/kernel';
 
 export const ORG_TYPE_REGISTRY = 'org.type';
 export const ORG_USAGE_REGISTRY = 'org.usage';
+export const ORG_PUBLIC_REFERENCE_REGISTRY = 'org.publicReference';
 
 /** The schema.org subtypes of `Organization` a type may name (ADR-0033); anything else is refused at start. */
 export const SCHEMA_TYPES = [
@@ -45,6 +46,31 @@ export const orgUsageEntrySchema = z.strictObject({
   count: z.custom<OrgUsageCount>((value) => typeof value === 'function', 'expected a function'),
 });
 export type OrgUsageEntry = z.output<typeof orgUsageEntrySchema>;
+
+/** A public record that refers to an organisation, as the organisation's public page lists it. */
+export interface PublicReference {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+/**
+ * Lists the PUBLIC records that name an organisation (M7: the services it is provider or consortium of).
+ * An organisation has a public profile exactly when some entry lists something for it (ADR-0036 part 2), so
+ * this module learns it without depending on the module that owns the records. An entry answers only for what
+ * is public at this moment, and an empty list when the instance has public reads switched off.
+ */
+export type OrgPublicReferences = (organisationId: string) => Promise<PublicReference[]>;
+
+export const orgPublicReferenceEntrySchema = z.strictObject({
+  /** The contributing module's id. */
+  id: z.string().min(1).max(100),
+  list: z.custom<OrgPublicReferences>(
+    (value) => typeof value === 'function',
+    'expected a function',
+  ),
+});
+export type OrgPublicReferenceEntry = z.output<typeof orgPublicReferenceEntrySchema>;
 
 /** The types this module contributes itself. A second module adds `funder` and the like. */
 export const SEED_TYPES: OrgTypeEntry[] = [

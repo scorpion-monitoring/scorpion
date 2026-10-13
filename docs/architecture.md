@@ -110,7 +110,7 @@ export default defineModule({
 | `ui.nav`, `ui.widget`, `ui.theme` | core.ui-shell | sidebar entries, dashboard cards, brand themes |
 | `vocabulary` | core.settings | stages, thematic categories, necessity levels, sender types, aggregates |
 | `org.type` | registry.organisations | provider, consortium, funder |
-| `service.fieldType`, `service.wizardStep` | registry.services | license, provider, ORCID, ROR, EDAM, kpi-set |
+| `service.fieldType`, `service.wizardStep`, `service.orgRole`, `service.facet`, `service.profileContributor` | registry.services | text, select, multi-select, license, organisation, image; kpi-set, ORCID, ROR, EDAM later |
 | `kpi.valueType` | kpi.framework | integer, float, text, duration, percentage, enum |
 | `ingestion.adapter` | kpi.ingestion | form, CSV/TSV, XLSX, REST, Matomo pull |
 | `analytics.aggregate`, `analytics.score`, `analytics.exporter` | kpi.analytics | sum/avg/min/max, MAPE, CSV/PDF/XLSX |
@@ -173,7 +173,7 @@ The plugins follow the module map in FEATURES.md §2, with one change: `registry
 | Plugin | Owns (tables) | Emits | Listens to | Notable design |
 | --- | --- | --- | --- | --- |
 | `registry.organisations` | organisation, organisation\_type, membership (state machine) | `membership.requested`, `.decided` | none | One `organisation` table typed by `org.type`, replacing separate provider and consortium tables |
-| `registry.services` | service, service\_organisation, service\_field\_value | `service.created`, `.updated` | none | Metadata schema and wizard steps loaded from config (successor of `steps.json`). The catalogue facets are computed in SQL over the filtered set |
+| `registry.services` | service, service\_organisation, service\_field\_value, slug\_history, license\_cache (prefix `svc_`, [ADR-0035](adr/0035-service-model.md)) | `registry.service.created`, `.updated`, `.slugChanged`, `.published`, `.unpublished` | none | Metadata schema and wizard steps loaded from config (successor of `steps.json`). The catalogue facets are computed in SQL over the filtered set |
 | `kpi.framework` | indicator, kpi\_set, kpi\_set\_indicator, service\_extra\_indicator, evaluation | `kpiSet.changed` | `service.created` | Value types are validators from `kpi.valueType`. Effective KPI set as one query function |
 | `kpi.ingestion` | measurement (unique per service, indicator, month), ingestion\_run | `measurement.recorded` | none | Every adapter produces `{indicator, month, value}[]`, then `upsertBatch()`. Preview and dry-run before commit. Import templates generated per service |
 | `kpi.analytics` | dashboard\_preference | none | none | Pure calculation library (change %, MAPE, aggregates, HH-MM-SS to seconds) with unit tests. Exporters run as jobs for large PDFs |

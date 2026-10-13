@@ -15,6 +15,7 @@ export {
 } from './i18n.ts';
 export { getShell, setShell, type Shell } from './context.ts';
 export { default as SafeHtml } from './SafeHtml.svelte';
+export { default as JsonLd } from './JsonLd.svelte';
 export { uiKitMessages } from './messages.ts';
 export {
   failureMessage,
@@ -36,6 +37,8 @@ export {
   type Returned,
 } from './reauth.ts';
 export { default as Alert } from './Alert.svelte';
+export { default as ImageBlock } from './ImageBlock.svelte';
+export type { ImageBlockTexts } from './image-block.ts';
 export { default as Dialog } from './Dialog.svelte';
 export { default as ReauthDialog } from './ReauthDialog.svelte';
 export { default as SubmitButton } from './SubmitButton.svelte';
@@ -49,6 +52,7 @@ export { default as DataTable } from './DataTable.svelte';
 export { default as Facets } from './Facets.svelte';
 export { default as FieldShell } from './FieldShell.svelte';
 export { default as Pagination } from './Pagination.svelte';
+export { default as SchemaField } from './SchemaField.svelte';
 export { default as SchemaForm } from './SchemaForm.svelte';
 export { default as Tabs } from './Tabs.svelte';
 export { default as Toasts } from './Toasts.svelte';
@@ -92,6 +96,7 @@ export {
 } from './chart.ts';
 export { createWizard, type Wizard as WizardMachine } from './wizard.ts';
 export {
+  describeField,
   describeRoot,
   errorsByPointer,
   humanize,
@@ -101,3 +106,4 @@ export {
   type FieldNode,
   type JsonSchema,
 } from './schema-form.ts';
+export { checkJsonSchema, type SchemaIssue } from './json-schema-check.ts';

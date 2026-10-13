@@ -54,7 +54,7 @@ describe('the SafeHtml rule', () => {
 });
 
 describe('the JSON-LD exception (Decision 17)', () => {
-  const JSON_LD = 'modules/registry-organisations/ui/JsonLd.svelte';
+  const JSON_LD = 'packages/ui-kit/src/JsonLd.svelte';
   // The severity the real configuration gives `svelte/no-at-html-tags` for a path: 'off' only where the exception is.
   const severity = async (file: string) => {
     const config = (await eslint.calculateConfigForFile(file)) as {
@@ -70,6 +70,9 @@ describe('the JSON-LD exception (Decision 17)', () => {
     // The same name elsewhere, a sibling in the same folder, a file of another module, the shell and ui-kit keep the rule.
     for (const other of [
       'modules/registry-organisations/ui/Other.svelte',
+      'modules/registry-organisations/ui/JsonLd.svelte', // where it was before M7 sprint 3
+      'packages/ui-kit/src/Other.svelte',
+      'packages/ui-kit/src/nested/JsonLd.svelte',
       'modules/registry-organisations/ui/nested/JsonLd.svelte',
       'modules/core-audit/ui/JsonLd.svelte',
       'apps/web/src/lib/components/JsonLd.svelte',
