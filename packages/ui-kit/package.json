@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./i18n": "./src/i18n.ts",
-    "./json-schema": "./src/json-schema-check.ts"
+    "./json-schema": "./src/json-schema-check.ts",
+    "./schema-form": "./src/schema-form.ts",
+    "./forms": "./src/forms.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"

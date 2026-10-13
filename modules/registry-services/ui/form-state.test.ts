@@ -2,6 +2,8 @@
 // server's JSON Schema, where an error belongs and which step shows it, `applies`. The schema is the one the
 // server builds for the shipped configuration (the same function the route calls), so the page's rules and the
 // server's cannot be tested against a hand-copied shape.
+import { ApiError } from '@scorpion/contracts/client';
+import { failureOf } from '@scorpion/ui-kit/forms';
 import { getTableColumns } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { FIELDS } from '../config/fields.ts';
@@ -16,8 +18,13 @@ import {
   bodyForStep,
   bodyFields,
   checkStep,
+  failureView,
   firstStepWithError,
   getAt,
+  noErrors,
+  rememberErrors,
+  shownErrors,
+  withoutStep,
   setAt,
   startForm,
   stepOfPointer,
@@ -320,5 +327,116 @@ describe('steps that apply', () => {
       'contactEmail',
       'contactType',
     ]);
+  });
+});
+
+describe('what the server said', () => {
+  const failed = (status: number, errors?: { path: string; message: string }[], type?: string) =>
+    failureOf(
+      new ApiError(status, {
+        type: type ?? 'about:blank',
+        title: 'x',
+        status,
+        ...(errors && { errors: errors.map((e) => ({ in: 'body', ...e })) }),
+      } as never),
+    );
+
+  it('puts a 422 on the fields it names, by pointer, an item of a list and a nested field included', () => {
+    const view = failureView(
+      failed(422, [
+        { path: 'slug', message: 'The slug may contain letters.' },
+        { path: 'contact.type', message: 'Needed.' },
+        { path: 'sameAs.2', message: 'Link 3 is not a valid URL.' },
+        { path: 'license', message: '"Nope" is not an SPDX licence id.' },
+      ]),
+      schema,
+      t,
+    );
+    expect(view.messages).toEqual([
+      ['/slug', ['The slug may contain letters.']],
+      ['/contact/type', ['Needed.']],
+      ['/sameAs/2', ['Link 3 is not a valid URL.']],
+      ['/license', ['"Nope" is not an SPDX licence id.']],
+    ]);
+    expect(view.loose).toEqual([]);
+  });
+
+  it('keeps a message for a key that is no field, with its pointer, so nothing is dropped', () => {
+    const view = failureView(
+      failed(422, [{ path: 'colour', message: 'This field is not known.' }]),
+      schema,
+      t,
+    );
+    expect(view.messages).toEqual([]);
+    expect(view.loose).toEqual(['/colour: This field is not known.']);
+  });
+
+  it('shows a taken slug on the slug field in the catalogue’s words, without the value', () => {
+    const view = failureView(
+      failed(
+        409,
+        [{ path: 'slug', message: 'This slug is already taken.' }],
+        'https://x/problems/slug-taken',
+      ),
+      schema,
+      t,
+    );
+    expect(view.messages).toEqual([['/slug', ['services.error.slugTaken']]]);
+    expect(view.loose).toEqual([]);
+  });
+
+  it('says in one sentence that a provider the caller is not a member of is refused (403)', () => {
+    expect(failureView(failed(403), schema, t)).toEqual({
+      messages: [],
+      loose: ['services.error.forbidden'],
+    });
+  });
+
+  it.each([
+    [0, 'kit.error.network'],
+    [429, 'kit.error.throttled'],
+    [500, 'kit.error.generic'],
+  ])('uses the generic sentence of status %i', (status, key) => {
+    const failure = status === 0 ? failureOf(new Error('offline')) : failed(status);
+    expect(failureView(failure, schema, t).loose).toEqual([key]);
+  });
+});
+
+describe('the errors on the fields', () => {
+  it('go when the person changes the field they belong to, and stay for the others', () => {
+    const body = { slug: 'a b', name: '' };
+    const found = rememberErrors(
+      [
+        ['/slug', ['bad']],
+        ['/name', ['needed']],
+      ],
+      body,
+    );
+    expect([...shownErrors(found, body)]).toEqual([
+      ['/slug', ['bad']],
+      ['/name', ['needed']],
+    ]);
+    expect([...shownErrors(found, { slug: 'ab', name: '' })]).toEqual([['/name', ['needed']]]);
+    expect([...shownErrors(noErrors(), body)]).toEqual([]);
+  });
+
+  it('are remembered with a copy of the value, so a later edit of the same object does not hide them by accident', () => {
+    const body = { sameAs: ['x'] };
+    const found = rememberErrors([['/sameAs/0', ['bad']]], body);
+    body.sameAs[0] = 'y';
+    expect([...shownErrors(found, body)]).toEqual([]);
+  });
+
+  it('are replaced per step: the messages of the other steps stay', () => {
+    const found = rememberErrors(
+      [
+        ['/slug', ['a']],
+        ['/provider', ['b']],
+        ['/sameAs/1', ['c']],
+      ],
+      {},
+    );
+    const basics = schema.steps[0]!;
+    expect(withoutStep(found, basics).map(([pointer]) => pointer)).toEqual(['/provider']);
   });
 });

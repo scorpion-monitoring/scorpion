@@ -4,6 +4,8 @@
 // table-driven test (`form-state.test.ts`). The page holds no field, step, limit or type of its own: all of
 // it comes from the schema the server sent.
 import { checkJsonSchema, type SchemaIssue } from '@scorpion/ui-kit/json-schema';
+import { failureMessage, type FormFailure } from '@scorpion/ui-kit/forms';
+import { errorsByPointer, sameJson } from '@scorpion/ui-kit/schema-form';
 import type { WizardField, WizardSchema, WizardStep } from './wizard-types.ts';
 
 type Tree = Record<string, unknown>;
@@ -48,7 +50,7 @@ export const bodyFields = (steps: readonly WizardStep[]): WizardField[] =>
 
 /** The form a new service starts from: the server's defaults, copied. */
 export const startForm = (schema: Pick<WizardSchema, 'defaults'>): Tree =>
-  structuredClone(schema.defaults) as Tree;
+  structuredClone(schema.defaults);
 
 const isList = (field: WizardField) => field.config.multiple === true;
 
@@ -59,7 +61,7 @@ function cleaned(value: unknown, field: WizardField): unknown {
     return text === '' ? undefined : text;
   }
   if (Array.isArray(value)) {
-    const items = value
+    const items = (value as unknown[])
       .map((item) => (typeof item === 'string' ? item.trim() : item))
       .filter((item) => item !== '' && item !== undefined && item !== null);
     // An emptied list is a list: the server reads `[]` as "none", the same as a field left out.
@@ -86,7 +88,7 @@ function pruneEmpty(tree: Tree): void {
  * name is kept, so the check and the server judge it, never the mapping.
  */
 export function toBody(form: Tree, schema: Pick<WizardSchema, 'steps'>): Tree {
-  const body = structuredClone(form) as Tree;
+  const body = structuredClone<Tree>(form);
   const fields = schema.steps.flatMap((step) => step.fields);
   for (const field of fields) {
     if (field.deferred) {
@@ -179,4 +181,85 @@ export function visibleSteps(
   applies: Readonly<Record<string, ((form: Tree) => boolean) | undefined>>,
 ): WizardStep[] {
   return steps.filter((step) => applies[step.id]?.(form) !== false);
+}
+
+// ----- the errors on the fields -----------------------------------------------------------------------------
+
+/** Messages for one pointer, with the value the pointer held when they were found: they go when it changes. */
+export interface Shown {
+  messages: string[];
+  at: unknown;
+}
+
+export const noErrors = (): Map<string, Shown> => new Map();
+
+/** Remembers messages by pointer together with the value each pointer holds in `body`. */
+export function rememberErrors(
+  messages: Iterable<readonly [string, readonly string[]]>,
+  body: Tree,
+): Map<string, Shown> {
+  return new Map(
+    [...messages].map(([pointer, list]) => [
+      pointer,
+      { messages: [...list], at: structuredClone(getAt(body, pointer)) },
+    ]),
+  );
+}
+
+/** What is shown for `body`: the remembered messages whose field still holds the value they were found for. */
+export function shownErrors(found: ReadonlyMap<string, Shown>, body: Tree): Map<string, string[]> {
+  return new Map(
+    [...found]
+      .filter(([pointer, entry]) => sameJson(getAt(body, pointer), entry.at))
+      .map(([pointer, entry]) => [pointer, entry.messages]),
+  );
+}
+
+/** The remembered messages without those of one step's fields (pointers at or below them). */
+export function withoutStep(
+  found: ReadonlyMap<string, Shown>,
+  step: WizardStep,
+): [string, Shown][] {
+  const own = step.fields.map((field) => field.path);
+  return [...found].filter(
+    ([pointer]) => !own.some((path) => pointer === path || pointer.startsWith(`${path}/`)),
+  );
+}
+
+// ----- what the server said ---------------------------------------------------------------------------------
+
+/** What to show for a failed `POST /services`: messages on fields (by pointer) and lines for the whole form. */
+export interface FailureView {
+  messages: [string, string[]][];
+  loose: string[];
+}
+
+/**
+ * Reads a failure of the create request. A 409 for the slug is shown on the slug field in the catalogue's words,
+ * without the value; a 403 is one sentence for the form; a 422 puts the server's messages on the fields they
+ * name (the pointer of the path), and a message for a pointer that is no field goes to the form with its
+ * pointer, so nothing is dropped. Anything else is the generic sentence of its status.
+ */
+export function failureView(
+  failure: FormFailure,
+  schema: Pick<WizardSchema, 'steps'>,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): FailureView {
+  const messages: [string, string[]][] = [];
+  const loose: string[] = [];
+  const slug = schema.steps.flatMap((step) => step.fields).find((field) => field.column === 'slug');
+  if (failure.type?.endsWith('slug-taken') && slug) {
+    messages.push([slug.path, [t('services.error.slugTaken')]]);
+  } else if (failure.status === 403) {
+    loose.push(t('services.error.forbidden'));
+  } else if (Object.keys(failure.fields).length > 0 || failure.general.length > 0) {
+    for (const [pointer, list] of errorsByPointer(failure.fields)) {
+      if (stepOfPointer(schema.steps, pointer) !== undefined) messages.push([pointer, list]);
+      else loose.push(...list.map((message) => `${pointer || '/'}: ${message}`));
+    }
+    loose.push(...failure.general);
+  } else {
+    loose.push(failureMessage(failure, t));
+  }
+  return { messages, loose };
 }

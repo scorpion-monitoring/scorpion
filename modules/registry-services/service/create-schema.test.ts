@@ -123,8 +123,8 @@ describe('the schema of the shipped configuration', () => {
           type: 'object',
           additionalProperties: false,
           properties: {
-            email: expect.objectContaining({ type: 'string', widget: 'text' }),
-            type: expect.objectContaining({ type: 'string', widget: 'text' }),
+            email: expect.objectContaining({ type: 'string', widget: 'text' }) as unknown,
+            type: expect.objectContaining({ type: 'string', widget: 'text' }) as unknown,
           },
           dependentRequired: { email: ['type'], type: ['email'] },
         },
