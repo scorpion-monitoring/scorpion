@@ -567,6 +567,10 @@ const schemaFieldSchema = z.object({
     .string()
     .optional()
     .describe('For an organisation field: the key of its role in `service.orgRole`.'),
+  column: z
+    .string()
+    .optional()
+    .describe('For a field stored in a column of the service: its name, such as `slug`.'),
   deferred: z.boolean().describe('Not part of the create body: the value is set afterwards.'),
   choices: z.array(choiceSchema).optional(),
 });

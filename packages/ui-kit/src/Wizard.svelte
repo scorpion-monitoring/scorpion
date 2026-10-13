@@ -2,7 +2,9 @@
   // A form in steps. The progress list shows where the person is and lets them go back to a step they have
   // reached; "Next" validates the step they are on and only then moves on. The wizard keeps no form state:
   // the page owns it, so everything typed stays when a step is left and opened again. While the page says it
-  // is `dirty`, leaving it (a reload, a closed tab, a link) asks first.
+  // is `dirty`, leaving it (a reload, a closed tab, a link) asks first. The list of steps may change while
+  // the wizard is open (a step that applies only to some answers); the person stays on the step they are on.
+  // `reopen` takes them to a step after a failure that only the whole form shows.
   import { onMount, type Snippet } from 'svelte';
   import Alert from './Alert.svelte';
   import { getShell } from './context.ts';
@@ -30,26 +32,39 @@
   } = $props();
   const { t, guardLeave } = getShell();
 
-  // The steps are fixed for the life of the wizard.
-  // svelte-ignore state_referenced_locally
   const machine: Wizard = createWizard({
-    steps: steps.map((entry) => entry.id),
+    steps: () => steps.map((entry) => entry.id),
     validate: (id) => validate?.(id),
   });
-  let view = $state(machine.state());
+  // The machine is plain state; a counter makes the view read it again after every move, and the read of
+  // `steps` inside it makes the view follow a change of the list.
+  let moves = $state(0);
+  const view = $derived.by(() => {
+    void moves;
+    return machine.state();
+  });
   let heading = $state<HTMLElement>();
   const headingId = $props.id();
-  const refresh = () => (view = machine.state());
+  const refresh = () => (moves += 1);
+
+  /** Opens the step with this id and takes the wizard out of "finished". */
+  export function reopen(stepId: string): void {
+    const index = steps.findIndex((entry) => entry.id === stepId);
+    if (machine.reopen(index)) {
+      refresh();
+      heading?.focus();
+    }
+  }
 
   async function move(action: () => Promise<boolean> | boolean | void) {
     const before = machine.state().index;
     await action();
     refresh();
-    if (view.finished) {
+    if (machine.state().finished) {
       await onfinish();
       return;
     }
-    if (view.index !== before) heading?.focus();
+    if (machine.state().index !== before) heading?.focus();
   }
 
   onMount(() => guardLeave(() => dirty && !view.finished));

@@ -52,6 +52,7 @@ export { default as DataTable } from './DataTable.svelte';
 export { default as Facets } from './Facets.svelte';
 export { default as FieldShell } from './FieldShell.svelte';
 export { default as Pagination } from './Pagination.svelte';
+export { default as SchemaField } from './SchemaField.svelte';
 export { default as SchemaForm } from './SchemaForm.svelte';
 export { default as Tabs } from './Tabs.svelte';
 export { default as Toasts } from './Toasts.svelte';
@@ -95,6 +96,7 @@ export {
 } from './chart.ts';
 export { createWizard, type Wizard as WizardMachine } from './wizard.ts';
 export {
+  describeField,
   describeRoot,
   errorsByPointer,
   humanize,

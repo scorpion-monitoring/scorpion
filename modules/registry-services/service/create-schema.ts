@@ -68,6 +68,8 @@ export interface SchemaField {
   config: Record<string, unknown>;
   /** For a field stored as an organisation link: the id of the role (`service.orgRole`). */
   role?: string;
+  /** For a field stored in a column of the service: its name (`slug`), so a screen can put a conflict on it. */
+  column?: string;
   /** Not part of the create body: the value is set after the service exists (the icon). */
   deferred: boolean;
   /** The options of a choice field. */
@@ -224,6 +226,7 @@ const roleOf = (resolved: ResolvedField): string | undefined =>
 function fieldOut(resolved: ResolvedField, choices: ReadonlyMap<string, Choice[]>): SchemaField {
   const { field } = resolved;
   const role = roleOf(resolved);
+  const column = field.storage.kind === 'column' ? field.storage.column : undefined;
   const options = choices.get(field.key);
   return {
     key: field.key,
@@ -236,6 +239,7 @@ function fieldOut(resolved: ResolvedField, choices: ReadonlyMap<string, Choice[]
     ...(field.default !== undefined && { default: field.default }),
     config: resolved.config,
     ...(role !== undefined && { role }),
+    ...(column !== undefined && { column }),
     deferred: isDeferred(resolved),
     ...(options !== undefined && { choices: options }),
   };
