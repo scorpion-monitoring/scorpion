@@ -38,7 +38,9 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **The old value of a setting is not in the trail.** The event names the keys, not the values (ADR-0017). If an operator needs "from what to what", store the diff in the audit payload for keys that a schema marks as non-sensitive.
 - ~~**Event payloads without `username`.**~~ Done in M5 sprint 4: `GET /audit` and `GET /audit/{id}` carry `userName` (the name the account has now, `null` for a purged one) and the Logs page shows "deleted account" with the first characters of the id. (was: The stored payload leaves the username out so a purge does not leave a name in an append-only table. The viewer shows ids; the admin UI must join the user table and show "deleted account" for a purged one.)
 - ~~**A purged account's id stays in the trail**~~ Done in M5 sprint 4: the description of the legal texts in the settings of `core.settings` says the privacy text should say so; the Logs page says it too. (was: as an actor or subject, until retention. That is the point of an audit trail; say so in the privacy text (M5).)
-- **The public API channel has no writer yet.** `channels.api` and `apiRetentionDays` are in place, but `/api/v1` exists only from M8. The first public route sets `audit: true`; check that `surface: 'v1'` entries land under `channels.api`.
+- **The public API channel has its first writer (M8 sprint 1).** A v1 route with `audit: true` is recorded under `channels.api` (tested for 200, 401, 403, 422 and 429, and the switch). Size, measured with 1000 calls of one token on the fixture route: about 231 bytes of row data per call, about 0.5 MB per 1000 calls with the table's indexes (so 90 days at 100 000 calls a day is about 4.5 GB: `apiRetentionDays` and the call volume of the busiest token decide whether that is acceptable; a plain table, no partitioning).
+- **A call the rate limit turns away is audited without the token id.** The audit hook wraps the limit, which runs before authentication on purpose. The entry has the address and the request id. If operators need the token, record its prefix (`scp_<prefix>_…`, which is not a secret and is shown in the token list) as the subject of a 429 entry; no hash is needed for that.
+- **`audit_event` has no `surface` column,** so internal and v1 calls are both `source = 'api'` and share `apiRetentionDays` (see "Per-surface retention" above); the viewer cannot filter on the surface except by the path prefix.
 - **Optional peers for later modules.** A module that declares events (M6 onwards) fails the decisions test until `core.audit` has a decision for it; add the module as an optional peer of `core.audit` at the same time. A registry through which a module contributes its own decisions would remove the edit to `decisions.ts`; not worth it for a few modules.
 - **`ctx.audit` has no caller yet** besides the module's own export and requeue entries. The first service that changes something without an event (M6 and later) uses it inside its transaction.
 - ~~**A job-run page.**~~ Done in M5 sprint 4: `GET /system/job-runs` and the System page. (was: `kernel_job_run.result` is filled, and `listJobRuns` returns it, but there is no route to list job runs. Add `GET /system/job-runs` (`core.audit.system.read`) with the system page (M5).)
@@ -453,6 +455,24 @@ Found while using the instance; not yet investigated.
 - **A public service has no link back to a list.** There is no public catalogue (plan §12); the public pages link to each other through the provider and the
   groups only.
 
+## Public API follow-ups (M8 sprint 1)
+
+- **v1 token calls and the browser's address bucket (measured).** Before M8 a token call drew from the same `ip:default` bucket as the browsers on its
+  address; now it has its own `ip-token:default` bucket (ten times the group's size) and the token's own bucket. Measured in
+  `public-api-routes.test.ts` with a bucket of 3: after four browser calls from one address a token on that address still gets its three, and the browser
+  is still refused afterwards; two tokens on one address each get their three; eleven tokens on one address get 30 together. The calls per page of the web
+  app (the table under "Too many 429s") are unchanged: they are session calls and still count against the browser bucket.
+- **The server URL of the document is the request's origin.** Behind a proxy that does not pass `Host` it names the internal address; `config.ORIGIN`
+  (the public origin that mail links use) is the alternative if that happens.
+- **CORS and anti-automation are outside the four ASVS chapters.** ASVS 5.0 has CORS in V3 and rate limits in V2; the entries of V7 and V8 cite only the
+  requirements those tests prove (7.2.1, 7.4.1, 8.1.1, 8.2.1, 8.3.1). If V2 or V3 are ever claimed, the CORS and limit tests of `public-api-routes.test.ts`
+  and `pipeline/cors.test.ts` are the evidence to tag.
+- **The contract-test walker matches a route's `'GET /path'` string in a file that calls `v1ContractTests(`.** A comment with the string satisfies it; a
+  review catches that. A stricter walker would register the route object, which separate test files cannot share.
+- **A session cookie is accepted on `/api/v1`** like on any route. If v1 should be token-only, the pipeline needs a per-route "tokens only" flag in
+  `packages/contracts/src/route.ts` (an ASVS V8 scoped file); not planned.
+- **The preflight answer lists the methods v1 has overall,** not those of the path asked. Harmless while v1 is read-only; revisit with M10's `POST`.
+
 ## Services follow-ups (M7 sprint 7)
 
 What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in the plan for it:
@@ -480,7 +500,7 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - Approval policies `auto-by-email-domain` and `invite-only` (architecture lists them; M2 ships `manual` only).
   Invite-only needs an invitation table and email delivery (M4) and admin permissions (M3).
 - Test harness for a module: every module test file builds a kernel over Postgres by hand (`modules/core-identity/test/harness.ts`). Move it to a shared helper once a second module needs it; `packages/testing` cannot import the kernel without a package cycle, so it probably belongs with the kernel's test exports.
-- Rate limits: the numbers are the `rateLimits` setting of `core.settings` since M3 sprint 3. Still open: a per-credential bucket for session cookies (they count against the address) and finer keys (for example per username on login).
+- Rate limits: the numbers are the `rateLimits` setting of `core.settings` since M3 sprint 3. Still open: a per-credential bucket for session cookies (they count against the address) and finer keys (for example per username on login). M8 sprint 1 gave the token calls their own, larger address bucket (`TOKEN_ADDRESS_FACTOR`, ADR-0037); the browsers' bucket is unchanged.
 - Sprint 2 follow-ups: (1) Done in M3 sprint 2: `approve` and `reject` check the permission and "not your own account" with `ctx.authz.require` in the service. (2) An `Origin` check as a third CSRF layer (ADR-0007) needs the public origin to be reliable behind every proxy; revisit with the settings in M3. (3) `POST /auth/register` answers 409 for a taken username or address, which tells a caller that it exists. Decided in sprint 5 to keep it for M2; see "Sprint 5 follow-ups". (4) Done in sprint 5: the purge of soft-deleted accounts after 30 days frees the username and the address (ADR-0013).
 - Sprint 4 follow-ups (OIDC): (1) A public `GET /auth/oidc/providers` (id and display name) for the login page, with the UI in M5. (2) Done in sprint 5: the hourly cleanup job removes expired `identity_login_state` rows. (3) `email_verified` sent as the string `"true"` by some providers is treated as not verified; add a per-provider option if a real provider needs it. (4) Provider icons (FEATURES asks for a display icon): the blob store exists since M3 sprint 4; add an icon hash to the provider setting with the login page (M5). (5) The code exchange cannot be aborted (arctic has no signal); revisit if arctic gains one. (6) Several identities of one provider per user are refused (409); lift that only with a product reason.
 - Sprint 5 follow-ups (recovery, profile, cleanup):
