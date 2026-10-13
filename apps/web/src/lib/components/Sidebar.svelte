@@ -57,7 +57,7 @@
       <Icon name="close" />
     </button>
   </div>
-  <nav aria-label={t('app.mainNav')} class="flex-1 overflow-y-auto p-2">
+  <nav aria-label={t('app.mainNav')} class="flex-1 overflow-y-auto overflow-x-hidden p-2">
     {#each sections as section (section.id)}
       <div class="mb-2">
         {#if !collapsed}
