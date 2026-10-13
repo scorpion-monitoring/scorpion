@@ -9423,6 +9423,8 @@ export interface paths {
                                     };
                                     /** @description For an organisation field: the key of its role in `service.orgRole`. */
                                     role?: string;
+                                    /** @description For a field stored in a column of the service: its name, such as `slug`. */
+                                    column?: string;
                                     /** @description Not part of the create body: the value is set afterwards. */
                                     deferred: boolean;
                                     choices?: {

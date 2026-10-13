@@ -24,7 +24,7 @@ const { BUILT_IN_WIDGETS } = (await mod('ui/widgets.ts')) as {
   BUILT_IN_WIDGETS: Record<string, unknown>;
 };
 const extensions = (await mod('ui/wizard-extensions.ts')) as {
-  registerFieldWidget: (name: string, component: Component) => void;
+  registerFieldWidget: (name: string, component: unknown) => void;
   resetExtensions: () => void;
 };
 const { createSchemaFixture, fixtureFieldType } = (await mod('test/create-schema-fixture.ts')) as {
