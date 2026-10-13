@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { iconShapes } from '../icons.ts';
+  import { iconShapes } from '@scorpion/contracts/icons';
 
   // A small set of outline icons, drawn on a 24 x 24 grid. A name that is not here shows a dot, so a
   // typo in a navigation entry cannot break a page.

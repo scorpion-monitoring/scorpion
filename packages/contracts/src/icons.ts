@@ -1,5 +1,5 @@
-// The outline icons of the shell, drawn on a 24 x 24 grid: the table `Icon.svelte` reads and the navigation
-// test checks. A name that is not here shows a dot.
+// The outline icons of the shell, drawn on a 24 x 24 grid: the table the web app's `Icon.svelte` reads and the
+// navigation test of the server checks against the `ui.nav` entries. A name that is not here shows a dot.
 export const iconShapes: Record<string, string> = {
   home: 'M3 11.5 12 4l9 7.5M5.5 10v10h13V10M10 20v-6h4v6',
   book: 'M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h10',

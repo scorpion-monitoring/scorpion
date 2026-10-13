@@ -348,7 +348,7 @@ Found while using the instance; not yet investigated.
   dependency and fits the CLAUDE.md rule to justify new dependencies), keep the `name` string of `ui.nav` entries working through a mapping (an
   unknown name still falls back to a dot), and check that the icons stay out of the accessible name (`aria-hidden`). A side finding: nav
   entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
-  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table. _Done in M7 sprint 7 for the side finding: `inbox`, `mail` and `settings` are drawn (the table moved to `apps/web/src/lib/icons.ts`), and `apps/server/src/ui-routes.test.ts` fails when a `ui.nav` entry of the full profile names an icon the table lacks. The library itself stays open._
+  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table. _Done in M7 sprint 7 for the side finding: `inbox`, `mail` and `settings` are drawn (the table moved to `packages/contracts/src/icons.ts`), and `apps/server/src/ui-routes.test.ts` fails when a `ui.nav` entry of the full profile names an icon the table lacks. The library itself stays open._
 
 ## Services follow-ups (M7 sprint 1)
 

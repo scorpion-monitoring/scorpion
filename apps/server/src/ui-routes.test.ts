@@ -3,7 +3,7 @@
 // about public pages and links a failing test, on the committed `full` profile.
 import { PUBLIC_PAGES, REGISTRIES } from '@scorpion/core-ui-shell/public';
 import { describe, expect, it } from 'vitest';
-import { iconShapes } from '../../web/src/lib/icons.ts';
+import { iconShapes } from '@scorpion/contracts/icons';
 import { sources } from './generated/profile.ts';
 
 type Entry = { module: string; value: Record<string, unknown> };

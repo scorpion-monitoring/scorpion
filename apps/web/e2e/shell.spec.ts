@@ -106,7 +106,7 @@ test.describe('the shell', () => {
         await page.getByRole('button', { name: theme }).click();
         // A horizontal scrollbar takes height from the box; content that is cut off (the tooltip) does not count.
         const sizes = await nav.evaluate((element) => ({
-          bar: element.offsetHeight - element.clientHeight,
+          bar: Math.round(element.getBoundingClientRect().height - element.clientHeight),
           overflowX: getComputedStyle(element).overflowX,
         }));
         expect(sizes.bar, `${theme}: the navigation has a scrollbar`).toBe(0);
