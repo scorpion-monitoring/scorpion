@@ -9,6 +9,7 @@ import {
   loadAdminOrganisations,
   loadNewOrganisation,
   loadOrganisation,
+  loadPublicOrganisation,
 } from './loaders.ts';
 
 export { messages } from './messages.ts';
@@ -42,6 +43,11 @@ const routes: UiRoute[] = [
     path: '/account/organisations',
     load: loadAccountOrganisations,
     component: () => import('./AccountOrganisations.svelte'),
+  },
+  {
+    path: '/public/organisations/:id',
+    load: loadPublicOrganisation,
+    component: () => import('./PublicOrganisation.svelte'),
   },
   {
     path: '/admin/memberships',

@@ -14,6 +14,12 @@ export interface UiLoadContext {
   locale: string;
   /** The typed client of this request: it forwards the caller's cookie and the client address. */
   api: ApiClient;
+  /**
+   * Sends the visitor to another page of this application: `path` is below the base path (`/services/x`), the
+   * shell adds the base. It throws SvelteKit's redirect (never returns a `Response`, defect 12), so a loader
+   * calls it as `redirect('/services/x')` and nothing after it runs.
+   */
+  redirect: (path: string) => never;
   /** The OpenAPI document of the public API (v1) of this build, for the documentation page. */
   publicApi: OpenApiDocument;
 }

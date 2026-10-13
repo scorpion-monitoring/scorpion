@@ -89,6 +89,8 @@ async function runPage(
       params,
       url: request.url,
       locale: (await request.locale?.().catch(() => undefined)) ?? 'en',
+      // The path of the page the loader names, below the base path; the base is added here, once.
+      redirect: (path) => redirect(303, withBase(request.basePath, path)),
       api: request.api,
       publicApi: request.publicApi,
     });

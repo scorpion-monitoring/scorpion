@@ -7,9 +7,14 @@ import type { NavEntry, RouteEntry } from '@scorpion/core-ui-shell/public';
 
 export const SERVICE_ROUTES: RouteEntry[] = [
   { path: '/services', permission: 'registry.services.service.read' },
-  // The wizard is offered since sprint 5; the service page follows in sprint 6 (`offered.ts`).
   { path: '/services/new', permission: 'registry.services.service.create' },
   { path: '/services/:slug', permission: 'registry.services.service.read' },
+  {
+    path: '/public/services/:slug',
+    public: true,
+    publicReason:
+      'Anyone may read a service that a Reviewer made public. The page only calls the public routes, which answer 404 for every other service, so existence is not revealed; it draws nothing from a session or a role.',
+  },
 ];
 
 export const SERVICE_NAV: NavEntry[] = [

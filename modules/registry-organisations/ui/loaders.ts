@@ -152,3 +152,18 @@ export type AdminMembershipsData = Awaited<ReturnType<typeof loadAdminMembership
 
 /** One row of the lists a decider sees (requests, members, the administrator's list). */
 export type ManagedRow = AdminMembershipsData['rows'][number];
+
+/**
+ * The public page of an organisation: the public record and its profile, asked of the public routes. An
+ * organisation no public service names, and an unknown one, come back as the API's one 404.
+ */
+export async function loadPublicOrganisation({ api, params }: UiLoadContext) {
+  const path = { id: params.id! };
+  const [organisation, profile] = await Promise.all([
+    unwrap(api.GET('/public/organisations/{id}', { params: { path } })),
+    unwrap(api.GET('/public/organisations/{id}/schema-org', { params: { path } })),
+  ]);
+  return { organisation, profile };
+}
+
+export type PublicOrganisationData = Awaited<ReturnType<typeof loadPublicOrganisation>>;

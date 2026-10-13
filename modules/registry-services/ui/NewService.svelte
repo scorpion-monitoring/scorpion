@@ -14,17 +14,15 @@
     ImageBlock,
     SchemaField,
     Wizard,
-    describeField,
     failureOf,
     getShell,
     sameJson,
-    type FieldNode,
-    type JsonSchema,
     type WizardStep as KitStep,
   } from '@scorpion/ui-kit';
   import { tick, untrack } from 'svelte';
   import { errorMap } from './check-messages.ts';
   import DevConsole from './DevConsole.svelte';
+  import { fieldNode } from './field-node.ts';
   import {
     checkStep,
     failureView,
@@ -40,7 +38,8 @@
     visibleSteps,
     withoutStep,
   } from './form-state.ts';
-  import { MAX_ICON_BYTES, MAX_ICON_MIB } from './limits.ts';
+  import { iconTexts, removeIcon as dropIcon, uploadIcon } from './icon.ts';
+  import { MAX_ICON_BYTES } from './limits.ts';
   import { isOffered } from './offered.ts';
   import { setWizardContext } from './wizard-context.ts';
   import { stepConditions } from './wizard-extensions.ts';
@@ -157,46 +156,7 @@
 
   // ----- the fields ----------------------------------------------------------------------------------
 
-  /** The JSON Schema of one field, found at its pointer in the step's schema. */
-  function propertyOf(step: WizardStep, field: WizardField): JsonSchema {
-    let node: unknown = step.schema;
-    for (const segment of field.path.slice(1).split('/')) {
-      const properties = (node as { properties?: Record<string, unknown> }).properties;
-      node = properties?.[segment];
-    }
-    return (node ?? { type: 'string' }) as JsonSchema;
-  }
-
-  /**
-   * The form draws a string as a box of several lines when its limit is long. Only the `description` format is
-   * written in paragraphs; a web address or a name is one line whatever its limit, so the limit is left to the
-   * check (the step's schema) and not to the control.
-   */
-  function oneLine(schema: JsonSchema, field: WizardField): JsonSchema {
-    const long = typeof schema.maxLength === 'number' && schema.maxLength > 300;
-    if (!long || field.config.format === 'description') return schema;
-    return Object.fromEntries(Object.entries(schema).filter(([key]) => key !== 'maxLength'));
-  }
-
-  function nodeOf(step: WizardStep, field: WizardField): FieldNode {
-    const property = oneLine(propertyOf(step, field), field);
-    const items = property.items;
-    const decorated: JsonSchema = {
-      ...property,
-      ...(typeof items === 'object' &&
-        items !== null && {
-          items: oneLine(items as JsonSchema, field),
-        }),
-      title: t(field.label),
-      ...(field.help !== undefined && { description: t(field.help) }),
-      widget: field.widget,
-    };
-    return describeField(decorated, decorated, {
-      pointer: field.path,
-      key: field.path.slice(field.path.lastIndexOf('/') + 1),
-      required: field.required,
-    });
-  }
+  const nodeOf = (step: WizardStep, field: WizardField) => fieldNode(step, field, t);
 
   const widgets = $derived(componentWidgets(allFields.map((field) => field.widget)));
 
@@ -247,35 +207,9 @@
 
   // ----- the screen after the creation ----------------------------------------------------------------
 
-  const iconTexts = $derived({
-    title: t('services.icon.title'),
-    alt: t('services.icon.alt', { name: created?.name ?? '' }),
-    none: t('services.icon.none'),
-    choose: t('services.icon.choose'),
-    hint: t('services.icon.hint', { count: MAX_ICON_MIB }),
-    remove: t('services.icon.remove'),
-    saved: t('services.icon.saved'),
-    removed: t('services.icon.removed'),
-    tooBig: t('services.icon.tooBig', { count: MAX_ICON_MIB }),
-    invalid: t('services.icon.invalid'),
-    forbidden: t('services.icon.forbidden'),
-  });
-
-  // The image is the request body as it is; the server checks it, re-encodes it and answers with the stored file.
-  async function upload(file: File) {
-    const saved = await unwrap(
-      api.PUT('/services/{id}/icon', {
-        params: { path: { id: created!.id } },
-        body: file as unknown as string,
-        bodySerializer: (sent: unknown) => sent as BodyInit,
-        headers: { 'content-type': 'application/octet-stream' },
-      }),
-    );
-    return saved.iconUrl;
-  }
-  async function removeIcon() {
-    await unwrap(api.DELETE('/services/{id}/icon', { params: { path: { id: created!.id } } }));
-  }
+  const texts = $derived(iconTexts(t, created?.name ?? ''));
+  const upload = (file: File) => uploadIcon(api, created!.id, file);
+  const removeIcon = () => dropIcon(api, created!.id);
 
   const detailOffered = isOffered('/services/:slug');
 </script>
@@ -299,7 +233,7 @@
         imageUrl={created.iconUrl}
         editable
         maxBytes={MAX_ICON_BYTES}
-        texts={iconTexts}
+        {texts}
         {upload}
         remove={removeIcon}
       />

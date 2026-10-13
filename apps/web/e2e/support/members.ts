@@ -80,8 +80,11 @@ export async function rowOf(
   return found!;
 }
 
-/** An active account that is an approved member of the organisation, with the role given. */
-export async function memberOf(
+/**
+ * Makes an account that already exists an approved member (or manager) of one more organisation: the request
+ * as that person, the decision as the administrator, and the promotion when `role` is `manager`.
+ */
+export async function alsoMemberOf(
   admin: AdminApi,
   playwright: Parameters<typeof apiAs>[0],
   baseURL: string | undefined,
@@ -89,8 +92,7 @@ export async function memberOf(
   who: Credentials,
   org: Org,
   role: 'member' | 'manager' = 'member',
-): Promise<string> {
-  const id = await activeUser(admin, at, who);
+): Promise<void> {
   const api = await apiAs(playwright, baseURL, at, who);
   const asked = await api.send('POST', `/organisations/${org.id}/membership`);
   expect(asked.status, JSON.stringify(asked.body)).toBeLessThan(300);
@@ -104,6 +106,20 @@ export async function memberOf(
     const promoted = await admin.send('POST', `/memberships/${row.id}/role`, { role: 'manager' });
     expect(promoted.status, JSON.stringify(promoted.body)).toBe(200);
   }
+}
+
+/** An active account that is an approved member of the organisation, with the role given. */
+export async function memberOf(
+  admin: AdminApi,
+  playwright: Parameters<typeof apiAs>[0],
+  baseURL: string | undefined,
+  at: (path: string) => string,
+  who: Credentials,
+  org: Org,
+  role: 'member' | 'manager' = 'member',
+): Promise<string> {
+  const id = await activeUser(admin, at, who);
+  await alsoMemberOf(admin, playwright, baseURL, at, who, org, role);
   return id;
 }
 

@@ -88,8 +88,15 @@ function pruneEmpty(tree: Tree): void {
  * name is kept, so the check and the server judge it, never the mapping.
  */
 export function toBody(form: Tree, schema: Pick<WizardSchema, 'steps'>): Tree {
+  return toBodyOf(
+    form,
+    schema.steps.flatMap((step) => step.fields),
+  );
+}
+
+/** {@link toBody} over a list of fields: the edit form maps only the fields it draws. */
+export function toBodyOf(form: Tree, fields: readonly WizardField[]): Tree {
   const body = structuredClone<Tree>(form);
-  const fields = schema.steps.flatMap((step) => step.fields);
   for (const field of fields) {
     if (field.deferred) {
       setAt(body, field.path, undefined);
@@ -244,6 +251,8 @@ export function failureView(
   failure: FormFailure,
   schema: Pick<WizardSchema, 'steps'>,
   t: (key: string, params?: Record<string, string | number>) => string,
+  /** The sentence for a 403 of this request: the create form and the edit form refuse for different reasons. */
+  forbiddenKey = 'services.error.forbidden',
 ): FailureView {
   const messages: [string, string[]][] = [];
   const loose: string[] = [];
@@ -251,7 +260,7 @@ export function failureView(
   if (failure.type?.endsWith('slug-taken') && slug) {
     messages.push([slug.path, [t('services.error.slugTaken')]]);
   } else if (failure.status === 403) {
-    loose.push(t('services.error.forbidden'));
+    loose.push(t(forbiddenKey));
   } else if (Object.keys(failure.fields).length > 0 || failure.general.length > 0) {
     for (const [pointer, list] of errorsByPointer(failure.fields)) {
       if (stepOfPointer(schema.steps, pointer) !== undefined) messages.push([pointer, list]);

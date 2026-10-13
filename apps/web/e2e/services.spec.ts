@@ -1,9 +1,16 @@
 import type { Page } from '@playwright/test';
 import { makePng } from '@scorpion/testing';
 import { activeUser, adminApi, apiAs, newPerson, unique } from './support/admin.ts';
-import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
-import { makeOrg, memberOf, pageAs, uniqueAbbreviation } from './support/members.ts';
-import { makeCatalogueService, makeConsortium, seedCatalogue } from './support/services.ts';
+import { admin, expect, saveSettings, signInThroughPage, test } from './support/fixtures.ts';
+import { alsoMemberOf, makeOrg, memberOf, pageAs, uniqueAbbreviation } from './support/members.ts';
+import { jsonLd, watchCsp } from './support/page-checks.ts';
+import {
+  makeCatalogueService,
+  makeConsortium,
+  makeReviewer,
+  seedCatalogue,
+  serviceEvents,
+} from './support/services.ts';
 import { fillBasics, openWizard } from './support/wizard.ts';
 
 // M7 sprint 4, journey 2 (plan §10 item 8): the catalogue. A person searches, chooses a facet and a second
@@ -488,6 +495,701 @@ test.describe('journey 1: the create wizard', () => {
     await lonely.page.getByRole('button', { name: 'Next' }).click();
     await expect(lonely.page.getByText('This field is required.')).toBeVisible();
     await lonely.close();
+    await api.dispose();
+  });
+});
+
+// M7 sprint 6, journey 3 (plan §10 item 8): a member edits a service in the browser, a manager renames it and
+// moves it. The page draws its form from what the API says the caller may change, never from a role: a member
+// has no short name and no owner to change (they are shown with the reason), a manager has both. Every test
+// makes its own organisations, accounts and short names.
+
+const toast = (page: Page) => page.getByRole('region', { name: 'Notifications' });
+const IDENTITY_LINE = 'Only a manager of the provider or an administrator can change these.';
+
+test.describe('journey 3: editing a service', () => {
+  test('a member edits the description, links, contact point, icon, name, licence, stage and consortia, and cannot change the short name or the owner', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+    basePath,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const provider = await makeOrg(api, uniqueAbbreviation('EDA'));
+    const first = await makeConsortium(api, uniqueAbbreviation('EDC'));
+    const second = await makeConsortium(api, uniqueAbbreviation('EDD'));
+    const member = newPerson('edmem');
+    await memberOf(api, playwright, baseURL, at, member, provider);
+    const tag = unique('ed');
+    const slug = `${tag}-svc`;
+    const name = `${tag} Edit service`;
+    const made = await api.send('POST', '/services', {
+      slug,
+      name,
+      provider: provider.id,
+      consortia: [first.id],
+      stage: 'DEV',
+      license: 'MIT',
+      description: 'Before',
+      contact: { email: `before-${tag}@example.org`, type: 'support' },
+    });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    const id = (made.body as { id: string }).id;
+
+    const opened = await pageAs(browser, baseURL, at, member);
+    const page = opened.page;
+    await page.goto(at(`/services/${slug}`));
+    // The words: the stage as the vocabulary words it, the licence by name, who runs it as a link.
+    await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+    await expect(page.getByText('Private', { exact: true })).toBeVisible();
+    await expect(page.getByText('Development', { exact: true })).toBeVisible();
+    await expect(page.getByText('MIT License')).toBeVisible();
+    await expect(page.getByRole('link', { name: provider.name })).toHaveAttribute(
+      'href',
+      at(`/organisations/${provider.id}`),
+    );
+    await expect(page.getByRole('link', { name: `before-${tag}@example.org` })).toBeVisible();
+    // A member may edit, and has no button to make it public.
+    await expect(page.getByRole('button', { name: 'Make public' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.getByRole('heading', { name: `Edit ${name}`, level: 2 })).toBeVisible();
+
+    // The short name and the owner are shown, read-only, with the reason; they are no controls.
+    await expect(page.getByText(IDENTITY_LINE)).toBeVisible();
+    await expect(page.getByLabel(/^Short name/)).toHaveCount(0);
+    await expect(page.getByLabel(/^Operated by/)).toHaveCount(0);
+    const fixed = page.getByRole('region', { name: 'Fixed values' });
+    await expect(fixed).toContainText(slug);
+    await expect(fixed).toContainText(provider.name);
+    // A save is offered only when something changed.
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+
+    const renamed = `${name} v2`;
+    await page.getByLabel(/^Name/).fill(renamed);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByLabel(/^Name/).fill(name);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+    await page.getByLabel(/^Name/).fill(renamed);
+    await page.getByLabel('Description', { exact: true }).fill(`After ${tag}`);
+    await page.getByLabel(/^Stage/).selectOption({ label: 'Production' });
+    await page.getByRole('searchbox', { name: 'Licence' }).fill('Apache-2.0');
+    await page.getByRole('button', { name: /^Apache License 2\.0 Apache-2\.0/ }).click();
+    await expect(page.getByText('Chosen licence: Apache License 2.0')).toBeVisible();
+    const links = page.getByRole('group', { name: 'Further links' });
+    await links.getByRole('button', { name: 'Add' }).click();
+    await links.getByRole('textbox').fill(`https://example.org/${tag}`);
+    await page.getByLabel(/^Contact address/).fill(`after-${tag}@example.org`);
+    await page.getByLabel('Kind of contact').fill('helpdesk');
+    // Consortia: a member may change them: one off, one on.
+    await page.getByRole('checkbox', { name: `${first.name} (${first.abbreviation})` }).uncheck();
+    await page.getByRole('checkbox', { name: `${second.name} (${second.abbreviation})` }).check();
+    // The icon has its own block and is saved on its own.
+    await page.getByLabel('Upload an icon').setInputFiles({
+      name: 'icon.png',
+      mimeType: 'image/png',
+      buffer: makePng(32),
+    });
+    await expect(toast(page).getByText('The icon was saved.')).toBeVisible();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    // The page says what happened, with the focus on that line, and shows the new record in words.
+    const status = page.getByRole('status').filter({ hasText: 'Your changes were saved.' });
+    await expect(status).toBeFocused();
+    await expect(page.getByRole('heading', { name: renamed, level: 1 })).toBeVisible();
+    await expect(page.getByText('Production', { exact: true })).toBeVisible();
+    await expect(page.getByText('Apache License 2.0')).toBeVisible();
+    await expect(page.getByText(`After ${tag}`)).toBeVisible();
+    await expect(page.getByRole('link', { name: `https://example.org/${tag}` })).toHaveAttribute(
+      'rel',
+      'noopener noreferrer',
+    );
+    await expect(page.getByRole('link', { name: `after-${tag}@example.org` })).toBeVisible();
+    await expect(page.getByRole('img', { name: `Icon of ${renamed}` })).toBeVisible();
+    await expect(page.getByRole('link', { name: second.name })).toBeVisible();
+    await expect(page.getByRole('link', { name: first.name })).toHaveCount(0);
+    const stored = await api.get<{
+      name: string;
+      slug: string;
+      stage: string;
+      license: string;
+      sameAs: string[];
+      contactEmail: string;
+      contactType: string;
+      organisations: { role: string; id: string }[];
+    }>(`/services/${id}`);
+    expect(stored).toMatchObject({
+      name: renamed,
+      slug,
+      stage: 'PROD',
+      license: 'Apache-2.0',
+      sameAs: [`https://example.org/${tag}`],
+      contactEmail: `after-${tag}@example.org`,
+      contactType: 'helpdesk',
+    });
+    expect(stored.organisations.map((o) => [o.role, o.id])).toEqual([
+      ['provider', provider.id],
+      ['consortium', second.id],
+    ]);
+
+    // A direct request for the short name or the owner is 403 and changes nothing (the whole request is refused).
+    const asMember = await apiAs(playwright, baseURL, at, member);
+    for (const change of [{ slug: `${tag}-sneaky` }, { name: 'Sneaky', slug: `${tag}-sneaky2` }]) {
+      const refused = await asMember.send('PATCH', `/services/${id}`, change);
+      expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+      expect(JSON.stringify(refused.body)).not.toContain('sneaky');
+    }
+    await asMember.dispose();
+    expect(await api.get(`/services/${id}`)).toMatchObject({ slug, name: renamed });
+
+    // The audit entry names who changed what: the actor, `by`, and the field names, never a value.
+    const updated = await serviceEvents(basePath, 'registry.service.updated@1', id);
+    const entry = updated.at(-1)!;
+    expect(entry.payload.by).toBe('member');
+    expect(entry.userId).not.toBeNull();
+    expect(entry.payload.fields as string[]).toEqual(
+      expect.arrayContaining(['name', 'description', 'stage', 'license', 'sameAs', 'consortia']),
+    );
+    expect(JSON.stringify(entry.payload)).not.toContain(`after-${tag}@example.org`);
+    expect(JSON.stringify(entry.payload)).not.toContain(`After ${tag}`);
+    await opened.close();
+    await api.dispose();
+  });
+
+  test('a manager renames it (the old address still works, the new short name cannot be taken) and moves it to another organisation they manage', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+    basePath,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const home = await makeOrg(api, uniqueAbbreviation('MVA'));
+    const other = await makeOrg(api, uniqueAbbreviation('MVB'));
+    const foreign = await makeOrg(api, uniqueAbbreviation('MVX'));
+    const manager = newPerson('mvmgr');
+    await memberOf(api, playwright, baseURL, at, manager, home, 'manager');
+    await alsoMemberOf(api, playwright, baseURL, at, manager, other, 'manager');
+    const tag = unique('mv');
+    const oldSlug = `${tag}-old`;
+    const newSlug = `${tag}-new`;
+    const name = `${tag} Moving service`;
+    const service = await makeCatalogueService(api, oldSlug, { name, provider: home.id });
+    const taken = await makeCatalogueService(api, `${tag}-taken`, {
+      name: `${tag} Taken`,
+      provider: home.id,
+    });
+
+    const opened = await pageAs(browser, baseURL, at, manager);
+    const page = opened.page;
+    await page.goto(at(`/services/${service.id}`));
+    // An id resolves, and the address becomes the short name's.
+    await expect(page).toHaveURL(at(`/services/${oldSlug}`));
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    // No fixed values and no reason: a manager may change both.
+    await expect(page.getByText(IDENTITY_LINE)).toHaveCount(0);
+    const slugField = page.getByLabel(/^Short name/);
+    await expect(slugField).toHaveValue(oldSlug);
+
+    // A short name that is taken is refused on its field, in words, without the value.
+    await slugField.fill(taken.slug);
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(slugField).toHaveAttribute('aria-invalid', 'true');
+    const slugError = page.getByText('This short name is already taken');
+    await expect(slugError).toBeVisible();
+    await expect(slugError).not.toContainText(taken.slug);
+    await expect(slugField).toHaveValue(taken.slug);
+    // Changing the field takes the message away.
+    await slugField.fill(newSlug);
+    await expect(slugError).toHaveCount(0);
+
+    // The owner: only the organisations this person manages are offered, never the other one.
+    const operated = page.getByLabel(/^Operated by/);
+    await expect(
+      operated.getByRole('option', { name: new RegExp(foreign.abbreviation) }),
+    ).toHaveCount(0);
+    await expect(operated.getByRole('option', { name: new RegExp(home.abbreviation) })).toHaveCount(
+      1,
+    );
+    await operated.selectOption(other.id);
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    // The address is the new one, and the notice says the old one still works.
+    await expect(page).toHaveURL(at(`/services/${newSlug}`));
+    await expect(
+      page.getByRole('status').filter({ hasText: 'The old address still works.' }).first(),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+    await expect(page.getByRole('link', { name: other.name })).toBeVisible();
+    await expect(page.getByRole('link', { name: home.name })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+
+    // The old address redirects to the new one; so does the id; and nobody else can take the old short name.
+    await page.goto(at(`/services/${oldSlug}`));
+    await expect(page).toHaveURL(at(`/services/${newSlug}`));
+    await page.goto(at(`/services/${service.id}`));
+    await expect(page).toHaveURL(at(`/services/${newSlug}`));
+    const reuse = await api.send('POST', '/services', {
+      slug: oldSlug,
+      name: `${tag} Reuse`,
+      provider: home.id,
+    });
+    expect(reuse.status, JSON.stringify(reuse.body)).toBe(409);
+
+    // A direct request to move it to an organisation the manager does not manage is 403, and nothing changes.
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const asManager = await apiAs(playwright, baseURL, at, manager);
+    const refused = await asManager.send('PATCH', `/services/${service.id}`, {
+      provider: foreign.id,
+    });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+    await asManager.dispose();
+    const stored = await api.get<{ organisations: { role: string; id: string }[] }>(
+      `/services/${service.id}`,
+    );
+    expect(stored.organisations.map((o) => [o.role, o.id])).toEqual([['provider', other.id]]);
+
+    // The audit entries: the rename and the move name the manager's group and the field names.
+    const updated = await serviceEvents(basePath, 'registry.service.updated@1', service.id);
+    expect(updated.at(-1)!.payload.by).toBe('manager');
+    expect(updated.at(-1)!.payload.fields as string[]).toEqual(
+      expect.arrayContaining(['slug', 'provider']),
+    );
+    const renamedEvents = await serviceEvents(
+      basePath,
+      'registry.service.slugChanged@1',
+      service.id,
+    );
+    expect(renamedEvents).toHaveLength(1);
+    await opened.close();
+    await api.dispose();
+  });
+
+  test('a page that has gone out of date says so in words when a save is refused with 403, keeps what was typed and saves nothing', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const provider = await makeOrg(api, uniqueAbbreviation('STA'));
+    const member = newPerson('stamem');
+    await memberOf(api, playwright, baseURL, at, member, provider);
+    const tag = unique('st');
+    const service = await makeCatalogueService(api, `${tag}-svc`, {
+      name: `${tag} Stale service`,
+      provider: provider.id,
+    });
+    const opened = await pageAs(browser, baseURL, at, member);
+    const page = opened.page;
+    await page.goto(at(`/services/${service.slug}`));
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByLabel('Description', { exact: true }).fill(`Typed ${tag}`);
+
+    // Meanwhile the person leaves the organisation (in another session): the page does not know yet.
+    const elsewhere = await apiAs(playwright, baseURL, at, member);
+    expect(
+      (await elsewhere.send('DELETE', `/organisations/${provider.id}/membership`)).status,
+    ).toBe(200);
+    await elsewhere.dispose();
+
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('alert')).toContainText('You are not allowed to make this change.');
+    await expect(page.getByRole('alert')).toContainText('nothing was saved');
+    await expect(page.getByLabel('Description', { exact: true })).toHaveValue(`Typed ${tag}`);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    expect(await api.get(`/services/${service.id}`)).toMatchObject({ description: null });
+    await opened.close();
+    await api.dispose();
+  });
+});
+
+// M7 sprint 6, journey 4 (plan §10 item 8): publication and the public pages. A Reviewer makes a service public
+// and the provider's manager is told; an anonymous browser reads the public service and organisation (the
+// Schema.org block parses and names the service, the logo is under the base path, no contact point, no CSP
+// violation); the Reviewer makes it private and the next anonymous request is a 404 that is the 404 of an address
+// nobody has; a manager and a member have no button and a direct PUT is 403; with `service.allowPublic` off every
+// public address is 404 and the page explains why the button does nothing.
+
+/** The text of the main content of a page, which the identical-404 rule compares. */
+const mainOf = (page: Page) => page.getByRole('main').innerText();
+
+test.describe('journey 4: publication and the public pages', () => {
+  test('a Reviewer makes a service public and private again; anonymous visitors read the public pages; nobody else can change it', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+    basePath,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const provider = await makeOrg(api, uniqueAbbreviation('PBA'));
+    const consortium = await makeConsortium(api, uniqueAbbreviation('PBC'));
+    const manager = newPerson('pbmgr');
+    const member = newPerson('pbmem');
+    const reviewer = newPerson('pbrev');
+    await memberOf(api, playwright, baseURL, at, manager, provider, 'manager');
+    await memberOf(api, playwright, baseURL, at, member, provider);
+    await makeReviewer(api, at, reviewer);
+    const tag = unique('pb');
+    const slug = `${tag}-svc`;
+    const name = `${tag} Public service`;
+    const secret = `private-${tag}@example.org`;
+    const made = await api.send('POST', '/services', {
+      slug,
+      name,
+      provider: provider.id,
+      consortia: [consortium.id],
+      description: `Open data ${tag}`,
+      url: `https://example.org/${tag}`,
+      license: 'MIT',
+      contact: { email: secret, type: 'support' },
+    });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    const id = (made.body as { id: string }).id;
+    const icon = await api.request.put(at(`/api/internal/services/${id}/icon`), {
+      headers: { 'x-csrf-token': api.csrf, 'content-type': 'application/octet-stream' },
+      data: makePng(32),
+    });
+    expect(icon.status(), await icon.text()).toBe(200);
+
+    // A manager and a member have no button, and a direct request is refused.
+    for (const who of [manager, member]) {
+      const opened = await pageAs(browser, baseURL, at, who);
+      await opened.page.goto(at(`/services/${slug}`));
+      await expect(opened.page.getByRole('heading', { name, level: 1 })).toBeVisible();
+      await expect(opened.page.getByRole('button', { name: /Make (public|private)/ })).toHaveCount(
+        0,
+      );
+      await opened.close();
+      const direct = await apiAs(playwright, baseURL, at, who);
+      const refused = await direct.send('PUT', `/services/${id}/publication`, { public: true });
+      expect(refused.status, who.username).toBe(403);
+      await direct.dispose();
+    }
+    // Nothing is public yet: an anonymous visitor gets the 404 of an address nobody has.
+    const visitor = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
+    const anon = await visitor.newPage();
+    const unknown = await anon.goto(at(`/public/services/${tag}-nobody`));
+    expect(unknown?.status()).toBe(404);
+    const nothing = await mainOf(anon);
+    const closed = await anon.goto(at(`/public/services/${slug}`));
+    expect(closed?.status()).toBe(404);
+    expect(await mainOf(anon)).toBe(nothing);
+
+    // The Reviewer: a confirm that says what the change means; Cancel keeps the focus on the button.
+    const reviewing = await pageAs(browser, baseURL, at, reviewer);
+    const page = reviewing.page;
+    await page.goto(at(`/services/${slug}`));
+    await expect(page.getByText('Private', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
+    const publish = page.getByRole('button', { name: 'Make public' });
+    await publish.click();
+    const dialog = page.getByRole('dialog', { name: `Make ${name} public?` });
+    await expect(dialog).toContainText('Anyone, signed in or not, can then read');
+    await expect(dialog).toContainText('The contact point is never public.');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(publish).toBeFocused();
+    expect((await api.get<{ public: boolean }>(`/services/${id}`)).public).toBe(false);
+    await publish.click();
+    await dialog.getByRole('button', { name: 'Make public' }).click();
+    // The state changes in place and the focus goes to the line that says what happened.
+    await expect(
+      page.getByRole('status').filter({ hasText: `${name} is now public.` }),
+    ).toBeFocused();
+    await expect(page.getByText('Public', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Make public' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Open the public page' })).toHaveAttribute(
+      'href',
+      at(`/public/services/${slug}`),
+    );
+
+    // The provider's manager got the inbox item (the service's id in its link resolves to the slug).
+    const managing = await pageAs(browser, baseURL, at, manager);
+    await managing.page.goto(at('/inbox'));
+    await expect(managing.page.getByText(`${name} is now public`).first()).toBeVisible();
+    await managing.close();
+
+    // An anonymous browser reads the public service: words, links, the block in the head.
+    const csp = await watchCsp(anon);
+    const reading = await anon.goto(at(`/public/services/${slug}`));
+    expect(reading?.status()).toBe(200);
+    await expect(anon.getByRole('heading', { name, level: 1 })).toBeVisible();
+    await expect(anon.getByText(`Open data ${tag}`)).toBeVisible();
+    await expect(anon.getByRole('link', { name: `https://example.org/${tag}` })).toHaveAttribute(
+      'rel',
+      'noopener noreferrer',
+    );
+    await expect(anon.getByRole('img', { name: `Icon of ${name}` })).toBeVisible();
+    // No contact point, no control, nothing of a person.
+    await expect(anon.getByText(secret)).toHaveCount(0);
+    await expect(anon.getByRole('main').getByRole('button')).toHaveCount(0);
+    expect(await anon.content()).not.toContain(secret);
+    const profile = await jsonLd(anon);
+    expect(profile).toMatchObject({ '@type': 'Service', name, alternateName: slug });
+    expect(profile.logo?.url).toContain(at('/api/internal/files/'));
+    expect(JSON.stringify(profile)).not.toContain(secret);
+    expect(JSON.stringify(profile)).not.toContain('contactPoint');
+    expect(await csp()).toEqual([]);
+    // An id and an old address go to the short name.
+    await anon.goto(at(`/public/services/${id}`));
+    await expect(anon).toHaveURL(at(`/public/services/${slug}`));
+
+    // The provider and the consortium link to their public pages.
+    await anon.getByRole('link', { name: provider.name }).click();
+    await expect(anon).toHaveURL(at(`/public/organisations/${provider.id}`));
+    await expect(anon.getByRole('heading', { name: provider.name, level: 1 })).toBeVisible();
+    await expect(anon.getByRole('link', { name })).toHaveAttribute(
+      'href',
+      at(`/public/services/${slug}`),
+    );
+    const orgProfile = await jsonLd(anon);
+    expect(orgProfile).toMatchObject({ name: provider.name });
+    expect(JSON.stringify(orgProfile)).not.toContain('contactPoint');
+    expect(await csp()).toEqual([]);
+    await anon.goto(at(`/public/organisations/${consortium.id}`));
+    await expect(anon.getByRole('heading', { name: consortium.name, level: 1 })).toBeVisible();
+
+    // With public reads switched off every public address is a 404: the pages and the API.
+    const off = async (allow: boolean) =>
+      saveSettings(api.request, at, api.csrf, 'registry.services', (values) => ({
+        ...values,
+        allowPublic: allow,
+      }));
+    await off(false);
+    try {
+      for (const path of [`/public/services/${slug}`, `/public/organisations/${provider.id}`]) {
+        expect((await anon.goto(at(path)))?.status(), path).toBe(404);
+        expect(
+          (await visitor.request.get(at(`/api/internal/${path.slice(1)}`))).status(),
+          `API ${path}`,
+        ).toBe(404);
+      }
+      expect(await mainOf(anon)).toBe(nothing);
+    } finally {
+      await off(true);
+    }
+    // Switched back on, what was marked public is served again.
+    expect((await anon.goto(at(`/public/services/${slug}`)))?.status()).toBe(200);
+
+    // The Reviewer makes it private again, and the next anonymous request is the 404 of an unknown address.
+    await page.reload();
+    await page.getByRole('button', { name: 'Make private' }).click();
+    const unpublish = page.getByRole('dialog', { name: `Make ${name} private?` });
+    await expect(unpublish).toContainText('Only signed-in people can then read this service.');
+    await unpublish.getByRole('button', { name: 'Make private' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: `${name} is now private.` }),
+    ).toBeFocused();
+    await expect(page.getByText('Private', { exact: true })).toBeVisible();
+    for (const path of [`/public/services/${slug}`, `/public/organisations/${provider.id}`]) {
+      expect((await anon.goto(at(path)))?.status(), path).toBe(404);
+      expect(await mainOf(anon), path).toBe(nothing);
+    }
+    // Both changes were audited with the Reviewer as the actor.
+    const published = await serviceEvents(basePath, 'registry.service.published@1', id);
+    const unpublished = await serviceEvents(basePath, 'registry.service.unpublished@1', id);
+    expect(published).toHaveLength(1);
+    expect(unpublished).toHaveLength(1);
+    expect(published[0]!.userId).not.toBeNull();
+    expect(published[0]!.userId).toBe(unpublished[0]!.userId);
+    await reviewing.close();
+    await visitor.close();
+    await api.dispose();
+  });
+
+  test('a Reviewer whose page is out of date meets the switched-off flag in words, and the button says why it does nothing', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const provider = await makeOrg(api, uniqueAbbreviation('PBF'));
+    const reviewer = newPerson('pbrev2');
+    await makeReviewer(api, at, reviewer);
+    const tag = unique('pf');
+    const service = await makeCatalogueService(api, `${tag}-svc`, {
+      name: `${tag} Flag service`,
+      provider: provider.id,
+    });
+    const reviewing = await pageAs(browser, baseURL, at, reviewer);
+    const page = reviewing.page;
+    await page.goto(at(`/services/${service.slug}`));
+    await expect(page.getByRole('button', { name: 'Make public' })).toBeEnabled();
+    // The administrator switches public reads off on the settings form while the page is open.
+    const settings = await pageAs(browser, baseURL, at, admin);
+    try {
+      await settings.page.goto(at('/admin/settings/registry.services'));
+      await settings.page.getByLabel('Allow public services').uncheck();
+      await settings.page.getByRole('button', { name: 'Save' }).click();
+      await expect(toast(settings.page).getByText(/saved/i).first()).toBeVisible();
+
+      await page.getByRole('button', { name: 'Make public' }).click();
+      await page
+        .getByRole('dialog', { name: `Make ${service.name} public?` })
+        .getByRole('button', { name: 'Make public' })
+        .click();
+      await expect(page.getByRole('alert')).toContainText('switched off on this instance');
+      const button = page.getByRole('button', { name: 'Make public' });
+      await expect(button).toBeDisabled();
+      await expect(button).toHaveAccessibleDescription('Switched off on this instance.');
+      expect((await api.get<{ public: boolean }>(`/services/${service.id}`)).public).toBe(false);
+      // Reloaded, the API no longer offers the action at all.
+      await page.reload();
+      await expect(page.getByRole('button', { name: 'Make public' })).toHaveCount(0);
+    } finally {
+      await saveSettings(api.request, at, api.csrf, 'registry.services', (values) => ({
+        ...values,
+        allowPublic: true,
+      }));
+      await settings.close();
+    }
+    await reviewing.close();
+    await api.dispose();
+  });
+});
+
+// M7 sprint 6, journey 5 (plan §10 item 8): what a plain User and an anonymous visitor can and cannot do. A
+// plain User reads the catalogue and the page and has no edit, publish or administration entry and no write
+// route; an anonymous visitor reaches the public pages and the sign-in page, and a private service is a 404.
+
+test.describe('journey 5: a plain User and an anonymous visitor', () => {
+  test('a plain User reads but changes nothing, and is offered no administration; an anonymous visitor sees only the public pages', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const provider = await makeOrg(api, uniqueAbbreviation('PUA'));
+    const tag = unique('pu');
+    const service = await makeCatalogueService(api, `${tag}-svc`, {
+      name: `${tag} Read-only service`,
+      provider: provider.id,
+    });
+    const reader = newPerson('pureader');
+    await activeUser(api, at, reader);
+
+    const opened = await pageAs(browser, baseURL, at, reader);
+    const page = opened.page;
+    await page.goto(at(`/services?q=${tag}`));
+    await expect(page.getByRole('row').filter({ hasText: service.name })).toHaveCount(1);
+    await page.getByRole('link', { name: service.name }).click();
+    await expect(page).toHaveURL(at(`/services/${service.slug}`));
+    await expect(page.getByRole('heading', { name: service.name, level: 1 })).toBeVisible();
+    // No edit, no publish, no form; the contact point of a service that has none is not asked for.
+    await expect(page.getByRole('button', { name: /Edit|Make public|Make private/ })).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole('main').getByRole('button')).toHaveCount(0);
+    // No administration anywhere in the shell.
+    await expect(page.getByRole('link', { name: /Administration|Settings|Users/ })).toHaveCount(0);
+    const navigation = await opened.page.request.get(at('/api/internal/ui/navigation'));
+    expect(navigation.status()).toBe(200);
+    const body = await navigation.text();
+    expect(body).not.toMatch(/admin/i);
+    expect((JSON.parse(body) as { routes: string[] }).routes).toEqual(
+      expect.arrayContaining(['/services', '/services/:slug', '/public/services/:slug']),
+    );
+
+    // Every write route refuses: the person may read, nothing more.
+    const csrf = (await (await opened.page.request.get(at('/api/internal/auth/me'))).json()) as {
+      csrfToken: string;
+    };
+    const call = async (
+      method: 'PATCH' | 'PUT' | 'DELETE' | 'POST',
+      path: string,
+      data?: unknown,
+    ) => {
+      const response = await opened.page.request.fetch(at(`/api/internal${path}`), {
+        method,
+        headers: { 'x-csrf-token': csrf.csrfToken, 'content-type': 'application/json' },
+        data: data === undefined ? '{}' : JSON.stringify(data),
+      });
+      return response.status();
+    };
+    expect(await call('PATCH', `/services/${service.id}`, { name: 'Changed' })).toBe(403);
+    expect(await call('PUT', `/services/${service.id}/publication`, { public: true })).toBe(403);
+    expect(await call('DELETE', `/services/${service.id}/icon`)).toBe(403);
+    expect(
+      await opened.page.request
+        .fetch(at(`/api/internal/services/${service.id}/icon`), {
+          method: 'PUT',
+          headers: { 'x-csrf-token': csrf.csrfToken, 'content-type': 'application/octet-stream' },
+          data: makePng(32),
+        })
+        .then((response) => response.status()),
+    ).toBe(403);
+    expect(
+      await call('POST', '/services', {
+        slug: `${tag}-mine`,
+        name: `${tag} Mine`,
+        provider: provider.id,
+      }),
+    ).toBe(403);
+    expect(await api.get(`/services/${service.id}`)).toMatchObject({ name: service.name });
+
+    // An anonymous visitor: the sign-in page, never the catalogue or a private service.
+    const visitor = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
+    const anon = await visitor.newPage();
+    await anon.goto(at('/services'));
+    await expect(anon).toHaveURL(
+      (address) => address.pathname === at('/login') && address.searchParams.has('returnTo'),
+    );
+    await anon.goto(at(`/services/${service.slug}`));
+    await expect(anon).toHaveURL(/\/login\?returnTo=/);
+    await expect(anon.getByRole('heading', { name: /Sign in/ })).toBeVisible();
+    expect((await anon.goto(at(`/public/services/${service.slug}`)))?.status()).toBe(404);
+    expect((await visitor.request.get(at(`/api/internal/services/${service.id}`))).status()).toBe(
+      401,
+    );
+    const open = await visitor.request.get(at('/api/internal/ui/navigation'));
+    const routes = ((await open.json()) as { routes: string[] }).routes;
+    expect(routes).toContain('/login');
+    expect(routes).toContain('/public/services/:slug');
+    expect(
+      routes.filter((route) => /^\/(services|admin|account|profile|inbox)/.test(route)),
+    ).toEqual([]);
+    await visitor.close();
+    await opened.close();
+    await api.dispose();
+  });
+});
+
+// M7 sprint 6, journey 6 (plan §10 item 8): an organisation that has a service cannot be deleted, which closes
+// the `org.usage` journey that M6 could only test with a fixture. The 409 is shown on the page and names the module
+// that still uses the organisation.
+
+test.describe('journey 6: an organisation in use cannot be deleted', () => {
+  test('an Admin who deletes the provider of a service is told which module still uses it, and the organisation stays', async ({
+    page,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const provider = await makeOrg(api, uniqueAbbreviation('USE'));
+    const tag = unique('us');
+    await makeCatalogueService(api, `${tag}-svc`, { name: `${tag} Used`, provider: provider.id });
+    await signInThroughPage(page, at, admin);
+    await page.goto(at(`/admin/organisations/${provider.id}`));
+    await page.getByRole('button', { name: 'Delete…' }).click();
+    const dialog = page.getByRole('dialog', { name: `Delete ${provider.name}?` });
+    await dialog.getByRole('button', { name: 'Delete the organisation' }).click();
+    await expect(page.getByRole('alert')).toContainText('Still in use by:');
+    await expect(page.getByRole('alert')).toContainText(/registry\.services|Services/);
+    expect((await api.request.get(at(`/api/internal/organisations/${provider.id}`))).status()).toBe(
+      200,
+    );
     await api.dispose();
   });
 });

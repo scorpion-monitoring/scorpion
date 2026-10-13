@@ -36,7 +36,7 @@ const pages = defineModule({
   },
 });
 
-// What core.ui-shell and core.identity open to anybody (their public pages), and what a signed-in user
+// What core.ui-shell, core.identity and the registry modules open to anybody (their public pages), and what a signed-in user
 // holds on top. The fixture module's own pages are added by each test.
 const PUBLIC_PAGES = [
   '/',
@@ -45,6 +45,9 @@ const PUBLIC_PAGES = [
   '/legal/:page',
   '/link-sign-in',
   '/login',
+  // M7 sprint 6: what a Reviewer made public (registry.services, registry.organisations); anyone may open them.
+  '/public/organisations/:id',
+  '/public/services/:slug',
   '/register',
   '/reset-password',
   '/setup',

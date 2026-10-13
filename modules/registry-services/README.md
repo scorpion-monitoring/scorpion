@@ -5,11 +5,11 @@ contact point, a provider and any consortia, and the extension points through wh
 organisation roles, facets and Schema.org properties. It is the second registry module and the first that other modules extend through
 several registries ([ADR-0035](../../docs/adr/0035-service-model.md), [m7-sprint-plan.md](../../docs/m7-sprint-plan.md)).
 
-Status: M7 sprints 1 to 4. Sprint 1: the module, the tables, the five registries, the two config files and their validator, the SPDX
+Status: M7 sprints 1 to 6. Sprint 1: the module, the tables, the five registries, the two config files and their validator, the SPDX
 licence list, the service record with `create`, `get`, `getBySlug` and `list`, the trusted reads and the `registry` and `full` profiles.
 Sprint 2 ([ADR-0036](../../docs/adr/0036-service-access.md)): the policy `service.member`, the scoped permissions, the three groups of
 editors, `update`, the slug rename with its history, the icon, the publication flag and the visibility of the contact point. The
-Sprint 3 ([ADR-0036](../../docs/adr/0036-service-access.md) part 2): the Schema.org profile, the anonymous reads of a service and of the organisations it names, and the notice to the provider on a publication. Sprint 4 ([ADR-0035](../../docs/adr/0035-service-model.md) addendum): the catalogue read model with facets over the filtered set, `GET /services/facets`, and the screen `/services`. The wizard and the service page (sprints 5 and 6) follow.
+Sprint 3 ([ADR-0036](../../docs/adr/0036-service-access.md) part 2): the Schema.org profile, the anonymous reads of a service and of the organisations it names, and the notice to the provider on a publication. Sprint 4 ([ADR-0035](../../docs/adr/0035-service-model.md) addendum): the catalogue read model with facets over the filtered set, `GET /services/facets`, and the screen `/services`. Sprint 5: the create wizard. Sprint 6: the service page with its edit form and the publication buttons, and the public pages (see "The service page, publication and the public pages"). The release is sprint 7.
 
 ## Manifest
 
@@ -19,7 +19,7 @@ Sprint 3 ([ADR-0036](../../docs/adr/0036-service-access.md) part 2): the Schema.
 | table prefix | `svc_` (set in the manifest; ADR-0004): `svc_service`, `svc_service_organisation`, `svc_field_value`, `svc_slug_history`, `svc_license_cache`                                                                                                                                                                                                                                                                                                                   |
 | dependencies | `core.authz`, `core.settings`, `core.identity`, `core.notifications`, `core.blob`, `registry.organisations` and the package `@scorpion/integrations` (SPDX); `core.ui-shell` as an optional peer (the module starts without the shell). `core.audit` observes it (see "Events")                                                                                                                                                                                 |
 | routes       | internal API, see "Routes"                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ui           | `./ui`: the catalogue `/services` (see "The catalogue"); `/services/new` and `/services/:slug` are registered and not offered until sprints 5 and 6                                                                                                                                                                                                                                                                                                             |
+| ui           | `./ui`: the catalogue `/services`, the wizard `/services/new`, the service page `/services/:slug` and the public page `/public/services/:slug` (see "The catalogue", "The create wizard" and "The service page, publication and the public pages")                                                                                                                                                                                                              |
 | events       | emits `registry.service.created@1`, `.updated@1`, `.slugChanged@1`, `.published@1` and `.unpublished@1`                                                                                                                                                                                                                                                                                                                                                         |
 | templates    | `registry.service-publication` (en, de), category `registry-service`: the notice to the provider on a publication                                                                                                                                                                                                                                                                                                                                               |
 | registries   | declares `service.orgRole`, `service.fieldType`, `service.wizardStep`, `service.facet`, `service.profileContributor`; contributes the seeds to the first, second and fourth, `org.usage` (registry.organisations), the `usage` of the `stage` vocabulary (core.settings), the public references to `org.publicReference`, the template to `notify.template`, the default roles to `authz.defaultRole` and the policy `service.member` to `authz.resourcePolicy` |
@@ -143,7 +143,7 @@ The public record is its own pinned list of fields: `id`, `slug`, `name`, `logoU
 
 The module contributes `org.publicReference`, so `registry.organisations` serves the public profile of an organisation that a public service names.
 The routes are in the table below. A 200 says `Cache-Control: public, max-age=60` (the only delay before a shared cache sees an unpublish; the
-server keeps none); the page block that uses `JsonLd` (ui-kit) comes with the service page in sprint 6.
+server keeps none); the page block that uses `JsonLd` (ui-kit) is on the service page and on the public page (sprint 6).
 
 **The publication notice.** `setPublication` also writes, in the same transaction, an inbox item (and a mail where the account has an address and has
 not switched off the category `registry-service`) to the approved managers of the provider and the creator of the service, read at that moment,
@@ -232,6 +232,51 @@ itself from `GET /services/schema` and holds no field, step, limit or type of it
   of its step through `ui/wizard-extensions.ts` (`registerFieldWidget`, `registerStepApplies`). How the `ui` entry of a contributing module
   reaches that file is M9's to settle (see the backlog); the fixture of the page tests calls it directly. A step that `applies` hides must not
   have required fields: the server validates every configured field.
+
+## The service page, publication and the public pages (sprint 6)
+
+Sprint 6 adds **no route**: the pages use the routes of the table above. The page draws what the API says and decides nothing; every button comes from
+`allowedActions` and every form field from `editableFields`, never from a role ([ADR-0036](../../docs/adr/0036-service-access.md) part 3).
+
+**Screens and routes**
+
+| Page                        | Needs                          | Loads                                                                                                                                                                         | Draws                                                                                                                                                                                            |
+| --------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/services/:slug`           | `…service.read`                | `GET /services/by-slug/{slug}` (or `/services/{id}`), `/services/{id}/schema-org`, `/services/schema`, `/licenses`; for the form `GET /account/memberships`, `/organisations` | the record in words, the Schema.org block in the head, Edit, Make public / Make private, the edit form. An id and an old slug redirect to the current address (thrown by the load)               |
+| `/public/services/:slug`    | nobody (public, with a reason) | `GET /public/services/{ref}` and its `/schema-org`                                                                                                                            | the public record, its Schema.org block, who operates it and what it is part of as links to their public pages. Nothing from a session or a role; a record that is not public is the shell's 404 |
+| `/public/organisations/:id` | nobody (public, with a reason) | `GET /public/organisations/{id}` and its `/schema-org` (registry.organisations)                                                                                               | the public organisation and its public services as links; the same rules                                                                                                                         |
+
+**The service page.** The stage is the label of its vocabulary term (the options `GET /services/schema` sends with the stage field), the licence is
+its name from the SPDX list, the contact point is drawn only when the API returned it (`exposeContactPoint`, the group of the caller), and every link
+carries `rel="noopener noreferrer"`. A "Public" or "Private" badge says in words who can read it.
+
+**Edit mode** (`ServiceEdit.svelte`) draws the fields of the schema whose key is in `editableFields`, with the widgets and helpers of the wizard
+(`form-state.ts`, `widgets.ts`, `field-node.ts`). The fields of the schema the caller may not write (the short name and the owner, for a member) are shown as
+text with "Only a manager of the provider or an administrator can change these." (the owning role's label comes from the server). A save sends only what
+changed (`edit-state.ts`, `patchBody`): an emptied optional field is `null`, an emptied list `[]`, the contact point travels as the pair (both `null` clears
+it), the icon never; a save button exists only when something changed. The owner field offers only the organisations the caller manages (an administrator:
+all of the role's types); the groups offer all organisations of their types, because a member may change them. The icon block is ui-kit's `ImageBlock`
+(`PUT`/`DELETE /services/{id}/icon`). A 403 (the page is out of date) is shown in words and keeps what was typed; a 409 for the short name is on its field,
+without the value; a 422 is on the fields it names. A rename goes to the new address and says that the old one still works.
+
+**Publication.** Reviewer and Admin get Make public / Make private (from `allowedActions`) with a confirm that says what it means: anyone, signed in or
+not, can then read the name, description, links and who operates the service and what it is part of; the contact point is never public. The state changes
+in place and the focus goes to the line that says what happened. With `service.allowPublic` off the API offers no Make public; a page that was open
+meets the 409, says so in words and disables the button with the reason. Switching the setting off also turns every public page and public route into
+a 404 at once (services marked public are served again when it is switched on).
+
+**The public pages** are listed in `PUBLIC_PAGES` of `core.ui-shell`, each with its reason in `ui.routes`. They call only public routes, draw no
+control and no field of a person, and are the same page for every visitor (`apps/web/src/service-page.test.ts` renders them with a harness in which reading
+the session throws). The stage is shown as its term, because the vocabulary labels are not public (backlog).
+
+**Schema.org on the pages.** Both pages render the profile with `JsonLd` (ui-kit), the one audited `{@html}`, from `serializeJsonLd`: the loader asks the profile
+route, the page never builds the string. The mapping is the table in "The Schema.org profile and the public reads"; the signed-in profile
+(`GET /services/{id}/schema-org`) never carries the contact point or the stage, and the public one is the same builder over the public record.
+
+**How a profile adds the module.** List `@scorpion/registry-services` in the profile's modules (`profiles/*.ts`), run `pnpm scorpion profile:generate <name>`
+(it writes the table of pages and of messages of the web app) and rebuild the image. The `registry` and `full` profiles have it; `core-only` does not, and
+then `/services`, the public pages and the routes do not exist. A profile property that tunes the module is a setting (`exposeContactPoint`,
+`allowPublic`), not a build option.
 
 ## Configuration (`config/fields.ts`, `config/steps.ts`)
 
@@ -330,5 +375,5 @@ An unknown licence id is 422; a deprecated one is accepted and marked. See the p
 (`service/registries.test.ts`), the validator with every failure (`config/validate.test.ts`), field validation (`service/fields.test.ts`,
 `field-types.test.ts`, `body.test.ts`), every service method against real Postgres with the real authoriser
 (`service/services.test.ts`), the contributions to other registries (`service/usage.test.ts`), the facets, the licence cache and the
-manifest rules (no pg enum, every table prefixed, no hard-coded stage or role). Sprint 4: the conditions of the catalogue as plain functions (`service/catalogue-condition.test.ts`), the catalogue against Postgres with a contributed facet and 300 generated services (`service/catalogue.test.ts`), the browser half (`ui/*.test.ts`, `apps/web/src/catalogue-page.test.ts`) and, in `apps/server/src`, the defect-2 regression test `defect-02.service-consortium.test.ts`. Journey 2 and its axe and keyboard runs are `apps/web/e2e/services.spec.ts` and `accessibility-services.spec.ts`. The routes through the whole pipeline are in
+manifest rules (no pg enum, every table prefixed, no hard-coded stage or role). Sprint 4: the conditions of the catalogue as plain functions (`service/catalogue-condition.test.ts`), the catalogue against Postgres with a contributed facet and 300 generated services (`service/catalogue.test.ts`), the browser half (`ui/*.test.ts`, `apps/web/src/catalogue-page.test.ts`) and, in `apps/server/src`, the defect-2 regression test `defect-02.service-consortium.test.ts`. Journey 2 and its axe and keyboard runs are `apps/web/e2e/services.spec.ts` and `accessibility-services.spec.ts`. Sprint 6: the pure edit form (`ui/edit-state.test.ts`), the loaders of the service page and the public page (`ui/service-loaders.test.ts`), the pages rendered on the server (`apps/web/src/service-page.test.ts`: the buttons from `allowedActions`, the fields from `editableFields`, the public pages with no session), journeys 3 to 6 in `services.spec.ts` and the axe and keyboard runs in `accessibility-service-page.spec.ts`. The routes through the whole pipeline are in
 `apps/server/src/service-routes.test.ts`; the denied cases are in `defect-01.privilege-escalation.test.ts`. Sprint 3: the builder (`service/schema-org.test.ts`: every row of the mapping, the allow-list, hostile text, the output against the schema.org vocabulary), the profile and public reads (`service/profile.test.ts`, `service/public.test.ts`, with a publication racing reads), the notice (`service/publication-notice.test.ts`, `templates/registry.test.ts`), and through the pipeline `apps/server/src/public-service-routes.test.ts` (the identical 404, the cache header, the rate limit, no contact point), `public-records.test.ts` (the pinned fields) and `public-routes-prototype.test.ts`.

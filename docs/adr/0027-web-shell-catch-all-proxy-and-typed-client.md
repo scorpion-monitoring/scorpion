@@ -134,3 +134,10 @@ container, under `BASE_PATH=/` and `BASE_PATH=/a/b` (`apps/web/e2e/session-cooki
   `ctx.deps` was a snapshot, so every settings route answered 500 in a running server. Fixed in the kernel (read when used), with a regression test.
 - SvelteKit 3 differences that shaped the code: `$lib` is `#lib` (package `imports`), hook types come from `@sveltejs/kit/hooks`, the error
   hook receives a `kind`, and `$app/env` replaces `$env/*` (the two values the web process reads come from `process.env`).
+
+## Addendum (M7 sprint 6): a load can redirect
+
+A page's `load` needs to send the visitor to the current address (an id or an old slug of a service). A module cannot import SvelteKit, and a loader never
+returns a `Response` (defect 12), so `UiLoadContext` gained `redirect(path: string): never`. `runPage` implements it with SvelteKit's `redirect(303, …)`
+and adds the base path once, so a loader names the page as the page table does (`/services/blast-tool`) and the redirect is right under any `BASE_PATH`
+(`page.test.ts`, under `/` and `/a/b`). It is a change of the contract of the shell, not of a route: no ASVS-scoped path is touched.

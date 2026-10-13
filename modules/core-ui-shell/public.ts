@@ -30,6 +30,10 @@ export const PUBLIC_PAGES: readonly string[] = [
   '/verify-email',
   '/link-sign-in',
   '/setup',
+  // registry.services and registry.organisations: what a Reviewer made public, for anyone. The pages call only the
+  // public routes (404 for everything else) and draw nothing from a session or a role.
+  '/public/services/:slug',
+  '/public/organisations/:id',
 ];
 
 declare module '@scorpion/kernel' {
