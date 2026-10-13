@@ -57,6 +57,7 @@ import {
 import { createPublicationMail } from './service/publication-mail.ts';
 import { createServicesService, type ServicesService } from './service/services.ts';
 import { TEMPLATES } from './templates/registry.ts';
+import { SERVICE_NAV, SERVICE_ROUTES } from './ui/routes.ts';
 import { settingsSchema, type ServicesSettings } from './settings-schema.ts';
 
 export { settingsSchema, type ServicesSettings } from './settings-schema.ts';
@@ -199,7 +200,13 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       [PROFILE_CONTRIBUTOR_REGISTRY]: profileContributorEntrySchema,
     },
 
+    // The pages (Svelte) are loaded by the web app only; the manifest just names the entry.
+    ui: () => import('./ui/index.ts'),
+
     contributes: {
+      // The pages and their links; entries for registries of core.ui-shell, an optional peer.
+      'ui.routes': SERVICE_ROUTES,
+      'ui.nav': SERVICE_NAV,
       [ORG_ROLE_REGISTRY]: SEED_ORG_ROLES,
       [FIELD_TYPE_REGISTRY]: SEED_FIELD_TYPES,
       [FACET_REGISTRY]: SEED_FACETS,
@@ -269,7 +276,10 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         FIELD_TYPE_REGISTRY,
         ctx.registry(FIELD_TYPE_REGISTRY) as readonly FieldTypeEntry[],
       );
-      uniqueById(FACET_REGISTRY, ctx.registry(FACET_REGISTRY) as readonly FacetEntry[]);
+      const facets = uniqueById(
+        FACET_REGISTRY,
+        ctx.registry(FACET_REGISTRY) as readonly FacetEntry[],
+      );
       const profileContributors = uniqueById(
         PROFILE_CONTRIBUTOR_REGISTRY,
         ctx.registry(PROFILE_CONTRIBUTOR_REGISTRY) as readonly ProfileContributorEntry[],
@@ -308,6 +318,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         config: resolved,
         roles,
         contributors: profileContributors,
+        facets,
         publicationMail: createPublicationMail(ctx, {
           identity: ctx.deps['core.identity'],
           notifications: ctx.deps['core.notifications'],

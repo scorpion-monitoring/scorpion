@@ -395,7 +395,8 @@ describe('list', () => {
     const { services: list, total } = await services.list(user, {}, PAGE);
     expect(list.map((s) => s.name)).toEqual(['Alpha', 'beta', 'Gamma']);
     expect(total).toBe(3);
-    expect(list[0]!.organisations.map((o) => o.role)).toEqual(['provider']);
+    expect(list[0]!.provider?.id).toBe(provider.id);
+    expect(list[0]!.consortia).toEqual([]);
   });
 
   it('shows no description, link or contact point in a row', async () => {
@@ -409,7 +410,7 @@ describe('list', () => {
     });
     const { services: list } = await services.list(user, {}, PAGE);
     expect(Object.keys(list[0]!).sort()).toEqual(
-      ['id', 'license', 'name', 'organisations', 'public', 'slug', 'stage'].sort(),
+      ['consortia', 'id', 'license', 'name', 'provider', 'public', 'slug', 'stage'].sort(),
     );
   });
 
@@ -484,9 +485,7 @@ describe('list', () => {
     await makeService(pool, { name: 'two', provider: provider.id, consortia: [c1.id, c2.id] });
     const { services: list, total } = await services.list(user, {}, PAGE);
     expect(total).toBe(3);
-    expect(
-      list.map((s) => [s.name, s.organisations.filter((o) => o.role === 'consortium').length]),
-    ).toEqual([
+    expect(list.map((s) => [s.name, s.consortia.length])).toEqual([
       ['none', 0],
       ['one', 1],
       ['two', 2],

@@ -547,6 +547,9 @@ importers:
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1

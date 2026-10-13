@@ -21,14 +21,19 @@ import type {
   OrganisationsPublic,
   SchemaOrgProfile,
 } from '@scorpion/registry-organisations/public';
-import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { ResolvedConfig } from '../config/validate.ts';
 import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/schema.ts';
 import { settingsSchema } from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
+import {
+  createCatalogue,
+  type CatalogueFacet,
+  type CatalogueQuery,
+  type CatalogueRow,
+} from './catalogue.ts';
 import { SlugTaken } from './errors.ts';
 import type { PublicationMail } from './publication-mail.ts';
-import { escapeLike } from './fields.ts';
 import {
   allows,
   editableFields,
@@ -49,11 +54,13 @@ import {
   PERMISSION_READ_CONTACT,
   RESOURCE_TYPE,
 } from './permissions.ts';
-import type {
-  FieldEnv,
-  FieldSchemaOrgProperty,
-  OrgRoleEntry,
-  ProfileContributorEntry,
+import {
+  CATALOGUE_SORT_KEYS,
+  type FacetEntry,
+  type FieldEnv,
+  type FieldSchemaOrgProperty,
+  type OrgRoleEntry,
+  type ProfileContributorEntry,
 } from './registries.ts';
 import { toSchemaOrg, type Contribution, type ServiceProfile } from './schema-org.ts';
 
@@ -182,21 +189,26 @@ export interface RoleView {
   order: number;
 }
 
-export const SORT_KEYS = ['name', 'slug', 'stage'] as const;
+export const SORT_KEYS = CATALOGUE_SORT_KEYS;
 export type SortKey = (typeof SORT_KEYS)[number];
 
-export interface ListFilter {
-  q?: string | undefined;
-  sort?: SortKey | undefined;
-  dir?: 'asc' | 'desc' | undefined;
-}
+/** The question of the catalogue: the search, the chosen facet values by facet id, the sort. */
+export type ListFilter = CatalogueQuery;
 
 export interface ServicesService {
+  /**
+   * The catalogue (ADR-0035): a page of services, filtered by the search and the facets, in the order
+   * asked for (the sort key, then the id), and the number of services in all. A service is one row
+   * whatever its number of consortia. `Invalid` (422) for a filter that names nothing.
+   */
   list: (
     actor: Actor,
     filter: ListFilter,
     page: { page: number; pageSize: number },
-  ) => Promise<{ services: ServiceSummary[]; total: number }>;
+    locale?: string,
+  ) => Promise<{ services: CatalogueRow[]; total: number }>;
+  /** The facets with the number of services per value, over the set the other facets and the search leave. */
+  facets: (actor: Actor, filter: ListFilter, locale?: string) => Promise<CatalogueFacet[]>;
   get: (actor: Actor, id: string) => Promise<ServiceView>;
   /** An old slug answers the current record with `redirectedFrom`. `NotFound` for a slug nobody had. */
   getBySlug: (actor: Actor, slug: string) => Promise<ServiceView>;
@@ -266,7 +278,7 @@ function isSlugClash(error: unknown): boolean {
 export interface ServicesDeps {
   authz: Pick<AuthzService, 'require' | 'can'>;
   blob: Pick<BlobService, 'put' | 'setReference'>;
-  settings: Pick<SettingsService, 'validateTerm'>;
+  settings: Pick<SettingsService, 'validateTerm' | 'listTerms'>;
   organisations: Pick<
     OrganisationsPublic,
     | 'findByIdsAsSystem'
@@ -281,6 +293,8 @@ export interface ServicesDeps {
   publicationMail?: PublicationMail;
   /** The entries of `service.profileContributor`. */
   contributors?: readonly ProfileContributorEntry[];
+  /** The entries of `service.facet`; the catalogue is empty of facets without them. */
+  facets?: readonly FacetEntry[];
 }
 
 export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): ServicesService {
@@ -452,6 +466,25 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     ...(row.iconHash && { iconUrl: iconPath(row.iconHash) }),
     public: row.public,
     organisations,
+  });
+
+  const catalogue = createCatalogue({
+    db,
+    facets: deps.facets ?? [],
+    organisationsOf,
+    iconPath,
+    env: (locale) => ({
+      locale,
+      async organisationNames(wanted) {
+        const found = await deps.organisations.findByIdsAsSystem([...wanted]);
+        return new Map(found.map((organisation) => [organisation.id, organisation.name]));
+      },
+      async termLabels(vocabulary) {
+        const terms = await deps.settings.listTerms(vocabulary, { includeInactive: true, locale });
+        return new Map(terms.map((term) => [term.key, term.label]));
+      },
+      findLicence: fieldEnv.findLicence,
+    }),
   });
 
   async function views(actor: Actor, rows: readonly Row[]): Promise<ServiceView[]> {
@@ -778,43 +811,15 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
   }
 
   return {
-    async list(actor, filter, page) {
+    async list(actor, filter, page, locale = 'en') {
       await deps.authz.require(actor, PERMISSION_READ);
-      const conditions: (SQL | undefined)[] = [];
-      const q = filter.q?.trim();
-      if (q) {
-        const pattern = `%${escapeLike(q)}%`;
-        conditions.push(
-          sql`(${service.slug} ilike ${pattern} escape '\\' or ${service.name} ilike ${pattern} escape '\\')`,
-        );
-      }
-      const where = and(...conditions);
-      const key = filter.sort ?? 'name';
-      const direction = filter.dir === 'desc' ? desc : asc;
-      const sortColumn =
-        key === 'slug'
-          ? sql`lower(${service.slug})`
-          : key === 'stage'
-            ? service.stage
-            : sql`lower(${service.name})`;
-      const [rows, [count]] = await Promise.all([
-        db
-          .select()
-          .from(service)
-          .where(where)
-          .orderBy(direction(sortColumn), asc(service.id))
-          .limit(page.pageSize)
-          .offset(page.page * page.pageSize),
-        db
-          .select({ total: sql<number>`count(*)::int` })
-          .from(service)
-          .where(where),
-      ]);
-      const organisations = await organisationsOf(rows.map((row) => row.id));
-      return {
-        services: rows.map((row) => summary(row, organisations.get(row.id) ?? [])),
-        total: count?.total ?? 0,
-      };
+      const { rows, total } = await catalogue.rows(filter, page, locale);
+      return { services: rows, total };
+    },
+
+    async facets(actor, filter, locale = 'en') {
+      await deps.authz.require(actor, PERMISSION_READ);
+      return catalogue.facets(filter, locale);
     },
 
     async get(actor, id) {
