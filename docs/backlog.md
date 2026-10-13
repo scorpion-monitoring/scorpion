@@ -351,6 +351,33 @@ Found while using the instance; not yet investigated.
 - **`UiLoadContext` has a `locale`** (added in this sprint) for a page whose API call returns labels in one language. The other pages still take their labels from the registry entries' `labels` in the browser; they could use it too.
 - **The icon is 32 px in the table and loads the stored file as it is.** A thumbnail size (a query on the file route) would save bytes for large icons; the blob store re-encodes at upload but keeps one size.
 
+## Services follow-ups (M7 sprint 5)
+
+- **How a contributing module's `ui` entry reaches the wizard.** The server side is complete (a contributed step appears in the schema, its values are
+  stored and its failures roll back, proved with a fixture). In the browser the page offers `registerFieldWidget` and `registerStepApplies`
+  (`ui/wizard-extensions.ts`), but the shell forwards only routes, messages and widgets of a `ui` entry, so a contributing module has no way to call them
+  yet. M9's category step settles it: either a fourth export of the `ui` entry that the shell forwards, or the module's own widget list under the
+  existing `widgets` export. Until then the fixture of `wizard-page.test.ts` registers directly.
+- **A step that `applies` hides cannot have a required field,** because the server validates every configured field (the plan's `applies` is per step
+  and client side only). If M9 needs a conditionally required field, the server must learn the condition (a serialisable `showIf`, which is also the
+  field-level condition already in the backlog above).
+- **The browser's schema is looser than the server's where the server needs data or normalises.** A reserved or id-shaped slug, a licence SPDX does not
+  list, a stage nobody declared, a URL with credentials and a name that is long only before its white space is collapsed pass the browser's check and
+  are a 422 on the field. The other way round (a value the browser refuses and the server accepts) is a bug and the agreement table fails on it.
+- **The lists of organisations are the first 100.** A provider list for an administrator, or a consortium list, with more than 100 organisations is cut
+  and the field says so; a searchable organisation picker (the `GET /organisations?q=` call exists) belongs to the widget when a profile has that many.
+- **The licence widget has no keyboard model of a combobox.** The results are a list of buttons below the search (Tab and Enter reach and choose them),
+  announced with a status line; an arrow-key listbox would be quicker to use and is more to maintain. Revisit with the first accessibility report.
+- **The wizard does not create the icon in the same request.** The blob refers to the service by id, so the icon is a second request on the screen after the
+  creation (the same as the organisation's logo). A creation that fails leaves no icon to clean up; a person who closes the page before uploading adds it
+  from the service page (sprint 6).
+- **The wizard has no draft.** What is typed lives in the page: a reload asks first and then loses it. A draft in `localStorage` would keep a secret-free
+  form across a reload; not built.
+- **The JSON console edits the nested object as it is,** not what the server stores: a key it adds that no field owns is reported and the server would
+  answer 422. It is a development tool and has no history or schema hints.
+- **The messages of the config are English and German only,** like the rest of the catalogue; a contributed step brings its own keys (`t(key)` shows the key
+  when a language lacks it, and the contributing module's own catalogue test is where that is caught).
+
 ## Service wizard follow-ups (M7 plan)
 
 - **Field-level conditions and a base path per step.** The wizard config of M7 has `applies` per step only. A `showIf` on a field (show it when another field has a value) and a base path per step (the same field list bound below a nested path, so M9's category step or M15's onboarding fields can reuse a step) are not planned. Source: the maintainer's ISA Wizard questionnaire, which has the base-path idea (`isaLvl + path`) and no conditions; see Decision 21 of [m7-sprint-plan.md](m7-sprint-plan.md).

@@ -321,6 +321,12 @@ const SAMPLES: Record<
     sample: ({ id }) => ({ method: 'GET', path: `/services/${id}/schema-org` }),
   },
   'GET /licenses': { kind: 'self', sample: () => ({ method: 'GET', path: '/licenses?q=mit' }) },
+  // M7 sprint 5: the schema of the create wizard names `…service.create`, held by every User, and carries
+  // nothing of any person or service (limits, field types, roles and the options of a vocabulary).
+  'GET /services/schema': {
+    kind: 'self',
+    sample: () => ({ method: 'GET', path: '/services/schema' }),
+  },
   'GET /service-roles': {
     kind: 'self',
     sample: () => ({ method: 'GET', path: '/service-roles' }),

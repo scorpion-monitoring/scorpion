@@ -234,6 +234,13 @@ Definition of done: journey 1 passes and a member creates a service through the 
 
 **Branch:** `feature/m7-services-detail-release`. **Goal:** every route has a screen; a member edits their service in the browser, a manager renames it, a Reviewer makes it public, anyone can read a public service and its JSON-LD; the journeys pass under both base paths; `0.9.0` is released.
 
+What sprint 5 left for this sprint (built, tested and documented in the sprint 5 pull request; reuse it, do not rebuild it):
+
+- `/services/new` is offered. Taking `/services/:slug` off `NOT_OFFERED` is what turns on the links of the catalogue **and** of the wizard's "done" screen (both build the link with `href()`); the matcher prefers the fixed word, so `/services/new` is never read as a slug (and `new` is a reserved slug).
+- The pure helpers of the wizard in `modules/registry-services/ui/form-state.ts` (`getAt`/`setAt` by JSON pointer, `toBody`, `checkStep` against the server's JSON Schema, `failureView`, the error state that clears when a field changes), the widget table `ui/widgets.ts` and the widgets (`SelectWidget`, `MultiSelectWidget`, `LicenseWidget`, `OrganisationWidget`) are what the edit mode draws its fields with; the edit form reads `editableFields` of the record, not the schema route. `GET /services/schema` names `…service.create` (every User), which every person who can edit a service holds, so edit mode may call it for the field list, the options and the limits; if it should be reachable for a reader who cannot create, change its permission with an ADR note rather than a second route.
+- The screen after a creation already uses `ImageBlock` with the `services.icon.*` messages; the service page's icon block reuses them.
+- The browser's JSON Schema checker is `@scorpion/ui-kit/json-schema`; the contributed widget and `applies` hook is `ui/wizard-extensions.ts` (backlog: how a contributing module's `ui` entry reaches it).
+
 Work items
 
 1. **The service page** (`/services/:slug`, `…service.read`; an id resolves and redirects to the slug, an old slug redirects too): the logo, name, abbreviation, stage and licence as words, description, URL and `sameAs` links (`rel="noopener noreferrer"`), provider and consortia (each links to its organisation page), the contact point **when the API returned it**, a "Public" or "Private" badge in words, the JSON-LD block in the head (the page's server load calls `GET /services/{id}/schema-org`; the block is rendered by the shared component of sprint 3), and the buttons from `allowedActions` and the form from `editableFields` (never from the role): Edit, Publish or Unpublish (Reviewer and Admin only). The page shows what the API returns and never decides from the client.

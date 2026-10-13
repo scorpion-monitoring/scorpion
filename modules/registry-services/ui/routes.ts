@@ -7,7 +7,7 @@ import type { NavEntry, RouteEntry } from '@scorpion/core-ui-shell/public';
 
 export const SERVICE_ROUTES: RouteEntry[] = [
   { path: '/services', permission: 'registry.services.service.read' },
-  // Registered now, offered with their pages: the wizard in sprint 5, the service page in sprint 6.
+  // The wizard is offered since sprint 5; the service page follows in sprint 6 (`offered.ts`).
   { path: '/services/new', permission: 'registry.services.service.create' },
   { path: '/services/:slug', permission: 'registry.services.service.read' },
 ];
