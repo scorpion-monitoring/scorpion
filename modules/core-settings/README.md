@@ -74,6 +74,8 @@ profile `ctx.settings` yields the schema's defaults.
 | `rateLimits.default` | `{ burst: 120, perMinute: 120 }`      | The server's rate limit for ordinary routes, per client address and per credential: a burst, then a steady rate. Read on every request, from the cache |
 | `rateLimits.strict`  | `{ burst: 10, perMinute: 10 }`        | The same for routes an attacker gains from by repeating them (login, register, token use and creation, secrets)                                        |
 
+The address bucket of a call that carries a token or an API key is separate from the browsers' bucket and ten times larger (`TOKEN_ADDRESS_FACTOR`, [ADR-0037](../../docs/adr/0037-public-api.md)); the credential's own bucket is the size above. The `strict` group is not scaled.
+
 The pipeline is not a module, so the module that stores settings owns these numbers; the server reads them with
 `kernel.settingsOf('core.settings')` and uses its constants when the profile has no core.settings or the value cannot be
 read.
