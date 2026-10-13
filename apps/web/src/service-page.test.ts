@@ -131,7 +131,11 @@ describe('the service page', () => {
     // Text is text: the description's markup is escaped.
     expect(body).toContain('Aligns &lt;b>sequences&lt;/b>.');
     for (const link of ['https://blast.example.org', 'https://wikidata.example.org/Q1']) {
-      expect(body).toMatch(new RegExp(`href="${link}"[^>]*rel="noopener noreferrer"`));
+      const anchor = body
+        .split('<a ')
+        .find((part) => part.startsWith(`class="link" href="${link}"`));
+      expect(anchor, link).toBeDefined();
+      expect(anchor!.split('>')[0]).toContain('rel="noopener noreferrer"');
     }
     // The block in the head is the audited component's, written from the profile.
     expect(head).toContain('<script type="application/ld+json">');
@@ -170,8 +174,11 @@ describe('the service page', () => {
   /** The texts of the buttons and links that act, in the order of the page. */
   const buttons = (body: string) =>
     [...body.split('<dialog')[0]!.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((match) =>
+      // The text of the button: what is between the tags, with the white space collapsed.
       match[1]!
-        .replace(/<[^>]*>/g, '')
+        .split('<')
+        .map((part) => part.slice(part.indexOf('>') + 1))
+        .join('')
         .replace(/\s+/g, ' ')
         .trim(),
     );

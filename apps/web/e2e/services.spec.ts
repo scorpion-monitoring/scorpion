@@ -1141,7 +1141,9 @@ test.describe('journey 5: a plain User and an anonymous visitor', () => {
     const visitor = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
     const anon = await visitor.newPage();
     await anon.goto(at('/services'));
-    await expect(anon).toHaveURL(new RegExp(`${at('/login').replace(/\//g, '\\/')}\\?returnTo=`));
+    await expect(anon).toHaveURL(
+      (address) => address.pathname === at('/login') && address.searchParams.has('returnTo'),
+    );
     await anon.goto(at(`/services/${service.slug}`));
     await expect(anon).toHaveURL(/\/login\?returnTo=/);
     await expect(anon.getByRole('heading', { name: /Sign in/ })).toBeVisible();
