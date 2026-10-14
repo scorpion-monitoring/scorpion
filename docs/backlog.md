@@ -477,8 +477,8 @@ Found while using the instance; not yet investigated.
 
 - **`category` in the service row.** The legacy `Service` has a required `category` (the KPI category). It is not in the v1 row until M9 (`kpi.framework`); then it is
   added as a new field (additive). Until then a client that requires it breaks.
-- **`GET /api/v1/providers/{id}` and a by-slug read of a service.** A client gets a provider's id from the list and a service's id from the list; there is no
-  single read of a provider, and no `GET /services/by-slug/{slug}` (the internal route follows old slugs with `redirectedFrom`).
+- **A by-slug read of a service.** `GET /api/v1/providers/{id}` was added in sprint 2, so a client can follow `providerId`; there is no
+  `GET /services/by-slug/{slug}` (the internal route follows old slugs with `redirectedFrom`) and no read of a consortium.
 - **Names and ids beside the abbreviations.** `provider` and `consortia` are abbreviations as in the legacy API, with `providerId` and `consortiaIds` beside
   them; the organisation names are not in a service row. A client that needs them reads `GET /providers` (consortia are not providers: there is no
   consortium read in v1).

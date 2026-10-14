@@ -125,7 +125,7 @@ be named, as `'GET /path'`, in a `*.contract.test.ts` that calls the harness. Sp
 The legacy API (`/nfdi/api/v1`, its OpenAPI document) is the shape to stay close to: a provider is `{ abbreviation, name }`, a service is `{ abbreviation,
 name, category, provider, license, consortia, stage }` with `provider` and `consortia` as abbreviations, `service` and `provider` are single-string
 filters, and `pageSize` has no maximum. The routes are declared by the modules that own the data (`registry.organisations`: `GET /providers`;
-`registry.services`: `GET /services`, `GET /services/{id}`, `GET /services/{id}/schema-org`), each with its own permission,
+`registry.services`: `GET /services`, `GET /services/{id}`, `GET /services/{id}/schema-org`; `GET /providers/{id}` returns the row of the list for one provider, so that the ids the service rows carry can be followed), each with its own permission,
 `registry.organisations.v1.read` and `registry.services.v1.read`, granted to the role `user`. The row shapes are the tables in the module READMEs; this
 is what they add to the legacy rows and what they leave out:
 

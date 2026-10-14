@@ -490,6 +490,7 @@ describe('GET /api/v1/openapi.json', () => {
       '/openapi.json',
       '/ping',
       '/providers',
+      '/providers/{id}',
       '/services',
       '/services/{id}',
       '/services/{id}/schema-org',

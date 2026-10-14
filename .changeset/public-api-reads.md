@@ -6,6 +6,7 @@ The public API (`/api/v1`) can read providers and services.
 
 - `GET /api/v1/providers`: the providers with `id`, `abbreviation`, `name`, `description`, `website`, `rorId`, `sameAs` and `isMember`. `is_member=true` lists
   the providers the owner of the token is an approved member of, `is_member=false` all the others (a legacy bug returned the wrong set), anything else is 422.
+- `GET /api/v1/providers/{id}` returns one provider (the row of the list; 404 for an unknown id or an organisation that is not a provider).
 - `GET /api/v1/services`: the services in the legacy shape (`abbreviation`, `name`, `stage`, `license`, `provider`, `consortia` as abbreviations), plus `id`,
   `public`, `providerId` and `consortiaIds`. Each service is one row, `consortia` is filled (`[]` for none), a service that is not public is listed with
   `public: false`. Filters `service`, `provider` (abbreviations, comma-separated), `stage` and `license`; a name that matches nothing is 422.

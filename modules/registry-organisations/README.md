@@ -387,10 +387,10 @@ do to the row now, for drawing buttons) and never an address.
 | `POST /memberships/{id}/role`               | `registry.organisations.organisation.read`   | **delegated** (`…membership.manage-roles`): `{ role }`; audited; 403 own role; 409 `membership-state`, `too-many-managers`                                           |
 | `POST /memberships/{id}/remove`             | `registry.organisations.organisation.read`   | **delegated** (`…membership.remove`): audited; 403 own row, a manager as the target of a manager, no right; 409 `membership-state`                                   |
 
-### The v1 route `GET /api/v1/providers` (M8 sprint 2, ADR-0037)
+### The v1 routes `GET /api/v1/providers` and `GET /api/v1/providers/{id}` (M8 sprint 2, ADR-0037)
 
 Permission `registry.organisations.v1.read` (granted to `user` by default). "Providers" are the organisations of the `provider` type. Query: `page`,
-`pageSize` (default and maximum 100; more is 422), `is_member` (`true` or `false`, nothing else: 422). An unknown query parameter is a 422. Sorted by abbreviation (without case), then id.
+`pageSize` (default and maximum 100; more is 422), `is_member` (`true` or `false`, nothing else: 422). An unknown query parameter is a 422. Sorted by abbreviation (without case), then id. `GET /api/v1/providers/{id}` returns the same row for one provider: 404 for an unknown id and for an organisation that is not a provider, 422 for an id that is not a UUID.
 
 | Field          | Type           | Source                                                                 |
 | -------------- | -------------- | ---------------------------------------------------------------------- |

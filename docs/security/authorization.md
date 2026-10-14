@@ -145,6 +145,7 @@ the same file answers 401 and 403 on every non-public route.
 | `DELETE /organisations/{id}/membership`         | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
 | `GET /account/memberships`                      | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
 | `GET /api/v1/providers`                         | registry.organisations | `registry.organisations.v1.read`             | default    | yes            |
+| `GET /api/v1/providers/{id}`                    | registry.organisations | `registry.organisations.v1.read`             | default    | yes            |
 | `GET /memberships`                              | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /memberships/summary`                      | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /organisation-types`                       | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
@@ -537,7 +538,7 @@ record with fields removed; `response-fields.test.ts` compares the property name
 on a contact field (`contactEmail`, `contactType`, `contactPoint`) and on any name the internal read hides. A v1 route needs a token whose scopes name the
 route's permission and whose owner holds it (the role `user` does by default); the service checks it again.
 
-| Provider row (`GET /api/v1/providers`)                                    | Who reads it                        | Notes                                                                                                                                                                                          |
+| Provider row (`GET /api/v1/providers` and `/{id}`)                        | Who reads it                        | Notes                                                                                                                                                                                          |
 | ------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`, `abbreviation`, `name`, `description`, `website`, `sameAs`, `rorId` | `registry.organisations.v1.read`    | The descriptive fields the signed-in record already shows every signed-in person. Only organisations of the `provider` type.                                                                   |
 | `isMember`                                                                | the token's owner, about themselves | True for an **approved** membership (a manager counts); `is_member=true` and `false` filter by it, `false` being all the others.                                                               |

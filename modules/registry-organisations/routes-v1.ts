@@ -75,6 +75,35 @@ export const listProvidersV1Route = createRoute({
   },
 });
 
+const EXAMPLE_PROVIDER = {
+  id: '0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10',
+  abbreviation: 'EXAMPLE-ORG',
+  name: 'Example Research Institute',
+  description: 'An example research institute.',
+  website: 'https://www.example.org',
+  rorId: '02skbsp27',
+  sameAs: ['https://www.wikidata.org/wiki/Q42'],
+  isMember: true,
+};
+
+export const getProviderV1Route = createRoute({
+  method: 'get',
+  path: '/providers/{id}',
+  permission: PERMISSION_V1_READ,
+  audit: true,
+  summary: 'Get one provider',
+  description:
+    'One provider by id, as it is listed by `GET /providers` (the ids are there). An organisation that is not a provider is 404. The contact point of a provider is never part of this API.',
+  request: { params: z.object({ id: z.uuid().describe('The id of the provider.') }) },
+  responses: {
+    200: {
+      description: 'The provider.',
+      content: { 'application/json': { schema: providerV1Schema, example: EXAMPLE_PROVIDER } },
+    },
+    404: { description: 'No such provider.' },
+  },
+});
+
 /** Field by field on purpose: a column added to the table later is not exposed by accident. */
 const providerOut = (p: ProviderV1) => ({
   id: p.id,
@@ -88,6 +117,13 @@ const providerOut = (p: ProviderV1) => ({
 });
 
 export function registerV1Routes(r: RouteRegistrar, service: OrganisationsService) {
+  r.public('v1', getProviderV1Route, (async (c) => {
+    return c.json(
+      providerOut(await service.getProviderV1(c.get('actor'), c.req.valid('param').id)),
+      200,
+    );
+  }) satisfies RouteHandler<typeof getProviderV1Route, AppEnv>);
+
   r.public('v1', listProvidersV1Route, (async (c) => {
     const { page, pageSize, is_member } = c.req.valid('query');
     const { providers, total } = await service.listProvidersV1(

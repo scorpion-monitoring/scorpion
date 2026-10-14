@@ -190,6 +190,11 @@ export interface OrganisationsService {
     filter: { isMember?: boolean | undefined },
     page: { page: number; pageSize: number },
   ) => Promise<{ providers: ProviderV1[]; total: number }>;
+  /**
+   * One provider for a token (needs `registry.organisations.v1.read`), the row of {@link listProvidersV1}. `NotFound` for an
+   * unknown id and for an organisation that is not a provider, `Invalid` for an id that is no UUID.
+   */
+  getProviderV1: (actor: Actor, id: string) => Promise<ProviderV1>;
   get: (actor: Actor, id: string) => Promise<OrganisationView>;
   create: (actor: Actor, input: CreateOrganisationInput) => Promise<OrganisationView>;
   update: (actor: Actor, id: string, input: UpdateOrganisationInput) => Promise<OrganisationView>;
@@ -460,6 +465,18 @@ export function createOrganisationsService(
     return level;
   }
 
+  /** The v1 row of a provider: field by field, so a column added to the table later is not exposed by accident. */
+  const providerRow = (row: Row, isMember: boolean): ProviderV1 => ({
+    id: row.id,
+    abbreviation: row.abbreviation,
+    name: row.name,
+    description: row.description,
+    website: row.website,
+    rorId: row.rorId,
+    sameAs: row.sameAs,
+    isMember,
+  });
+
   const actorId = (actor: Actor): string | null => (actor.kind === 'user' ? actor.userId : null);
 
   /** An id that is no UUID is a bad request (422), never a database error (500). */
@@ -546,18 +563,21 @@ export function createOrganisationsService(
           )
         : new Map<string, { state: State; role: Role }>();
       return {
-        providers: rows.map((row) => ({
-          id: row.id,
-          abbreviation: row.abbreviation,
-          name: row.name,
-          description: row.description,
-          website: row.website,
-          rorId: row.rorId,
-          sameAs: row.sameAs,
-          isMember: mine.get(row.id)?.state === 'approved',
-        })),
+        providers: rows.map((row) => providerRow(row, mine.get(row.id)?.state === 'approved')),
         total: count?.total ?? 0,
       };
+    },
+
+    async getProviderV1(actor, id) {
+      await deps.authz.require(actor, PERMISSION_V1_READ);
+      requireId(id);
+      const [row] = await db
+        .select()
+        .from(organisation)
+        .where(and(eq(organisation.id, id), eq(organisation.type, PROVIDER_TYPE)));
+      if (!row) throw new NotFound('There is no such provider.');
+      const mine = actor.kind === 'user' ? await ownRows(db, actor.userId, [id]) : undefined;
+      return providerRow(row, mine?.get(id)?.state === 'approved');
     },
 
     async get(actor, id) {

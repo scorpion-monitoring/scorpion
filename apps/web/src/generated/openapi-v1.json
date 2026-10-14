@@ -66,6 +66,147 @@
     "parameters": {}
   },
   "paths": {
+    "/providers/{id}": {
+      "get": {
+        "permission": "registry.organisations.v1.read",
+        "audit": true,
+        "summary": "Get one provider",
+        "description": "One provider by id, as it is listed by `GET /providers` (the ids are there). An organisation that is not a provider is 404. The contact point of a provider is never part of this API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The id of the provider."
+            },
+            "required": true,
+            "description": "The id of the provider.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The provider.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10",
+                  "abbreviation": "EXAMPLE-ORG",
+                  "name": "Example Research Institute",
+                  "description": "An example research institute.",
+                  "website": "https://www.example.org",
+                  "rorId": "02skbsp27",
+                  "sameAs": [
+                    "https://www.wikidata.org/wiki/Q42"
+                  ],
+                  "isMember": true
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The id of the provider (a UUID)."
+                    },
+                    "abbreviation": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Plain text."
+                    },
+                    "website": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rorId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The bare ROR id, for example `02skbsp27`."
+                    },
+                    "sameAs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "isMember": {
+                      "type": "boolean",
+                      "description": "Whether the owner of the token is an approved member of the provider (a manager is a member)."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "abbreviation",
+                    "name",
+                    "description",
+                    "website",
+                    "rorId",
+                    "sameAs",
+                    "isMember"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such provider."
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "registry.organisations.v1.read"
+      }
+    },
     "/providers": {
       "get": {
         "permission": "registry.organisations.v1.read",

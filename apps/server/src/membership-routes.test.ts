@@ -371,8 +371,8 @@ describe('the OpenAPI document', () => {
         return permission ? [permission] : [];
       }),
     );
-    // 18 internal routes and the v1 read of the providers (M8 sprint 2): `v1.read` is a plain permission too.
-    expect(permissions.length).toBe(19);
+    // 18 internal routes and the two v1 reads of the providers (M8 sprint 2): `v1.read` is a plain permission too.
+    expect(permissions.length).toBe(20);
     const scoped = [
       'registry.organisations.membership.decide',
       'registry.organisations.membership.manage-roles',

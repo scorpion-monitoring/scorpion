@@ -16,6 +16,7 @@ process.env.SECRETS_KEY = makeSecretsKey();
 const EXPECTED_V1_PATHS = [
   '/openapi.json',
   '/providers',
+  '/providers/{id}',
   '/services',
   '/services/{id}',
   '/services/{id}/schema-org',

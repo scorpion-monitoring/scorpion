@@ -511,6 +511,7 @@ const SERVICE_ROW = [
 ];
 const V1_ANSWERS: Record<string, readonly string[]> = {
   'GET /providers': PROVIDER_ROW,
+  'GET /providers/{id}': PROVIDER_ROW,
   'GET /services': SERVICE_ROW,
   'GET /services/{id}': [...SERVICE_ROW, 'description', 'sameAs', 'url'],
 };
@@ -568,6 +569,7 @@ describe('the v1 schemas', () => {
     // which this profile does not load).
     expect(keys).toEqual([
       'GET /providers',
+      'GET /providers/{id}',
       'GET /services',
       'GET /services/{id}',
       'GET /services/{id}/schema-org',

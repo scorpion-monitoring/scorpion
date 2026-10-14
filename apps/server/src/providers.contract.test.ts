@@ -1,7 +1,7 @@
 // The contract test of GET /api/v1/providers (M8 sprint 2): the harness of packages/testing (never public, 401, 403,
 // Bearer and X-API-Key, the envelope, the stable order, the paging cases) and the cases the harness cannot know: the
 // `is_member` matrix against a brute-force count over generated data, a bad filter, the size cap, the pinned row.
-import { listProvidersV1Route } from '@scorpion/registry-organisations/public';
+import { getProviderV1Route, listProvidersV1Route } from '@scorpion/registry-organisations/public';
 import {
   makeMembership,
   makeOrganisation,
@@ -147,5 +147,52 @@ describe('GET /providers', () => {
 
   it('is 403 for a token that names the scope of the other v1 family, [ASVS-8.3.1]', async () => {
     expect((await get('', servicesOnlyToken)).status).toBe(403);
+  });
+});
+
+const firstId = {
+  get id() {
+    return all[0]!;
+  },
+};
+
+describe('GET /providers/{id}', () => {
+  v1ContractTests(getProviderV1Route, {
+    call,
+    get token() {
+      return token;
+    },
+    get tokenWithoutScope() {
+      return tokenWithoutScope;
+    },
+    params: firstId,
+  });
+
+  it('is the row of the list for that provider, with isMember from the token owner [ASVS-8.2.3]', async () => {
+    const listed = rows(await get('?pageSize=100'));
+    for (const row of listed.slice(0, 8)) {
+      const one = await started.getV1(`/providers/${row.id}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(one.status).toBe(200);
+      expect(one.body).toEqual(row);
+    }
+    expect(listed.some((r) => r.isMember)).toBe(true);
+  });
+
+  it('is 404 for an unknown id and for a consortium, and 422 for an id that is no UUID, never 500', async () => {
+    const withToken = { headers: { authorization: `Bearer ${token}` } };
+    expect(
+      (await started.getV1('/providers/018f3b7e-0000-7000-8000-000000000000', withToken)).status,
+    ).toBe(404);
+    const consortium = (
+      await started.kernel.pool.query<{ id: string }>(
+        "select id from org_organisation where abbreviation = 'Cons-v1'",
+      )
+    ).rows[0]!.id;
+    expect((await started.getV1(`/providers/${consortium}`, withToken)).status).toBe(404);
+    for (const id of ['not-a-uuid', '123', 'Pv00']) {
+      expect((await started.getV1(`/providers/${id}`, withToken)).status, id).toBe(422);
+    }
   });
 });

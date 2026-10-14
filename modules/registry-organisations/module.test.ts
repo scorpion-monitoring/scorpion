@@ -210,8 +210,8 @@ describe('in a profile', () => {
     const own = s.kernel.routes.filter((r) =>
       String(r.route.permission).startsWith('registry.organisations.'),
     );
-    // Nine for the record, the logo and the types; nine for membership; one v1 read (M8 sprint 2).
-    expect(own).toHaveLength(19);
+    // Nine for the record, the logo and the types; nine for membership; two v1 reads (M8 sprint 2).
+    expect(own).toHaveLength(20);
     const plain = new Set(
       Object.entries(manifest.permissions ?? {})
         .filter(([, def]) => def.scope === undefined)

@@ -1,6 +1,6 @@
 // `listProvidersV1` against real Postgres: the real authoriser decides. The `is_member` matrix is checked against a
 // brute-force count over generated data (defect 15: `false` must be the others, not nothing).
-import { Forbidden, Unauthorized, type Actor } from '@scorpion/contracts';
+import { Forbidden, Invalid, NotFound, Unauthorized, type Actor } from '@scorpion/contracts';
 import { makeMembership, makeOrganisation } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { useOrganisations } from '../test/harness.ts';
@@ -132,5 +132,76 @@ describe('listProvidersV1', () => {
     // The plain organisation read is not the v1 permission.
     const reader = await actor('reviewer');
     await expect(organisations.listProvidersV1(reader, {}, PAGE)).rejects.toBeInstanceOf(Forbidden);
+  });
+});
+
+describe('getProviderV1', () => {
+  it('returns the row of the list, with isMember for the caller, and never the contact point or the logo', async () => {
+    const { organisations, pool, actor, user } = await setup();
+    const mine = await makeOrganisation(pool, {
+      abbreviation: 'ONE-mine',
+      description: 'About',
+      rorId: '02skbsp27',
+      contactEmail: 'secret@example.org',
+      contactType: 'support',
+      logoBlobId: '018f3b7e-6666-7000-8000-000000000006',
+      logoHash: 'e'.repeat(64),
+    });
+    const requested = await makeOrganisation(pool, { abbreviation: 'ONE-asked' });
+    await makeMembership(pool, { organisationId: mine.id, userId: user.userId });
+    await makeMembership(pool, {
+      organisationId: requested.id,
+      userId: user.userId,
+      state: 'requested',
+    });
+    const row = await organisations.getProviderV1(user, mine.id);
+    expect(row).toMatchObject({
+      id: mine.id,
+      abbreviation: 'ONE-mine',
+      description: 'About',
+      isMember: true,
+    });
+    expect(Object.keys(row).sort()).toEqual(
+      [
+        'abbreviation',
+        'description',
+        'id',
+        'isMember',
+        'name',
+        'rorId',
+        'sameAs',
+        'website',
+      ].sort(),
+    );
+    expect(JSON.stringify(row)).not.toMatch(/secret@|support|logo/);
+    expect((await organisations.getProviderV1(user, requested.id)).isMember).toBe(false);
+    // The row is the one of the list.
+    const listed = (await organisations.listProvidersV1(user, {}, PAGE)).providers;
+    expect(listed.find((p) => p.id === mine.id)).toEqual(row);
+    expect((await organisations.getProviderV1(await actor('user'), mine.id)).isMember).toBe(false);
+  });
+
+  it('is NotFound for an unknown id and for an organisation that is no provider, Invalid for an id that is no UUID', async () => {
+    const { organisations, pool, user } = await setup();
+    const consortium = await makeOrganisation(pool, { type: 'consortium' });
+    await expect(organisations.getProviderV1(user, consortium.id)).rejects.toBeInstanceOf(NotFound);
+    await expect(
+      organisations.getProviderV1(user, '018f3b7e-0000-7000-8000-000000000000'),
+    ).rejects.toBeInstanceOf(NotFound);
+    await expect(organisations.getProviderV1(user, 'not-a-uuid')).rejects.toBeInstanceOf(Invalid);
+  });
+
+  it('is denied to an anonymous caller, to a person without the permission and to a reviewer', async () => {
+    const { organisations, pool, actor } = await setup();
+    const org = await makeOrganisation(pool, {});
+    await expect(organisations.getProviderV1(anonymous, org.id)).rejects.toBeInstanceOf(
+      Unauthorized,
+    );
+    await expect(organisations.getProviderV1(await actor(), org.id)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(
+      organisations.getProviderV1(await actor('reviewer'), org.id),
+    ).rejects.toBeInstanceOf(Forbidden);
   });
 });
