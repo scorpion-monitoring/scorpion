@@ -156,7 +156,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       },
       [PERMISSION_V1_READ]: {
         description:
-          'Read the services through the public API (`GET /api/v1/services`, one service and its Schema.org profile), with a token that names this permission',
+          'Read the services through the public API (`GET /api/v1/services`, one service and its Schema.org profile), with a token that holds this scope',
       },
       [PERMISSION_PUBLISH]: {
         description: 'Make a service public, or private again (Reviewers and administrators)',

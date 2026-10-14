@@ -10,11 +10,9 @@ import {
   type RouteHandler,
 } from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
-import {
-  PERMISSION_V1_READ,
-  type OrganisationsService,
-  type ProviderV1,
-} from './service/organisations.ts';
+// Constants and types only: `public.ts` re-exports this route for its contract test, and the web app imports `public.ts`.
+import type { OrganisationsService, ProviderV1 } from './service/organisations.ts';
+import { PERMISSION_V1_READ } from './service/permissions.ts';
 
 /** A provider as v1 returns it: the legacy `abbreviation` and `name`, and what is added (ADR-0037 decision 9). */
 export const providerV1Schema = z.object({

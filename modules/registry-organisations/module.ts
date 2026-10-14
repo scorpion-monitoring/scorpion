@@ -103,7 +103,7 @@ export function createOrganisationsModule() {
       },
       [PERMISSION_V1_READ]: {
         description:
-          'Read the providers through the public API (`GET /api/v1/providers`), with a token that names this permission',
+          'Read the providers through the public API (`GET /api/v1/providers`), with a token that holds this scope',
       },
       [PERMISSION_REQUEST]: {
         description: 'Ask to become a member of an organisation, and withdraw or leave',
