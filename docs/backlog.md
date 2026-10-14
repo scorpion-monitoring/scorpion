@@ -493,8 +493,26 @@ Found while using the instance; not yet investigated.
   cap for v1 lists is a decision for the next sprint (the harness checks 100000 only).
 - **The contract harness fetches at most 20 pages** in its page-walk case; with more rows it checks the order of those 20 only (fixed in sprint 2 so that it no
   longer compares an incomplete walk with the whole list). A table-driven test of that rule is not written.
-- **No measurement of the catalogue under v1 load.** The list uses the catalogue's query (a `count(*)` and a page, then two queries for the organisation links); no
-  timing on a large generated set was taken in sprint 2.
+- **The services list on 5,000 services (measured, M8 sprint 2).** 5,000 generated services (40 providers, 12 consortia, 0 to 3 consortia each; a throwaway
+  test, not committed), one token, calls made in-process through the whole pipeline on a local Postgres 16 (no network, so the times are the server's own), 30
+  calls per case after 3 warm-up calls. Median and p95 per request, and the statements sent to Postgres per request, BEGIN and COMMIT included and the
+  token check, the authorisation and the audit entry of the call included (`GET /providers?pageSize=100` on 40 rows is the floor at 4.1):
+
+  | Request                                      | Median  | p95     | Statements | Body    |
+  | -------------------------------------------- | ------- | ------- | ---------- | ------- |
+  | `/services?pageSize=100` (page 0)            | 16.8 ms | 24.3 ms | 6.2        | 30.9 kB |
+  | `/services?pageSize=100&page=49` (last page) | 23.7 ms | 29.1 ms | 6.2        | 31.1 kB |
+  | `…&provider=MP7` (125 services)              | 23.6 ms | 28.2 ms | 10.3       | 37.7 kB |
+  | `…&provider=MP7,MP8,MP9` (375 services)      | 27.5 ms | 30.6 ms | 14.5       | 30.3 kB |
+  | `…&service=msvc-00042`                       | 8.8 ms  | 9.7 ms  | 7.2        | 0.4 kB  |
+  | `…&stage=DEV&license=MIT` (833 services)     | 20.2 ms | 22.4 ms | 8.3        | 33.1 kB |
+  | `/services/{id}`                             | 7.4 ms  | 9.1 ms  | 5.2        | 0.4 kB  |
+  | `/providers?pageSize=100` (40 providers)     | 5.8 ms  | 7.5 ms  | 4.1        | 6.8 kB  |
+
+  What it shows: a page of 100 services is 6 statements whatever the number of consortia (one page query, one count, one for the organisation links, one for
+  their names). Each `provider=` abbreviation adds about **4 statements** (the lookup, its member count, and the catalogue's check that the id is known),
+  so 50 abbreviations would be about 200; a batch lookup of abbreviations in `registry.organisations` would make it constant (not built). The deep page costs
+  about 7 ms more than page 0 (offset). Not measured: concurrent calls, a network, a cold cache, or more than 5,000 services.
 
 ## Services follow-ups (M7 sprint 7)
 
