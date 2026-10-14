@@ -4,6 +4,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { parseApiTimeout } from './src/front/front.ts';
+import { scalarAsset } from './src/front/scalar-asset-plugin.ts';
 import { scorpionFront } from './src/front/vite-plugin.ts';
 
 // SvelteKit 3 no longer reads svelte.config.js; its options go to the plugin.
@@ -20,12 +21,16 @@ export default defineConfig({
       apiOrigin: process.env.API_ORIGIN ?? 'http://127.0.0.1:3001',
       apiTimeoutMs: parseApiTimeout(process.env.API_TIMEOUT_MS),
     }),
+    // The one script of the API reference (ADR-0038), shipped from this origin as a hashed asset.
+    scalarAsset({ root: import.meta.dirname }),
     tailwindcss(),
     sveltekit({
       adapter: adapter(),
       preprocess: vitePreprocess(),
       paths: { relative: true },
       // CSP with nonces: SvelteKit adds them to its own inline script and style tags. No 'unsafe-inline'.
+      // This is the policy of every page. The one document that differs is the API reference, which sets
+      // its own header in src/routes/docs/reference/+server.ts (ADR-0038).
       csp: {
         mode: 'nonce',
         directives: {

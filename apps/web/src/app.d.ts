@@ -3,6 +3,9 @@ import type { Locale } from '@scorpion/ui-kit';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
 declare global {
+  /** The address of the API reference's script below the base path; set by the build (src/front/scalar-asset-plugin.ts). */
+  const __SCALAR_ASSET__: string;
+
   namespace App {
     interface Locals {
       /** The API client of this request: it forwards the caller's cookie and address. */
