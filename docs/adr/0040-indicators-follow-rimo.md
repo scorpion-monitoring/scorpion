@@ -81,6 +81,10 @@ Every indicator, KPI set, unit, means of measurement and automation tool has an 
   migration for sets that name it (the key of a term in use is never deleted, only deactivated) and needs its own ADR; an added category is
   seeded at the next start without one. The RDF reads name the version they follow.
 - Nothing fetches RIMO at run time or in CI.
+- **Units without a UO term.** The Units Ontology has `count unit`, `percent`, `second` and `byte`. It has no term for a request, a user,
+  a publication or a citation (checked against `uo.owl`, 2026-10-14). The four seeded units of that kind map to `count unit`, because each
+  is a count of a kind of thing, and carry no symbol; no UO IRI is invented. The unit keeps its own key and its own minted IRI, so the
+  distinction survives in this system.
 - **The seed has 16 categories**, not the 17 the first draft of the plan said: the file has 16 `rimo:ServiceCategory` instances. The plan
   and `implementation.md` were corrected; the file is the source.
 

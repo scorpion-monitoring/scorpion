@@ -108,6 +108,16 @@ Tests (sprint 1): the loader accepts the module and rejects a table without the 
 
 Definition of done: `pnpm check`, `pnpm test --filter @scorpion/kpi-framework` and the full `pnpm test` pass; `profile:generate` and `openapi:generate` leave no diff; the image jobs hold exactly the profiles' modules.
 
+**Amended in sprint 1 (what was decided while building it):**
+
+- `RIMO.ttl` has **16** service categories, not 17 (the text above and in `implementation.md` was corrected).
+- **No `routes.ts` and no `./ui` export** in sprint 1: there is no route and no page yet, and an empty `ui` entry would add the module to the web app's generated table for nothing. Sprint 2 adds both.
+- **No dependency of `core.audit` on `kpi.framework` beyond an optional peer**, like `registry.services`: the two events are in `decisions.ts` and the README of `core.audit`.
+- **The setting is `iriBase`** of the module `kpi.framework` (a setting belongs to its module); the plan's `kpi.iriBase` is the same thing.
+- **Four seeded units map to the UO term `count unit`** (request, user, publication, citation: UO has no term for them and none is invented; ADR-0040 §4).
+- **`service/terms.ts` is built in sprint 1** (the save-time `validateTerm` checks as pure helpers over `core.settings`), so item 5 has a testable form before the services of sprint 2 exist; sprint 2's methods call it.
+- The factories `makeIndicator` and `makeKpiSet` are in `packages/testing` (sprint 2 and 3 tests use them).
+
 ## 6. Sprint 2: indicators and KPI sets
 
 **Branch:** `feature/m9-kpi-indicators`. **Goal:** an administrator creates, edits, deletes and lists indicators and KPI sets in the browser and through the internal API, all transactional.
