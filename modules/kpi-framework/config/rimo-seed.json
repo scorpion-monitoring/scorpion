@@ -1,0 +1,109 @@
+{
+  "ontology": {
+    "iri": "http://w3id.org/RIMO",
+    "title": "Research Infrastructure Metrics Ontology (RIMO)",
+    "version": "0.2.0",
+    "issued": "2025-11-05",
+    "modified": "2025-11-06",
+    "license": "http://creativecommons.org/licenses/by/4.0/"
+  },
+  "namespace": "http://w3id.org/RIMO#",
+  "categories": [
+    {
+      "key": "Bioinformatics_portal",
+      "iri": "http://w3id.org/RIMO#Bioinformatics_portal",
+      "label": "Bioinformatics portal",
+      "comment": "web site providing a platform/portal to multiple resources used for research in a focused area, including biological databases, web applications, training resources and so on."
+    },
+    {
+      "key": "Commandline_tool",
+      "iri": "http://w3id.org/RIMO#Commandline_tool",
+      "label": "Command-line tool",
+      "comment": "A tool with a text-based (command-line) interface."
+    },
+    {
+      "key": "Database_portal",
+      "iri": "http://w3id.org/RIMO#Database_portal",
+      "label": "Database portal",
+      "comment": "A Web application, suite or workbench providing a portal to a biological database."
+    },
+    {
+      "key": "Desktop_application",
+      "iri": "http://w3id.org/RIMO#Desktop_application",
+      "label": "Desktop application",
+      "comment": "A tool with a graphical user interface that runs on your desktop environment, e.g. on a PC or mobile device."
+    },
+    {
+      "key": "Helpdesk",
+      "iri": "http://w3id.org/RIMO#Helpdesk",
+      "label": "Helpdesk",
+      "comment": "A service providing assistance with the use of bioinformatics tools, data resources, or any other aspect of bioinformatics."
+    },
+    {
+      "key": "Library",
+      "iri": "http://w3id.org/RIMO#Library",
+      "label": "Library",
+      "comment": "A collection of components that are used to construct other tools. bio.tools scope includes component libraries performing high-level bioinformatics functions but excludes lower-level programming libraries."
+    },
+    {
+      "key": "Ontology",
+      "iri": "http://w3id.org/RIMO#Ontology",
+      "label": "Ontology",
+      "comment": "A collection of information about concepts, including terms, synonyms, descriptions etc."
+    },
+    {
+      "key": "Plugin",
+      "iri": "http://w3id.org/RIMO#Plugin",
+      "label": "Plug-in",
+      "comment": "A software component encapsulating a set of related functions, which are not standalone, i.e. depend upon other software for its use, e.g. a Javascript widget, or a plug-in, extension add-on etc. that extends the function of some existing tool."
+    },
+    {
+      "key": "SPARQL_endpoint",
+      "iri": "http://w3id.org/RIMO#SPARQL_endpoint",
+      "label": "SPARQL endpoint",
+      "comment": "A service that provides queries over an RDF knowledge base via the SPARQL query language and protocol, and returns results via HTTP."
+    },
+    {
+      "key": "Script",
+      "iri": "http://w3id.org/RIMO#Script",
+      "label": "Script",
+      "comment": "A tool written for some run-time environment (e.g. other applications or an OS shell) that automates the execution of tasks. Often a small program written in a general-purpose languages (e.g. Perl, Python) or some domain-specific languages (e.g. sed)."
+    },
+    {
+      "key": "Suite",
+      "iri": "http://w3id.org/RIMO#Suite",
+      "label": "Suite",
+      "comment": "A collection of tools which are bundled together into a convenient toolkit. Such tools typically share related functionality, a common user interface and can exchange data conveniently. This includes collections of stand-alone command-line tools, or Web applications within a common portal."
+    },
+    {
+      "key": "Web_API",
+      "iri": "http://w3id.org/RIMO#Web_API",
+      "label": "Web API",
+      "comment": "An application programming interface (API) consisting of endpoints to a request-response message system accessible via HTTP. Includes everything from simple data-access URLs to RESTful APIs."
+    },
+    {
+      "key": "Web_application",
+      "iri": "http://w3id.org/RIMO#Web_application",
+      "label": "Web application",
+      "comment": "A tool with a graphical user interface that runs in your Web browser."
+    },
+    {
+      "key": "Web_service",
+      "iri": "http://w3id.org/RIMO#Web_service",
+      "label": "Web service",
+      "comment": "An API described in a machine readable form (typically WSDL) providing programmatic access via SOAP over HTTP."
+    },
+    {
+      "key": "Workbench",
+      "iri": "http://w3id.org/RIMO#Workbench",
+      "label": "Workbench",
+      "comment": "An application or suite with a graphical user interface, providing an integrated environment for data analysis which includes or may be extended with any number of functions or tools. Includes workflow systems, platforms, frameworks etc."
+    },
+    {
+      "key": "Workflow",
+      "iri": "http://w3id.org/RIMO#Workflow",
+      "label": "Workflow",
+      "comment": "A set of tools which have been composed together into a pipeline of some sort. Such tools are (typically) standalone, but are composed for convenience, for instance for batch execution via some workflow engine or script."
+    }
+  ]
+}

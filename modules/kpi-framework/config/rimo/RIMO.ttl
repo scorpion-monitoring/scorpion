@@ -1,0 +1,125 @@
+@prefix rimo:  <http://w3id.org/RIMO#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dct:   <http://purl.org/dc/terms/> .
+@prefix voaf:  <http://purl.org/vocommons/voaf#> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
+@prefix sosa:  <http://www.w3.org/ns/sosa/> .
+@prefix schema: <http://schema.org/> .
+@prefix uo:    <http://purl.obolibrary.org/obo/UO_> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix edam:  <http://edamontology.org/> .
+
+
+<http://w3id.org/RIMO> a owl:Ontology, voaf:Vocabulary ;
+    dct:contributor "BioHackathon Europe 2025 METRICS Team"@en ;
+    dct:creator "Julia Koblitz"@en ;
+    dct:description """An ontology for representing and harmonising Key Performance Indicators across research infrastructures 
+and life science services. It defines classes and properties to describe indicators, measurement methods, relevance, 
+and applicable service categories. First developed during the BioHackathon Europe 2025."""@en ;
+    dct:issued "2025-11-05"^^xsd:date ;
+    dct:modified "2025-11-06"^^xsd:date ;
+    dct:language "en" ;
+    dct:license <http://creativecommons.org/licenses/by/4.0/> ;
+    dct:title "Research Infrastructure Metrics Ontology (RIMO)"@en ;
+    dct:publisher "BioHackathon Europe"@en ;
+    dct:relation <http://edamontology.org/> , <https://schema.org/> , <https://bio.tools/> ;
+    owl:versionInfo "0.2.0" .
+
+### Core classes
+rimo:KPI              a owl:Class ; rdfs:label "KPI"@en .
+rimo:KPIValue         a owl:Class ; rdfs:label "KPI value"@en .
+rimo:ServiceCategory     a owl:Class ; rdfs:label "Service Category"@en ; rdfs:comment "Aligned to bio.tools toolType / EDAM where possible."@en .
+
+# Helpful pointers for consumers: related vocabularies and tooling registries
+rimo:ServiceCategory rdfs:seeAlso <http://edamontology.org/> , <https://bio.tools/> .
+rimo:MeasurementMeans a owl:Class ; rdfs:label "Means of Measurement"@en ; rdfs:subClassOf sosa:Procedure .
+rimo:AutomationTool   a owl:Class ; rdfs:label "Automation Tool"@en ; rdfs:subClassOf schema:SoftwareApplication .
+
+# Example alignment: indicate a close mapping to Schema.org's SoftwareApplication using SKOS
+rimo:AutomationTool skos:closeMatch schema:SoftwareApplication .
+
+### Annotations on KPI (from your sheet)
+rimo:KPIName        a owl:AnnotationProperty ; rdfs:subPropertyOf rdfs:label .
+rimo:KPIDescription a owl:AnnotationProperty ; rdfs:subPropertyOf rdfs:comment .
+rimo:KPIExample     a owl:AnnotationProperty ; rdfs:subPropertyOf skos:example .
+
+### Object properties
+rimo:measuredBy          a owl:ObjectProperty ; rdfs:domain rimo:KPI ; rdfs:range rimo:MeasurementMeans ; rdfs:label "measured by"@en .
+rimo:canBeAutomatedBy    a owl:ObjectProperty ; rdfs:domain rimo:KPI ; rdfs:range rimo:AutomationTool ; rdfs:label "can be automated by"@en .
+rimo:appliedTo              a owl:ObjectProperty ; rdfs:domain rimo:KPI ; rdfs:range rimo:ServiceCategory ; rdfs:label "used by (tool category)"@en .
+rimo:mandatoryFor        a owl:ObjectProperty ; rdfs:subPropertyOf rimo:appliedTo ; rdfs:label "mandatory for"@en .
+rimo:recommendedFor      a owl:ObjectProperty ; rdfs:subPropertyOf rimo:appliedTo ; rdfs:label "recommended for"@en .
+rimo:requestedBy         a owl:ObjectProperty ; rdfs:domain rimo:KPI ; rdfs:range foaf:Agent ; rdfs:label "requested by"@en .
+rimo:hasValue            a owl:ObjectProperty ; rdfs:domain rimo:KPI ; rdfs:range  rimo:KPIValue ; rdfs:label "has value"@en .
+rimo:hasUnit             a owl:ObjectProperty ; rdfs:domain rimo:KPIValue ; rdfs:range  uo: ; rdfs:label "has unit"@en .
+
+### Datatype properties
+rimo:isQualitativeIndicator a owl:DatatypeProperty ;
+  rdfs:domain rimo:KPI ; rdfs:range xsd:boolean ; rdfs:label "is qualitative indicator"@en .
+
+### Service Categories
+rimo:Bioinformatics_portal a rimo:ServiceCategory ;
+    rdfs:label "Bioinformatics portal"@en ;
+    rdfs:comment "web site providing a platform/portal to multiple resources used for research in a focused area, including biological databases, web applications, training resources and so on."@en .
+
+rimo:Commandline_tool a rimo:ServiceCategory ;
+    rdfs:label "Command-line tool"@en ;
+    rdfs:comment "A tool with a text-based (command-line) interface."@en .
+
+rimo:Database_portal a rimo:ServiceCategory ;
+    rdfs:label "Database portal"@en ;
+    rdfs:comment "A Web application, suite or workbench providing a portal to a biological database."@en .
+
+rimo:Desktop_application a rimo:ServiceCategory ;
+    rdfs:label "Desktop application"@en ;
+    rdfs:comment "A tool with a graphical user interface that runs on your desktop environment, e.g. on a PC or mobile device."@en .
+
+rimo:Helpdesk a rimo:ServiceCategory ;
+    rdfs:label "Helpdesk"@en ;
+    rdfs:comment "A service providing assistance with the use of bioinformatics tools, data resources, or any other aspect of bioinformatics."@en .
+
+rimo:Library a rimo:ServiceCategory ;
+    rdfs:label "Library"@en ;
+    rdfs:comment "A collection of components that are used to construct other tools. bio.tools scope includes component libraries performing high-level bioinformatics functions but excludes lower-level programming libraries."@en .
+
+rimo:Ontology a rimo:ServiceCategory ;
+    rdfs:label "Ontology"@en ;
+    rdfs:comment "A collection of information about concepts, including terms, synonyms, descriptions etc."@en .
+
+rimo:Plugin a rimo:ServiceCategory ;
+    rdfs:label "Plug-in"@en ;
+    rdfs:comment "A software component encapsulating a set of related functions, which are not standalone, i.e. depend upon other software for its use, e.g. a Javascript widget, or a plug-in, extension add-on etc. that extends the function of some existing tool."@en .
+
+rimo:SPARQL_endpoint a rimo:ServiceCategory ;
+    rdfs:label "SPARQL endpoint"@en ;
+    rdfs:comment "A service that provides queries over an RDF knowledge base via the SPARQL query language and protocol, and returns results via HTTP."@en .
+
+rimo:Script a rimo:ServiceCategory ;
+    rdfs:label "Script"@en ;
+    rdfs:comment "A tool written for some run-time environment (e.g. other applications or an OS shell) that automates the execution of tasks. Often a small program written in a general-purpose languages (e.g. Perl, Python) or some domain-specific languages (e.g. sed)."@en .
+
+rimo:Suite a rimo:ServiceCategory ;
+    rdfs:label "Suite"@en ;
+    rdfs:comment "A collection of tools which are bundled together into a convenient toolkit. Such tools typically share related functionality, a common user interface and can exchange data conveniently. This includes collections of stand-alone command-line tools, or Web applications within a common portal."@en .
+
+rimo:Web_API a rimo:ServiceCategory ;
+    rdfs:label "Web API"@en ;
+    rdfs:comment "An application programming interface (API) consisting of endpoints to a request-response message system accessible via HTTP. Includes everything from simple data-access URLs to RESTful APIs."@en .
+
+rimo:Web_application a rimo:ServiceCategory ;
+    rdfs:label "Web application"@en ;
+    rdfs:comment "A tool with a graphical user interface that runs in your Web browser."@en .
+
+rimo:Web_service a rimo:ServiceCategory ;
+    rdfs:label "Web service"@en ;
+    rdfs:comment "An API described in a machine readable form (typically WSDL) providing programmatic access via SOAP over HTTP."@en .
+
+rimo:Workbench a rimo:ServiceCategory ;
+    rdfs:label "Workbench"@en ;
+    rdfs:comment "An application or suite with a graphical user interface, providing an integrated environment for data analysis which includes or may be extended with any number of functions or tools. Includes workflow systems, platforms, frameworks etc."@en .
+
+rimo:Workflow a rimo:ServiceCategory ;
+    rdfs:label "Workflow"@en ;
+    rdfs:comment "A set of tools which have been composed together into a pipeline of some sort. Such tools are (typically) standalone, but are composed for convenience, for instance for batch execution via some workflow engine or script."@en .
