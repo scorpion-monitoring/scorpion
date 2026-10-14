@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- 6287925: The public API (`/api/v1`) can read providers and services.
+
+  - `GET /api/v1/providers`: the providers with `id`, `abbreviation`, `name`, `description`, `website`, `rorId`, `sameAs` and `isMember`. `is_member=true` lists
+    the providers the owner of the token is an approved member of, `is_member=false` all the others (a legacy bug returned the wrong set), anything else is 422.
+  - `GET /api/v1/providers/{id}` returns one provider (the row of the list; 404 for an unknown id or an organisation that is not a provider).
+  - `GET /api/v1/services`: the services in the legacy shape (`abbreviation`, `name`, `stage`, `license`, `provider`, `consortia` as abbreviations), plus `id`,
+    `public`, `providerId` and `consortiaIds`. Each service is one row, `consortia` is filled (`[]` for none), a service that is not public is listed with
+    `public: false`. Filters `service`, `provider` (abbreviations, comma-separated), `stage` and `license`; a name that matches nothing is 422.
+  - `GET /api/v1/services/{id}` returns one service with its description, address and links; `GET /api/v1/services/{id}/schema-org` returns its Schema.org
+    profile. The contact point of a provider or a service is never part of the API.
+  - Lists sort by abbreviation without case, then by id; pages count from 0; `pageSize` defaults to 100 and is at most 100 (a legacy client that asked for
+    more now gets 422 instead of a short page); `totalCount` is the size of the filtered set.
+  - Two new permissions, `registry.organisations.v1.read` and `registry.services.v1.read`, held by the role `user` by default. A token needs the scope as
+    well as an owner who holds the permission, so an administrator can withdraw the API from a role without touching the screens. Calls are audited in
+    the `api` channel.
+  - `/api/v1/openapi.json` now describes the four routes; the committed document is the first version of the contract and later changes are additive.
+
+- cfdba94: The documentation of the public API is now an interactive reference, and CI protects what was published.
+
+  - **The API reference at `/docs/reference`** (Scalar, served from the instance itself: nothing is loaded from another site and nothing is kept in the
+    browser). It lists every `/api/v1` route with its parameters and answers, follows the light or dark choice of the site, and lets a person paste an access token
+    and send a call from the page. It is public, like the description of the API; it is in English. The address of the document behind it and the server URL are
+    the instance's own, also under a base path. Its policy differs from the other pages in one thing, `style-src 'unsafe-inline'`, which Scalar needs for its
+    styles (ADR-0038); every other page keeps the strict policy.
+  - **The page `/docs` is now a landing page**: what v1 is, how to get a token in three steps (your profile, the permissions to tick, `Authorization: Bearer` or
+    `X-API-Key`), the permission each route needs, the address of the OpenAPI document, a note that a browser application needs its origin in the `public-api`
+    setting `corsOrigins`, and a link to the reference. English and German.
+  - **The OpenAPI document of v1 now says how to authenticate**: the security schemes `HTTPBearer` and `APIKeyHeader`, `security` on every route that needs a
+    token, and "Needs the scope …" in each description. This is additive.
+  - **`pnpm openapi:diff`** compares the committed v1 document with the one of the last release tag and fails a breaking change (a removed path, field or enum value,
+    a narrowed type, a new required request field, a removed security scheme); CI runs it. `pnpm test:contract` now runs the contract tests of the v1 routes.
+  - The web image carries the Scalar script (4.5 MB on disk, 1 MB as brotli, cached by the browser for a year); two new dependencies, `@scalar/sveltekit` and
+    `@scalar/api-reference`, are pinned to exact versions.
+
+- 6a69c8d: The public API (`/api/v1`) has its shell, with no data routes yet.
+
+  - New module `public-api` (in the `registry` and `full` profiles). `GET /api/v1/openapi.json` returns the OpenAPI document of the API this instance
+    serves, anonymously; its server URL is the address of the request, and its title, description and contact are settings.
+  - Browsers: the setting `corsOrigins` of `public-api` lists the origins whose pages may call `/api/v1` (empty by default: same origin only). Each entry
+    is an origin such as `https://app.example.org`. A change applies at once. The answer names the caller's own origin, never `*`, and never allows
+    credentials; `/api/internal` is never opened to another origin.
+  - Every call of a v1 route that is audited is recorded in the `api` channel of the audit trail (also 401, 403, 422 and 429), with the route, the
+    status and the token's id. Plan about 0.5 MB of database per 1000 calls.
+  - Rate limits: a call with a token or an API key now has its own address bucket, ten times the size of the `default` limit, apart from the one the
+    browsers on that address use. Two programs behind one address no longer share a bucket and a script no longer uses up the budget of the people on its
+    network. No configured limit changed; the `strict` group is as before.
+
 ## 0.9.0
 
 ### Minor Changes
