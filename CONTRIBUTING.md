@@ -200,6 +200,7 @@ pnpm check                                  # lint, format, type check
 pnpm test                                   # all packages (needs Docker)
 pnpm test --filter @scorpion/<package>      # the packages you touched
 pnpm test:e2e                               # if a user journey is affected
+pnpm test:all                               # unit and e2e at once, the e2e in two runs (one per base path)
 pnpm openapi:diff                           # if a v1 route changed: compares with the last release tag
 pnpm changeset                              # or: pnpm changeset --empty
 ```

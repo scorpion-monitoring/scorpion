@@ -20,6 +20,8 @@
     "test": "node scripts/test.ts",
     "test:contract": "node scripts/test.ts contract.test.ts",
     "test:e2e": "pnpm --filter @scorpion/web test:e2e",
+    "test:e2e:parallel": "node scripts/e2e-parallel.ts",
+    "test:all": "node scripts/test-all.ts",
     "db:generate": "node scripts/db-generate.ts",
     "scorpion": "node apps/server/src/cli.ts",
     "changeset:check": "node scripts/changeset-check.ts",
