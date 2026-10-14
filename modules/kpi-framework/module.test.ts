@@ -19,7 +19,9 @@ const dir = fileURLToPath(new URL('.', import.meta.url));
 const sourceFiles = (folder: string): string[] =>
   readdirSync(join(dir, folder), { withFileTypes: true }).flatMap((entry) =>
     entry.isDirectory()
-      ? sourceFiles(join(folder, entry.name))
+      ? entry.name === 'node_modules' || entry.name === 'dist'
+        ? []
+        : sourceFiles(join(folder, entry.name))
       : entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
         ? [join(folder, entry.name)]
         : [],
