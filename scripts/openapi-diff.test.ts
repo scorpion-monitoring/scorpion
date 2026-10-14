@@ -216,7 +216,7 @@ describe('diffOpenApi: what breaks a client', () => {
   it('allows a new path, a new method and a new security scheme, and says so', () => {
     const head = document();
     (head.paths as Obj)['/more'] = { get: { responses: { 200: { description: 'ok' } } } };
-    (asObj(asObj(head.paths)['/things']) as Obj).post = {
+    asObj(asObj(head.paths)['/things']).post = {
       responses: { 200: { description: 'ok' } },
     };
     (asObj(head.components).securitySchemes as Obj).OAuth = { type: 'oauth2' };
@@ -258,7 +258,7 @@ describe('diffOpenApi: removals', () => {
 
   it('fails a removed method', () => {
     const base = document();
-    (asObj(asObj(base.paths)['/things']) as Obj).post = { responses: {} };
+    asObj(asObj(base.paths)['/things']).post = { responses: {} };
     expect(diffOpenApi(base, document()).breaking).toEqual(['POST /things: removed']);
   });
 
