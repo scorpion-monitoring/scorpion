@@ -2,14 +2,17 @@
 // shell outside the registry rule. GET only; everything that matters is in `reference.ts`.
 import type { RequestHandler } from './$types';
 import { url } from '@scorpion/contracts';
-import { createTranslator } from '@scorpion/ui-kit';
+import { createTranslator, negotiateLocale } from '@scorpion/ui-kit';
 import { loadBranding } from '#lib/server/branding.ts';
 import { basePath } from '#lib/server/env.ts';
 import { shellMessages } from '#lib/messages.ts';
 import { newNonce, referencePolicy, renderReference } from '#lib/server/reference.ts';
 
-export const GET: RequestHandler = async ({ locals }) => {
-  const [branding, locale] = await Promise.all([loadBranding(locals.api), locals.locale()]);
+export const GET: RequestHandler = async ({ locals, request }) => {
+  const branding = await loadBranding(locals.api);
+  // The language of the one link back is the browser's, not the saved preference: reading the preference
+  // costs two more API calls (the session and the preferences) on a page that has one text to translate.
+  const locale = negotiateLocale({ acceptLanguage: request.headers.get('accept-language') });
   const nonce = newNonce();
   const html = await renderReference({
     nonce,

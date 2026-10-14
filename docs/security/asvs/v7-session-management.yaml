@@ -32,7 +32,9 @@ requirements:
       - code: modules/core-identity/service/sessions.ts
       - code: apps/server/src/public-api-routes.test.ts
       - doc: docs/adr/0037-public-api.md
-    note: 'Every request is checked against identity_session by the SHA-256 of the cookie value; nothing is verified in the browser. A 5 s per-process cache is the documented staleness bound (ADR-0007). M8 sprint 1: the public API (`/api/v1`) uses the same authenticator, so a token on a v1 route is checked against identity_token at every call (a made-up token is 401; expiry and an owner who is no longer active are 401 at once). Tagged tests: apps/server/src/public-api-routes.test.ts. A session cookie is also accepted on v1, as on any route, and the CORS step never sends Access-Control-Allow-Credentials, so a page on another origin cannot read such an answer (ADR-0037).'
+      - doc: docs/adr/0038-api-reference-with-scalar.md
+      - code: apps/web/e2e/reference.spec.ts
+    note: 'Every request is checked against identity_session by the SHA-256 of the cookie value; nothing is verified in the browser. A 5 s per-process cache is the documented staleness bound (ADR-0007). M8 sprint 1: the public API (`/api/v1`) uses the same authenticator, so a token on a v1 route is checked against identity_token at every call (a made-up token is 401; expiry and an owner who is no longer active are 401 at once). Tagged tests: apps/server/src/public-api-routes.test.ts. A session cookie is also accepted on v1, as on any route, and the CORS step never sends Access-Control-Allow-Credentials, so a page on another origin cannot read such an answer (ADR-0037). M8 sprint 3: the API reference at /docs/reference (ADR-0038) is where a person pastes a token to try a call. It verifies nothing: the journey in apps/web/e2e/reference.spec.ts (tagged) sends a made-up token from the reference and the server answers 401, a token without the scope 403 and one with it 200, and the browser keeps the token in no storage and no cookie, in no line of the audit trail and no line of the log.'
   - id: v5.0.0-7.2.2
     status: pass
     evidence:

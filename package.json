@@ -18,7 +18,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -b && pnpm --filter @scorpion/web check",
     "test": "node scripts/test.ts",
-    "test:contract": "node scripts/not-yet.ts M8 test:contract",
+    "test:contract": "node scripts/test.ts contract.test.ts",
     "test:e2e": "pnpm --filter @scorpion/web test:e2e",
     "db:generate": "node scripts/db-generate.ts",
     "scorpion": "node apps/server/src/cli.ts",

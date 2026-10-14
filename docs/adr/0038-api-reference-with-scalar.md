@@ -117,7 +117,8 @@ The reference follows the shell. Its variables (`--scalar-*`) are written once i
 themes `scorpionlight` and `scorpiondark` and delivered as the wrapper's `customCss`; a test reads `app.css` and fails when a colour drifts.
 Scalar's own light and dark switch is hidden; a small inline script (with the nonce) runs before Scalar starts and sets its starting mode from
 the shell's `scorpion.theme` (read, never written), else from `prefers-color-scheme`. A slim bar above the page names the instance (from
-`core.settings`, escaped) and links back to `/docs` in the visitor's language. The document is `lang="en"`, as Scalar's text is English; the
+`core.settings`, escaped) and links back to `/docs` in the language the browser asks for (`Accept-Language`; the saved preference of a signed-in person would cost
+two more API calls on a page that has one text to translate: measured 4 calls signed in against 2 without it). The document is `lang="en"`, as Scalar's text is English; the
 landing page is en and de.
 
 The document is the wrapper's HTML with four additions, made by string replacement on markers that the code checks (a change in the wrapper's

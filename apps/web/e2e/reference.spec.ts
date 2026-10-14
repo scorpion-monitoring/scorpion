@@ -44,7 +44,7 @@ async function makeToken(page: Page, name: string, scope: string): Promise<strin
 }
 
 test.describe('the API reference', () => {
-  test('a person makes a token, opens the reference from the landing page and calls the API with it', async ({
+  test('[ASVS-7.2.1] [ASVS-8.2.1] [ASVS-8.3.1] a person makes a token, opens the reference from the landing page and calls the API with it', async ({
     page,
     playwright,
     baseURL,
@@ -96,11 +96,15 @@ test.describe('the API reference', () => {
     });
     const refused = await callFromReference(page, 'List the providers', wrong);
     expect(refused.status).toMatch(/^403\b/);
+    // The page decides nothing: a token that was never made is refused by the server at the same call (401).
+    const invented = `not-a-token-${randomBytes(12).toString('hex')}`;
+    const unknown = await callFromReference(page, 'List the providers', invented);
+    expect(unknown.status).toMatch(/^401\b/);
 
     // 5. The token is in no storage and no cookie, and nothing in the browser changed.
     const after = await browserState(page);
     expect(after).toBe(before);
-    for (const secret of [good, wrong]) expect(after).not.toContain(secret);
+    for (const secret of [good, wrong, invented]) expect(after).not.toContain(secret);
 
     // 6. Nothing left the origin (the landing page and the reference), and the policy had one report: the known one.
     expectNoForeignRequest(seen.requests, new URL(baseURL!).origin);
@@ -129,8 +133,8 @@ test.describe('the API reference', () => {
         ['%/api/v1/providers'],
       );
       const leaks = await client.query<{ n: number }>(
-        `select count(*)::int as n from audit_event where audit_event::text like $1 or audit_event::text like $2`,
-        [`%${good}%`, `%${wrong}%`],
+        `select count(*)::int as n from audit_event where audit_event::text like any ($1)`,
+        [[good, wrong, invented].map((secret) => `%${secret}%`)],
       );
       return { entries: entries.rows[0]!.n, leaks: leaks.rows[0]!.n };
     });
@@ -140,7 +144,7 @@ test.describe('the API reference', () => {
       resolve(import.meta.dirname, `../test-results/stack-${stackFor(basePath).name}.log`),
       'utf8',
     );
-    for (const secret of [good, wrong]) expect(log).not.toContain(secret);
+    for (const secret of [good, wrong, invented]) expect(log).not.toContain(secret);
     await program.dispose();
     await aliased.dispose();
   });
