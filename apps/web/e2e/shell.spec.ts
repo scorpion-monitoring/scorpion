@@ -54,7 +54,7 @@ test.describe('the shell', () => {
     await nav.getByRole('link', { name: 'API documentation' }).click();
     await expect(page).toHaveURL(new RegExp(`${at('/docs')}$`));
     await expect(page.getByRole('heading', { level: 1, name: 'API documentation' })).toBeVisible();
-    // The one route of v1 so far is the description of the API (public-api, M8 sprint 1).
+    // The description of the API (public-api, M8 sprint 1) is one of the v1 routes the page lists; the cell is matched exactly.
     await expect(page.getByRole('cell', { name: '/openapi.json', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'API documentation' })).toHaveAttribute(
       'aria-current',

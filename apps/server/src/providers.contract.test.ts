@@ -16,6 +16,7 @@ const app = useIdentityApp({ shared: true });
 let started: Awaited<ReturnType<typeof app.start>>;
 let token = '';
 let tokenWithoutScope = '';
+let servicesOnlyToken = '';
 /** The ids of the generated providers the token's owner is an approved member of, and all of them. */
 const mine = new Set<string>();
 const all: string[] = [];
@@ -35,6 +36,7 @@ beforeAll(async () => {
   const bob = await started.signedIn('bob-providers');
   token = await tokenFor(alice, [SCOPE]);
   tokenWithoutScope = await tokenFor(alice, ['core.identity.me.read']);
+  servicesOnlyToken = await tokenFor(alice, ['registry.services.v1.read']);
   const pool = started.kernel.pool;
   const states = ['approved', 'requested', 'rejected', 'left', 'manager', 'other', 'none'] as const;
   for (let i = 0; i < 28; i++) {
@@ -141,5 +143,9 @@ describe('GET /providers', () => {
       ].sort(),
     );
     expect(JSON.stringify(reply.body)).not.toMatch(/contact|memberCount|createdBy|logo/i);
+  });
+
+  it('is 403 for a token that names the scope of the other v1 family, [ASVS-8.3.1]', async () => {
+    expect((await get('', servicesOnlyToken)).status).toBe(403);
   });
 });

@@ -20,6 +20,7 @@ const app = useIdentityApp({ shared: true });
 let started: Awaited<ReturnType<typeof app.start>>;
 let token = '';
 let tokenWithoutScope = '';
+let providersOnlyToken = '';
 const world: {
   p1?: { id: string; abbreviation: string };
   p2?: { id: string; abbreviation: string };
@@ -45,6 +46,7 @@ beforeAll(async () => {
   const alice = await started.signedIn('alice-services');
   token = await tokenFor(alice, [SCOPE]);
   tokenWithoutScope = await tokenFor(alice, ['core.identity.me.read']);
+  providersOnlyToken = await tokenFor(alice, ['registry.organisations.v1.read']);
   const pool = started.kernel.pool;
   const p1 = await makeOrganisation(pool, { abbreviation: 'Sp1', name: 'Provider one' });
   const p2 = await makeOrganisation(pool, { abbreviation: 'Sp2', name: 'Provider two' });
@@ -174,6 +176,18 @@ const oneId = {
   },
 };
 
+describe('the scope of the services family', () => {
+  it('is needed on all three routes: a token that names only the providers scope is 403 [ASVS-8.3.1]', async () => {
+    for (const path of [
+      '/services',
+      `/services/${world.one!.id}`,
+      `/services/${world.one!.id}/schema-org`,
+    ]) {
+      expect((await get(path, providersOnlyToken)).status, path).toBe(403);
+    }
+  });
+});
+
 describe('GET /services/{id}', () => {
   v1ContractTests(getServiceV1Route, contextOf({ params: oneId }));
 
@@ -213,11 +227,8 @@ describe('GET /services/{id}/schema-org', () => {
     expect(reply.status).toBe(200);
     expect(reply.res.headers.get('content-type')).toContain('application/ld+json');
     expect(reply.res.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(reply.body).toMatchObject({
-      '@type': 'Service',
-      alternateName: 'Sv-one',
-      name: expect.any(String),
-    });
+    expect(reply.body).toMatchObject({ '@type': 'Service', alternateName: 'Sv-one' });
+    expect(typeof (reply.body as { name: unknown }).name).toBe('string');
     expect(JSON.stringify(reply.body)).not.toMatch(/secret@|support|contactPoint/);
     expect((await get(`/services/${world.zero!.id}/schema-org`)).status).toBe(200);
   });
