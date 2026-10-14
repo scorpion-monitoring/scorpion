@@ -13,7 +13,13 @@ import { createMetrics } from './metrics.ts';
 process.env.SECRETS_KEY = makeSecretsKey();
 
 /** Every v1 path of the full profile. A new one is a decision: add it here in the pull request that adds the route. */
-const EXPECTED_V1_PATHS = ['/openapi.json'];
+const EXPECTED_V1_PATHS = [
+  '/openapi.json',
+  '/providers',
+  '/services',
+  '/services/{id}',
+  '/services/{id}/schema-org',
+];
 /** The only v1 route that may be `public: true` (ADR-0037). */
 const PUBLIC_V1 = ['GET /openapi.json'];
 

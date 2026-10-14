@@ -20,7 +20,8 @@ describe('docs/security/authorization.md', () => {
     const { kernel } = await app.start({ publicApi: true });
     const rows = kernel.routes
       .map(({ module, surface, route }) => ({
-        key: `${route.method.toUpperCase()} ${route.path}`,
+        // A v1 route shares its path with an internal one (`GET /services`): the public API is named with its prefix.
+        key: `${route.method.toUpperCase()} ${surface === 'v1' ? '/api/v1' : ''}${route.path}`,
         module,
         surface,
         access: route.public ? '**public**' : `\`${route.permission}\``,

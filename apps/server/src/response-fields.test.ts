@@ -248,7 +248,7 @@ describe('the contact point of an organisation', () => {
   it('is declared by the routes the field table names and by no other route [ASVS-8.2.3]', async () => {
     const { kernel } = await app.start();
     const found: Record<string, string[]> = {};
-    for (const { route } of kernel.routes) {
+    for (const { route } of kernel.routes.filter((entry) => entry.surface === 'internal')) {
       const key = `${route.method.toUpperCase()} ${route.path}`;
       if (NOT_THE_ORGANISATIONS.includes(key)) continue;
       const names = new Set<string>();
@@ -295,8 +295,10 @@ describe('the contact point of an organisation', () => {
       'GET /account/memberships',
     ];
     for (const key of mustNot) {
+      // The internal route: the v1 routes of the same path are checked by the tests of the v1 schemas below.
       const entry = kernel.routes.find(
-        ({ route }) => `${route.method.toUpperCase()} ${route.path}` === key,
+        ({ route, surface }) =>
+          surface === 'internal' && `${route.method.toUpperCase()} ${route.path}` === key,
       );
       expect(entry, key).toBeDefined();
       const names = Object.values((entry!.route as RouteLike).responses ?? {}).flatMap((response) =>
@@ -458,5 +460,149 @@ describe('the schema of the create wizard', () => {
         /user|owner|createdBy|updatedBy|password|secret|token|contactEmail|contactPoint/i,
       );
     }
+  });
+});
+
+// The public API (v1, ADR-0037, M8 sprint 2). A v1 route never returns what the internal read of the same module hides:
+// the contact point, the audit columns, the hints for the screens (`editableFields`, `allowedActions`), the member
+// counts and the caller's own membership rows, the paths below the internal API (`logoUrl`, `iconUrl`) and the
+// configured values. The names of every v1 answer are pinned per route, so a field that is added passes through this
+// list and through the v1 rows of the field tables in docs/security/authorization.md.
+const V1_NEVER = [
+  ...CONTACT_FIELDS,
+  'editableFields',
+  'allowedActions',
+  'createdBy',
+  'updatedBy',
+  'createdAt',
+  'updatedAt',
+  'publishedAt',
+  'publishedBy',
+  'iconUrl',
+  'logoUrl',
+  'memberCount',
+  'myMembership',
+  'values',
+  'redirectedFrom',
+  'organisations',
+  'typeKnown',
+] as const;
+const PROVIDER_ROW = [
+  'abbreviation',
+  'description',
+  'id',
+  'isMember',
+  'name',
+  'rorId',
+  'sameAs',
+  'website',
+];
+const SERVICE_ROW = [
+  'abbreviation',
+  'consortia',
+  'consortiaIds',
+  'id',
+  'license',
+  'name',
+  'provider',
+  'providerId',
+  'public',
+  'stage',
+];
+const V1_ANSWERS: Record<string, readonly string[]> = {
+  'GET /providers': PROVIDER_ROW,
+  'GET /services': SERVICE_ROW,
+  'GET /services/{id}': [...SERVICE_ROW, 'description', 'sameAs', 'url'],
+};
+/** The properties of the Schema.org `Service` (the profile of the internal route, which has no contact point). */
+const V1_SCHEMA_ORG = [
+  '@context',
+  '@id',
+  '@type',
+  'alternateName',
+  'brand',
+  'description',
+  'license',
+  'logo',
+  'name',
+  'provider',
+  'sameAs',
+  'url',
+];
+
+const v1Names = (route: RouteLike, status = '200') =>
+  new Set(
+    Object.entries(route.responses ?? {})
+      .filter(([code]) => code === status)
+      .flatMap(([, response]) =>
+        Object.values(response?.content ?? {}).flatMap((content) =>
+          propertyNames(content.schema).map((at) => at.slice(at.lastIndexOf('.') + 1)),
+        ),
+      ),
+  );
+
+/** The names a v1 route declares anywhere in a response that it must never carry. */
+function v1Violations(routes: readonly RouteLike[]): string[] {
+  const found: string[] = [];
+  for (const route of routes) {
+    for (const response of Object.values(route.responses ?? {})) {
+      for (const content of Object.values(response?.content ?? {})) {
+        for (const at of propertyNames(content.schema)) {
+          const name = at.slice(at.lastIndexOf('.') + 1);
+          if ((V1_NEVER as readonly string[]).includes(name)) {
+            found.push(`${route.method.toUpperCase()} ${route.path}: ${at}`);
+          }
+        }
+      }
+    }
+  }
+  return found;
+}
+
+describe('the v1 schemas', () => {
+  it('are walked, name the fields of the v1 rows of the field tables and no field the internal read hides [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start();
+    const v1 = kernel.routes.filter((entry) => entry.surface === 'v1');
+    const keys = v1.map(({ route }) => `${route.method.toUpperCase()} ${route.path}`).sort();
+    // The same list as EXPECTED_V1_PATHS of public-api-full-profile.test.ts (the spec route belongs to public-api,
+    // which this profile does not load).
+    expect(keys).toEqual([
+      'GET /providers',
+      'GET /services',
+      'GET /services/{id}',
+      'GET /services/{id}/schema-org',
+    ]);
+    expect(v1Violations(v1.map((entry) => entry.route as RouteLike))).toEqual([]);
+    for (const [key, expected] of Object.entries(V1_ANSWERS)) {
+      const entry = v1.find(({ route }) => `${route.method.toUpperCase()} ${route.path}` === key);
+      const names = v1Names(entry!.route as RouteLike);
+      for (const name of ENVELOPE) names.delete(name);
+      expect([...names].sort(), key).toEqual([...expected].sort());
+    }
+    const schemaOrg = v1.find(({ route }) => route.path === '/services/{id}/schema-org');
+    const profile = v1Names(schemaOrg!.route as RouteLike);
+    // The nested `@type` of the nodes and the logo repeat names; the contributed properties are the deployment's.
+    for (const name of V1_SCHEMA_ORG) expect(profile.has(name), name).toBe(true);
+    for (const name of CONTACT_FIELDS) expect(profile.has(name), name).toBe(false);
+  });
+
+  it('fail a planted contact field, audit column or screen hint, at any depth [ASVS-8.2.3]', () => {
+    const planted = (schema: z.ZodType): RouteLike => ({
+      method: 'get',
+      path: '/planted',
+      responses: { 200: { content: { 'application/json': { schema } } } },
+    });
+    const row = z.object({ id: z.string() });
+    for (const name of V1_NEVER) {
+      const field = { [name]: z.string() };
+      for (const schema of [
+        z.object(field),
+        z.object({ result: z.array(row.extend(field)) }),
+        z.object({ a: z.object({ b: z.object(field).nullable() }) }),
+      ]) {
+        expect(v1Violations([planted(schema)]), name).toHaveLength(1);
+      }
+    }
+    expect(v1Violations([planted(row)])).toEqual([]);
   });
 });
