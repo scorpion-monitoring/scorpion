@@ -660,6 +660,9 @@ describe('the OpenAPI document', () => {
       // M7 sprint 3: the two anonymous reads (ADR-0036 part 2).
       '/api/internal/public/organisations/{id}',
       '/api/internal/public/organisations/{id}/schema-org',
+      // M8 sprint 2: the v1 read of the providers (ADR-0037).
+      '/api/v1/providers',
+      '/api/v1/providers/{id}',
     ]);
     const profile = document.paths?.['/api/internal/organisations/{id}/schema-org']?.get;
     expect(JSON.stringify(profile)).toContain('application/ld+json');

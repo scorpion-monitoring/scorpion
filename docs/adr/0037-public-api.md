@@ -1,6 +1,6 @@
 # ADR-0037: the public API: one module, the runtime spec, CORS, the audit channel and the token model
 
-- Status: Accepted (sprint 1 of M8: the shell; the data routes are sprint 2)
+- Status: Accepted (sprint 1 of M8: the shell; sprint 2: the data routes, decisions 9 to 12)
 - Date: 2026-10-13
 
 ## Context
@@ -119,6 +119,51 @@ public, audited, 401, 403, Bearer and `X-API-Key`, the answer against **the rout
 and `X-Request-Id`) and, for a list, the legacy envelope with 0-based pages, a stable order (key, then id) across pages, the last page, a page past the
 end, a `pageSize` over the total and a 422 for bad paging. `v1RoutesWithoutContractTest()` is the walker: every v1 route of the generated profile must
 be named, as `'GET /path'`, in a `*.contract.test.ts` that calls the harness. Sprint 2 and M9 plug their routes in with one call each.
+
+### 9. The first data routes (sprint 2): providers and services
+
+The legacy API (`/nfdi/api/v1`, its OpenAPI document) is the shape to stay close to: a provider is `{ abbreviation, name }`, a service is `{ abbreviation,
+name, category, provider, license, consortia, stage }` with `provider` and `consortia` as abbreviations, `service` and `provider` are single-string
+filters, and `pageSize` has no maximum. The routes are declared by the modules that own the data (`registry.organisations`: `GET /providers`;
+`registry.services`: `GET /services`, `GET /services/{id}`, `GET /services/{id}/schema-org`; `GET /providers/{id}` returns the row of the list for one provider, so that the ids the service rows carry can be followed), each with its own permission,
+`registry.organisations.v1.read` and `registry.services.v1.read`, granted to the role `user`. The row shapes are the tables in the module READMEs; this
+is what they add to the legacy rows and what they leave out:
+
+- **Added** (additive, so a legacy client still works): `id`, `public`, `providerId` and `consortiaIds` on a service; `id`, `description`, `website`,
+  `rorId`, `sameAs` and `isMember` on a provider; the record adds `description`, `url` and `sameAs`. `category` is not in the row until M9.
+- **Never**: the contact point; what the internal read hides (audit columns, `editableFields`, `allowedActions`, member counts, the caller's own
+  membership rows); paths below the internal API (`logoUrl`, `iconUrl`).
+- **`consortia`** holds the organisations with the role `consortium` only, as the public record and the Schema.org `brand` do, so a role that
+  a deployment adds does not enter the contract.
+
+### 10. Filters
+
+- `is_member` is `true` or `false` and nothing else (422). `true` is the providers the token's owner is an approved member of (a manager is a member),
+  `false` is **all the others** (defect 15). A token without a user owner is a member of nothing.
+- `service` and `provider` take abbreviations separated by commas (at most 50, each at most 64 characters, compared without case). The legacy document
+  does not say how a second value was given; a comma is the natural reading of a single string. A service slug cannot contain a comma and an
+  organisation abbreviation may, so such an abbreviation cannot be asked for by `provider`; that is the price of staying close to the legacy call.
+  Services match their **current** slug only (an old slug is a redirect of the screens, not a name of v1). Several values are OR, the filters
+  together are AND.
+- **An abbreviation that names nothing is 422**, as the internal catalogue treats an unknown organisation, stage or licence: a typo must not read
+  as "no results". (The maintainer's first lean was an empty list, the likely legacy behaviour; the legacy document does not say, and the answer of
+  422 is the one the rest of the API gives.) `stage` and `license` are the catalogue's own filters with the same rule; `:none` is internal syntax and is
+  refused in v1.
+- An unknown query parameter is 422 (the paging schema is strict); the catalogue's `q`, `sort`, `dir`, `locale`, `consortium` are not v1 parameters.
+
+### 11. Sort and paging
+
+Providers: lower-cased abbreviation, then id. Services: lower-cased current slug, then id (the catalogue's `slug` sort). `pageSize` defaults to
+**100** and is at most 100; a larger value is 422 and is not clamped, so a legacy client that sent `pageSize=1000` learns of the change at once instead of
+receiving fewer rows than it asked for. `page` is 0-based. `totalCount` is the size of the **filtered** set, `totalPages` is `ceil(totalCount / pageSize)`.
+
+### 12. How the service layer serves a v1 read
+
+A v1 handler calls one service method (`listProvidersV1`, `listV1`, `getV1`, `schemaOrgV1`), which requires the v1 permission again
+(`ctx.authz.require`) and applies the field rules of the internal read; the trusted `…AsSystem` reads stay for jobs and are not called by a handler. The
+catalogue query function serves the services list; the one change to it is an optional `slugs` condition (the `service` filter), so there is no
+second query that could drift from the screen. A service that is not public is returned to a token whose owner may read it internally, with its
+`public` flag, because the internal read gives every holder of `registry.services.service.read` every service.
 
 ## Consequences
 

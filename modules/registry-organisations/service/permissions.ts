@@ -1,11 +1,13 @@
 // The permission ids of registry.organisations and the resource type of the scoped ones.
 //
-// Plain permissions (checked by the route): `read`, `manage`, `membership.request`.
+// Plain permissions (checked by the route): `read`, `manage`, `membership.request`, `v1.read`.
 // Scoped permissions (scope `organisation`): Admin holds them globally, the managers and members of
 // one organisation through the policy `organisation.member` (ADR-0034). A route never names a scoped
 // permission; the service calls `ctx.authz.require(actor, scoped, { type: 'organisation', id })`.
 export const PERMISSION_READ = 'registry.organisations.organisation.read';
 export const PERMISSION_MANAGE = 'registry.organisations.organisation.manage';
+/** Read the providers through the public API (`/api/v1`, ADR-0037): a token names it as a scope. */
+export const PERMISSION_V1_READ = 'registry.organisations.v1.read';
 export const PERMISSION_REQUEST = 'registry.organisations.membership.request';
 
 export const PERMISSION_READ_CONTACT = 'registry.organisations.organisation.read-contact';

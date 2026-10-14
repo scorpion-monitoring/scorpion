@@ -232,10 +232,12 @@ export function v1ContractTests(route: AppRoute, ctx: V1ContractContext): void {
           expect(next.metadata.totalCount).toBe(total);
           walked.push(...next.result);
         }
-        if (first.metadata.totalPages <= 20) expect(walked).toHaveLength(total);
+        // Only a walk of every page (at most 20 are fetched) can be compared with the whole list.
+        const complete = first.metadata.totalPages <= 20;
+        if (complete) expect(walked).toHaveLength(total);
         expectStableOrder(walked, sortKey, list.idOf);
         const everything = await page({ [sizeParam]: '100' });
-        if (total <= 100) expect(walked).toEqual(everything.result);
+        if (complete && total <= 100) expect(walked).toEqual(everything.result);
       });
 
       it('answers a page past the end with an empty result and the same totals, and a pageSize over the total with everything', async () => {

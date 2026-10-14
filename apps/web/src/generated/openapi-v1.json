@@ -66,6 +66,1108 @@
     "parameters": {}
   },
   "paths": {
+    "/providers/{id}": {
+      "get": {
+        "permission": "registry.organisations.v1.read",
+        "audit": true,
+        "summary": "Get one provider",
+        "description": "One provider by id, as it is listed by `GET /providers` (the ids are there). An organisation that is not a provider is 404. The contact point of a provider is never part of this API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The id of the provider."
+            },
+            "required": true,
+            "description": "The id of the provider.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The provider.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10",
+                  "abbreviation": "EXAMPLE-ORG",
+                  "name": "Example Research Institute",
+                  "description": "An example research institute.",
+                  "website": "https://www.example.org",
+                  "rorId": "02skbsp27",
+                  "sameAs": [
+                    "https://www.wikidata.org/wiki/Q42"
+                  ],
+                  "isMember": true
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The id of the provider (a UUID)."
+                    },
+                    "abbreviation": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Plain text."
+                    },
+                    "website": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rorId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The bare ROR id, for example `02skbsp27`."
+                    },
+                    "sameAs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "isMember": {
+                      "type": "boolean",
+                      "description": "Whether the owner of the token is an approved member of the provider (a manager is a member)."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "abbreviation",
+                    "name",
+                    "description",
+                    "website",
+                    "rorId",
+                    "sameAs",
+                    "isMember"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such provider."
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "registry.organisations.v1.read"
+      }
+    },
+    "/providers": {
+      "get": {
+        "permission": "registry.organisations.v1.read",
+        "audit": true,
+        "summary": "List the providers",
+        "description": "All providers, or with `is_member` the ones the owner of the token is an approved member of (`true`) or all the others (`false`). Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a provider is never part of this API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 0,
+              "description": "Page number, counted from 0."
+            },
+            "required": false,
+            "description": "Page number, counted from 0.",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 100,
+              "description": "Items per page, 1 to 100."
+            },
+            "required": false,
+            "description": "Items per page, 1 to 100.",
+            "name": "pageSize",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "`true`: the providers the token owner is an approved member of. `false`: all the others. Absent: all providers."
+            },
+            "required": false,
+            "description": "`true`: the providers the token owner is an approved member of. `false`: all the others. Absent: all providers.",
+            "name": "is_member",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of providers.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "metadata": {
+                    "currentPage": 0,
+                    "pageSize": 100,
+                    "totalCount": 1,
+                    "totalPages": 1
+                  },
+                  "result": [
+                    {
+                      "id": "0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10",
+                      "abbreviation": "EXAMPLE-ORG",
+                      "name": "Example Research Institute",
+                      "description": "An example research institute.",
+                      "website": "https://www.example.org",
+                      "rorId": "02skbsp27",
+                      "sameAs": [
+                        "https://www.wikidata.org/wiki/Q42"
+                      ],
+                      "isMember": true
+                    }
+                  ]
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "currentPage": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "totalCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "currentPage",
+                        "pageSize",
+                        "totalCount",
+                        "totalPages"
+                      ]
+                    },
+                    "result": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The id of the provider (a UUID)."
+                          },
+                          "abbreviation": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Plain text."
+                          },
+                          "website": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "rorId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The bare ROR id, for example `02skbsp27`."
+                          },
+                          "sameAs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "isMember": {
+                            "type": "boolean",
+                            "description": "Whether the owner of the token is an approved member of the provider (a manager is a member)."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "abbreviation",
+                          "name",
+                          "description",
+                          "website",
+                          "rorId",
+                          "sameAs",
+                          "isMember"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "metadata",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "registry.organisations.v1.read"
+      }
+    },
+    "/services": {
+      "get": {
+        "permission": "registry.services.v1.read",
+        "audit": true,
+        "summary": "List the services",
+        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, and a stage or licence that names nothing, is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 0,
+              "description": "Page number, counted from 0."
+            },
+            "required": false,
+            "description": "Page number, counted from 0.",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 100,
+              "description": "Items per page, 1 to 100."
+            },
+            "required": false,
+            "description": "Items per page, 1 to 100.",
+            "name": "pageSize",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 3250,
+              "description": "Abbreviations of services, comma-separated."
+            },
+            "required": false,
+            "description": "Abbreviations of services, comma-separated.",
+            "name": "service",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 3250,
+              "description": "Abbreviations of providers, comma-separated: the services they provide."
+            },
+            "required": false,
+            "description": "Abbreviations of providers, comma-separated: the services they provide.",
+            "name": "provider",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 3250,
+              "description": "Keys of the `stage` vocabulary, comma-separated."
+            },
+            "required": false,
+            "description": "Keys of the `stage` vocabulary, comma-separated.",
+            "name": "stage",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 3250,
+              "description": "SPDX licence ids, comma-separated."
+            },
+            "required": false,
+            "description": "SPDX licence ids, comma-separated.",
+            "name": "license",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of services.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "metadata": {
+                    "currentPage": 0,
+                    "pageSize": 100,
+                    "totalCount": 1,
+                    "totalPages": 1
+                  },
+                  "result": [
+                    {
+                      "id": "0198f3a5-1d44-7e08-a6b1-93c2d0f47e55",
+                      "abbreviation": "EXAMPLE-SVC",
+                      "name": "Example Data Portal",
+                      "stage": "PROD",
+                      "license": "Apache-2.0",
+                      "public": false,
+                      "provider": "EXAMPLE-ORG",
+                      "providerId": "0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10",
+                      "consortia": [
+                        "EXAMPLE-CONS-A",
+                        "EXAMPLE-CONS-B"
+                      ],
+                      "consortiaIds": [
+                        "0198f3a3-02b9-7a14-8c6d-5b7e1f9a3d20",
+                        "0198f3a3-5e87-7c90-b2f4-6a1d8e0c4b31"
+                      ]
+                    }
+                  ]
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "currentPage": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "totalCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "currentPage",
+                        "pageSize",
+                        "totalCount",
+                        "totalPages"
+                      ]
+                    },
+                    "result": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The id of the service (a UUID)."
+                          },
+                          "abbreviation": {
+                            "type": "string",
+                            "description": "The current slug of the service."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string",
+                            "description": "The key of a term of the `stage` vocabulary."
+                          },
+                          "license": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "An SPDX licence id."
+                          },
+                          "public": {
+                            "type": "boolean",
+                            "description": "Whether anonymous readers may see the service on the public pages."
+                          },
+                          "provider": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The abbreviation of the provider."
+                          },
+                          "providerId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The id of the provider, as in `GET /providers`."
+                          },
+                          "consortia": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The abbreviations of the consortia, by name; `[]` for none."
+                          },
+                          "consortiaIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The ids of the consortia, in the order of `consortia`."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "abbreviation",
+                          "name",
+                          "stage",
+                          "license",
+                          "public",
+                          "provider",
+                          "providerId",
+                          "consortia",
+                          "consortiaIds"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "metadata",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "registry.services.v1.read"
+      }
+    },
+    "/services/{id}": {
+      "get": {
+        "permission": "registry.services.v1.read",
+        "audit": true,
+        "summary": "Get one service",
+        "description": "One service by id: the fields of the list and the description, the address and the `sameAs` links. A service that is not public is returned too, with `public: false`. The contact point is never part of this API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The id of the service."
+            },
+            "required": true,
+            "description": "The id of the service.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The service.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "0198f3a5-1d44-7e08-a6b1-93c2d0f47e55",
+                  "abbreviation": "EXAMPLE-SVC",
+                  "name": "Example Data Portal",
+                  "stage": "PROD",
+                  "license": "Apache-2.0",
+                  "public": false,
+                  "provider": "EXAMPLE-ORG",
+                  "providerId": "0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10",
+                  "consortia": [
+                    "EXAMPLE-CONS-A",
+                    "EXAMPLE-CONS-B"
+                  ],
+                  "consortiaIds": [
+                    "0198f3a3-02b9-7a14-8c6d-5b7e1f9a3d20",
+                    "0198f3a3-5e87-7c90-b2f4-6a1d8e0c4b31"
+                  ],
+                  "description": "A portal for example data.",
+                  "url": "https://portal.example.org",
+                  "sameAs": []
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The id of the service (a UUID)."
+                    },
+                    "abbreviation": {
+                      "type": "string",
+                      "description": "The current slug of the service."
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "type": "string",
+                      "description": "The key of a term of the `stage` vocabulary."
+                    },
+                    "license": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "An SPDX licence id."
+                    },
+                    "public": {
+                      "type": "boolean",
+                      "description": "Whether anonymous readers may see the service on the public pages."
+                    },
+                    "provider": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The abbreviation of the provider."
+                    },
+                    "providerId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The id of the provider, as in `GET /providers`."
+                    },
+                    "consortia": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The abbreviations of the consortia, by name; `[]` for none."
+                    },
+                    "consortiaIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The ids of the consortia, in the order of `consortia`."
+                    },
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Plain text."
+                    },
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sameAs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "abbreviation",
+                    "name",
+                    "stage",
+                    "license",
+                    "public",
+                    "provider",
+                    "providerId",
+                    "consortia",
+                    "consortiaIds",
+                    "description",
+                    "url",
+                    "sameAs"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such service."
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "registry.services.v1.read"
+      }
+    },
+    "/services/{id}/schema-org": {
+      "get": {
+        "permission": "registry.services.v1.read",
+        "audit": true,
+        "summary": "Get one service as Schema.org",
+        "description": "The service as a Schema.org `Service` (JSON-LD), built as the instance builds it for its own pages: the same properties, no contact point and no stage. A service that is not public is returned too.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The id of the service."
+            },
+            "required": true,
+            "description": "The id of the service.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The Schema.org profile.",
+            "content": {
+              "application/ld+json": {
+                "example": {
+                  "@context": "https://schema.org",
+                  "@type": "Service",
+                  "@id": "https://registry.example.org/services/0198f3a5-1d44-7e08-a6b1-93c2d0f47e55",
+                  "name": "Example Data Portal",
+                  "alternateName": "EXAMPLE-SVC",
+                  "url": "https://portal.example.org"
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "@context": {
+                      "type": "string",
+                      "enum": [
+                        "https://schema.org"
+                      ]
+                    },
+                    "@type": {
+                      "type": "string",
+                      "enum": [
+                        "Service"
+                      ]
+                    },
+                    "@id": {
+                      "type": "string",
+                      "description": "The absolute URL of the service by id; stable across a rename of the slug."
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "alternateName": {
+                      "type": "string",
+                      "description": "The slug."
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "The service's own address."
+                    },
+                    "sameAs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "logo": {
+                      "type": "object",
+                      "properties": {
+                        "@type": {
+                          "type": "string",
+                          "enum": [
+                            "ImageObject"
+                          ]
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "@type",
+                        "url"
+                      ]
+                    },
+                    "license": {
+                      "type": "string",
+                      "description": "The SPDX licence page, for an id the list knows."
+                    },
+                    "provider": {
+                      "type": "object",
+                      "properties": {
+                        "@type": {
+                          "type": "string"
+                        },
+                        "@id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "@type",
+                        "@id",
+                        "name",
+                        "url"
+                      ]
+                    },
+                    "brand": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "@type": {
+                            "type": "string"
+                          },
+                          "@id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "@type",
+                          "@id",
+                          "name",
+                          "url"
+                        ]
+                      },
+                      "description": "The consortia."
+                    },
+                    "serviceType": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "category": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "audience": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "areaServed": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "termsOfService": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "slogan": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "serviceOutput": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "@context",
+                    "@type",
+                    "@id",
+                    "name",
+                    "alternateName"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such service."
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "registry.services.v1.read"
+      }
+    },
     "/openapi.json": {
       "get": {
         "public": true,

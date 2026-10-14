@@ -473,6 +473,48 @@ Found while using the instance; not yet investigated.
   `packages/contracts/src/route.ts` (an ASVS V8 scoped file); not planned.
 - **The preflight answer lists the methods v1 has overall,** not those of the path asked. Harmless while v1 is read-only; revisit with M10's `POST`.
 
+## Public API follow-ups (M8 sprint 2)
+
+- **`category` in the service row.** The legacy `Service` has a required `category` (the KPI category). It is not in the v1 row until M9 (`kpi.framework`); then it is
+  added as a new field (additive). Until then a client that requires it breaks.
+- **A by-slug read of a service.** `GET /api/v1/providers/{id}` was added in sprint 2, so a client can follow `providerId`; there is no
+  `GET /services/by-slug/{slug}` (the internal route follows old slugs with `redirectedFrom`) and no read of a consortium.
+- **Names and ids beside the abbreviations.** `provider` and `consortia` are abbreviations as in the legacy API, with `providerId` and `consortiaIds` beside
+  them; the organisation names are not in a service row. A client that needs them reads `GET /providers` (consortia are not providers: there is no
+  consortium read in v1).
+- **Logos and icons in v1.** `logoUrl` and `iconUrl` are paths below the internal API and are not in v1 rows; the Schema.org profile has the `logo` it always had.
+  A v1 file route (or an absolute public URL) would add them.
+- **`values` (configured fields) in the service record.** Left out: its shape is open and M9 fills it with categories. It would be added with the category routes.
+- **A comma in an organisation abbreviation.** `provider=A,B` splits on commas, so an abbreviation that contains one cannot be asked for by `provider` (the
+  schema allows it; slugs cannot contain one). Repeated parameters would remove the limit; the legacy document does not say which one legacy used.
+- **A consortium filter and a `q` search in v1.** The internal catalogue has them; v1 has only the legacy filters and the cheap catalogue ones (`stage`, `license`).
+- **`service=` matches current slugs only.** An old slug is a redirect of the screens, not a name of v1.
+- **Legacy clients that send `pageSize` above 100** (the legacy default was 1000) get 422, as decided in ADR-0037 decision 11. If that turns out to hurt, a higher
+  cap for v1 lists is a decision for the next sprint (the harness checks 100000 only).
+- **The contract harness fetches at most 20 pages** in its page-walk case; with more rows it checks the order of those 20 only (fixed in sprint 2 so that it no
+  longer compares an incomplete walk with the whole list). A table-driven test of that rule is not written.
+- **The services list on 5,000 services (measured, M8 sprint 2).** 5,000 generated services (40 providers, 12 consortia, 0 to 3 consortia each; a throwaway
+  test, not committed), one token, calls made in-process through the whole pipeline on a local Postgres 16 (no network, so the times are the server's own), 30
+  calls per case after 3 warm-up calls. Median and p95 per request, and the statements sent to Postgres per request, BEGIN and COMMIT included and the
+  token check, the authorisation and the audit entry of the call included (`GET /providers?pageSize=100` on 40 rows is the floor at 4.1):
+
+  | Request                                      | Median  | p95     | Statements | Body    |
+  | -------------------------------------------- | ------- | ------- | ---------- | ------- |
+  | `/services?pageSize=100` (page 0)            | 16.8 ms | 24.3 ms | 6.2        | 30.9 kB |
+  | `/services?pageSize=100&page=49` (last page) | 23.7 ms | 29.1 ms | 6.2        | 31.1 kB |
+  | `…&provider=MP7` (125 services)              | 23.6 ms | 28.2 ms | 10.3       | 37.7 kB |
+  | `…&provider=MP7,MP8,MP9` (375 services)      | 27.5 ms | 30.6 ms | 14.5       | 30.3 kB |
+  | `…&service=msvc-00042`                       | 8.8 ms  | 9.7 ms  | 7.2        | 0.4 kB  |
+  | `…&stage=DEV&license=MIT` (833 services)     | 20.2 ms | 22.4 ms | 8.3        | 33.1 kB |
+  | `/services/{id}`                             | 7.4 ms  | 9.1 ms  | 5.2        | 0.4 kB  |
+  | `/providers?pageSize=100` (40 providers)     | 5.8 ms  | 7.5 ms  | 4.1        | 6.8 kB  |
+
+  What it shows: the statements of a page of 100 services do not depend on the number of consortia of the services (6.2 for page 0 and for the last page, from
+  the catalogue's page, count and organisation-link reads on top of the 4 or so of the call itself). Each `provider=` abbreviation adds about **4
+  statements** (measured: 6.2 to 10.3 to 14.5 for none, one and three); from reading the code these are the lookup of the provider, its member count, and the
+  catalogue's check that the id is known, so 50 abbreviations would be about 200 statements, and a batch lookup of abbreviations in `registry.organisations`
+  would make it constant (not built). The last page costs about 7 ms more than page 0 (the offset). Not measured: concurrent calls, a network, a cold cache, or more than 5,000 services.
+
 ## Services follow-ups (M7 sprint 7)
 
 What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in the plan for it:
@@ -483,7 +525,7 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **A review queue for member edits,** a request-and-approve flow for publication (a Reviewer or Admin sets the flag today) and a preview of the public page before publishing.
 - **A public catalogue,** public facets, anonymous search and a sitemap of public services. The public pages link to each other through the provider and the groups only.
 - **Transfer of a service between providers by someone who is not a manager** of both, and a per-service history view beyond the audit trail (and the slug history).
-- **A public read of `services` in v1** with the Schema.org representation (additive); M8.
+- **A public read of `services` in v1** with the Schema.org representation (additive); M8. _Done in M8 sprint 2: `GET /api/v1/services`, `/services/{id}` and `/services/{id}/schema-org`._
 - **Logos and icons in list rows.** The catalogue shows the service icon; the organisation lists, the member tables and the public organisation page's service list show none.
 - **The layout's four calls on every navigation** and what to do about them are in "Too many 429s" above, with the numbers.
 

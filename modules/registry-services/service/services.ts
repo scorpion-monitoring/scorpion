@@ -28,6 +28,7 @@ import { settingsSchema } from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import {
   createCatalogue,
+  slugCondition,
   type CatalogueFacet,
   type CatalogueQuery,
   type CatalogueRow,
@@ -53,10 +54,12 @@ import {
   PERMISSION_PUBLISH,
   PERMISSION_READ,
   PERMISSION_READ_CONTACT,
+  PERMISSION_V1_READ,
   RESOURCE_TYPE,
 } from './permissions.ts';
 import {
   CATALOGUE_SORT_KEYS,
+  FACET_EMPTY,
   type Choice,
   type ChoiceEnv,
   type FacetEntry,
@@ -75,6 +78,7 @@ export {
   PERMISSION_PUBLISH,
   PERMISSION_READ,
   PERMISSION_READ_CONTACT,
+  PERMISSION_V1_READ,
   RESOURCE_TYPE,
 } from './permissions.ts';
 
@@ -192,6 +196,42 @@ export interface RoleView {
   order: number;
 }
 
+/**
+ * A service as `GET /api/v1/services` returns it (ADR-0037 decision 9): the legacy `abbreviation`, `name`, `provider`,
+ * `license`, `consortia` and `stage`, with `provider` and `consortia` as abbreviations, and what is added to them.
+ * Never the contact point, the icon path, the configured values or an audit column.
+ */
+export interface ServiceV1 {
+  id: string;
+  /** The current slug. */
+  abbreviation: string;
+  name: string;
+  /** The key of a term of the `stage` vocabulary. */
+  stage: string;
+  license: string | null;
+  public: boolean;
+  /** The abbreviation of the organisation with the owning role; `null` only for a record the roles do not describe. */
+  provider: string | null;
+  providerId: string | null;
+  /** Abbreviations of the organisations with the role `consortium`, by name then id (`consortiaIds` in the same order). */
+  consortia: string[];
+  consortiaIds: string[];
+}
+
+export interface ServiceRecordV1 extends ServiceV1 {
+  description: string | null;
+  url: string | null;
+  sameAs: string[];
+}
+
+/** The filters of `GET /api/v1/services`: abbreviations for the first two, catalogue values for the others. */
+export interface ListV1Filter {
+  services?: readonly string[] | undefined;
+  providers?: readonly string[] | undefined;
+  stage?: readonly string[] | undefined;
+  license?: readonly string[] | undefined;
+}
+
 export const SORT_KEYS = CATALOGUE_SORT_KEYS;
 export type SortKey = (typeof SORT_KEYS)[number];
 
@@ -212,6 +252,20 @@ export interface ServicesService {
   ) => Promise<{ services: CatalogueRow[]; total: number }>;
   /** The facets with the number of services per value, over the set the other facets and the search leave. */
   facets: (actor: Actor, filter: ListFilter, locale?: string) => Promise<CatalogueFacet[]>;
+  /**
+   * The services for a token (needs `registry.services.v1.read`), through the catalogue's query: by current slug
+   * without case, then id; each service once; `total` counts the filtered set. `Invalid` (422) for an abbreviation
+   * that names no service or provider and for a stage or licence that names nothing.
+   */
+  listV1: (
+    actor: Actor,
+    filter: ListV1Filter,
+    page: { page: number; pageSize: number },
+  ) => Promise<{ services: ServiceV1[]; total: number }>;
+  /** One service for a token: `NotFound` for an unknown id and `Invalid` for one that is no UUID. */
+  getV1: (actor: Actor, id: string) => Promise<ServiceRecordV1>;
+  /** The Schema.org profile for a token: the profile of {@link schemaOrg} (never the contact point), the v1 permission. */
+  schemaOrgV1: (actor: Actor, id: string) => Promise<ServiceProfile>;
   get: (actor: Actor, id: string) => Promise<ServiceView>;
   /** An old slug answers the current record with `redirectedFrom`. `NotFound` for a slug nobody had. */
   getBySlug: (actor: Actor, slug: string) => Promise<ServiceView>;
@@ -291,6 +345,7 @@ export interface ServicesDeps {
   organisations: Pick<
     OrganisationsPublic,
     | 'findByIdsAsSystem'
+    | 'findByAbbreviationAsSystem'
     | 'isManagerAsSystem'
     | 'listApprovedOrganisationIdsAsSystem'
     | 'toSchemaOrgAsSystem'
@@ -821,11 +876,128 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     return hit;
   }
 
+  /** The v1 row of a service: abbreviations for the legacy fields, ids beside them, the consortia only as the brand. */
+  function v1Of(
+    row: Pick<Row, 'id' | 'slug' | 'name' | 'stage' | 'license' | 'public'>,
+    links: readonly ServiceOrganisation[],
+  ): ServiceV1 {
+    const owner = links.find((link) => link.role === OWNER_ROLE);
+    const consortia = links.filter((link) => link.role === BRAND_ROLE);
+    return {
+      id: row.id,
+      abbreviation: row.slug,
+      name: row.name,
+      stage: row.stage,
+      license: row.license,
+      public: row.public,
+      provider: owner?.abbreviation ?? null,
+      providerId: owner?.id ?? null,
+      consortia: consortia.map((link) => link.abbreviation),
+      consortiaIds: consortia.map((link) => link.id),
+    };
+  }
+
+  /** The profile of any service for a reader who passed their own permission check: never the contact point. */
+  async function schemaOrgOf(id: string): Promise<ServiceProfile> {
+    requireId(id);
+    const row = await load(db, id);
+    const [links, values] = await Promise.all([organisationsOf([id]), valuesOf([id])]);
+    return profileOf(
+      row,
+      (links.get(id) ?? []).map(({ role, id: organisationId }) => ({ role, id: organisationId })),
+      values.get(id) ?? {},
+    );
+  }
+
   return {
     async list(actor, filter, page, locale = 'en') {
       await deps.authz.require(actor, PERMISSION_READ);
       const { rows, total } = await catalogue.rows(filter, page, locale);
       return { services: rows, total };
+    },
+
+    async listV1(actor, filter, page) {
+      await deps.authz.require(actor, PERMISSION_V1_READ);
+      const problems: FieldProblem[] = [];
+      for (const name of ['stage', 'license'] as const) {
+        if (filter[name]?.includes(FACET_EMPTY)) {
+          problems.push({
+            in: 'query',
+            path: name,
+            message: `"${FACET_EMPTY}" is not a value of this filter.`,
+          });
+        }
+      }
+      if (filter.services) {
+        const found = await db
+          .select({ slug: service.slug })
+          .from(service)
+          .where(slugCondition(filter.services));
+        const known = new Set(found.map((row) => row.slug.toLowerCase()));
+        for (const slug of filter.services) {
+          if (!known.has(slug.toLowerCase())) {
+            problems.push({
+              in: 'query',
+              path: 'service',
+              message: `"${slug.slice(0, 64)}" is not the abbreviation of a service.`,
+            });
+          }
+        }
+      }
+      const providerIds: string[] = [];
+      if (filter.providers) {
+        const types = roles.get(OWNER_ROLE)?.orgTypes ?? [];
+        for (const abbreviation of filter.providers) {
+          let found: OrganisationRecord | undefined;
+          for (const type of types) {
+            found ??= await deps.organisations.findByAbbreviationAsSystem(type, abbreviation);
+          }
+          if (found) providerIds.push(found.id);
+          else {
+            problems.push({
+              in: 'query',
+              // The name of the filter is the key of the owning role, as the catalogue's facet of it is.
+              path: OWNER_ROLE,
+              message: `"${abbreviation.slice(0, 64)}" is not the abbreviation of a ${ownerLabel}.`,
+            });
+          }
+        }
+      }
+      if (problems.length > 0) throw new Invalid('The request is not valid.', problems);
+      const filters: Record<string, readonly string[]> = {
+        ...(filter.providers && { provider: providerIds }),
+        ...(filter.stage && { stage: filter.stage }),
+        ...(filter.license && { license: filter.license }),
+      };
+      const { rows, total } = await catalogue.rows(
+        { slugs: filter.services, filters, sort: 'slug' },
+        page,
+        'en',
+      );
+      return {
+        services: rows.map((row) =>
+          v1Of(row, row.provider ? [row.provider, ...row.consortia] : row.consortia),
+        ),
+        total,
+      };
+    },
+
+    async getV1(actor, id) {
+      await deps.authz.require(actor, PERMISSION_V1_READ);
+      requireId(id);
+      const row = await load(db, id);
+      const links = (await organisationsOf([id])).get(id) ?? [];
+      return {
+        ...v1Of(row, links),
+        description: row.description,
+        url: row.url,
+        sameAs: row.sameAs,
+      };
+    },
+
+    async schemaOrgV1(actor, id) {
+      await deps.authz.require(actor, PERMISSION_V1_READ);
+      return schemaOrgOf(id);
     },
 
     async facets(actor, filter, locale = 'en') {
@@ -1172,14 +1344,7 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
 
     async schemaOrg(actor, id) {
       await deps.authz.require(actor, PERMISSION_READ);
-      requireId(id);
-      const row = await load(db, id);
-      const [links, values] = await Promise.all([organisationsOf([id]), valuesOf([id])]);
-      return profileOf(
-        row,
-        (links.get(id) ?? []).map(({ role, id: organisationId }) => ({ role, id: organisationId })),
-        values.get(id) ?? {},
-      );
+      return schemaOrgOf(id);
     },
 
     async getPublicAsSystem(ref) {

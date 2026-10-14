@@ -7,6 +7,7 @@ import type { SettingsService } from '@scorpion/core-settings/public';
 import { defineModule } from '@scorpion/kernel';
 import { registerMembershipRoutes } from './routes-membership.ts';
 import { registerOrganisationRoutes } from './routes.ts';
+import { registerV1Routes } from './routes-v1.ts';
 import { createMembershipsService, type MembershipsService } from './service/memberships.ts';
 import { createOrganisationsService, type OrganisationsService } from './service/organisations.ts';
 import {
@@ -18,6 +19,7 @@ import {
   PERMISSION_READ_CONTACT,
   PERMISSION_REMOVE,
   PERMISSION_REQUEST,
+  PERMISSION_V1_READ,
   PERMISSION_VIEW_MEMBERS,
   RESOURCE_TYPE,
 } from './service/permissions.ts';
@@ -98,6 +100,10 @@ export function createOrganisationsModule() {
       },
       [PERMISSION_MANAGE]: {
         description: 'Create, change and delete organisations, and set their logo',
+      },
+      [PERMISSION_V1_READ]: {
+        description:
+          'Read the providers through the public API (`GET /api/v1/providers`), with a token that holds this scope',
       },
       [PERMISSION_REQUEST]: {
         description: 'Ask to become a member of an organisation, and withdraw or leave',
@@ -213,7 +219,7 @@ export function createOrganisationsModule() {
       // Every signed-in person may read organisations (the forms need them); `manage` stays with Admin.
       // The roles User and Reviewer read organisations; `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [
-        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_REQUEST] },
+        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_REQUEST, PERMISSION_V1_READ] },
         { role: 'reviewer', permissions: [PERMISSION_READ] },
       ],
       // The first resource policy (ADR-0034): managers and members of an organisation, per permission.
@@ -249,6 +255,7 @@ export function createOrganisationsModule() {
       const service = r.service<RegistryOrganisationsService>();
       registerOrganisationRoutes(r, service);
       registerMembershipRoutes(r, service);
+      registerV1Routes(r, service);
     },
   });
 }
