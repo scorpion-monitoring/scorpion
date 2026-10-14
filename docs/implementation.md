@@ -280,7 +280,7 @@ Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [A
 
 Additions agreed in [m9-sprint-plan.md](m9-sprint-plan.md) §12 (four sprints, [ADR-0039](adr/0039-gate-2-conditional-pass.md) and [ADR-0040](adr/0040-indicators-follow-rimo.md) from sprint 1):
 
-- **Indicators follow the Research Infrastructure Metrics Ontology (RIMO 0.2.0):** the fields `example`, `qualitative` (needs the value type `text`), `unit`, `measuredBy` and `canBeAutomatedBy`; a KPI set optionally maps to one of the 17 seeded `rimo:ServiceCategory` terms; necessity maps to `mandatoryFor`, `recommendedFor` and `appliedTo`. `rimo:requestedBy` is not in M9.
+- **Indicators follow the Research Infrastructure Metrics Ontology (RIMO 0.2.0):** the fields `example`, `qualitative` (needs the value type `text`), `unit`, `measuredBy` and `canBeAutomatedBy`; a KPI set optionally maps to one of the 16 seeded `rimo:ServiceCategory` terms; necessity maps to `mandatoryFor`, `recommendedFor` and `appliedTo`. `rimo:requestedBy` is not in M9.
 - **Vocabularies** `kpi.unit` (seeded with Units Ontology IRIs), `kpi.measured-by`, `kpi.automation-tool` and `kpi.service-category`; `usage` checks and `validateTerm` for `thematic-category`, `necessity` and `aggregate`.
 - **Stable IRIs** minted from the setting `kpi.iriBase`; **RIMO-shaped Turtle and JSON-LD reads** (a token route in v1 and a public pair with definitions only), written without a new dependency.
 - The service's link to its KPI set lives in `kpi.framework`'s own tables (`kpif_` prefix); the v1 `categories` and `indicators` keep the legacy shape and add fields.
