@@ -254,6 +254,9 @@ importers:
       '@scorpion/core-ui-shell':
         specifier: workspace:*
         version: link:../core-ui-shell
+      '@scorpion/kpi-framework':
+        specifier: workspace:*
+        version: link:../kpi-framework
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations

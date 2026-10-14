@@ -86,6 +86,7 @@ describe('in a profile', () => {
       'core.identity',
       'registry.organisations',
       'registry.services',
+      'kpi.framework',
       'core.audit',
     ]);
     await s.kernel.audit({ action: 'thing.done', outcome: 'ok', actor: { kind: 'system' } });
