@@ -28,7 +28,8 @@
     "security:asvs": "node tools/asvs-report/cli.ts",
     "modules:sync": "node scripts/sync-workspace-modules.ts",
     "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check && node apps/server/src/openapi-generate.ts --check",
-    "openapi:generate": "node apps/server/src/openapi-generate.ts"
+    "openapi:generate": "node apps/server/src/openapi-generate.ts",
+    "openapi:diff": "node scripts/openapi-diff.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",

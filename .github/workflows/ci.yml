@@ -49,6 +49,11 @@ jobs:
 
       - run: pnpm check
 
+      # The public API (v1) only grows: the committed OpenAPI document is compared with the one of the last release tag
+      # (scripts/openapi-diff.ts, ADR-0037). A breaking change fails here; an additive one is summarised in the job.
+      - name: OpenAPI compatibility (v1)
+        run: pnpm openapi:diff
+
   # Unit and integration tests, split by file over a fixed number of runners; Testcontainers uses each
   # runner's Docker daemon. To add a shard, add its number here and change `/4` in the command.
   unit:
