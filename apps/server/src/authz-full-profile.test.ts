@@ -87,6 +87,7 @@ describe('profile full with core.authz', () => {
       'core.ui-shell',
       'registry.organisations',
       'registry.services',
+      'kpi.framework',
       'public-api',
     ]);
   });
