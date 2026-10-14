@@ -5,7 +5,16 @@
     "outDir": "dist",
     "lib": ["ES2024"]
   },
-  "include": ["*.ts", "package.json", "config", "db", "scripts", "service", "test"],
+  "include": [
+    "*.ts",
+    "package.json",
+    "config",
+    "config/rimo-seed.json",
+    "db",
+    "scripts",
+    "service",
+    "test"
+  ],
   "references": [
     { "path": "../../packages/kernel" },
     { "path": "../../packages/contracts" },

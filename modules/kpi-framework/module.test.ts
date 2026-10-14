@@ -172,7 +172,9 @@ describe('the events carry ids and field names, never text', () => {
 });
 
 describe('the schema', () => {
-  const tables = Object.values(schema).filter((value): value is PgTable => is(value, PgTable));
+  const tables = Object.values(schema as Record<string, unknown>).filter(
+    (value): value is PgTable => is(value, PgTable),
+  );
 
   it('has the six tables, each with the prefix of the manifest', () => {
     expect(tables.map((table) => getTableName(table)).sort()).toEqual(TABLES);
