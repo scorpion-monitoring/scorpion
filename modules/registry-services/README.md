@@ -170,6 +170,54 @@ service and the new state and carries the link `<origin><base path>/services/<id
 | `GET /licenses`                         | `registry.services.service.read`    | the SPDX search for the licence field; deprecated ids are marked                                                                                                                                                                                                                                                                                   |
 | `GET /service-roles`                    | `registry.services.service.read`    | the `service.orgRole` entries, for the form                                                                                                                                                                                                                                                                                                        |
 
+### The v1 routes for services (M8 sprint 2; row shapes proposed, under review)
+
+Permission `registry.services.v1.read` (granted to `user` by default) for all three routes. A service that is not public is returned like any other
+(the token owner may read it internally); the row says so with `public`. Never the contact point.
+
+**`GET /api/v1/services`** (list row). Query: `page`, `pageSize` (default and maximum 100; more is 422), and the filters `service` and `provider` (abbreviations,
+comma-separated, case-insensitive, at most 50; an unknown abbreviation is 422), `stage`, `license` (an unknown value is 422; `:none` is refused). An unknown
+parameter is a 422. Sorted by abbreviation (without case), then id. Shaped after the legacy `Service`: the same names and types, without `category`
+(M9 adds it).
+
+| Field          | Type                  | Source                                                                                                                 |
+| -------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `id`           | string (UUID)         | `svc_service.id` (new; the legacy row has none)                                                                        |
+| `abbreviation` | string                | the current `slug`                                                                                                     |
+| `name`         | string                | `name`                                                                                                                 |
+| `stage`        | string                | the key of a term of the `stage` vocabulary (never its label)                                                          |
+| `license`      | string or null        | an SPDX id                                                                                                             |
+| `public`       | boolean               | `public` (new)                                                                                                         |
+| `provider`     | string or null        | the abbreviation of the organisation with the role `provider`                                                          |
+| `consortia`    | string[]              | the abbreviations of the organisations with the role `consortium`, by name then id; `[]` for none; one row per service |
+| `providerId`   | string (UUID) or null | the id of that organisation (new), the same id as `id` of `GET /providers`                                             |
+| `consortiaIds` | string[]              | the ids of the consortia, in the same order as `consortia` (new)                                                       |
+
+**`GET /api/v1/services/{id}`** (record) is the list row plus:
+
+| Field         | Type           | Source        |
+| ------------- | -------------- | ------------- |
+| `description` | string or null | `description` |
+| `url`         | string or null | `url`         |
+| `sameAs`      | string[]       | `same_as`     |
+
+**`GET /api/v1/services/{id}/schema-org`**: the Schema.org `Service` profile as `application/ld+json`, built by the same function and serialised by the
+same `serializeJsonLd` as the internal route, so the properties are the internal ones (`name`, `alternateName`, `description`, `url`, `sameAs`, `logo`,
+`license`, `provider`, `brand`, and the contributed properties); no contact point, no stage.
+
+Left out of the internal reads, and why:
+
+| Internal field                                     | Why it is not in v1                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `contactEmail`, `contactType`                      | never in v1 (decision of the maintainer)                                                                            |
+| `slug`                                             | one name: the legacy `abbreviation` carries it                                                                      |
+| `organisations` (all roles)                        | replaced by `provider` and `consortia`; a role nobody registered as owner or consortium is not part of the contract |
+| `iconUrl`                                          | a path below `/api/internal/files`, not part of v1 (the Schema.org profile has the logo as it always had)           |
+| `values` (configured fields)                       | an open shape that M9 fills with categories; additive later through their own v1 routes                             |
+| `redirectedFrom`                                   | belongs to the by-slug read, which v1 has not                                                                       |
+| `editableFields`, `allowedActions`                 | hints for the screens, about the caller                                                                             |
+| `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | audit columns; not legacy fields; additive later                                                                    |
+
 ## The catalogue (sprint 4)
 
 `service/catalogue.ts` is the read model of the screen: a tested query function, not a view (defect 2). `list(actor, query, page, locale)`

@@ -386,6 +386,34 @@ do to the row now, for drawing buttons) and never an address.
 | `POST /memberships/{id}/role`               | `registry.organisations.organisation.read`   | **delegated** (`…membership.manage-roles`): `{ role }`; audited; 403 own role; 409 `membership-state`, `too-many-managers`                                           |
 | `POST /memberships/{id}/remove`             | `registry.organisations.organisation.read`   | **delegated** (`…membership.remove`): audited; 403 own row, a manager as the target of a manager, no right; 409 `membership-state`                                   |
 
+### The v1 route `GET /api/v1/providers` (M8 sprint 2; row shape proposed, under review)
+
+Permission `registry.organisations.v1.read` (granted to `user` by default). "Providers" are the organisations of the `provider` type. Query: `page`,
+`pageSize` (default and maximum 100; more is 422), `is_member` (`true` or `false`, nothing else: 422). An unknown query parameter is a 422. Sorted by abbreviation (without case), then id.
+
+| Field          | Type           | Source                                                                 |
+| -------------- | -------------- | ---------------------------------------------------------------------- |
+| `id`           | string (UUID)  | `org_organisation.id`                                                  |
+| `abbreviation` | string         | `abbreviation`                                                         |
+| `name`         | string         | `name`                                                                 |
+| `description`  | string or null | `description` (plain text)                                             |
+| `website`      | string or null | `website`                                                              |
+| `rorId`        | string or null | `ror_id`, the bare id                                                  |
+| `sameAs`       | string[]       | `same_as`                                                              |
+| `isMember`     | boolean        | the token owner has an **approved** membership (a manager is a member) |
+
+Left out of the internal read, and why:
+
+| Internal field                                     | Why it is not in v1                                                                                                         |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `contactEmail`, `contactType`                      | never in v1 (decision of the maintainer)                                                                                    |
+| `type`, `typeKnown`                                | every row is a provider; the type registry is internal                                                                      |
+| `memberCount`                                      | not a legacy field; it is derived from the membership table, which v1 treats as private; additive later                     |
+| `myMembership` (state and role)                    | the person's own requested, rejected and left rows are their business; v1 gives the one boolean a client needs (`isMember`) |
+| `logoUrl`                                          | a path below `/api/internal/files`, which is not part of v1                                                                 |
+| `editableFields`                                   | a hint for the screens, about the caller                                                                                    |
+| `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | audit columns; not legacy fields; additive later                                                                            |
+
 ## Screens
 
 The pages are contributed to `ui.routes` and `ui.nav` of `core.ui-shell` (an optional peer: without the shell the module starts and
