@@ -1,6 +1,6 @@
 # M9 Sprint Plan: `kpi.framework`, with indicators that follow RIMO
 
-Status: **draft for approval**, 2026-10-14. The maintainer answered six questions while this was drafted (recorded in §13); the items marked _(proposed)_ there still need a yes.
+Status: **decided**, 2026-10-14. The maintainer answered six questions while this was drafted and approved the six proposals that followed (all recorded in §13).
 Scope source: [implementation.md](implementation.md) §4, M9 and Gate 2, [architecture.md](architecture.md) (the `kpi.framework` row of the module table, §4 "kpi-set wizard step", the `kpi.valueType` registry), FEATURES §3.6 and §3.16 and defect 14 (KPI part) and defect 15 (`totalCount` of indicators) ([FEATURES.md](FEATURES.md) §5), and the **Research Infrastructure Metrics Ontology (RIMO) 0.2.0** ([RIMO.ttl](https://github.com/JKoblitz/BH25-metrics/blob/main/RIMO.ttl), CC BY 4.0, BioHackathon Europe 2025 METRICS team).
 
 M9 is size M in `implementation.md`. This plan has **four sprints (about four weeks for one developer)**: the RIMO structure adds a seed, minted IRIs and two RDF reads to the old scope, and it is the first milestone that contributes a wizard step and a section to `registry.services` from another module. Releases as `0.11.0` (`0.10.0` is M8, released 2026-10-14). Gate 3 follows M13.
@@ -17,7 +17,7 @@ State on 2026-10-14 (checked against `dev` after the merge-back of `0.10.0`):
    - `serializeJsonLd` (`registry.organisations/public`) and the Schema.org builder of `registry.services`: the patterns for a `application/ld+json` read and its escaping.
    - `kpi.reporting-reminder` and other templates of modules that do not exist yet live in `core.notifications` (backlog); they are M10's.
 3. **Known gaps this plan has to settle** (from the backlog): how the `ui` entry of a contributing module reaches the wizard (`registerFieldWidget`, `registerStepApplies`; sprint 3); a step whose `applies` hides it cannot have a required field (sprint 3); the `category` and `values` keys the v1 service row lacked until M9 (sprint 3, additive); a service delete needs a `service.usage` check that KPI modules contribute (sprint 3 contributes it; the delete itself stays out of scope).
-4. **Prototype in the first days of sprint 1** (stop and say so if it fails): read `RIMO.ttl` with the small extractor of Decision 6 and write `config/rimo-seed.json` (the 17 service categories with IRI, label and comment, the ontology version); render one fixture indicator and one fixture KPI set as Turtle and as JSON-LD by hand and load both with a real Turtle parser in a throwaway script (for example `n3`, **not** added to the repository) to prove that the output is valid and has the triples of §3. If a hand-written serialiser cannot be made valid with the escaping rules of §3, stop: the fallback is a development-time parser dependency for the tests only.
+4. **Prototype in the first days of sprint 1** (stop and say so if it fails): read `RIMO.ttl` with the small extractor of Decision 9 and write `config/rimo-seed.json` (the 17 service categories with IRI, label and comment, the ontology version); render one fixture indicator and one fixture KPI set as Turtle and as JSON-LD by hand and load both with a real Turtle parser in a throwaway script (for example `n3`, **not** added to the repository) to prove that the output is valid and has the triples of §3. If a hand-written serialiser cannot be made valid with the escaping rules of §3, stop: the fallback is a development-time parser dependency for the tests only.
 5. **Lessons of M7 and M8 applied from the first sprint:** unique names, slugs and ids in tests (specs share a database); no regex built from a variable in a test (CodeQL); `docs/security/**` maps to all four ASVS chapters, so a pull request that changes it updates the matching chapter file or carries `asvs-no-impact` with a true reason; the release runs `pnpm security:asvs --release`, so the maintainer bumps `assessed_commit` before the release branch is cut; a load a shell repeats on every navigation costs API calls (the wizard step and the service section must add none to pages that already make four).
 
 ## 1. What earlier milestones hand to M9
@@ -45,7 +45,7 @@ State on 2026-10-14 (checked against `dev` after the merge-back of `0.10.0`):
 - **Transactions and events.** Every write of more than one row runs in `ctx.db.tx()` with the event in the outbox in the same transaction; a rollback test per such method.
 - **Permissions are checked twice** where a resource is involved (the route and `ctx.authz.require` in the service). Nobody approves or changes their own role here, so no new self-service rule arises; the service-scoped permission of sprint 3 follows ADR-0036.
 - **No hard-coded branding.** IRIs, titles and contact in the RDF reads come from settings (Decision 5); no word of the instance in a message.
-- Update the module README with every manifest change. No new runtime dependency (Decisions 6 and 7); a development dependency is named in the pull request description.
+- Update the module README with every manifest change. No new runtime dependency (Decisions 9 and 10); a development dependency is named in the pull request description.
 - Every pull request carries a changeset (package `scorpion`); sprints 1 to 4 are `minor` where an operator or API user can see something, `patch` otherwise.
 
 ## 3. How RIMO maps to the model
@@ -159,7 +159,7 @@ Definition of done: as sprint 2, plus `pnpm test:contract` and `pnpm openapi:dif
 Work items
 
 1. **The RDF export** (`service/rdf.ts`, pure, no dependency): `toTurtle(model, options)` and `toJsonLd(model, options)` over one in-memory model built by one query function. It writes the ontology header (`@prefix rimo`, `skos`, `dct`, `uo`, `scorpion`), each indicator as `rimo:KPI` with `rimo:KPIName`, `rimo:KPIDescription`, `rimo:KPIExample` (when present), `rimo:isQualitativeIndicator`, one `rimo:hasValue` node typed `rimo:KPIValue` with `rimo:hasUnit` (the UO IRI where the term has one, otherwise our minted unit IRI), `rimo:measuredBy` and `rimo:canBeAutomatedBy` (minted IRIs typed `rimo:MeasurementMeans` and `rimo:AutomationTool`), and each KPI set as a `rimo:ServiceCategory` (the RIMO IRI when mapped) with `rimo:mandatoryFor`, `rimo:recommendedFor` and `rimo:appliedTo` pointing **from the indicator to the category**. The thematic category is a `scorpion:thematicCategory` literal (Decision 4). **Escaping** is a tested function for Turtle string literals and for IRIs (control characters, quotes, backslashes, `\u`, an IRI with a space or `>` is refused); the prototype's parser round-trips every fixture, including a hostile name. A snapshot test per format, and a test that the output equals the output of the previous run for the same data (stable order).
-2. **The reads:** `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld` (a token with `kpi.framework.v1.read`, `Cache-Control: private, no-cache`; the walker and the contract tests cover them) and, Decision 5 _(proposed)_, the public counterparts `GET /public/kpi/rimo.ttl` and `.jsonld` for dereferencing the IRIs: definitions only, no value, no service, no person, `Cache-Control` with a short max-age and an ETag. The IRIs of §3 resolve to a small public HTML or Turtle page per object only if Decision 5 says so; otherwise they identify and do not dereference, and the README says so.
+2. **The reads:** `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld` (a token with `kpi.framework.v1.read`, `Cache-Control: private, no-cache`; the walker and the contract tests cover them) and, Decision 9, the public counterparts `GET /public/kpi/rimo.ttl` and `.jsonld` for dereferencing the IRIs: definitions only, no value, no service, no person, `Cache-Control` with a short max-age and an ETag. The IRIs of §3 resolve to a small public HTML or Turtle page per object only if the maintainer later asks for it; they identify and do not dereference, and the README says so.
 3. **The page of the API:** the landing page `/docs` lists the new routes; the reference shows the security scheme as for the other v1 routes (no change of the CSP).
 4. **Journeys and accessibility:** `kpi-framework.spec.ts` (admin creates a unit-bearing indicator, builds a set mapped to a RIMO category, creates a service with that set, changes the set, reads `/api/v1/indicators` and `rimo.ttl` through the reference page with a token, under both base paths); axe in both themes on the indicator list, the set page, the wizard step and the service section; `shell.spec.ts` for the navigation.
 5. **Gate and security documents:** `docs/security/authorization.md` (a short subsection on the RDF reads: what they expose, why a token or why public); V8 and V7 notes where the reads are public or token-bearing; `pnpm security:asvs --write`; the maintainer bumps `assessed_commit` before the release branch is cut.
@@ -189,7 +189,7 @@ Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e`,
 
 | Risk                                                                                  | Effect                                                    | Mitigation                                                                                                                                                          |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| RIMO is version 0.2.0 from a hackathon and may change or disappear                    | the seed or the export drifts from the published ontology | a committed copy with its commit, a seed generated from it, an ADR for adopting a new version, the export names the version it follows                              |
+| RIMO is version 0.2.0 from a hackathon (treated as stable, Decision 15)               | the seed or the export drifts from the published ontology | a committed copy with its commit, a seed generated from it, an ADR for adopting a new version, the export names the version it follows                              |
 | The hand-written Turtle and JSON-LD serialisers are wrong for some input              | invalid RDF, or an injection through a name               | the prototype with a real parser; one tested escaping function; round-trip tests with hostile names; no free text becomes an IRI                                    |
 | The `ui` entry change and `showIf` reach into `registry.services` and `core.ui-shell` | sprint 3 grows                                            | the change is named in ADR-0040's addendum; if it exceeds the field config the sprint stops and says so; the wizard step can ship with a fixed set of widgets first |
 | Seeded units carry IRIs and symbols in code, not in the vocabulary                    | an administrator's own unit has no IRI                    | stated in the README and the export (a minted IRI); term metadata is a backlog item                                                                                 |
@@ -203,7 +203,7 @@ Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e`,
 - `rimo:requestedBy` (an indicator requested by an organisation or consortium); needs `registry.organisations` as a dependency.
 - Importing a RIMO or any Turtle file at runtime (needs a parser as a runtime dependency).
 - Metadata on vocabulary terms (IRI, symbol, description) in `core.settings`.
-- Dereferenceable HTML pages per indicator (unless Decision 5 adds them), content negotiation on the v1 routes, SPARQL.
+- Dereferenceable HTML pages per indicator , content negotiation on the v1 routes, SPARQL.
 - Deleting a service (the `service.usage` check exists; the delete does not).
 - A `kpi` profile image beyond `full`.
 
@@ -227,11 +227,12 @@ Answered by the maintainer on 2026-10-14:
 7. **The v1 `categories` and `indicators` keep the legacy shape and add fields;** a RIMO-first shape would be v2.
 8. **M9 has four sprints.**
 
-Proposed in this draft, to confirm or change:
+Approved by the maintainer on 2026-10-14 (the proposals of the draft):
 
-- **Seed extractor, no parser dependency** (the file is regular; the script fails on an unknown shape). If you prefer a development dependency for it (for example `n3`), say so; it would not reach the image.
-- **The RDF reads are token-bearing in v1 and public as a second pair of routes** (definitions only, no values), so that IRIs can identify; dereferenceable pages per object are out of scope. If you want token-only, sprint 4 drops the public routes.
-- **A qualitative indicator must have the value type `text`;** a `text` indicator may be quantitative-looking or qualitative.
-- **`rimo:hasUnit` goes on a `rimo:KPIValue` node per indicator** (its domain in RIMO), which M10's real values will reuse.
-- **No `kpi` profile image in M9** (the `full` profile carries the module); a profile that selects the KPI modules without the rest is decided when M10 needs it.
-- **Table prefix `kpif_`** (checked against the loader in sprint 1).
+9. **The seed extractor is our own small script, with no parser dependency** (the file is regular; the script fails on an unknown shape).
+10. **The RDF reads are token-bearing in v1 and public as a second pair of routes** (definitions only, no values); IRIs identify and do not dereference to a page.
+11. **A qualitative indicator must have the value type `text`;** a `text` indicator may be qualitative or not.
+12. **`rimo:hasUnit` goes on a `rimo:KPIValue` node per indicator** (its domain in RIMO), which M10's real values will reuse.
+13. **No `kpi` profile image in M9** (the `full` profile carries the module); a profile that selects the KPI modules without the rest is decided when M10 needs it.
+14. **The table prefix is `kpif_`** (sprint 1 checks it against the loader's rule on the first run and changes it only if the loader refuses).
+15. **RIMO 0.2.0 is treated as stable** (the maintainer, 2026-10-14). The risk of a changed or vanished ontology stays in §10 as a note; the committed copy, the seed and ADR-0040 remain the way a later version is adopted.
