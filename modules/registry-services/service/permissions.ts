@@ -5,6 +5,8 @@
 // service's provider through the policy `service.member`. A delegated route names the plain `read` and the
 // service calls `ctx.authz.require(actor, scoped, { type: 'service', id })` (ADR-0034).
 export const PERMISSION_READ = 'registry.services.service.read';
+/** Read services through the public API (`/api/v1`, ADR-0037): a token names it as a scope. */
+export const PERMISSION_V1_READ = 'registry.services.v1.read';
 /** Create a service; the service then needs an Admin or an approved member of the chosen provider (Decision 14). */
 export const PERMISSION_CREATE = 'registry.services.service.create';
 /** Every field of any service, as Admin: never restricted. */

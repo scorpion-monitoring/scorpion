@@ -21,7 +21,7 @@ policies) are in the [core.authz README](../../modules/core-authz/README.md) and
 The roles `user` and `reviewer` are data. `user` holds the self-service permissions that the core modules contribute (`me.read`,
 `session.manage`, the profile, avatar, password, e-mail, link and token permissions of `core.identity`, the inbox permissions and
 `core.notifications.preference.read`, `core.settings.preference.read` and `.write`, `core.settings.vocabulary.read` and `core.blob.upload`); `reviewer` holds nothing
-from the core. An administrator can change what a role holds, so the matrix names permissions, not roles.
+from the core. The modules add theirs (the registry modules give `user` the two `v1.read` permissions of the public API, see "The public API (v1)"). An administrator can change what a role holds, so the matrix names permissions, not roles.
 
 ## The two checks
 
@@ -139,10 +139,13 @@ the same file answers 401 and 403 on every non-public route.
 | `PUT /secrets/{name}`                           | core.settings          | `core.settings.secret.write`                 | strict     | yes            |
 | `PUT /settings/{module}`                        | core.settings          | `core.settings.write`                        | default    | yes, with body |
 | `GET /ui/navigation`                            | core.ui-shell          | **public**                                   | default    | no             |
+| `GET /api/v1/openapi.json`                      | public-api             | **public**                                   | default    | no             |
 | `DELETE /organisations/{id}`                    | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
 | `DELETE /organisations/{id}/logo`               | registry.organisations | `registry.organisations.organisation.read`   | default    | yes            |
 | `DELETE /organisations/{id}/membership`         | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
 | `GET /account/memberships`                      | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
+| `GET /api/v1/providers`                         | registry.organisations | `registry.organisations.v1.read`             | default    | yes            |
+| `GET /api/v1/providers/{id}`                    | registry.organisations | `registry.organisations.v1.read`             | default    | yes            |
 | `GET /memberships`                              | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /memberships/summary`                      | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /organisation-types`                       | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
@@ -160,6 +163,9 @@ the same file answers 401 and 403 on every non-public route.
 | `POST /organisations/{id}/membership`           | registry.organisations | `registry.organisations.membership.request`  | default    | no             |
 | `PUT /organisations/{id}/logo`                  | registry.organisations | `registry.organisations.organisation.read`   | strict     | yes            |
 | `DELETE /services/{id}/icon`                    | registry.services      | `registry.services.service.read`             | default    | yes            |
+| `GET /api/v1/services`                          | registry.services      | `registry.services.v1.read`                  | default    | yes            |
+| `GET /api/v1/services/{id}`                     | registry.services      | `registry.services.v1.read`                  | default    | yes            |
+| `GET /api/v1/services/{id}/schema-org`          | registry.services      | `registry.services.v1.read`                  | default    | yes            |
 | `GET /licenses`                                 | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /public/services/{ref}`                    | registry.services      | **public**                                   | default    | no             |
 | `GET /public/services/{ref}/schema-org`         | registry.services      | **public**                                   | default    | no             |
@@ -227,6 +233,41 @@ The pages of the web app follow the same rule ([ADR-0027](../adr/0027-web-shell-
 when its module says why and `PUBLIC_PAGES` of `core.ui-shell` lists it, and the server decides who may open a page from the same list that
 builds the navigation. The sign-in, registration, recovery and first-admin pages are public; the profile needs
 `core.identity.profile.read`. Public pages call only routes that are public or need the session the page checks for itself.
+
+## The public API (v1)
+
+Routes under `/api/v1` are the ones programs call ([ADR-0037](../adr/0037-public-api.md)). They follow the rules of every route, with these additions:
+
+- **A v1 route is never public**, with one named exception: `GET /api/v1/openapi.json` (module `public-api`) describes the API (routes, schemas, the
+  permission each route needs) and holds no record; it is also committed to the repository and drawn by the public page `/docs`. A walker
+  (`public-api-full-profile.test.ts`) fails when any other v1 route is `public: true`, and when a v1 path appears that nobody listed.
+- **A call needs a token.** `Authorization: Bearer` or `X-API-Key`; the token passes only for a permission that its scopes name **and** its owner holds
+  (ADR-0015), checked at every call against the database. A session cookie is accepted on v1 as on any route (a person on the instance's own pages), and
+  it never makes a response readable to another origin: `Access-Control-Allow-Credentials` is never sent.
+- **CORS** is an allow-list of origins in the `public-api` setting `corsOrigins` (empty: same origin only). Only `/api/v1` answers a preflight, the
+  header is the caller's own origin and never `*`, and `/api/internal` never carries a CORS header.
+- **Every v1 call with `audit: true` is recorded** in the `api` channel of the audit trail, denied (401, 403) and limited (429) calls included, with the route
+  template, the status and the id of the token (never the token). A call the rate limit turns away is recorded without the token id: the limit runs before the
+  token is checked, so that a flood of guesses costs no hash each. The spec route is not audited.
+- **A v1 read never returns what the module's internal read hides.** The v1 rows of the field tables are in "The v1 rows (token)" below, and `response-fields.test.ts`
+  walks the v1 schemas: it pins the names of each v1 answer and fails on a contact field, an audit column or a hint for the screens. One permission per
+  route family, `registry.organisations.v1.read` and `registry.services.v1.read`, held by the role `user` by default; a token needs the scope as well.
+
+### The API reference (`/docs/reference`)
+
+The reference is a document of the web shell, not a route of the API ([ADR-0038](../adr/0038-api-reference-with-scalar.md)), so it is not in the route table
+above. It decides nothing:
+
+- **It is public by design** (the landing page `/docs` is too): it holds no record, and the description it draws, `GET /api/v1/openapi.json`, is the one public v1
+  route. A person who wants to call a route pastes a token into Scalar's authentication panel; the call goes from their browser to this origin, and the
+  answer, 200, 401 or 403, is the server's (the pipeline and the service check the token and its scope as for any caller). The page never judges a token.
+- **The token stays in the page.** `persistAuth` is off, so it is in no `localStorage`, `sessionStorage` or cookie; the proxy, the telemetry, the AI agent and the
+  default fonts are off, and the policy of the document has `connect-src 'self'`, so a token cannot go to another host, even if a person types another
+  server into the panel. The end-to-end journey (`apps/web/e2e/reference.spec.ts`) proves this under both base paths: the browser's storage and cookies
+  are identical before and after a call, no request leaves the origin, and the secret is in no line of the audit trail and no line of the log.
+- **The policy** of this one document differs from the instance's in `style-src 'unsafe-inline'` (Scalar writes styles while it runs), which is the only
+  relaxation; scripts are `'self'` and a nonce, and the strict policy of every other page is tested to be unchanged. The document is the same for every
+  request (it takes no input), so the relaxation has nothing to inject into.
 
 ## Rules on one resource
 
@@ -505,6 +546,30 @@ The events name ids and field keys, never a value: `registry.service.updated@1` 
 (`by` is the highest group the change needed), `slugChanged@1`, `published@1` and `unpublished@1` have `{ serviceId, actorId }`.
 `core.audit` logs a new slug, a publication and an unpublication as critical (they change an address others link to, and who can read the
 service), and an update as an ordinary admin event whose payload says who used which group.
+
+### The v1 rows (token)
+
+What a token reads through the public API (`/api/v1`, ADR-0037 decisions 9 to 12, M8 sprint 2). Each v1 row is its own response schema, not the internal
+record with fields removed; `response-fields.test.ts` compares the property names of every v1 answer with the lists below and fails on a field that is added,
+on a contact field (`contactEmail`, `contactType`, `contactPoint`) and on any name the internal read hides. A v1 route needs a token whose scopes name the
+route's permission and whose owner holds it (the role `user` does by default); the service checks it again.
+
+| Provider row (`GET /api/v1/providers` and `/{id}`)                        | Who reads it                        | Notes                                                                                                                                                                                          |
+| ------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `abbreviation`, `name`, `description`, `website`, `sameAs`, `rorId` | `registry.organisations.v1.read`    | The descriptive fields the signed-in record already shows every signed-in person. Only organisations of the `provider` type.                                                                   |
+| `isMember`                                                                | the token's owner, about themselves | True for an **approved** membership (a manager counts); `is_member=true` and `false` filter by it, `false` being all the others.                                                               |
+| not in it                                                                 | nobody through v1                   | The contact point, `type`, `memberCount`, `myMembership` (the person's own requested, rejected and left rows), `logoUrl` (a path below the internal API), `editableFields`, the audit columns. |
+
+| Service row (`GET /api/v1/services`) and record (`GET /api/v1/services/{id}`) | Who reads it                | Notes                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `abbreviation` (the current slug), `name`, `stage`, `license`           | `registry.services.v1.read` | `stage` is the term key of the vocabulary, never its label.                                                                                                                                                                           |
+| `public`                                                                      | `registry.services.v1.read` | A service that is not public is returned too: the internal read gives every holder of `registry.services.service.read` every service.                                                                                                 |
+| `provider`, `consortia` (abbreviations), `providerId`, `consortiaIds`         | `registry.services.v1.read` | `consortia` holds the organisations with the role `consortium` only, by name; `[]` for none; one row per service.                                                                                                                     |
+| `description`, `url`, `sameAs` (the record only)                              | `registry.services.v1.read` | As in the signed-in record.                                                                                                                                                                                                           |
+| not in it                                                                     | nobody through v1           | The contact point, `slug` (it is `abbreviation`), `organisations`, `iconUrl`, `values` (the configured fields; M9 adds categories through their own routes), `redirectedFrom`, `editableFields`, `allowedActions`, the audit columns. |
+
+`GET /api/v1/services/{id}/schema-org` is the profile of the internal route (the same builder and `serializeJsonLd`): a `Service` has no contact point and the
+profile never maps the stage; the `logo` is the one the public profile shows anyone.
 
 ### Membership
 

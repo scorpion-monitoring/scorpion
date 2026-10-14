@@ -63,6 +63,13 @@ export default defineConfig(
     rules: { 'no-restricted-syntax': ['error', ...uiSelectors] },
   },
   {
+    // eslint-plugin-svelte 3.23.1 asks every link and `goto()` to go through SvelteKit's `resolve()`. That helper
+    // knows `paths.base`, which is empty here: `BASE_PATH` is a run-time value that the front takes off every request
+    // (ADR-0027), so the one way to build a path is `href()` / `url()`, and the rule above already forbids a literal.
+    files: ['**/*.svelte', '**/*.svelte.ts'],
+    rules: { 'svelte/no-navigation-without-resolve': 'off' },
+  },
+  {
     // A loader throws; it never returns a response (defect 12). Replaces the list above for these files.
     files: LOADER_FILES,
     ignores: ['**/*.test.ts'],

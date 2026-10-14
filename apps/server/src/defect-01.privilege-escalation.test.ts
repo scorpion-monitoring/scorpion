@@ -559,13 +559,15 @@ const problem = (reply: Reply) => reply.res.headers.get('content-type') ?? '';
 describe('defect 1: the route table', () => {
   it('has a decision in the matrix for every non-public route, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
     const { kernel } = await start();
-    const live = kernel.routes
-      .filter((entry) => !entry.route.public)
-      .map((entry) => {
-        // The matrix is written for the internal API, which these helpers call.
-        expect(entry.surface, `${entry.route.path} is not an internal route`).toBe('internal');
-        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
-      })
+    const nonPublic = kernel.routes.filter((entry) => !entry.route.public);
+    // The public API (v1) answers tokens, not sessions: its 401 and 403 cases are the harness's, and the walker of
+    // v1-contract-walker.test.ts fails a v1 route without a contract test. Here each of them must name a permission.
+    for (const entry of nonPublic.filter((e) => e.surface === 'v1')) {
+      expect(entry.route.permission, `${entry.route.path} (v1) names a permission`).toBeTruthy();
+    }
+    const live = nonPublic
+      .filter((entry) => entry.surface === 'internal')
+      .map((entry) => `${entry.route.method.toUpperCase()} ${entry.route.path}`)
       .sort();
     expect(live.length).toBeGreaterThan(10);
     const missing = live.filter((key) => !(key in SAMPLES));

@@ -39,6 +39,16 @@ export function limitsFromSettings(
 }
 
 /**
+ * How much bigger the address bucket is for a call that carries a token or key, in the `default` group.
+ * Many programs, each with its own token, can share one address (a proxy, a campus network, a CI
+ * runner): the token's own bucket limits each of them, and this bucket only stops one address from
+ * running many tokens at once. It is separate from the bucket of the browsers on that address, so a
+ * script with a token does not use up the budget of the people behind the same NAT, and the other way
+ * round. The `strict` group is not scaled: its routes are the ones an attacker gains from.
+ */
+export const TOKEN_ADDRESS_FACTOR = 10;
+
+/**
  * A bearer token or API key, as an opaque id for the bucket: its hash, so the secret itself is
  * never written to the database or the log. Session cookies are not keyed here; they count
  * against the address.
@@ -75,7 +85,8 @@ export interface RateLimitOptions {
 
 /**
  * Step 2: a token bucket per client address and, when the request carries a bearer token or API
- * key, one per credential. A denied request is answered with 429 problem+json and `Retry-After`
+ * key, one per credential (and then the address bucket is the separate, larger one of
+ * `TOKEN_ADDRESS_FACTOR`). A denied request is answered with 429 problem+json and `Retry-After`
  * before the body is read or the handler runs. The buckets are per route group, so a flood of
  * logins does not use up the budget of the rest of the API.
  */
@@ -83,14 +94,26 @@ export function rateLimit(options: RateLimitOptions): MiddlewareHandler<AppEnv> 
   const { limiter, group, limit, clientIp, log } = options;
   return async (c, next) => {
     // No address (no socket) means one shared bucket: stricter, never open.
-    const keys = [`ip:${group}:${clientIp(c) ?? 'unknown'}`];
+    const address = clientIp(c) ?? 'unknown';
     const credential = credentialKey({ get: (name) => c.req.header(name) });
-    if (credential) keys.push(`credential:${group}:${credential}`);
-
     const current = typeof limit === 'function' ? await limit() : limit;
+    const scaled = credential !== undefined && group === 'default';
+    const buckets: { key: string; limit: RateLimit }[] = [
+      scaled
+        ? {
+            key: `ip-token:${group}:${address}`,
+            limit: {
+              capacity: current.capacity * TOKEN_ADDRESS_FACTOR,
+              refillPerSecond: current.refillPerSecond * TOKEN_ADDRESS_FACTOR,
+            },
+          }
+        : { key: `ip:${group}:${address}`, limit: current },
+    ];
+    if (credential) buckets.push({ key: `credential:${group}:${credential}`, limit: current });
+
     let retryAfter = 0;
-    for (const key of keys) {
-      const decision = await limiter.consume(key, current);
+    for (const { key, limit: bucket } of buckets) {
+      const decision = await limiter.consume(key, bucket);
       if (!decision.allowed) {
         retryAfter = decision.retryAfterSeconds;
         break; // the next bucket is not charged for a request that is refused

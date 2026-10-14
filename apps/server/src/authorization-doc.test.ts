@@ -17,10 +17,11 @@ const audited = (audit: unknown) =>
 
 describe('docs/security/authorization.md', () => {
   it('lists every route of the live registry with its permission [ASVS-8.1.1]', async () => {
-    const { kernel } = await app.start();
+    const { kernel } = await app.start({ publicApi: true });
     const rows = kernel.routes
       .map(({ module, surface, route }) => ({
-        key: `${route.method.toUpperCase()} ${route.path}`,
+        // A v1 route shares its path with an internal one (`GET /services`): the public API is named with its prefix.
+        key: `${route.method.toUpperCase()} ${surface === 'v1' ? '/api/v1' : ''}${route.path}`,
         module,
         surface,
         access: route.public ? '**public**' : `\`${route.permission}\``,

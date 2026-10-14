@@ -2,8 +2,8 @@ asvs_version: 5.0.0
 level: 2
 chapter: V7
 assessment_type: self
-assessed_commit: ecce966e14e234a03e8440599e384b43d42adc9f
-assessed_on: 2026-10-13
+assessed_commit: c8e270243b5874680104f484baa1c40144825076
+assessed_on: 2026-10-14
 assessor: feserm
 second_pass: null
 reviewer: null
@@ -30,7 +30,11 @@ requirements:
     evidence:
       - test: ASVS-7.2.1
       - code: modules/core-identity/service/sessions.ts
-    note: 'Every request is checked against identity_session by the SHA-256 of the cookie value; nothing is verified in the browser. A 5 s per-process cache is the documented staleness bound (ADR-0007).'
+      - code: apps/server/src/public-api-routes.test.ts
+      - doc: docs/adr/0037-public-api.md
+      - doc: docs/adr/0038-api-reference-with-scalar.md
+      - code: apps/web/e2e/reference.spec.ts
+    note: 'Every request is checked against identity_session by the SHA-256 of the cookie value; nothing is verified in the browser. A 5 s per-process cache is the documented staleness bound (ADR-0007). M8 sprint 1: the public API (`/api/v1`) uses the same authenticator, so a token on a v1 route is checked against identity_token at every call (a made-up token is 401; expiry and an owner who is no longer active are 401 at once). Tagged tests: apps/server/src/public-api-routes.test.ts. A session cookie is also accepted on v1, as on any route, and the CORS step never sends Access-Control-Allow-Credentials, so a page on another origin cannot read such an answer (ADR-0037). M8 sprint 3: the API reference at /docs/reference (ADR-0038) is where a person pastes a token to try a call. It verifies nothing: the journey in apps/web/e2e/reference.spec.ts (tagged) sends a made-up token from the reference and the server answers 401, a token without the scope 403 and one with it 200, and the browser keeps the token in no storage and no cookie, in no line of the audit trail and no line of the log.'
   - id: v5.0.0-7.2.2
     status: pass
     evidence:
@@ -68,7 +72,7 @@ requirements:
     evidence:
       - test: ASVS-7.4.1
       - code: modules/core-identity/service/sessions.ts
-    note: 'Logout, log out everywhere and expiry delete or stop the row; other server processes may accept a revoked session for at most the 5 s cache TTL (ADR-0007). M5 sprint 4 (ADR-0028): a response that outlives the check at its start, the live inbox count `GET /inbox/stream`, ends within one heartbeat (25 s) of the session or token becoming bad: the pipeline offers `recheckActor` (the same authenticator, with the credentials of the request) and the stream re-checks at every heartbeat. The tagged tests apps/server/src/inbox-stream-routes.test.ts end a stream by a logout, by an administrator ending the sessions of the person, by an expired session and by a revoked token, and apps/server/src/pipeline/authenticate.test.ts covers the re-check.'
+    note: 'Logout, log out everywhere and expiry delete or stop the row; other server processes may accept a revoked session for at most the 5 s cache TTL (ADR-0007). M5 sprint 4 (ADR-0028): a response that outlives the check at its start, the live inbox count `GET /inbox/stream`, ends within one heartbeat (25 s) of the session or token becoming bad: the pipeline offers `recheckActor` (the same authenticator, with the credentials of the request) and the stream re-checks at every heartbeat. The tagged tests apps/server/src/inbox-stream-routes.test.ts end a stream by a logout, by an administrator ending the sessions of the person, by an expired session and by a revoked token, and apps/server/src/pipeline/authenticate.test.ts covers the re-check. M8 sprint 1: a revoked token is 401 on a v1 route at the next call even with a long token cache (tagged test in apps/server/src/public-api-routes.test.ts), as it is on the internal API.'
   - id: v5.0.0-7.4.2
     status: pass
     evidence:

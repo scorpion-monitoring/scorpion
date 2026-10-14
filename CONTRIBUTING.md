@@ -92,6 +92,9 @@ edit it by hand.
   `dependabot[bot]`) needs no changeset when it changes only `package.json` files, `pnpm-lock.yaml`,
   `docker/Dockerfile` or `.github/workflows/*.yml`. Anything else in a bot pull request needs one.
 - `pnpm changeset:check` runs the same check as CI.
+- `pnpm openapi:diff` compares the committed v1 OpenAPI document with the one of the last release tag and fails a breaking
+  change (a removed path, field or enum value, a narrowed type, a new required request field, a removed security scheme).
+  `--base <ref>` compares with another ref.
 
 The internal `@scorpion/*` packages are not versioned separately. The root package
 `scorpion` carries the one product version, which the image tags use.
@@ -102,7 +105,7 @@ The `CI` workflow runs its work as parallel jobs, so a run takes as long as its 
 
 | Job                          | Does                                                                                    |
 | ---------------------------- | --------------------------------------------------------------------------------------- |
-| `Static checks`              | branch policy, changeset check, `pnpm check`                                            |
+| `Static checks`              | branch policy, changeset check, `pnpm check`, `pnpm openapi:diff` (v1 compatibility)    |
 | `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                       |
 | `End-to-end tests (n/3)`     | Playwright, one JUnit file per shard (the browser download is cached)                   |
 | `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                      |
@@ -197,6 +200,8 @@ pnpm check                                  # lint, format, type check
 pnpm test                                   # all packages (needs Docker)
 pnpm test --filter @scorpion/<package>      # the packages you touched
 pnpm test:e2e                               # if a user journey is affected
+pnpm test:all                               # unit and e2e at once, the e2e in two runs (one per base path)
+pnpm openapi:diff                           # if a v1 route changed: compares with the last release tag
 pnpm changeset                              # or: pnpm changeset --empty
 ```
 

@@ -38,7 +38,9 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **The old value of a setting is not in the trail.** The event names the keys, not the values (ADR-0017). If an operator needs "from what to what", store the diff in the audit payload for keys that a schema marks as non-sensitive.
 - ~~**Event payloads without `username`.**~~ Done in M5 sprint 4: `GET /audit` and `GET /audit/{id}` carry `userName` (the name the account has now, `null` for a purged one) and the Logs page shows "deleted account" with the first characters of the id. (was: The stored payload leaves the username out so a purge does not leave a name in an append-only table. The viewer shows ids; the admin UI must join the user table and show "deleted account" for a purged one.)
 - ~~**A purged account's id stays in the trail**~~ Done in M5 sprint 4: the description of the legal texts in the settings of `core.settings` says the privacy text should say so; the Logs page says it too. (was: as an actor or subject, until retention. That is the point of an audit trail; say so in the privacy text (M5).)
-- **The public API channel has no writer yet.** `channels.api` and `apiRetentionDays` are in place, but `/api/v1` exists only from M8. The first public route sets `audit: true`; check that `surface: 'v1'` entries land under `channels.api`.
+- **The public API channel has its first writer (M8 sprint 1).** A v1 route with `audit: true` is recorded under `channels.api` (tested for 200, 401, 403, 422 and 429, and the switch). Size, measured with 1000 calls of one token on the fixture route: about 231 bytes of row data per call, about 0.5 MB per 1000 calls with the table's indexes (so 90 days at 100 000 calls a day is about 4.5 GB: `apiRetentionDays` and the call volume of the busiest token decide whether that is acceptable; a plain table, no partitioning).
+- **A call the rate limit turns away is audited without the token id.** The audit hook wraps the limit, which runs before authentication on purpose. The entry has the address and the request id. If operators need the token, record its prefix (`scp_<prefix>_…`, which is not a secret and is shown in the token list) as the subject of a 429 entry; no hash is needed for that.
+- **`audit_event` has no `surface` column,** so internal and v1 calls are both `source = 'api'` and share `apiRetentionDays` (see "Per-surface retention" above); the viewer cannot filter on the surface except by the path prefix.
 - **Optional peers for later modules.** A module that declares events (M6 onwards) fails the decisions test until `core.audit` has a decision for it; add the module as an optional peer of `core.audit` at the same time. A registry through which a module contributes its own decisions would remove the edit to `decisions.ts`; not worth it for a few modules.
 - **`ctx.audit` has no caller yet** besides the module's own export and requeue entries. The first service that changes something without an event (M6 and later) uses it inside its transaction.
 - ~~**A job-run page.**~~ Done in M5 sprint 4: `GET /system/job-runs` and the System page. (was: `kernel_job_run.result` is filled, and `listJobRuns` returns it, but there is no route to list job runs. Add `GET /system/job-runs` (`core.audit.system.read`) with the system page (M5).)
@@ -155,6 +157,7 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 
 ## End-to-end test follow-ups (0.7.0 release)
 
+- **Two e2e flakes in shard 1/3 of CI, seen on the M7 sprint 7 pull request and the 0.9.0 release pull request** (both passed on a re-run of the failed job, and in a full local run of 426 tests). `profile.spec.ts` "follows the preference of a person over the browser…" timed out on `getByLabel('Username')` of the login page after a sign-out, and `organisations.spec.ts` journey 2 saw 5 rows after "Next" where the second page has 1 (the URL had changed, the table had not within 5 s). Neither touches code of sprint 7. Both wait on a page that reloads the layout's four calls plus the page's own; if they come back, give the failing step a wait on the response, not a longer timeout, and look at the load of the runner.
 - **Only `page.goto` waits for hydration.** A click that loads another page with a full reload, or a form that redirects, is not covered by the wait (`hydrated(page)` in `apps/web/e2e/support/fixtures.ts` can be called by hand). Look at the first failure of any E2E test that types or presses a key right after a navigation before looking elsewhere.
 - **A retry is only as good as its fixtures.** `createUser` now accepts the account of a failed first attempt (409 on a retry), but a test that changes the account before it fails (password, email) leaves a different state for the retry. Prefer tests that create what they change.
 
@@ -284,6 +287,8 @@ Found while using the instance; not yet investigated.
   catalogue (M7 sprint 4) makes three API calls per load (the list, the facets and `GET /account/permissions`) and repeats them on every filter click, so it is likely to be the worst page; M7 sprint 7 measured the calls per page (below) and changed nothing in the pipeline. The
   pipeline is an ASVS-scoped path (V7, V8): the change needs the chapter files or the `asvs-no-impact` line and a test that the public
   endpoints (login, register, token use) stay limited.
+
+  **A v1 call is a token call** and does not draw from the browsers' address bucket; the numbers (one v1 call is one API request, the documentation pages make 3 to 5 and the reference 2) are under "Public API follow-ups (M8 sprint 3)".
 
   **Measured in M7 sprint 7** (nothing in the pipeline or in a limit changed). Method: the e2e stack with the API's request log on, a signed-in
   person in a fresh browser, every `/api/` request counted at the API, whoever made it (the browser, or the web server's loaders, which forward
@@ -452,6 +457,120 @@ Found while using the instance; not yet investigated.
 - **A public service has no link back to a list.** There is no public catalogue (plan §12); the public pages link to each other through the provider and the
   groups only.
 
+## Public API follow-ups (M8 sprint 1)
+
+- **v1 token calls and the browser's address bucket (measured).** Before M8 a token call drew from the same `ip:default` bucket as the browsers on its
+  address; now it has its own `ip-token:default` bucket (ten times the group's size) and the token's own bucket. Measured in
+  `public-api-routes.test.ts` with a bucket of 3: after four browser calls from one address a token on that address still gets its three, and the browser
+  is still refused afterwards; two tokens on one address each get their three; eleven tokens on one address get 30 together. The calls per page of the web
+  app (the table under "Too many 429s") are unchanged: they are session calls and still count against the browser bucket.
+- **The server URL of the document is the request's origin.** Behind a proxy that does not pass `Host` it names the internal address; `config.ORIGIN`
+  (the public origin that mail links use) is the alternative if that happens.
+- **CORS and anti-automation are outside the four ASVS chapters.** ASVS 5.0 has CORS in V3 and rate limits in V2; the entries of V7 and V8 cite only the
+  requirements those tests prove (7.2.1, 7.4.1, 8.1.1, 8.2.1, 8.3.1). If V2 or V3 are ever claimed, the CORS and limit tests of `public-api-routes.test.ts`
+  and `pipeline/cors.test.ts` are the evidence to tag.
+- **The contract-test walker matches a route's `'GET /path'` string in a file that calls `v1ContractTests(`.** A comment with the string satisfies it; a
+  review catches that. A stricter walker would register the route object, which separate test files cannot share.
+- **A session cookie is accepted on `/api/v1`** like on any route. If v1 should be token-only, the pipeline needs a per-route "tokens only" flag in
+  `packages/contracts/src/route.ts` (an ASVS V8 scoped file); not planned.
+- **The preflight answer lists the methods v1 has overall,** not those of the path asked. Harmless while v1 is read-only; revisit with M10's `POST`.
+
+## Public API follow-ups (M8 sprint 2)
+
+- **`category` in the service row.** The legacy `Service` has a required `category` (the KPI category). It is not in the v1 row until M9 (`kpi.framework`); then it is
+  added as a new field (additive). Until then a client that requires it breaks.
+- **A by-slug read of a service.** `GET /api/v1/providers/{id}` was added in sprint 2, so a client can follow `providerId`; there is no
+  `GET /services/by-slug/{slug}` (the internal route follows old slugs with `redirectedFrom`) and no read of a consortium.
+- **Names and ids beside the abbreviations.** `provider` and `consortia` are abbreviations as in the legacy API, with `providerId` and `consortiaIds` beside
+  them; the organisation names are not in a service row. A client that needs them reads `GET /providers` (consortia are not providers: there is no
+  consortium read in v1).
+- **Logos and icons in v1.** `logoUrl` and `iconUrl` are paths below the internal API and are not in v1 rows; the Schema.org profile has the `logo` it always had.
+  A v1 file route (or an absolute public URL) would add them.
+- **`values` (configured fields) in the service record.** Left out: its shape is open and M9 fills it with categories. It would be added with the category routes.
+- **A comma in an organisation abbreviation.** `provider=A,B` splits on commas, so an abbreviation that contains one cannot be asked for by `provider` (the
+  schema allows it; slugs cannot contain one). Repeated parameters would remove the limit; the legacy document does not say which one legacy used.
+- **A consortium filter and a `q` search in v1.** The internal catalogue has them; v1 has only the legacy filters and the cheap catalogue ones (`stage`, `license`).
+- **`service=` matches current slugs only.** An old slug is a redirect of the screens, not a name of v1.
+- **Legacy clients that send `pageSize` above 100** (the legacy default was 1000) get 422, as decided in ADR-0037 decision 11. If that turns out to hurt, a higher
+  cap for v1 lists is a decision for the next sprint (the harness checks 100000 only).
+- **The contract harness fetches at most 20 pages** in its page-walk case; with more rows it checks the order of those 20 only (fixed in sprint 2 so that it no
+  longer compares an incomplete walk with the whole list). A table-driven test of that rule is not written.
+- **The services list on 5,000 services (measured, M8 sprint 2).** 5,000 generated services (40 providers, 12 consortia, 0 to 3 consortia each; a throwaway
+  test, not committed), one token, calls made in-process through the whole pipeline on a local Postgres 16 (no network, so the times are the server's own), 30
+  calls per case after 3 warm-up calls. Median and p95 per request, and the statements sent to Postgres per request, BEGIN and COMMIT included and the
+  token check, the authorisation and the audit entry of the call included (`GET /providers?pageSize=100` on 40 rows is the floor at 4.1):
+
+  | Request                                      | Median  | p95     | Statements | Body    |
+  | -------------------------------------------- | ------- | ------- | ---------- | ------- |
+  | `/services?pageSize=100` (page 0)            | 16.8 ms | 24.3 ms | 6.2        | 30.9 kB |
+  | `/services?pageSize=100&page=49` (last page) | 23.7 ms | 29.1 ms | 6.2        | 31.1 kB |
+  | `…&provider=MP7` (125 services)              | 23.6 ms | 28.2 ms | 10.3       | 37.7 kB |
+  | `…&provider=MP7,MP8,MP9` (375 services)      | 27.5 ms | 30.6 ms | 14.5       | 30.3 kB |
+  | `…&service=msvc-00042`                       | 8.8 ms  | 9.7 ms  | 7.2        | 0.4 kB  |
+  | `…&stage=DEV&license=MIT` (833 services)     | 20.2 ms | 22.4 ms | 8.3        | 33.1 kB |
+  | `/services/{id}`                             | 7.4 ms  | 9.1 ms  | 5.2        | 0.4 kB  |
+  | `/providers?pageSize=100` (40 providers)     | 5.8 ms  | 7.5 ms  | 4.1        | 6.8 kB  |
+
+  What it shows: the statements of a page of 100 services do not depend on the number of consortia of the services (6.2 for page 0 and for the last page, from
+  the catalogue's page, count and organisation-link reads on top of the 4 or so of the call itself). Each `provider=` abbreviation adds about **4
+  statements** (measured: 6.2 to 10.3 to 14.5 for none, one and three); from reading the code these are the lookup of the provider, its member count, and the
+  catalogue's check that the id is known, so 50 abbreviations would be about 200 statements, and a batch lookup of abbreviations in `registry.organisations`
+  would make it constant (not built). The last page costs about 7 ms more than page 0 (the offset). Not measured: concurrent calls, a network, a cold cache, or more than 5,000 services.
+
+## Public API follow-ups (M8 sprint 3)
+
+- **A v1 call does not count against the browser's address bucket (measured).** Method: the e2e stack on the `full` profile, the API's own
+  `scorpion_http_request_duration_seconds_count` (`/metrics`, by route, method and status) read before and after, one fresh Chromium context per page, the
+  numbers from the working tree of sprint 3. One `GET /api/v1/providers` with a token is **one** API request, counted in the `ip-token:default` bucket and
+  the token's own bucket, and in none of the `ip:default` bucket the browsers on that address draw from (ADR-0037, decision 1; the bucket separation itself is
+  proved in `public-api-routes.test.ts`). The pages of the documentation, for comparison with the table under "Too many 429s":
+
+  | Page                                | API calls | What they are                                                        |
+  | ----------------------------------- | --------: | -------------------------------------------------------------------- |
+  | `/docs`, signed out                 |         3 | `ui/navigation`, `branding`, `bootstrap/status` (the layout's calls) |
+  | `/docs`, signed in                  |         5 | the same plus `auth/me`, `preferences` and `inbox/stream` (the bell) |
+  | `/docs/reference`, signed out or in |         2 | `branding` (the route's, for the page title) and `v1/openapi.json`   |
+  | `/` for comparison, signed out      |         2 | `ui/navigation`, `branding`                                          |
+
+  The reference makes no call of the layout (it is not a page of the shell) and, on purpose, no session call: the language of its one link back is the
+  browser's, because the saved preference would cost two more calls signed in (measured: 4 against 2). Each Test Request a person sends from it is one v1
+  call (above).
+
+- **What the reference costs (measured, local).** The script is the single-file build of `@scalar/api-reference` 1.74.0: **4,571,171 bytes** as shipped (the
+  package's file without its source-map comment; the 17 MB map is not shipped), **1,328,455 bytes** gzip and **991,457 bytes** brotli (adapter-node
+  precompresses both and serves them by `Accept-Encoding`). Headless Chromium on the same machine as the stack (loopback, so no network time), 12 runs each,
+  the time from the start of the navigation to the first route link of the sidebar being visible: **cold cache** 3 requests, 1,018,195 bytes on the wire,
+  median **1,016 ms** (p95 1,050 ms, fastest 964 ms); **warm cache** (the script cached for its year) 3 requests, 26,406 bytes, median **967 ms** (p95 1,022 ms).
+  The landing page `/docs` is drawn at a median of **220 ms** (p95 288 ms). So the cache saves the transfer and about 50 ms; most of the second is the
+  browser parsing and running the bundle and Scalar drawing the document. Not measured: a real network, a phone, a cold server, the image size per profile
+  (below).
+- **The images carry it (measured).** The `registry` image built from `dev` is 613,598,713 bytes; built with sprint 3 it is 624,454,105: **+10.9 MB**. That is
+  the script (4,571,171 bytes, with its 1,328,455-byte gzip and 991,457-byte brotli copies next to it) and the wrapper's code bundled into the server build;
+  `node_modules` is unchanged at 216 MB. With the wrapper as a `dependency` the same image was 740 MB: its production install pulled `@sveltejs/kit` through the
+  wrapper's peer dependency, and with it Vite, esbuild, rolldown, lightningcss and TypeScript (+87 MB of `node_modules`), so it is a development dependency
+  that Vite bundles (ADR-0038, decision 2). Method: `docker image inspect` on `docker build --build-arg PROFILE=registry` of each tree on the same machine.
+- **The reference is English.** `@scalar/api-reference` 1.74.0 has no `locale` option (its bundle holds German and other texts, but `<html lang>` does not
+  select them; tried with `de`). When it gets one, the route can pass the browser's language; the landing page and the link back are en and de already.
+- **One policy report on load.** The bundle's Zod tests `Function('')` inside a `try`; the reference's policy has no `'unsafe-eval'`, so the browser reports a
+  `script-src` violation of `eval`, and Zod falls back. No console message. `e2e/support/reference.ts` (`KNOWN_REPORTS`) names it and fails on any other; if a
+  Scalar upgrade removes it the test says so (the list is then emptied), if it adds one the upgrade is read first (ADR-0038).
+- **"Powered by Scalar" is a link to the vendor** in the sidebar of the reference. It is followed only by a click and nothing is fetched. Hiding it would be a
+  custom CSS rule; not done, as the licence (MIT) does not ask for it and the maintainer did not ask to.
+- **`/docs/reference` is reachable on a fresh install** (before the first administrator exists), unlike the shell's pages, which show the first-administrator form.
+  It is a document with no record, and its data is the public spec. Revisit only if the shell's rule becomes "nothing but the form".
+- **The landing page names "Access tokens" and "Zugriffstoken" in words** (the section of the profile page). A rename of that section's title in
+  `core.identity` needs the two texts in `core.ui-shell` changed; the journey (`reference.spec.ts`) finds the section by its title and would fail first.
+- **`pnpm openapi:diff` is a small script of our own** (plan Decision 6). What it reads: paths, methods, parameters, request bodies, responses and their media
+  types, fields, `required`, types, enums, the bounds, `pattern` and `format` of what a client sends, the security schemes, the scope (`x-permission`) and
+  whether a route is public. Its gaps: `additionalProperties`, `oneOf` with a discriminator, response headers, `default` values, the bounds of a response, a
+  `$ref` outside the document, `callbacks` and `webhooks`, and a changed description or example (never a breaking change). A renamed field is read as a removed
+  one plus an added one. Revisit when v1 grows in M9 to M11; a general differ (`oasdiff`) is the alternative and needs a binary in CI.
+- **The release tag is the contract.** `pnpm openapi:diff` compares with the last release tag reachable from `HEAD`; a hotfix branch from `main` and a release
+  branch both find it. A pull request that adds a route and a later one that removes it before a release is not seen as a break (nothing was promised).
+- **Scalar upgrades:** Dependabot groups `@scalar/*` into one pull request (`dependabot.yml`); the gate is in ADR-0038, "What an upgrade of Scalar has to pass".
+  The CSP of the reference and the strict one are two policies to keep; if Scalar ever stops needing `style-src 'unsafe-inline'`, the reference's test is the
+  place to tighten it.
+
 ## Services follow-ups (M7 sprint 7)
 
 What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in the plan for it:
@@ -462,7 +581,7 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **A review queue for member edits,** a request-and-approve flow for publication (a Reviewer or Admin sets the flag today) and a preview of the public page before publishing.
 - **A public catalogue,** public facets, anonymous search and a sitemap of public services. The public pages link to each other through the provider and the groups only.
 - **Transfer of a service between providers by someone who is not a manager** of both, and a per-service history view beyond the audit trail (and the slug history).
-- **A public read of `services` in v1** with the Schema.org representation (additive); M8.
+- **A public read of `services` in v1** with the Schema.org representation (additive); M8. _Done in M8 sprint 2: `GET /api/v1/services`, `/services/{id}` and `/services/{id}/schema-org`._
 - **Logos and icons in list rows.** The catalogue shows the service icon; the organisation lists, the member tables and the public organisation page's service list show none.
 - **The layout's four calls on every navigation** and what to do about them are in "Too many 429s" above, with the numbers.
 
@@ -479,7 +598,7 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - Approval policies `auto-by-email-domain` and `invite-only` (architecture lists them; M2 ships `manual` only).
   Invite-only needs an invitation table and email delivery (M4) and admin permissions (M3).
 - Test harness for a module: every module test file builds a kernel over Postgres by hand (`modules/core-identity/test/harness.ts`). Move it to a shared helper once a second module needs it; `packages/testing` cannot import the kernel without a package cycle, so it probably belongs with the kernel's test exports.
-- Rate limits: the numbers are the `rateLimits` setting of `core.settings` since M3 sprint 3. Still open: a per-credential bucket for session cookies (they count against the address) and finer keys (for example per username on login).
+- Rate limits: the numbers are the `rateLimits` setting of `core.settings` since M3 sprint 3. Still open: a per-credential bucket for session cookies (they count against the address) and finer keys (for example per username on login). M8 sprint 1 gave the token calls their own, larger address bucket (`TOKEN_ADDRESS_FACTOR`, ADR-0037); the browsers' bucket is unchanged.
 - Sprint 2 follow-ups: (1) Done in M3 sprint 2: `approve` and `reject` check the permission and "not your own account" with `ctx.authz.require` in the service. (2) An `Origin` check as a third CSRF layer (ADR-0007) needs the public origin to be reliable behind every proxy; revisit with the settings in M3. (3) `POST /auth/register` answers 409 for a taken username or address, which tells a caller that it exists. Decided in sprint 5 to keep it for M2; see "Sprint 5 follow-ups". (4) Done in sprint 5: the purge of soft-deleted accounts after 30 days frees the username and the address (ADR-0013).
 - Sprint 4 follow-ups (OIDC): (1) A public `GET /auth/oidc/providers` (id and display name) for the login page, with the UI in M5. (2) Done in sprint 5: the hourly cleanup job removes expired `identity_login_state` rows. (3) `email_verified` sent as the string `"true"` by some providers is treated as not verified; add a per-provider option if a real provider needs it. (4) Provider icons (FEATURES asks for a display icon): the blob store exists since M3 sprint 4; add an icon hash to the provider setting with the login page (M5). (5) The code exchange cannot be aborted (arctic has no signal); revisit if arctic gains one. (6) Several identities of one provider per user are refused (409); lift that only with a product reason.
 - Sprint 5 follow-ups (recovery, profile, cleanup):

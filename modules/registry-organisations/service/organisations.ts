@@ -54,6 +54,7 @@ import {
   PERMISSION_MANAGE,
   PERMISSION_READ,
   PERMISSION_READ_CONTACT,
+  PERMISSION_V1_READ,
   RESOURCE_TYPE,
 } from './permissions.ts';
 
@@ -62,6 +63,7 @@ export {
   PERMISSION_MANAGE,
   PERMISSION_READ,
   PERMISSION_READ_CONTACT,
+  PERMISSION_V1_READ,
   RESOURCE_TYPE,
 } from './permissions.ts';
 
@@ -148,6 +150,25 @@ export interface OrganisationRecord extends Omit<OrganisationSummary, 'myMembers
   sameAs: string[];
 }
 
+/** The id of the organisation type that `GET /api/v1/providers` lists (a key of the registry `org.type`). */
+export const PROVIDER_TYPE = 'provider';
+
+/**
+ * A row of `GET /api/v1/providers` (ADR-0037 decision 9): the legacy `abbreviation` and `name`, and what is added
+ * to them. Never the contact point, the audit columns, the member count or the caller's own membership rows.
+ */
+export interface ProviderV1 {
+  id: string;
+  abbreviation: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  rorId: string | null;
+  sameAs: string[];
+  /** The caller has an approved membership (a manager is a member). */
+  isMember: boolean;
+}
+
 export interface ListFilter {
   q?: string | undefined;
   type?: string | undefined;
@@ -159,6 +180,21 @@ export interface OrganisationsService {
     filter: ListFilter,
     page: { page: number; pageSize: number },
   ) => Promise<{ organisations: OrganisationSummary[]; total: number }>;
+  /**
+   * The providers for a token (needs `registry.organisations.v1.read`): all of them, or with `isMember` the ones the
+   * caller is an approved member of (`true`) or **all the others** (`false`, defect 15). By abbreviation without
+   * case, then id; `total` counts the filtered set.
+   */
+  listProvidersV1: (
+    actor: Actor,
+    filter: { isMember?: boolean | undefined },
+    page: { page: number; pageSize: number },
+  ) => Promise<{ providers: ProviderV1[]; total: number }>;
+  /**
+   * One provider for a token (needs `registry.organisations.v1.read`), the row of {@link listProvidersV1}. `NotFound` for an
+   * unknown id and for an organisation that is not a provider, `Invalid` for an id that is no UUID.
+   */
+  getProviderV1: (actor: Actor, id: string) => Promise<ProviderV1>;
   get: (actor: Actor, id: string) => Promise<OrganisationView>;
   create: (actor: Actor, input: CreateOrganisationInput) => Promise<OrganisationView>;
   update: (actor: Actor, id: string, input: UpdateOrganisationInput) => Promise<OrganisationView>;
@@ -429,6 +465,18 @@ export function createOrganisationsService(
     return level;
   }
 
+  /** The v1 row of a provider: field by field, so a column added to the table later is not exposed by accident. */
+  const providerRow = (row: Row, isMember: boolean): ProviderV1 => ({
+    id: row.id,
+    abbreviation: row.abbreviation,
+    name: row.name,
+    description: row.description,
+    website: row.website,
+    rorId: row.rorId,
+    sameAs: row.sameAs,
+    isMember,
+  });
+
   const actorId = (actor: Actor): string | null => (actor.kind === 'user' ? actor.userId : null);
 
   /** An id that is no UUID is a bad request (422), never a database error (500). */
@@ -482,6 +530,54 @@ export function createOrganisationsService(
         organisations: rows.map((row) => summary(row, extras(row))),
         total: count?.total ?? 0,
       };
+    },
+
+    async listProvidersV1(actor, filter, page) {
+      await deps.authz.require(actor, PERMISSION_V1_READ);
+      const userId = actor.kind === 'user' ? actor.userId : undefined;
+      const member = userId
+        ? sql`exists (select 1 from ${membership} where ${membership.organisationId} = ${organisation.id} and ${membership.userId} = ${userId} and ${membership.state} = 'approved')`
+        : sql`false`;
+      const where = and(
+        eq(organisation.type, PROVIDER_TYPE),
+        filter.isMember === undefined ? undefined : filter.isMember ? member : sql`not (${member})`,
+      );
+      const [rows, [count]] = await Promise.all([
+        db
+          .select()
+          .from(organisation)
+          .where(where)
+          .orderBy(sql`lower(${organisation.abbreviation})`, asc(organisation.id))
+          .limit(page.pageSize)
+          .offset(page.page * page.pageSize),
+        db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(organisation)
+          .where(where),
+      ]);
+      const mine = userId
+        ? await ownRows(
+            db,
+            userId,
+            rows.map((row) => row.id),
+          )
+        : new Map<string, { state: State; role: Role }>();
+      return {
+        providers: rows.map((row) => providerRow(row, mine.get(row.id)?.state === 'approved')),
+        total: count?.total ?? 0,
+      };
+    },
+
+    async getProviderV1(actor, id) {
+      await deps.authz.require(actor, PERMISSION_V1_READ);
+      requireId(id);
+      const [row] = await db
+        .select()
+        .from(organisation)
+        .where(and(eq(organisation.id, id), eq(organisation.type, PROVIDER_TYPE)));
+      if (!row) throw new NotFound('There is no such provider.');
+      const mine = actor.kind === 'user' ? await ownRows(db, actor.userId, [id]) : undefined;
+      return providerRow(row, mine?.get(id)?.state === 'approved');
     },
 
     async get(actor, id) {

@@ -25,6 +25,7 @@ import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
 import { DEFAULT_MAX_BODY_BYTES, limitBodyPerRoute } from './pipeline/body-limit.ts';
 import { createClientIpResolver } from './pipeline/client-ip.ts';
+import { cors } from './pipeline/cors.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
 import { RATE_LIMITS, rateLimit } from './pipeline/rate-limit.ts';
@@ -60,6 +61,12 @@ export interface AppOptions {
    * recorded, which is what a profile without `core.audit` has.
    */
   audit?: AuditSink;
+  /**
+   * The origins a browser page may call the public API (`/api/v1`) from (the `public-api` setting
+   * `corsOrigins`), read for every request that carries an `Origin` header. Without it, or when it
+   * fails, no origin is allowed: same origin only. `/api/internal` never gets a CORS header.
+   */
+  corsOrigins?: () => Promise<readonly string[]>;
   /** Largest accepted request body. Default 1 MiB. */
   maxBodyBytes?: number;
   /** Called after every request; the metrics use it. */
@@ -79,8 +86,10 @@ export interface AppOptions {
  *  1. request id           5. body size limit      8. handler
  *  2. security headers     6. input validation     9. error mapper
  *  3. request logging      7. authorisation hook
- *  4. rate limit and authentication (a route with `audit` has its audit hook in front of both)
+ *  4. CORS (public API only; a preflight ends here)
+ *  5. rate limit and authentication (a route with `audit` has its audit hook in front of both)
  *
+ * (The numbers in the code comments below are older than the CORS step and are kept as they are.)
  * Steps 1 to 3 and 5 are middleware for every request; step 4 is added per route, because its
  * bucket is the route's group, and runs before the body is read; 6 to 8 run per route (Zod
  * validation, then the hook, then the handler); 9 catches whatever any step throws. Routes are
@@ -105,6 +114,15 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.use('*', requestId());
   app.use('*', securityHeaders());
   app.use('*', requestLogging(log, options.onRequest));
+  app.use(
+    '*',
+    cors({
+      prefix: `${base}${SURFACE_PREFIX.v1}`,
+      origins: options.corsOrigins ?? (() => Promise.resolve([])),
+      methods: options.routes.filter((r) => r.surface === 'v1').map((r) => r.route.method),
+      log,
+    }),
+  );
   app.use(
     '*',
     limitBodyPerRoute(

@@ -54,9 +54,17 @@ test.describe('the shell', () => {
     await nav.getByRole('link', { name: 'API documentation' }).click();
     await expect(page).toHaveURL(new RegExp(`${at('/docs')}$`));
     await expect(page.getByRole('heading', { level: 1, name: 'API documentation' })).toBeVisible();
-    await expect(
-      page.getByText('The public API of this instance has no routes yet.'),
-    ).toBeVisible();
+    // The description of the API (public-api, M8 sprint 1) is one of the v1 routes the page lists; the cell is matched exactly.
+    await expect(page.getByRole('cell', { name: '/openapi.json', exact: true })).toBeVisible();
+    // The reference is a document of its own (ADR-0038); the page links to it under the base path.
+    await expect(page.getByRole('link', { name: 'Open the API reference' })).toHaveAttribute(
+      'href',
+      at('/docs/reference'),
+    );
+    await expect(page.getByRole('link', { name: 'Open your profile' })).toHaveAttribute(
+      'href',
+      at('/profile'),
+    );
     await expect(nav.getByRole('link', { name: 'API documentation' })).toHaveAttribute(
       'aria-current',
       'page',

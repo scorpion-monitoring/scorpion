@@ -10,14 +10,17 @@ export interface DocsOperation {
 
 export interface DocsData {
   operations: DocsOperation[];
+  /** The permissions a token needs to call every route (each once, sorted): what to tick on the profile page. */
+  scopes: string[];
 }
 
 const METHODS = ['get', 'put', 'post', 'delete', 'patch'] as const;
 
 /**
  * The operations of the public API of this build (v1), from the OpenAPI document the build generated
- * (`pnpm openapi:generate`). Sorted by path then method, so the page is stable. v1 has no routes before
- * M8; the page then says so.
+ * (`pnpm openapi:generate`). Sorted by path then method, so the page is stable. A build whose profile has
+ * no v1 route (a profile without `public-api`) gets a page that says so. Nothing here calls the API: the
+ * document is part of the build.
  */
 export function loadDocs({ publicApi }: UiLoadContext): DocsData {
   const operations: DocsOperation[] = [];
@@ -37,5 +40,10 @@ export function loadDocs({ publicApi }: UiLoadContext): DocsData {
     }
   }
   operations.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
-  return { operations };
+  const scopes = [
+    ...new Set(
+      operations.flatMap((operation) => (operation.permission ? [operation.permission] : [])),
+    ),
+  ].sort();
+  return { operations, scopes };
 }
