@@ -191,7 +191,7 @@ const organisationNodeSchema = z.object({
 const propertyValueSchema = z.union([z.string(), z.array(z.string())]);
 
 /** The Schema.org `Service` profile (plan §3). The names are the whole list; a property without a value is absent. */
-const schemaOrgSchema = z.object({
+export const schemaOrgSchema = z.object({
   '@context': z.literal('https://schema.org'),
   '@type': z.literal('Service'),
   '@id': z

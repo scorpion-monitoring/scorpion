@@ -34,6 +34,8 @@ export interface CatalogueQuery {
   q?: string | undefined;
   /** The chosen values by facet id; `FACET_EMPTY` stands for the services that have none. */
   filters?: Readonly<Record<string, readonly string[]>> | undefined;
+  /** Current slugs, without case (OR): the `service` filter of the public API. Not a facet, so it is not counted. */
+  slugs?: readonly string[] | undefined;
   sort?: CatalogueSort | undefined;
   dir?: 'asc' | 'desc' | undefined;
 }
@@ -92,6 +94,16 @@ export function searchCondition(q: string | undefined): SQL | undefined {
   return sql`(${service.slug} ilike ${pattern} escape '\\' or ${service.name} ilike ${pattern} escape '\\')`;
 }
 
+/** The services whose current slug is one of `slugs`, without case; `undefined` when none is asked for. */
+export function slugCondition(slugs: readonly string[] | undefined): SQL | undefined {
+  if (slugs === undefined) return undefined;
+  if (slugs.length === 0) return sql`false`;
+  return sql`lower(${service.slug}) in (${sql.join(
+    slugs.map((slug) => sql`${slug.toLowerCase()}`),
+    sql`, `,
+  )})`;
+}
+
 /**
  * The condition of the search and of every facet that has a choice except `except` (AND across facets,
  * each facet OR within itself). With no `except` it is the condition of the rows; with a facet's id it is
@@ -99,10 +111,10 @@ export function searchCondition(q: string | undefined): SQL | undefined {
  */
 export function catalogueCondition(
   facets: readonly FacetEntry[],
-  query: Pick<CatalogueQuery, 'q' | 'filters'>,
+  query: Pick<CatalogueQuery, 'q' | 'filters' | 'slugs'>,
   except?: string,
 ): SQL | undefined {
-  const conditions: (SQL | undefined)[] = [searchCondition(query.q)];
+  const conditions: (SQL | undefined)[] = [searchCondition(query.q), slugCondition(query.slugs)];
   for (const facet of facets) {
     if (facet.id === except) continue;
     const selection = selectionOf(query.filters?.[facet.id] ?? []);

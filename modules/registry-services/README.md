@@ -27,17 +27,18 @@ Sprint 3 ([ADR-0036](../../docs/adr/0036-service-access.md) part 2): the Schema.
 
 ### Permissions
 
-| Permission                                | Scope     | Allows                                                                                                                                | Held by default by                                                        |
-| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `registry.services.service.read`          | plain     | Read services, search the licence list and list the organisation roles; also what the delegated routes name at the route              | Admin, User, Reviewer                                                     |
-| `registry.services.service.create`        | plain     | Create a service. The service then needs an Admin or an approved member of the chosen provider                                        | Admin, User                                                               |
-| `registry.services.service.manage`        | plain     | Every field of any service, as Admin; never restricted                                                                                | Admin                                                                     |
-| `registry.services.service.publish`       | plain     | Make a service public or private again                                                                                                | Admin, Reviewer                                                           |
-| `registry.services.service.edit`          | `service` | Name, licence, stage, description, URL, `sameAs`, the contact point, the icon, the consortia and the configured fields of one service | Admin; the approved **members** (managers too) of that service's provider |
-| `registry.services.service.edit-identity` | `service` | The slug and the provider of one service                                                                                              | Admin; the approved **managers** of that service's provider               |
-| `registry.services.service.read-contact`  | `service` | Always see the contact point of one service, whatever the setting says                                                                | Admin; the approved members (managers too) of that service's provider     |
+| Permission                                | Scope     | Allows                                                                                                                                  | Held by default by                                                        |
+| ----------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `registry.services.service.read`          | plain     | Read services, search the licence list and list the organisation roles; also what the delegated routes name at the route                | Admin, User, Reviewer                                                     |
+| `registry.services.service.create`        | plain     | Create a service. The service then needs an Admin or an approved member of the chosen provider                                          | Admin, User                                                               |
+| `registry.services.service.manage`        | plain     | Every field of any service, as Admin; never restricted                                                                                  | Admin                                                                     |
+| `registry.services.service.publish`       | plain     | Make a service public or private again                                                                                                  | Admin, Reviewer                                                           |
+| `registry.services.v1.read`               | plain     | Read the services through the public API (`GET /api/v1/services`, one service, its Schema.org profile); a token must name it as a scope | Admin, User                                                               |
+| `registry.services.service.edit`          | `service` | Name, licence, stage, description, URL, `sameAs`, the contact point, the icon, the consortia and the configured fields of one service   | Admin; the approved **members** (managers too) of that service's provider |
+| `registry.services.service.edit-identity` | `service` | The slug and the provider of one service                                                                                                | Admin; the approved **managers** of that service's provider               |
+| `registry.services.service.read-contact`  | `service` | Always see the contact point of one service, whatever the setting says                                                                  | Admin; the approved members (managers too) of that service's provider     |
 
-Admin holds every declared permission by resolution (ADR-0014); `user` gets `read` and `create`, `reviewer` gets `read` and `publish`
+Admin holds every declared permission by resolution (ADR-0014); `user` gets `read`, `create` and `v1.read`, `reviewer` gets `read` and `publish`
 through `authz.defaultRole`. The service checks the permission again on every method (`ctx.authz.require`).
 
 ### The policy `service.member` and the three groups (ADR-0036)
@@ -170,13 +171,13 @@ service and the new state and carries the link `<origin><base path>/services/<id
 | `GET /licenses`                         | `registry.services.service.read`    | the SPDX search for the licence field; deprecated ids are marked                                                                                                                                                                                                                                                                                   |
 | `GET /service-roles`                    | `registry.services.service.read`    | the `service.orgRole` entries, for the form                                                                                                                                                                                                                                                                                                        |
 
-### The v1 routes for services (M8 sprint 2; row shapes proposed, under review)
+### The v1 routes for services (M8 sprint 2, ADR-0037)
 
 Permission `registry.services.v1.read` (granted to `user` by default) for all three routes. A service that is not public is returned like any other
 (the token owner may read it internally); the row says so with `public`. Never the contact point.
 
 **`GET /api/v1/services`** (list row). Query: `page`, `pageSize` (default and maximum 100; more is 422), and the filters `service` and `provider` (abbreviations,
-comma-separated, case-insensitive, at most 50; an unknown abbreviation is 422), `stage`, `license` (an unknown value is 422; `:none` is refused). An unknown
+comma-separated, case-insensitive, at most 50; an unknown abbreviation is 422), `stage`, `license` (comma-separated like the others; an unknown value is 422 and `:none` is refused). An unknown
 parameter is a 422. Sorted by abbreviation (without case), then id. Shaped after the legacy `Service`: the same names and types, without `category`
 (M9 adds it).
 

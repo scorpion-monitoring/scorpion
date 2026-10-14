@@ -22,6 +22,7 @@ import type { ServicesConfig } from './config/types.ts';
 import { validateServicesConfig } from './config/validate.ts';
 import { service as serviceTable, serviceOrganisation } from './db/schema.ts';
 import { registerServiceRoutes } from './routes.ts';
+import { registerV1Routes } from './routes-v1.ts';
 import { SEED_FACETS } from './service/facets.ts';
 import { SEED_FIELD_TYPES } from './service/field-types.ts';
 import { createLicenseCache } from './service/licences.ts';
@@ -32,6 +33,7 @@ import {
   PERMISSION_MANAGE,
   PERMISSION_PUBLISH,
   PERMISSION_READ,
+  PERMISSION_V1_READ,
   PERMISSION_READ_CONTACT,
   RESOURCE_TYPE,
 } from './service/permissions.ts';
@@ -152,6 +154,10 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       [PERMISSION_MANAGE]: {
         description: 'Create and change every field of any service, as an administrator',
       },
+      [PERMISSION_V1_READ]: {
+        description:
+          'Read the services through the public API (`GET /api/v1/services`, one service and its Schema.org profile), with a token that names this permission',
+      },
       [PERMISSION_PUBLISH]: {
         description: 'Make a service public, or private again (Reviewers and administrators)',
       },
@@ -250,7 +256,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       // Every signed-in person may read services and ask to create one (the service checks the provider);
       // Reviewers publish. `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [
-        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_CREATE] },
+        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_CREATE, PERMISSION_V1_READ] },
         { role: 'reviewer', permissions: [PERMISSION_READ, PERMISSION_PUBLISH] },
       ],
       // The policy `service.member` (ADR-0036): members and managers of the service's provider.
@@ -349,6 +355,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
 
     routes: (r) => {
       registerServiceRoutes(r, r.service<RegistryServicesService>());
+      registerV1Routes(r, r.service<RegistryServicesService>());
     },
   });
 }
