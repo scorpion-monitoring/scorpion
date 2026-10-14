@@ -509,10 +509,11 @@ Found while using the instance; not yet investigated.
   | `/services/{id}`                             | 7.4 ms  | 9.1 ms  | 5.2        | 0.4 kB  |
   | `/providers?pageSize=100` (40 providers)     | 5.8 ms  | 7.5 ms  | 4.1        | 6.8 kB  |
 
-  What it shows: a page of 100 services is 6 statements whatever the number of consortia (one page query, one count, one for the organisation links, one for
-  their names). Each `provider=` abbreviation adds about **4 statements** (the lookup, its member count, and the catalogue's check that the id is known),
-  so 50 abbreviations would be about 200; a batch lookup of abbreviations in `registry.organisations` would make it constant (not built). The deep page costs
-  about 7 ms more than page 0 (offset). Not measured: concurrent calls, a network, a cold cache, or more than 5,000 services.
+  What it shows: the statements of a page of 100 services do not depend on the number of consortia of the services (6.2 for page 0 and for the last page, from
+  the catalogue's page, count and organisation-link reads on top of the 4 or so of the call itself). Each `provider=` abbreviation adds about **4
+  statements** (measured: 6.2 to 10.3 to 14.5 for none, one and three); from reading the code these are the lookup of the provider, its member count, and the
+  catalogue's check that the id is known, so 50 abbreviations would be about 200 statements, and a batch lookup of abbreviations in `registry.organisations`
+  would make it constant (not built). The last page costs about 7 ms more than page 0 (the offset). Not measured: concurrent calls, a network, a cold cache, or more than 5,000 services.
 
 ## Services follow-ups (M7 sprint 7)
 
