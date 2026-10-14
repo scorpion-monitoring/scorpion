@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { admin, createUser, expect, signIn, test } from './support/fixtures.ts';
+import { openReference } from './support/reference.ts';
 
 // No serious or critical violation (axe, WCAG 2.1 A and AA) on a page of the shell, in both themes, signed
 // out and signed in; and the layout works with the keyboard alone (M5 plan §2, accessibility).
@@ -31,6 +32,16 @@ test.describe('the pages of the shell have no serious accessibility violation', 
         await expect(page.getByRole('banner')).toBeVisible();
         expect(await violations(page), path).toEqual([]);
       }
+    });
+  }
+
+  // The reference is Scalar's own markup (ADR-0038), in the colours of the shell. No exclusion: it is clean
+  // today, and a finding after an upgrade is read before one is named here with its reason and upstream issue.
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the API reference, ${scheme} theme`, async ({ page, at }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await openReference(page, at);
+      expect(await violations(page)).toEqual([]);
     });
   }
 

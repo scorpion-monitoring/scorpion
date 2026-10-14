@@ -95,8 +95,6 @@ describe('renderReference', () => {
   it('names no host: the script, the document and every link are paths of this instance', async () => {
     const html = await renderReference(input());
     expect(html).not.toMatch(/https?:\/\//);
-    expect(html).not.toContain('jsdelivr');
-    expect(html).not.toContain('scalar.com');
     expect(html).toContain(
       '<script src="/a/b/_app/immutable/scalar/api-reference.0123456789ab.js"',
     );

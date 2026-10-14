@@ -7,7 +7,7 @@ const context = (paths: Record<string, unknown>) =>
 
 describe('loadDocs', () => {
   it('lists no operation for a document without paths', () => {
-    expect(loadDocs(context({}))).toEqual({ operations: [] });
+    expect(loadDocs(context({}))).toEqual({ operations: [], scopes: [] });
   });
 
   it('lists the operations by path then method, with how they are guarded', () => {
@@ -31,5 +31,16 @@ describe('loadDocs', () => {
         permission: 'registry.service.create',
       },
     ]);
+  });
+
+  it('names each scope once, sorted, and none for a public route', () => {
+    const { scopes } = loadDocs(
+      context({
+        '/b': { get: { 'x-permission': 'm.b.read' } },
+        '/a': { get: { 'x-permission': 'm.a.read' }, post: { 'x-permission': 'm.b.read' } },
+        '/open': { get: { 'x-public': true } },
+      }),
+    );
+    expect(scopes).toEqual(['m.a.read', 'm.b.read']);
   });
 });
