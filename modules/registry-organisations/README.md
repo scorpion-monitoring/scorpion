@@ -31,6 +31,7 @@ Admin and by the managers of an organisation, the administrator's editor and the
 | `registry.organisations.organisation.read`         | Read organisations and the registered types; the plain permission of every delegated route                 | Admin, User, Reviewer                                                     |
 | `registry.organisations.organisation.manage`       | Create and delete organisations, and change every field of one, `type`, `abbreviation` and `name` included | Admin                                                                     |
 | `registry.organisations.organisation.edit`         | scoped (`organisation`): change the description, website, `sameAs` links, ROR id, contact point and logo   | Admin; managers                                                           |
+| `registry.organisations.v1.read`                   | Read the providers through the public API (`GET /api/v1/providers`); a token must name it as a scope       | Admin, User                                                               |
 | `registry.organisations.membership.request`        | Ask to join an organisation, withdraw, leave, and list your own memberships                                | Admin, User                                                               |
 | `registry.organisations.organisation.read-contact` | scoped (`organisation`): always see the contact point of an organisation                                   | Admin; managers                                                           |
 | `registry.organisations.membership.view-members`   | scoped: see the members of an organisation (usernames and join dates)                                      | Admin; managers; members while `membership.membersVisibleToMembers` is on |
@@ -38,7 +39,7 @@ Admin and by the managers of an organisation, the administrator's editor and the
 | `registry.organisations.membership.manage-roles`   | scoped: promote a member to manager, demote a manager                                                      | Admin; managers                                                           |
 | `registry.organisations.membership.remove`         | scoped: end the membership of a member (a manager removes plain members only)                              | Admin; managers                                                           |
 
-Admin holds every declared permission by resolution (ADR-0014); `user` gets `read` and `membership.request`, `reviewer` gets `read`,
+Admin holds every declared permission by resolution (ADR-0014); `user` gets `read`, `membership.request` and `v1.read`, `reviewer` gets `read`,
 through `authz.defaultRole`. The service checks the permission again on every method (`ctx.authz.require`). `PATCH
 /organisations/{id}` and the two logo routes name the plain `…organisation.read` and the service decides (ADR-0034), so that the
 managers of an organisation can edit its descriptive fields (ADR-0033, Decision 14); `POST` and `DELETE /organisations` keep `manage`.
@@ -386,7 +387,7 @@ do to the row now, for drawing buttons) and never an address.
 | `POST /memberships/{id}/role`               | `registry.organisations.organisation.read`   | **delegated** (`…membership.manage-roles`): `{ role }`; audited; 403 own role; 409 `membership-state`, `too-many-managers`                                           |
 | `POST /memberships/{id}/remove`             | `registry.organisations.organisation.read`   | **delegated** (`…membership.remove`): audited; 403 own row, a manager as the target of a manager, no right; 409 `membership-state`                                   |
 
-### The v1 route `GET /api/v1/providers` (M8 sprint 2; row shape proposed, under review)
+### The v1 route `GET /api/v1/providers` (M8 sprint 2, ADR-0037)
 
 Permission `registry.organisations.v1.read` (granted to `user` by default). "Providers" are the organisations of the `provider` type. Query: `page`,
 `pageSize` (default and maximum 100; more is 422), `is_member` (`true` or `false`, nothing else: 422). An unknown query parameter is a 422. Sorted by abbreviation (without case), then id.
