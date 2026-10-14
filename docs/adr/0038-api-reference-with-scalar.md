@@ -55,8 +55,12 @@ public (the same reason as ADR-0037, decision 3). SvelteKit's catch-all for the 
 
 ### 2. Self-hosted and pinned
 
-`@scalar/sveltekit` is a **dependency** of `apps/web` and `@scalar/api-reference` a **development dependency**, both pinned to exact versions
-(`0.3.29` and `1.74.0`); they are a pair, and an upgrade moves both. Only the built file `dist/browser/standalone.js` of the second is used: a
+Both packages are **development dependencies** of `apps/web`, pinned to exact versions (`@scalar/sveltekit` 0.3.29 and `@scalar/api-reference` 1.74.0); they are a pair, and an upgrade moves both. The maintainer approved the wrapper as a
+dependency; it is a development dependency because Vite bundles it into the server build (adapter-node bundles what is not in `dependencies`), so the image
+needs none of its packages. Measured on the `registry` image: as a dependency, the image's production install also pulled `@sveltejs/kit` through the wrapper's
+peer dependency and, with it, Vite, esbuild, rolldown, lightningcss and TypeScript, **+87 MB of `node_modules` and +127 MB for the image** (740 MB against
+614 MB before); as a development dependency the image grows by **10.9 MB** (624 MB), which is the script (4.6 MB, plus its gzip and brotli copies) and the
+wrapper's code in the server bundle, and `node_modules` is unchanged (216 MB). Only the built file `dist/browser/standalone.js` of the second is used: a
 small Vite plugin (`src/front/scalar-asset-plugin.ts`) reads it from the package's directory (its `exports` do not offer it), drops the trailing
 `sourceMappingURL` comment (the 17 MB map is not shipped), and emits it into the client build as
 `_app/immutable/scalar/api-reference.<hash>.js`, where adapter-node serves it with a one-year `immutable` cache and, precompressed, as brotli
@@ -151,9 +155,9 @@ document is still the first contract (ADR-0037, decision 7), and the runtime and
 
 ## Consequences
 
-- A new dependency pair (MIT; `@scalar/sveltekit` brings `@scalar/client-side-rendering` and four small `@scalar/*` packages to the image's
-  runtime; `@scalar/api-reference` is installed only to build). The reference script is 4.5 MB on disk and, precompressed, 1.0 MB as brotli
-  (measured in the backlog); it is fetched only by a person who opens the reference, and cached for a year.
+- A new dependency pair (MIT), both used at build time only. The image gains the script (4.6 MB, 6.9 MB with its two precompressed copies) and the wrapper's code
+  in the server bundle: 10.9 MB in all, measured; no package is added at run time. The script is 1.0 MB as brotli on the wire (backlog), fetched only by a
+  person who opens the reference, and cached for a year.
 - A second Content-Security-Policy to keep in step with the first. The test that pins it and the one that pins the strict one are the guard.
 - The reference is English. If Scalar adds a locale option, the route can pass the visitor's language; nothing else changes.
 - A person who types a different server into the panel gets a refused request, not a leaked token.

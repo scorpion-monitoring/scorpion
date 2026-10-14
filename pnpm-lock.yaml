@@ -132,9 +132,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@scalar/sveltekit':
-        specifier: 0.3.29
-        version: 0.3.29(@sveltejs/kit@3.0.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1(@typescript-eslint/types@8.71.0))(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(svelte@5.57.1(@typescript-eslint/types@8.71.0))(typescript@6.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(svelte@5.57.1(@typescript-eslint/types@8.71.0))
       '@scorpion/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -151,6 +148,9 @@ importers:
       '@scalar/api-reference':
         specifier: 1.74.0
         version: 1.74.0(change-case@5.4.4)(tailwindcss@4.3.3)(typescript@6.0.3)(zod@4.6.5)
+      '@scalar/sveltekit':
+        specifier: 0.3.29
+        version: 0.3.29(@sveltejs/kit@3.0.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1(@typescript-eslint/types@8.71.0))(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(svelte@5.57.1(@typescript-eslint/types@8.71.0))(typescript@6.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(svelte@5.57.1(@typescript-eslint/types@8.71.0))
       '@scorpion/core-audit':
         specifier: workspace:*
         version: link:../../modules/core-audit

@@ -40,12 +40,15 @@ describe('the asset of the API reference', () => {
   });
 
   it('is pinned exactly, with its wrapper, in the manifest', () => {
+    // Both are development dependencies: Vite bundles the wrapper into the server build, so the image carries the
+    // one script and none of the packages (ADR-0038).
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
     };
+    expect(manifest.dependencies).not.toHaveProperty(['@scalar/sveltekit']);
     for (const version of [
-      manifest.dependencies['@scalar/sveltekit'],
+      manifest.devDependencies['@scalar/sveltekit'],
       manifest.devDependencies['@scalar/api-reference'],
     ]) {
       expect(version).toMatch(/^\d+\.\d+\.\d+$/);
