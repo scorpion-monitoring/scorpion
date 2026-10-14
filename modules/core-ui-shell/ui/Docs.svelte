@@ -4,6 +4,8 @@
 
   let { data }: { data: DocsData } = $props();
   const { t, href, branding } = getShell();
+  // Protocol syntax, not prose: the two ways to send the token.
+  const headers = ['Authorization: Bearer <token>', 'X-API-Key: <token>'];
 </script>
 
 <svelte:head>
@@ -33,8 +35,10 @@
     </li>
     <li>{t('docs.token.scopes')}</li>
     <li>
-      {t('docs.token.send')} <code class="num">Authorization: Bearer &lt;token&gt;</code>,
-      <code class="num">X-API-Key: &lt;token&gt;</code>
+      {t('docs.token.send')}
+      {#each headers as header, index (header)}{index > 0 ? ', ' : ''}<code class="num"
+          >{header}</code
+        >{/each}
     </li>
   </ol>
 </section>
