@@ -63,14 +63,14 @@ export const serviceRecordV1Schema = serviceV1Schema.extend({
 
 const EXAMPLE_SERVICE = {
   id: '0198f3a5-1d44-7e08-a6b1-93c2d0f47e55',
-  abbreviation: 'BRIDGE',
-  name: 'BRIDGE Data Portal',
+  abbreviation: 'EXAMPLE-SVC',
+  name: 'Example Data Portal',
   stage: 'PROD',
   license: 'Apache-2.0',
   public: false,
-  provider: 'IPK',
+  provider: 'EXAMPLE-ORG',
   providerId: '0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10',
-  consortia: ['DE-NBI', 'NFDI4Biodiversity'],
+  consortia: ['EXAMPLE-CONS-A', 'EXAMPLE-CONS-B'],
   consortiaIds: ['0198f3a3-02b9-7a14-8c6d-5b7e1f9a3d20', '0198f3a3-5e87-7c90-b2f4-6a1d8e0c4b31'],
 };
 
@@ -125,8 +125,8 @@ export const getServiceV1Route = createRoute({
           schema: serviceRecordV1Schema,
           example: {
             ...EXAMPLE_SERVICE,
-            description: 'A portal for plant genomic data.',
-            url: 'https://bridge.ipk-gatersleben.de',
+            description: 'A portal for example data.',
+            url: 'https://portal.example.org',
             sameAs: [],
           },
         },
@@ -154,10 +154,10 @@ export const getServiceSchemaOrgV1Route = createRoute({
           example: {
             '@context': 'https://schema.org',
             '@type': 'Service',
-            '@id': 'https://scorpion.example.org/services/0198f3a5-1d44-7e08-a6b1-93c2d0f47e55',
-            name: 'BRIDGE Data Portal',
-            alternateName: 'BRIDGE',
-            url: 'https://bridge.ipk-gatersleben.de',
+            '@id': 'https://registry.example.org/services/0198f3a5-1d44-7e08-a6b1-93c2d0f47e55',
+            name: 'Example Data Portal',
+            alternateName: 'EXAMPLE-SVC',
+            url: 'https://portal.example.org',
           },
         },
       },

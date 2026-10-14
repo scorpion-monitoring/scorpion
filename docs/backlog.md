@@ -473,6 +473,29 @@ Found while using the instance; not yet investigated.
   `packages/contracts/src/route.ts` (an ASVS V8 scoped file); not planned.
 - **The preflight answer lists the methods v1 has overall,** not those of the path asked. Harmless while v1 is read-only; revisit with M10's `POST`.
 
+## Public API follow-ups (M8 sprint 2)
+
+- **`category` in the service row.** The legacy `Service` has a required `category` (the KPI category). It is not in the v1 row until M9 (`kpi.framework`); then it is
+  added as a new field (additive). Until then a client that requires it breaks.
+- **`GET /api/v1/providers/{id}` and a by-slug read of a service.** A client gets a provider's id from the list and a service's id from the list; there is no
+  single read of a provider, and no `GET /services/by-slug/{slug}` (the internal route follows old slugs with `redirectedFrom`).
+- **Names and ids beside the abbreviations.** `provider` and `consortia` are abbreviations as in the legacy API, with `providerId` and `consortiaIds` beside
+  them; the organisation names are not in a service row. A client that needs them reads `GET /providers` (consortia are not providers: there is no
+  consortium read in v1).
+- **Logos and icons in v1.** `logoUrl` and `iconUrl` are paths below the internal API and are not in v1 rows; the Schema.org profile has the `logo` it always had.
+  A v1 file route (or an absolute public URL) would add them.
+- **`values` (configured fields) in the service record.** Left out: its shape is open and M9 fills it with categories. It would be added with the category routes.
+- **A comma in an organisation abbreviation.** `provider=A,B` splits on commas, so an abbreviation that contains one cannot be asked for by `provider` (the
+  schema allows it; slugs cannot contain one). Repeated parameters would remove the limit; the legacy document does not say which one legacy used.
+- **A consortium filter and a `q` search in v1.** The internal catalogue has them; v1 has only the legacy filters and the cheap catalogue ones (`stage`, `license`).
+- **`service=` matches current slugs only.** An old slug is a redirect of the screens, not a name of v1.
+- **Legacy clients that send `pageSize` above 100** (the legacy default was 1000) get 422, as decided in ADR-0037 decision 11. If that turns out to hurt, a higher
+  cap for v1 lists is a decision for the next sprint (the harness checks 100000 only).
+- **The contract harness fetches at most 20 pages** in its page-walk case; with more rows it checks the order of those 20 only (fixed in sprint 2 so that it no
+  longer compares an incomplete walk with the whole list). A table-driven test of that rule is not written.
+- **No measurement of the catalogue under v1 load.** The list uses the catalogue's query (a `count(*)` and a page, then two queries for the organisation links); no
+  timing on a large generated set was taken in sprint 2.
+
 ## Services follow-ups (M7 sprint 7)
 
 What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in the plan for it:
@@ -483,7 +506,7 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **A review queue for member edits,** a request-and-approve flow for publication (a Reviewer or Admin sets the flag today) and a preview of the public page before publishing.
 - **A public catalogue,** public facets, anonymous search and a sitemap of public services. The public pages link to each other through the provider and the groups only.
 - **Transfer of a service between providers by someone who is not a manager** of both, and a per-service history view beyond the audit trail (and the slug history).
-- **A public read of `services` in v1** with the Schema.org representation (additive); M8.
+- **A public read of `services` in v1** with the Schema.org representation (additive); M8. _Done in M8 sprint 2: `GET /api/v1/services`, `/services/{id}` and `/services/{id}/schema-org`._
 - **Logos and icons in list rows.** The catalogue shows the service icon; the organisation lists, the member tables and the public organisation page's service list show none.
 - **The layout's four calls on every navigation** and what to do about them are in "Too many 429s" above, with the numbers.
 

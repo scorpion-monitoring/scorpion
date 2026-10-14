@@ -956,8 +956,9 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
           else {
             problems.push({
               in: 'query',
-              path: 'provider',
-              message: `"${abbreviation.slice(0, 64)}" is not the abbreviation of a provider.`,
+              // The name of the filter is the key of the owning role, as the catalogue's facet of it is.
+              path: OWNER_ROLE,
+              message: `"${abbreviation.slice(0, 64)}" is not the abbreviation of a ${ownerLabel}.`,
             });
           }
         }

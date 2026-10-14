@@ -26,7 +26,7 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix, four plain permissions and three scoped to the service (ADR-0036)', () => {
+  it('has the id, the table prefix, five plain permissions (one of them the v1 read) and three scoped to the service (ADR-0036)', () => {
     expect(manifest.id).toBe('registry.services');
     expect(manifest.tablePrefix).toBe('svc_');
     const permissions = manifest.permissions ?? {};
@@ -40,6 +40,7 @@ describe('the manifest', () => {
       'registry.services.service.manage',
       'registry.services.service.publish',
       'registry.services.service.read',
+      'registry.services.v1.read',
     ]);
     expect(
       Object.entries(permissions)
@@ -104,7 +105,11 @@ describe('the manifest', () => {
     expect(contributes['authz.defaultRole']).toEqual([
       {
         role: 'user',
-        permissions: ['registry.services.service.read', 'registry.services.service.create'],
+        permissions: [
+          'registry.services.service.read',
+          'registry.services.service.create',
+          'registry.services.v1.read',
+        ],
       },
       {
         role: 'reviewer',

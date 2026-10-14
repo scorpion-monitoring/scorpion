@@ -485,7 +485,15 @@ describe('GET /api/v1/openapi.json', () => {
       servers: { url: string }[];
       paths: Record<string, Record<string, Record<string, unknown>>>;
     };
-    expect(Object.keys(doc.paths).sort()).toEqual(['/openapi.json', '/ping']);
+    // The fixture's route and the v1 routes of the registry modules the profile carries.
+    expect(Object.keys(doc.paths).sort()).toEqual([
+      '/openapi.json',
+      '/ping',
+      '/providers',
+      '/services',
+      '/services/{id}',
+      '/services/{id}/schema-org',
+    ]);
     expect(doc.paths['/ping']!.get).toMatchObject({
       'x-permission': PING,
       summary: 'Answers pong',

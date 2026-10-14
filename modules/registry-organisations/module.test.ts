@@ -22,7 +22,7 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix and the nine permissions: three plain, six scoped to organisation', () => {
+  it('has the id, the table prefix and the ten permissions: four plain, six scoped to organisation', () => {
     expect(manifest.id).toBe('registry.organisations');
     expect(manifest.tablePrefix).toBe('org_');
     const permissions = manifest.permissions ?? {};
@@ -36,6 +36,7 @@ describe('the manifest', () => {
       'registry.organisations.organisation.manage',
       'registry.organisations.organisation.read',
       'registry.organisations.organisation.read-contact',
+      'registry.organisations.v1.read',
     ]);
     // A route names a plain permission only (ADR-0034); the scoped ones are checked by the service.
     const scoped = Object.entries(permissions)
@@ -121,6 +122,7 @@ describe('the manifest', () => {
         permissions: [
           'registry.organisations.organisation.read',
           'registry.organisations.membership.request',
+          'registry.organisations.v1.read',
         ],
       },
       { role: 'reviewer', permissions: ['registry.organisations.organisation.read'] },
@@ -208,8 +210,8 @@ describe('in a profile', () => {
     const own = s.kernel.routes.filter((r) =>
       String(r.route.permission).startsWith('registry.organisations.'),
     );
-    // Nine for the record, the logo and the types; nine for membership.
-    expect(own).toHaveLength(18);
+    // Nine for the record, the logo and the types; nine for membership; one v1 read (M8 sprint 2).
+    expect(own).toHaveLength(19);
     const plain = new Set(
       Object.entries(manifest.permissions ?? {})
         .filter(([, def]) => def.scope === undefined)

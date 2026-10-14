@@ -61,12 +61,12 @@ export const listProvidersV1Route = createRoute({
             result: [
               {
                 id: '0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10',
-                abbreviation: 'IPK',
-                name: 'Leibniz Institute of Plant Genetics and Crop Plant Research',
-                description: 'Research institute for plant genetics.',
-                website: 'https://www.ipk-gatersleben.de',
+                abbreviation: 'EXAMPLE-ORG',
+                name: 'Example Research Institute',
+                description: 'An example research institute.',
+                website: 'https://www.example.org',
                 rorId: '02skbsp27',
-                sameAs: ['https://www.wikidata.org/wiki/Q567890'],
+                sameAs: ['https://www.wikidata.org/wiki/Q42'],
                 isMember: true,
               },
             ],
