@@ -13,10 +13,13 @@ export default async function globalSetup() {
     });
     if (build.status !== 0) throw new Error(`vite build failed:\n${build.stdout}\n${build.stderr}`);
   }
-  const harness = await startHarness();
+  // `E2E_STACKS`: only these stacks (names of `SPECS`, and `components` for the harness) start in this process.
+  // Unset, everything starts, as in CI.
+  const only = process.env.E2E_STACKS?.split(',').filter(Boolean);
+  const harness = !only || only.includes('components') ? await startHarness() : undefined;
   // `E2E_COMPONENTS_ONLY=1`: only the component specs run (`--project components`), which need no database.
-  if (process.env.E2E_COMPONENTS_ONLY) return harness.stop;
-  const { stacks, stop } = await startAll();
+  if (process.env.E2E_COMPONENTS_ONLY) return () => harness?.stop() ?? Promise.resolve();
+  const { stacks, stop } = await startAll(only);
   process.env.SCORPION_E2E_STACKS = JSON.stringify(
     stacks.map(({ name, basePath, origin, apiPort, databaseUrl }) => ({
       name,
@@ -27,7 +30,7 @@ export default async function globalSetup() {
     })),
   );
   return async () => {
-    await harness.stop();
+    await harness?.stop();
     await stop();
   };
 }

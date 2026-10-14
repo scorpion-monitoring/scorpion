@@ -23,8 +23,8 @@
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
-    "drizzle-orm": "^0.45.3",
-    "hono": "^4.13.12",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
     "zod": "^4.6.5"
   },
   "peerDependencies": {

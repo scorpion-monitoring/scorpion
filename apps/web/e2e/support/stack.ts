@@ -192,11 +192,19 @@ export async function startStack(spec: StackSpec, database: StartedPostgres): Pr
   };
 }
 
-export async function startAll(): Promise<{ stacks: Stack[]; stop: () => Promise<void> }> {
+/**
+ * Starts the stacks of `SPECS`, or only those named in `only` (`E2E_STACKS`, see `scripts/e2e-parallel.ts`: two runs,
+ * one per base path, each with its own database and its own ports, which `SPECS` already keeps apart).
+ */
+export async function startAll(
+  only?: readonly string[],
+): Promise<{ stacks: Stack[]; stop: () => Promise<void> }> {
   const database = await startPostgres();
   const stacks: Stack[] = [];
   try {
-    for (const spec of SPECS) stacks.push(await startStack(spec, database));
+    for (const spec of SPECS.filter((entry) => !only || only.includes(entry.name))) {
+      stacks.push(await startStack(spec, database));
+    }
   } catch (error) {
     await Promise.all(stacks.map((stack) => stack.stop()));
     await database.stop();

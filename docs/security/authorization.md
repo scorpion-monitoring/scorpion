@@ -253,6 +253,22 @@ Routes under `/api/v1` are the ones programs call ([ADR-0037](../adr/0037-public
   walks the v1 schemas: it pins the names of each v1 answer and fails on a contact field, an audit column or a hint for the screens. One permission per
   route family, `registry.organisations.v1.read` and `registry.services.v1.read`, held by the role `user` by default; a token needs the scope as well.
 
+### The API reference (`/docs/reference`)
+
+The reference is a document of the web shell, not a route of the API ([ADR-0038](../adr/0038-api-reference-with-scalar.md)), so it is not in the route table
+above. It decides nothing:
+
+- **It is public by design** (the landing page `/docs` is too): it holds no record, and the description it draws, `GET /api/v1/openapi.json`, is the one public v1
+  route. A person who wants to call a route pastes a token into Scalar's authentication panel; the call goes from their browser to this origin, and the
+  answer, 200, 401 or 403, is the server's (the pipeline and the service check the token and its scope as for any caller). The page never judges a token.
+- **The token stays in the page.** `persistAuth` is off, so it is in no `localStorage`, `sessionStorage` or cookie; the proxy, the telemetry, the AI agent and the
+  default fonts are off, and the policy of the document has `connect-src 'self'`, so a token cannot go to another host, even if a person types another
+  server into the panel. The end-to-end journey (`apps/web/e2e/reference.spec.ts`) proves this under both base paths: the browser's storage and cookies
+  are identical before and after a call, no request leaves the origin, and the secret is in no line of the audit trail and no line of the log.
+- **The policy** of this one document differs from the instance's in `style-src 'unsafe-inline'` (Scalar writes styles while it runs), which is the only
+  relaxation; scripts are `'self'` and a nonce, and the strict policy of every other page is tested to be unchanged. The document is the same for every
+  request (it takes no input), so the relaxation has nothing to inject into.
+
 ## Rules on one resource
 
 These are the checks of the second kind. Each is in a service and each has tests.

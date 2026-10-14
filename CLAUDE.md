@@ -48,6 +48,8 @@ pnpm test                      # unit + integration (needs Docker for Testcontai
 pnpm test --filter @scorpion/kpi-ingestion   # one module
 pnpm test:contract             # public API against OpenAPI
 pnpm test:e2e                  # Playwright
+pnpm test:e2e:parallel         # the same in two runs at once, one per base path (needs the cores)
+pnpm test:all                  # pnpm test and the parallel e2e at the same time
 pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a module (from db/schema.ts)
 pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts and apps/web/src/generated/ui.ts (build time)
 pnpm openapi:generate          # write the typed client's types (packages/contracts/src/generated) and the web app's v1 document; pnpm check fails on a diff

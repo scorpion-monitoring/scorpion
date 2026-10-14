@@ -18,7 +18,7 @@
     "@scorpion/core-settings": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "@scorpion/sanitize": "workspace:*",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },

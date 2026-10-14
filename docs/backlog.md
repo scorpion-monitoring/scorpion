@@ -288,6 +288,8 @@ Found while using the instance; not yet investigated.
   pipeline is an ASVS-scoped path (V7, V8): the change needs the chapter files or the `asvs-no-impact` line and a test that the public
   endpoints (login, register, token use) stay limited.
 
+  **A v1 call is a token call** and does not draw from the browsers' address bucket; the numbers (one v1 call is one API request, the documentation pages make 3 to 5 and the reference 2) are under "Public API follow-ups (M8 sprint 3)".
+
   **Measured in M7 sprint 7** (nothing in the pipeline or in a limit changed). Method: the e2e stack with the API's request log on, a signed-in
   person in a fresh browser, every `/api/` request counted at the API, whoever made it (the browser, or the web server's loaders, which forward
   the caller's address). The measurement script was a throwaway Playwright spec; the numbers are from 0.9.0 on the `full` profile.
@@ -514,6 +516,60 @@ Found while using the instance; not yet investigated.
   statements** (measured: 6.2 to 10.3 to 14.5 for none, one and three); from reading the code these are the lookup of the provider, its member count, and the
   catalogue's check that the id is known, so 50 abbreviations would be about 200 statements, and a batch lookup of abbreviations in `registry.organisations`
   would make it constant (not built). The last page costs about 7 ms more than page 0 (the offset). Not measured: concurrent calls, a network, a cold cache, or more than 5,000 services.
+
+## Public API follow-ups (M8 sprint 3)
+
+- **A v1 call does not count against the browser's address bucket (measured).** Method: the e2e stack on the `full` profile, the API's own
+  `scorpion_http_request_duration_seconds_count` (`/metrics`, by route, method and status) read before and after, one fresh Chromium context per page, the
+  numbers from the working tree of sprint 3. One `GET /api/v1/providers` with a token is **one** API request, counted in the `ip-token:default` bucket and
+  the token's own bucket, and in none of the `ip:default` bucket the browsers on that address draw from (ADR-0037, decision 1; the bucket separation itself is
+  proved in `public-api-routes.test.ts`). The pages of the documentation, for comparison with the table under "Too many 429s":
+
+  | Page                                | API calls | What they are                                                        |
+  | ----------------------------------- | --------: | -------------------------------------------------------------------- |
+  | `/docs`, signed out                 |         3 | `ui/navigation`, `branding`, `bootstrap/status` (the layout's calls) |
+  | `/docs`, signed in                  |         5 | the same plus `auth/me`, `preferences` and `inbox/stream` (the bell) |
+  | `/docs/reference`, signed out or in |         2 | `branding` (the route's, for the page title) and `v1/openapi.json`   |
+  | `/` for comparison, signed out      |         2 | `ui/navigation`, `branding`                                          |
+
+  The reference makes no call of the layout (it is not a page of the shell) and, on purpose, no session call: the language of its one link back is the
+  browser's, because the saved preference would cost two more calls signed in (measured: 4 against 2). Each Test Request a person sends from it is one v1
+  call (above).
+
+- **What the reference costs (measured, local).** The script is the single-file build of `@scalar/api-reference` 1.74.0: **4,571,171 bytes** as shipped (the
+  package's file without its source-map comment; the 17 MB map is not shipped), **1,328,455 bytes** gzip and **991,457 bytes** brotli (adapter-node
+  precompresses both and serves them by `Accept-Encoding`). Headless Chromium on the same machine as the stack (loopback, so no network time), 12 runs each,
+  the time from the start of the navigation to the first route link of the sidebar being visible: **cold cache** 3 requests, 1,018,195 bytes on the wire,
+  median **1,016 ms** (p95 1,050 ms, fastest 964 ms); **warm cache** (the script cached for its year) 3 requests, 26,406 bytes, median **967 ms** (p95 1,022 ms).
+  The landing page `/docs` is drawn at a median of **220 ms** (p95 288 ms). So the cache saves the transfer and about 50 ms; most of the second is the
+  browser parsing and running the bundle and Scalar drawing the document. Not measured: a real network, a phone, a cold server, the image size per profile
+  (below).
+- **The images carry it (measured).** The `registry` image built from `dev` is 613,598,713 bytes; built with sprint 3 it is 624,454,105: **+10.9 MB**. That is
+  the script (4,571,171 bytes, with its 1,328,455-byte gzip and 991,457-byte brotli copies next to it) and the wrapper's code bundled into the server build;
+  `node_modules` is unchanged at 216 MB. With the wrapper as a `dependency` the same image was 740 MB: its production install pulled `@sveltejs/kit` through the
+  wrapper's peer dependency, and with it Vite, esbuild, rolldown, lightningcss and TypeScript (+87 MB of `node_modules`), so it is a development dependency
+  that Vite bundles (ADR-0038, decision 2). Method: `docker image inspect` on `docker build --build-arg PROFILE=registry` of each tree on the same machine.
+- **The reference is English.** `@scalar/api-reference` 1.74.0 has no `locale` option (its bundle holds German and other texts, but `<html lang>` does not
+  select them; tried with `de`). When it gets one, the route can pass the browser's language; the landing page and the link back are en and de already.
+- **One policy report on load.** The bundle's Zod tests `Function('')` inside a `try`; the reference's policy has no `'unsafe-eval'`, so the browser reports a
+  `script-src` violation of `eval`, and Zod falls back. No console message. `e2e/support/reference.ts` (`KNOWN_REPORTS`) names it and fails on any other; if a
+  Scalar upgrade removes it the test says so (the list is then emptied), if it adds one the upgrade is read first (ADR-0038).
+- **"Powered by Scalar" is a link to the vendor** in the sidebar of the reference. It is followed only by a click and nothing is fetched. Hiding it would be a
+  custom CSS rule; not done, as the licence (MIT) does not ask for it and the maintainer did not ask to.
+- **`/docs/reference` is reachable on a fresh install** (before the first administrator exists), unlike the shell's pages, which show the first-administrator form.
+  It is a document with no record, and its data is the public spec. Revisit only if the shell's rule becomes "nothing but the form".
+- **The landing page names "Access tokens" and "Zugriffstoken" in words** (the section of the profile page). A rename of that section's title in
+  `core.identity` needs the two texts in `core.ui-shell` changed; the journey (`reference.spec.ts`) finds the section by its title and would fail first.
+- **`pnpm openapi:diff` is a small script of our own** (plan Decision 6). What it reads: paths, methods, parameters, request bodies, responses and their media
+  types, fields, `required`, types, enums, the bounds, `pattern` and `format` of what a client sends, the security schemes, the scope (`x-permission`) and
+  whether a route is public. Its gaps: `additionalProperties`, `oneOf` with a discriminator, response headers, `default` values, the bounds of a response, a
+  `$ref` outside the document, `callbacks` and `webhooks`, and a changed description or example (never a breaking change). A renamed field is read as a removed
+  one plus an added one. Revisit when v1 grows in M9 to M11; a general differ (`oasdiff`) is the alternative and needs a binary in CI.
+- **The release tag is the contract.** `pnpm openapi:diff` compares with the last release tag reachable from `HEAD`; a hotfix branch from `main` and a release
+  branch both find it. A pull request that adds a route and a later one that removes it before a release is not seen as a break (nothing was promised).
+- **Scalar upgrades:** Dependabot groups `@scalar/*` into one pull request (`dependabot.yml`); the gate is in ADR-0038, "What an upgrade of Scalar has to pass".
+  The CSP of the reference and the strict one are two policies to keep; if Scalar ever stops needing `style-src 'unsafe-inline'`, the reference's test is the
+  place to tighten it.
 
 ## Services follow-ups (M7 sprint 7)
 

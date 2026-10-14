@@ -18,8 +18,10 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -b && pnpm --filter @scorpion/web check",
     "test": "node scripts/test.ts",
-    "test:contract": "node scripts/not-yet.ts M8 test:contract",
+    "test:contract": "node scripts/test.ts contract.test.ts",
     "test:e2e": "pnpm --filter @scorpion/web test:e2e",
+    "test:e2e:parallel": "node scripts/e2e-parallel.ts",
+    "test:all": "node scripts/test-all.ts",
     "db:generate": "node scripts/db-generate.ts",
     "scorpion": "node apps/server/src/cli.ts",
     "changeset:check": "node scripts/changeset-check.ts",
@@ -28,7 +30,8 @@
     "security:asvs": "node tools/asvs-report/cli.ts",
     "modules:sync": "node scripts/sync-workspace-modules.ts",
     "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check && node apps/server/src/openapi-generate.ts --check",
-    "openapi:generate": "node apps/server/src/openapi-generate.ts"
+    "openapi:generate": "node apps/server/src/openapi-generate.ts",
+    "openapi:diff": "node scripts/openapi-diff.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
@@ -36,18 +39,18 @@
     "@scorpion/contracts": "workspace:*",
     "@scorpion/eslint-plugin": "workspace:*",
     "@scorpion/kernel": "workspace:*",
-    "@types/node": "^24.19.1",
+    "@types/node": "^24.19.2",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-svelte": "^3.23.0",
+    "eslint-plugin-svelte": "^3.23.1",
     "globals": "^17.13.0",
     "openapi-typescript": "^7.13.0",
-    "prettier": "^3.9.9",
+    "prettier": "^3.9.10",
     "prettier-plugin-svelte": "^4.1.1",
-    "svelte": "^5.57.1",
+    "svelte": "^5.57.2",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.71.0",
+    "typescript-eslint": "^8.71.1",
     "vitest": "^5.0.3"
   }
 }

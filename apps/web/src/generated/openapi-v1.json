@@ -63,7 +63,20 @@
         ]
       }
     },
-    "parameters": {}
+    "parameters": {},
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A personal access token, made on the profile page, with the scope each route names. Sent as `Authorization: Bearer <token>`."
+      },
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "The same token, in the header `X-API-Key`, for a client that cannot set `Authorization`."
+      }
+    }
   },
   "paths": {
     "/providers/{id}": {
@@ -71,7 +84,7 @@
         "permission": "registry.organisations.v1.read",
         "audit": true,
         "summary": "Get one provider",
-        "description": "One provider by id, as it is listed by `GET /providers` (the ids are there). An organisation that is not a provider is 404. The contact point of a provider is never part of this API.",
+        "description": "One provider by id, as it is listed by `GET /providers` (the ids are there). An organisation that is not a provider is 404. The contact point of a provider is never part of this API.\n\nNeeds the scope `registry.organisations.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -204,7 +217,15 @@
             }
           }
         },
-        "x-permission": "registry.organisations.v1.read"
+        "x-permission": "registry.organisations.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/providers": {
@@ -212,7 +233,7 @@
         "permission": "registry.organisations.v1.read",
         "audit": true,
         "summary": "List the providers",
-        "description": "All providers, or with `is_member` the ones the owner of the token is an approved member of (`true`) or all the others (`false`). Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a provider is never part of this API.",
+        "description": "All providers, or with `is_member` the ones the owner of the token is an approved member of (`true`) or all the others (`false`). Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a provider is never part of this API.\n\nNeeds the scope `registry.organisations.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -418,7 +439,15 @@
             }
           }
         },
-        "x-permission": "registry.organisations.v1.read"
+        "x-permission": "registry.organisations.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/services": {
@@ -426,7 +455,7 @@
         "permission": "registry.services.v1.read",
         "audit": true,
         "summary": "List the services",
-        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, and a stage or licence that names nothing, is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.",
+        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, and a stage or licence that names nothing, is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -684,7 +713,15 @@
             }
           }
         },
-        "x-permission": "registry.services.v1.read"
+        "x-permission": "registry.services.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/services/{id}": {
@@ -692,7 +729,7 @@
         "permission": "registry.services.v1.read",
         "audit": true,
         "summary": "Get one service",
-        "description": "One service by id: the fields of the list and the description, the address and the `sameAs` links. A service that is not public is returned too, with `public: false`. The contact point is never part of this API.",
+        "description": "One service by id: the fields of the list and the description, the address and the `sameAs` links. A service that is not public is returned too, with `public: false`. The contact point is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -872,7 +909,15 @@
             }
           }
         },
-        "x-permission": "registry.services.v1.read"
+        "x-permission": "registry.services.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/services/{id}/schema-org": {
@@ -880,7 +925,7 @@
         "permission": "registry.services.v1.read",
         "audit": true,
         "summary": "Get one service as Schema.org",
-        "description": "The service as a Schema.org `Service` (JSON-LD), built as the instance builds it for its own pages: the same properties, no contact point and no stage. A service that is not public is returned too.",
+        "description": "The service as a Schema.org `Service` (JSON-LD), built as the instance builds it for its own pages: the same properties, no contact point and no stage. A service that is not public is returned too.\n\nNeeds the scope `registry.services.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -1165,7 +1210,15 @@
             }
           }
         },
-        "x-permission": "registry.services.v1.read"
+        "x-permission": "registry.services.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/openapi.json": {

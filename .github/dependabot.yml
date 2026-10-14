@@ -17,6 +17,10 @@ updates:
     commit-message:
       prefix: 'deps'
     groups:
+      # The wrapper and the script of the API reference move together, and the journey gates the pull request
+      # (ADR-0038, "What an upgrade of Scalar has to pass").
+      scalar:
+        patterns: ['@scalar/*']
       npm-minor-patch:
         update-types: [minor, patch]
     # Node, TypeScript and pnpm move with the toolchain milestones (CLAUDE.md, "Stack").
