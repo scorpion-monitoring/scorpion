@@ -90,10 +90,10 @@ test.describe('the API reference', () => {
     const before = await browserState(page);
     const ok = await callFromReference(page, 'List the providers', good);
     expect(ok.status).toMatch(/^200\b/);
-    expect(JSON.parse(ok.body)).toMatchObject({
-      metadata: { currentPage: 0, pageSize: 100 },
-      result: expect.any(Array),
-    });
+    // Scalar's viewer draws only the lines in view, so the text is read as text, not parsed.
+    expect(ok.body).toContain('"metadata"');
+    expect(ok.body).toContain('"currentPage": 0');
+    expect(ok.body).toContain('"result"');
     const refused = await callFromReference(page, 'List the providers', wrong);
     expect(refused.status).toMatch(/^403\b/);
     // The page decides nothing: a token that was never made is refused by the server at the same call (401).
@@ -118,7 +118,14 @@ test.describe('the API reference', () => {
     });
     const plain = await program.get(at('/api/v1/providers'));
     expect(plain.status()).toBe(200);
-    expect(await plain.json()).toEqual(JSON.parse(ok.body));
+    const envelope = (await plain.json()) as {
+      metadata: { currentPage: number; totalCount: number };
+      result: unknown[];
+    };
+    expect(envelope.metadata.currentPage).toBe(0);
+    expect(Array.isArray(envelope.result)).toBe(true);
+    // The panel showed the same count the plain request returns.
+    expect(ok.body).toContain(`"totalCount": ${envelope.metadata.totalCount}`);
     const aliased = await playwright.request.newContext({
       baseURL,
       extraHTTPHeaders: { 'x-api-key': good },

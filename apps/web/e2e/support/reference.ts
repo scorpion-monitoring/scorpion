@@ -84,11 +84,26 @@ export async function callFromReference(
     .getByRole('button', { name: 'Test Request' })
     .click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: /^Send/ }).first().click();
-  const status = dialog.getByText(/^\d{3} [A-Z]/).first();
+  // The dialog keeps its own copy of the token; set it too, so a call never goes out with the one before.
+  const field = dialog.getByRole('textbox', { name: 'Token' }).first();
+  await field.fill(token);
+  await expect(field).toHaveValue(token);
+  // The viewer keeps the answer of the call before until the new one arrives: wait for this call's own response,
+  // then for the panel to show its status.
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (candidate) =>
+        candidate.request().method() === 'GET' &&
+        candidate.url().includes('/api/v1/') &&
+        !candidate.url().endsWith('/openapi.json'),
+    ),
+    dialog.getByRole('button', { name: /^Send/ }).first().click(),
+  ]);
+  const code = String(response.status());
+  const status = dialog.getByText(`${code} `).first();
   await expect(status).toBeVisible();
-  const body = await dialog.locator('.cm-content').last().innerText();
   const line = await status.innerText();
+  const body = await dialog.locator('.cm-content').last().innerText();
   await page.getByRole('button', { name: 'Close Client' }).click();
   return { status: line, body };
 }
