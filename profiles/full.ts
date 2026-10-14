@@ -21,6 +21,7 @@ export default defineProfile({
     'core.ui-shell',
     'registry.organisations',
     'registry.services',
+    'kpi.framework',
     'public-api',
   ],
 });
