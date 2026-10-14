@@ -34,6 +34,13 @@ export type { ServiceRecord } from './service/services.ts';
 
 import type { ServicesService } from './service/services.ts';
 
+// The v1 route definitions, for their contract test (`apps/server/src/services.contract.test.ts`).
+export {
+  getServiceSchemaOrgV1Route,
+  getServiceV1Route,
+  listServicesV1Route,
+} from './routes-v1.ts';
+
 export type ServicesPublic = Pick<
   ServicesService,
   'findByIdsAsSystem' | 'findBySlugAsSystem' | 'listByOrganisationAsSystem' | 'existsAsSystem'

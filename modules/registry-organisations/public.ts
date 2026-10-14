@@ -39,6 +39,8 @@ export {
 } from './service/fields.ts';
 // The one function that turns a profile into a string for HTML; M7's service profile goes through it too.
 export { serializeJsonLd, type SchemaOrgProfile } from './service/schema-org.ts';
+// The v1 route definition, for its contract test (`apps/server/src/providers.contract.test.ts`).
+export { listProvidersV1Route } from './routes-v1.ts';
 export type {
   OrganisationRecord,
   PublicOrganisationRecord,
