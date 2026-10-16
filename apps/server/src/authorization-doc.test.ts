@@ -17,7 +17,7 @@ const audited = (audit: unknown) =>
 
 describe('docs/security/authorization.md', () => {
   it('lists every route of the live registry with its permission [ASVS-8.1.1]', async () => {
-    const { kernel } = await app.start({ publicApi: true });
+    const { kernel } = await app.start({ publicApi: true, kpi: true });
     const rows = kernel.routes
       .map(({ module, surface, route }) => ({
         // A v1 route shares its path with an internal one (`GET /services`): the public API is named with its prefix.
