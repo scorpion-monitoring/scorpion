@@ -26,6 +26,7 @@
   "peerDependencies": {
     "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-ui-shell": "workspace:*",
+    "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*"
   },
@@ -34,6 +35,9 @@
       "optional": true
     },
     "@scorpion/core-ui-shell": {
+      "optional": true
+    },
+    "@scorpion/kpi-framework": {
       "optional": true
     },
     "@scorpion/registry-organisations": {
@@ -47,6 +51,7 @@
     "@scorpion/core-blob": "workspace:*",
     "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-ui-shell": "workspace:*",
+    "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
     "@scorpion/testing": "workspace:*",

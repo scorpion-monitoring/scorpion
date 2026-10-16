@@ -15,6 +15,8 @@ import { createIdentityModule } from '@scorpion/core-identity/module';
 import identityPackage from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
+import kpiModule from '@scorpion/kpi-framework/module';
+import kpiPackage from '@scorpion/kpi-framework/package.json' with { type: 'json' };
 import orgModule from '@scorpion/registry-organisations/module';
 import orgPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
@@ -102,6 +104,7 @@ export function useAudit(): AuditHarness {
           'core.identity',
           'registry.organisations',
           'registry.services',
+          'kpi.framework',
           ...(withAudit ? ['core.audit'] : []),
         ] as never,
       },
@@ -124,6 +127,8 @@ export function useAudit(): AuditHarness {
         { manifest: orgModule, packageJson: orgPackage },
         // An optional peer of core.audit too: its event needs a decision.
         { manifest: servicesModule, packageJson: servicesPackage },
+        // An optional peer of core.audit too: its two events need a decision.
+        { manifest: kpiModule, packageJson: kpiPackage },
         ...(withAudit ? [{ manifest, packageJson }] : []),
       ],
       modulePackages: {
@@ -136,6 +141,7 @@ export function useAudit(): AuditHarness {
         'core.ui-shell': '@scorpion/core-ui-shell',
         'registry.organisations': '@scorpion/registry-organisations',
         'registry.services': '@scorpion/registry-services',
+        'kpi.framework': '@scorpion/kpi-framework',
         'core.audit': '@scorpion/core-audit',
       },
       config: loadConfig({

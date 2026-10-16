@@ -255,6 +255,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           'core.ui-shell': '@scorpion/core-ui-shell',
           'registry.organisations': '@scorpion/registry-organisations',
           'registry.services': '@scorpion/registry-services',
+          'kpi.framework': '@scorpion/kpi-framework',
           'public-api': '@scorpion/public-api',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [

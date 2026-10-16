@@ -145,6 +145,7 @@ export function useServices(): ServicesHarness {
         'core.audit': '@scorpion/core-audit',
         'registry.organisations': '@scorpion/registry-organisations',
         'registry.services': '@scorpion/registry-services',
+        'kpi.framework': '@scorpion/kpi-framework',
         ...Object.fromEntries(
           extra.map((module) => [module.manifest.id, String(module.packageJson.name)]),
         ),

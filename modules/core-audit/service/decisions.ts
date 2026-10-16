@@ -142,6 +142,11 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   'registry.service.slugChanged@1': log(true, userBy('actorId'), subjectOf('service', 'serviceId')),
   'registry.service.published@1': log(true, userBy('actorId'), subjectOf('service', 'serviceId')),
   'registry.service.unpublished@1': log(true, userBy('actorId'), subjectOf('service', 'serviceId')),
+  // kpi.framework (present only in profiles that have it; see the module's optional peer). An indicator or a KPI
+  // set is changed by an Admin, so both follow `channels.admin`; the payload names the id, the kind of change and
+  // the changed field names, never a name, a description or a value.
+  'kpi.indicator.changed@1': log(false, userBy('actorId'), subjectOf('indicator', 'indicatorId')),
+  'kpi.set.changed@1': log(false, userBy('actorId'), subjectOf('kpi-set', 'setId')),
   // Membership (M6 sprint 3). An approval or a role change is a permission-relevant act, like an approved
   // account and a role assignment, so `decided` and `roleChanged` are critical; so is a membership that an
   // Admin or a manager ended (`by`), while a person who leaves or withdraws follows `channels.admin`. A purge
