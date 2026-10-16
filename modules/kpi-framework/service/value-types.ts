@@ -46,7 +46,9 @@ export type ValueTypeEntry = z.output<typeof valueTypeEntrySchema>;
 // ----- the pure parsers -----------------------------------------------------------------------------
 
 const INTEGER_TEXT = /^[+-]?\d{1,15}$/;
-const DECIMAL_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+/** Digits, then an optional fraction; or a fraction alone. Unambiguous, so it cannot backtrack. */
+const DECIMAL_TEXT = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
+const MAX_NUMBER_TEXT = 400;
 const MAX_TEXT_LENGTH = 4000;
 /** `HH-MM-SS`: hours 0 to 9999, minutes and seconds 00 to 59, always two digits for the last two. */
 const DURATION_TEXT = /^(\d{1,4})-([0-5]\d)-([0-5]\d)$/;
@@ -75,7 +77,7 @@ export function parseFloatValue(input: unknown): ParseResult<number> {
   }
   if (typeof input === 'string') {
     const text = input.trim();
-    if (!DECIMAL_TEXT.test(text)) return bad('must be a number');
+    if (text.length > MAX_NUMBER_TEXT || !DECIMAL_TEXT.test(text)) return bad('must be a number');
     const value = Number(text);
     return Number.isFinite(value) ? ok(value === 0 ? 0 : value) : bad('must be a finite number');
   }

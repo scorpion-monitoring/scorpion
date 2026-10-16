@@ -37,6 +37,13 @@ export function iriBaseProblem(value: string): string | undefined {
   return undefined;
 }
 
+/** Drops every `/` at the end (a loop, not a regular expression: no backtracking on a long run of slashes). */
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end--;
+  return value.slice(0, end);
+}
+
 /** The request the base falls back to: the origin (`https://host:port`) and the base path (`''` or `/x/y`). */
 export interface IriRequest {
   origin: string;
@@ -56,7 +63,7 @@ export function resolveIriBase(setting: string | null | undefined, request?: Iri
     throw new RangeError('no IRI base: set kpi.framework iriBase or give the request');
   const problem = iriBaseProblem(raw);
   if (problem) throw new RangeError(`the IRI base ${JSON.stringify(raw)} ${problem}`);
-  return raw.replace(/\/+$/, '');
+  return stripTrailingSlashes(raw);
 }
 
 /** `<base>/kpi/<kind>/<slug>`. `base` comes from `resolveIriBase`. Throws `RangeError` for a bad kind, slug or base. */
@@ -68,5 +75,5 @@ export function iriFor(kind: IriKind, slug: string, base: string): string {
   const problem = iriBaseProblem(base);
   if (problem !== undefined || base === '')
     throw new RangeError(`the IRI base ${JSON.stringify(base)} ${problem ?? 'is empty'}`);
-  return `${base.replace(/\/+$/, '')}/kpi/${kind}/${slug}`;
+  return `${stripTrailingSlashes(base)}/kpi/${kind}/${slug}`;
 }
