@@ -139,6 +139,20 @@ the same file answers 401 and 403 on every non-public route.
 | `PUT /secrets/{name}`                           | core.settings          | `core.settings.secret.write`                 | strict     | yes            |
 | `PUT /settings/{module}`                        | core.settings          | `core.settings.write`                        | default    | yes, with body |
 | `GET /ui/navigation`                            | core.ui-shell          | **public**                                   | default    | no             |
+| `DELETE /kpi/indicators/{id}`                   | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
+| `DELETE /kpi/sets/{id}`                         | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
+| `GET /kpi/indicators`                           | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
+| `GET /kpi/indicators/{id}`                      | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
+| `GET /kpi/sets`                                 | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
+| `GET /kpi/sets/{id}`                            | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
+| `GET /kpi/sets/{id}/evaluation`                 | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
+| `GET /kpi/value-types`                          | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
+| `POST /kpi/indicators`                          | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
+| `POST /kpi/sets`                                | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
+| `PUT /kpi/indicators/{id}`                      | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
+| `PUT /kpi/sets/{id}`                            | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
+| `PUT /kpi/sets/{id}/evaluation`                 | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
+| `PUT /kpi/sets/{id}/indicators`                 | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
 | `GET /api/v1/openapi.json`                      | public-api             | **public**                                   | default    | no             |
 | `DELETE /organisations/{id}`                    | registry.organisations | `registry.organisations.organisation.manage` | default    | yes            |
 | `DELETE /organisations/{id}/logo`               | registry.organisations | `registry.organisations.organisation.read`   | default    | yes            |

@@ -599,6 +599,15 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **A service-category term that disappears from a newer RIMO.** A key that is in use is deactivated, never deleted; the sets that name it keep the value. How an administrator is told, and how a set is remapped, is not built: it needs a decision when a RIMO version drops a category (ADR-0040, "adopting a new version").
 - **The `rimo:hasUnit` of an own unit.** The RDF read (sprint 4) mints an IRI for a unit that has no UO IRI; a consumer that follows `rimo:hasUnit` to the Units Ontology finds nothing there. Linking an own unit to the nearest UO term is a data question that the metadata item above would answer.
 
+## KPI framework follow-ups (M9 sprint 2)
+
+- **Clearing an evaluation.** `evaluation.set` replaces the headline; there is no call that removes it without removing the headline's row from the set. A `DELETE /kpi/sets/{id}/evaluation` is small and has no caller yet.
+- **Reading indicators and sets without the administration.** The six pages need `manage`; a plain `user` holds `indicator.read` and `set.read` for the service pages of sprint 3 and has no page of their own for browsing the catalogue of indicators. A read-only list for them needs a decision on where it is linked.
+- **`escapeLike` is copied again.** `service/text.ts` has its own three-line copy (as `core.audit`, `core.identity` and `registry.services` do), because importing it from `registry.organisations/public` would make that module a dependency of `kpi.framework` (Decision 2 of [m9-sprint-plan.md](m9-sprint-plan.md) keeps it out). One shared helper would remove four copies.
+- **A rename that frees a name for another indicator.** Names are unique without case and a delete frees the name; the slug of a deleted indicator is free too, so a new indicator of the same name gets the same IRI. IRIs of deleted rows are not reserved (services have a slug history; indicators do not). Decide before the RDF reads of sprint 4 are public.
+- **The picker of a set loads from the API on the client.** It is the one place that calls `GET /kpi/indicators` from the browser instead of a page loader; the server-rendered page shows an empty picker until the first answer. A loader with the search in the address would make it linkable.
+- **The `kept` rule for means and tools is per term.** A deactivated means a row has stays valid for that row; a second indicator that names it is refused. The form offers a deactivated term only where the row has it.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.

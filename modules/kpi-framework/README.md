@@ -5,23 +5,23 @@ services. Its indicators follow the **Research Infrastructure Metrics Ontology (
 [m9-sprint-plan.md](../../docs/m9-sprint-plan.md)). It is the first module of the KPI phase; `kpi.ingestion` (M10) and `kpi.analytics`
 (M11) build on its tables, its value types and its vocabularies.
 
-Status: M9 sprint 1: the model, the vocabularies and the RIMO seed. There are **no routes, no pages and no permissions yet**: the
-service layer and the screens are sprint 2, the link to services and the v1 reads sprint 3, the RDF reads sprint 4. The module is in the
-`full` profile only.
+Status: M9 sprint 2: the model, the vocabularies and the RIMO seed (sprint 1), and the indicators and KPI sets with their service
+layer, internal routes, administration pages and evaluation (sprint 2). The link to services and the v1 reads are sprint 3, the RDF
+reads sprint 4. The module is in the `full` profile only.
 
 ## Manifest
 
-| Part         | Value                                                                                                                                                                                                                                               |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id           | `kpi.framework` (package `@scorpion/kpi-framework`)                                                                                                                                                                                                 |
-| table prefix | `kpif_` (set in the manifest; ADR-0004): `kpif_indicator`, `kpif_indicator_means`, `kpif_indicator_tool`, `kpif_kpi_set`, `kpif_kpi_set_indicator`, `kpif_evaluation`. `kpi.ingestion` will use `kpii_`                                             |
-| dependencies | `core.settings` (vocabularies, settings) and `registry.services` (sprint 3 contributes to its registries; nothing in sprint 1 uses it yet). `registry.services` does **not** depend on this module. No foreign key points to another module's table |
-| routes       | none yet                                                                                                                                                                                                                                            |
-| ui           | none yet (no `./ui` export until sprint 2)                                                                                                                                                                                                          |
-| events       | emits `kpi.indicator.changed@1` and `kpi.set.changed@1` (declared; the writes that emit them are sprint 2)                                                                                                                                          |
-| registries   | declares `kpi.valueType` and contributes its five entries; contributes the vocabularies below to `vocabulary` (core.settings)                                                                                                                       |
-| settings     | `iriBase` (see "Settings"), shown by the generic settings form                                                                                                                                                                                      |
-| permissions  | none yet. Sprint 2 adds `kpi.framework.indicator.read` and `.manage`, `kpi.framework.set.read` and `.manage`; sprint 3 adds `kpi.framework.v1.read` and the service-scoped `kpi.framework.service.kpis.edit`                                        |
+| Part         | Value                                                                                                                                                                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id           | `kpi.framework` (package `@scorpion/kpi-framework`)                                                                                                                                                                                                   |
+| table prefix | `kpif_` (set in the manifest; ADR-0004): `kpif_indicator`, `kpif_indicator_means`, `kpif_indicator_tool`, `kpif_kpi_set`, `kpif_kpi_set_indicator`, `kpif_evaluation`. `kpi.ingestion` will use `kpii_`                                               |
+| dependencies | `core.authz`, `core.settings` (vocabularies, settings) and `registry.services` (sprint 3 contributes to its registries; nothing yet uses it). `registry.services` does **not** depend on this module. No foreign key points to another module's table |
+| routes       | the internal routes below (sprint 2); no v1 route yet                                                                                                                                                                                                 |
+| ui           | `./ui`: six pages through the registry `ui.routes` (see "Pages"), two `ui.nav` entries in the administration section                                                                                                                                  |
+| events       | emits `kpi.indicator.changed@1` and `kpi.set.changed@1` (see "Events")                                                                                                                                                                                |
+| registries   | declares `kpi.valueType` and contributes its five entries; contributes the vocabularies below to `vocabulary` (core.settings)                                                                                                                         |
+| settings     | `iriBase` (see "Settings"), shown by the generic settings form                                                                                                                                                                                        |
+| permissions  | `kpi.framework.indicator.read` and `.manage`, `kpi.framework.set.read` and `.manage` (see "Permissions"); sprint 3 adds `kpi.framework.v1.read` and the service-scoped `kpi.framework.service.kpis.edit`                                              |
 
 ## The model
 
@@ -147,7 +147,73 @@ migration for sets that name it and needs an ADR.
 | `kpi.set.changed@1`       | `{ setId, change: created \| updated \| deleted, fields: string[], actorId }`; `fields` names `indicators` and `evaluation` when those changed |
 
 Ids and field names only, never a name, a description or a value (a test refuses a payload that adds one). `core.audit` logs both, not
-critical (see its README). They are declared now; the writes that emit them come in sprint 2.
+critical (see its README). Every write emits its event in the same transaction as the rows (the outbox), so a failed event leaves no row:
+
+| Write                                   | Event                   | `change` and `fields`                                                                                                                                                         |
+| --------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `indicators.create`, `update`, `delete` | `kpi.indicator.changed` | `created` / `deleted` with no fields; `updated` with the names of the fields that changed (`measuredBy`, `canBeAutomatedBy` included). Nothing changed: no write and no event |
+| `sets.create`, `update`, `delete`       | `kpi.set.changed`       | the same for `name`, `description`, `rimoCategory`                                                                                                                            |
+| `sets.setIndicators`                    | `kpi.set.changed`       | `updated`, `fields: ['indicators']`, plus `'evaluation'` when the headline was removed with its row                                                                           |
+| `evaluation.set`                        | `kpi.set.changed`       | `updated`, `fields: ['evaluation']`                                                                                                                                           |
+
+## Permissions
+
+| Permission                       | Grants                                                                     | Default role  |
+| -------------------------------- | -------------------------------------------------------------------------- | ------------- |
+| `kpi.framework.indicator.read`   | read and list indicators, list the value types                             | `user`, Admin |
+| `kpi.framework.indicator.manage` | create, change and delete indicators                                       | Admin         |
+| `kpi.framework.set.read`         | read and list KPI sets, their rows and their evaluation                    | `user`, Admin |
+| `kpi.framework.set.manage`       | create, change and delete KPI sets, replace their rows, set the evaluation | Admin         |
+
+Each route names its permission and each service method checks it again with `ctx.authz.require`. Admin holds every declared permission
+without a grant (core.authz); the `user` grants are the module's `authz.defaultRole` contribution.
+
+## Routes (internal API)
+
+| Route                                       | Permission                  | Notes                                                                                                                                                                                                                                     |
+| ------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /kpi/indicators`                       | `indicator.read`            | `q` (name, slug, description; `%` and `_` are literal), `thematic`, `unit`, `qualitative`, `sort` (`name`, `thematic`, `unit`, `valueType`; ties by name, then id), `page` from 0, `pageSize` 1 to 100                                    |
+| `POST /kpi/indicators`                      | `indicator.manage`, audited | 201; slug made from the name when not given; 409 names `name` or `slug`; 422 names every bad path                                                                                                                                         |
+| `GET`, `PUT`, `DELETE /kpi/indicators/{id}` | read / manage, audited      | `PUT` replaces the editable fields (a field left out is cleared; the slug never changes); `DELETE` is 409 `kpi-in-use` while a set row or an evaluation uses it                                                                           |
+| `GET /kpi/value-types`                      | `indicator.read`            | the registry entries (id, labels, `numeric`, `range`, `aggregates`), by id                                                                                                                                                                |
+| `GET /kpi/sets`                             | `set.read`                  | `q`, `rimoCategory`, `sort` (`name`, `rimoCategory`); each row has `indicatorCount` and `necessityCounts` for the badges                                                                                                                  |
+| `POST /kpi/sets`                            | `set.manage`, audited       | 201; the set has no rows yet                                                                                                                                                                                                              |
+| `GET`, `PUT`, `DELETE /kpi/sets/{id}`       | read / manage, audited      | the detail has the rows and the evaluation; `DELETE` removes rows and evaluation (a service that uses the set blocks it from sprint 3)                                                                                                    |
+| `PUT /kpi/sets/{id}/indicators`             | `set.manage`, audited       | replaces the rows in one transaction (add, change necessity, remove); an empty necessity, an unknown term or indicator and a repeat are 422 naming `indicators[i].…`; removing the headline clears the evaluation in the same transaction |
+| `GET`, `PUT /kpi/sets/{id}/evaluation`      | read / manage, audited      | `GET` answers `{ evaluation: null }` without a headline; `PUT` needs a headline that is a row of the set and an aggregate that the value type allows and the vocabulary has active                                                        |
+
+Lists use the legacy envelope (`{ metadata, result }`, 0-based pages). An unknown id is 404, a malformed one 422, an unknown term 422 with
+the path, a duplicate name or slug 409, never a 500. Every string and list is bounded (names 200, descriptions 4000, examples 1000, 50
+terms per link list, 500 rows per set). Responses carry `iri` (`<base>/kpi/<kind>/<slug>`, base from the setting `iriBase`).
+Internal routes are not part of the public v1 document.
+
+### Rules the service enforces
+
+- **Terms** (unit, thematic category, means, tools, RIMO category, necessity, aggregate) are checked with `checkTerms` before the
+  transaction opens: one 422 names every bad path. A row keeps a term it already has when that term was deactivated since.
+- **Value type and bounds** come from the registry: the type must exist, `boundsProblem` decides whether bounds fit, and a qualitative
+  indicator has the value type `text` and no bounds.
+- **Evaluation**: the headline is a row of the set; the aggregate is in the `aggregates` of the headline's value type and an active term
+  of `aggregate`. A change of an indicator's value type that would strand a headline's aggregate is a 409.
+- **Slugs** are made from the name when not given (accents folded, runs of other characters become `-`, at most 64 characters; a taken
+  slug gets `-2`, `-3`, …) and never change on a rename. Names and slugs are unique without regard to case.
+- **Deletes** are by id. An indicator in a set is a 409 that names the module and the count before the database's `restrict` is reached.
+
+## Pages
+
+Six pages through the registry `ui.routes` (never a SvelteKit file route), all for an administrator (`indicator.manage` or `set.manage`)
+and linked from the administration section of the navigation:
+
+| Path                                         | Shows                                                                                                                                                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/kpi/indicators`                            | the list with the search and the filters (thematic category, unit, kind) in the address                                                                                                      |
+| `/kpi/indicators/new`, `/kpi/indicators/:id` | the form with every RIMO field (name, description, example, qualitative, value type, unit, bounds, thematic category, means, tools), the identifier and IRI, where it is used and the delete |
+| `/kpi/sets`                                  | the list with the RIMO category filter and a badge per necessity                                                                                                                             |
+| `/kpi/sets/new`, `/kpi/sets/:id`             | the details, the rows (a paginated picker over `GET /kpi/indicators`, a necessity per row, saved together), the evaluation (headline and aggregate) and the delete                           |
+
+Labels of units, categories, necessities, aggregates, means, tools and value types come from the vocabularies and the registry; the texts
+are in English and German (`ui/messages.ts`). Pure helpers (`ui/query.ts`, `form.ts`, `rows.ts`, `terms.ts`, `failure.ts`, `errors.ts`)
+have table-driven tests.
 
 ## Migration from the old application (for M13)
 
@@ -162,7 +228,12 @@ critical (see its README). They are declared now; the writes that emit them come
 
 ## Tests
 
-`pnpm test --filter @scorpion/kpi-framework`. Table-driven unit tests for the value types, the IRIs and the extractor (with the seed
-drift test); integration tests over real Postgres for the loader and the schema ([module.test.ts](module.test.ts)), the constraints
-([db/constraints.test.ts](db/constraints.test.ts)) and the usage checks and save-time term checks
-([service/vocabularies.test.ts](service/vocabularies.test.ts)). Factories: `makeIndicator` and `makeKpiSet` in `packages/testing`.
+`pnpm test --filter @scorpion/kpi-framework`. Table-driven unit tests for the value types, the IRIs, the slugs and the extractor (with the
+seed drift test) and for the pure helpers of the pages; integration tests over real Postgres for the loader and the schema
+([module.test.ts](module.test.ts)), the constraints ([db/constraints.test.ts](db/constraints.test.ts)), the usage checks and save-time
+term checks ([service/vocabularies.test.ts](service/vocabularies.test.ts)) and every service method
+([service/indicators.test.ts](service/indicators.test.ts), [sets.test.ts](service/sets.test.ts),
+[evaluation.test.ts](service/evaluation.test.ts)), each with a denied-permission case and a rollback case for the multi-row writes.
+The routes are tested through the whole pipeline in `apps/server/src/kpi-routes.test.ts` and the regression test of defect 14 in
+`apps/server/src/defect-14.kpi-sets.test.ts`; the pages in `apps/web/src/kpi-pages.test.ts` and the journey and axe in
+`apps/web/e2e/kpi-framework.spec.ts`. Factories: `makeIndicator` and `makeKpiSet` in `packages/testing`.
