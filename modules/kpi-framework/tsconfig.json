@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist",
-    "lib": ["ES2024"]
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
   "include": [
     "*.ts",
@@ -13,18 +13,45 @@
     "db",
     "scripts",
     "service",
-    "test"
+    "test",
+    "ui"
   ],
   "references": [
-    { "path": "../../packages/kernel" },
-    { "path": "../../packages/contracts" },
-    { "path": "../../packages/testing" },
-    { "path": "../core-authz" },
-    { "path": "../core-blob" },
-    { "path": "../core-identity" },
-    { "path": "../core-notifications" },
-    { "path": "../core-settings" },
-    { "path": "../registry-organisations" },
-    { "path": "../registry-services" }
+    {
+      "path": "../../packages/kernel"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/testing"
+    },
+    {
+      "path": "../core-authz"
+    },
+    {
+      "path": "../core-blob"
+    },
+    {
+      "path": "../core-identity"
+    },
+    {
+      "path": "../core-notifications"
+    },
+    {
+      "path": "../core-settings"
+    },
+    {
+      "path": "../registry-organisations"
+    },
+    {
+      "path": "../registry-services"
+    },
+    {
+      "path": "../core-ui-shell"
+    },
+    {
+      "path": "../../packages/ui-kit"
+    }
   ]
 }
