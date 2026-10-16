@@ -37,10 +37,26 @@ const TABLES = [
 ];
 
 describe('the manifest', () => {
-  it('has the id, the table prefix kpif_ and no permission yet (the routes arrive with sprint 2)', () => {
+  it('has the id, the table prefix kpif_ and the four permissions of the indicator and set families', () => {
     expect(manifest.id).toBe('kpi.framework');
     expect(manifest.tablePrefix).toBe('kpif_');
-    expect(manifest.permissions ?? {}).toEqual({});
+    expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
+      'kpi.framework.indicator.manage',
+      'kpi.framework.indicator.read',
+      'kpi.framework.set.manage',
+      'kpi.framework.set.read',
+    ]);
+    for (const permission of Object.values(manifest.permissions ?? {}))
+      expect(permission.description.length).toBeGreaterThan(10);
+  });
+
+  it('gives the role user the two read permissions and nobody else a default grant (Admin holds everything)', () => {
+    expect(manifest.contributes?.['authz.defaultRole']).toEqual([
+      {
+        role: 'user',
+        permissions: ['kpi.framework.indicator.read', 'kpi.framework.set.read'],
+      },
+    ]);
   });
 
   it('declares the two events, the value type registry and the contributions', () => {
@@ -98,17 +114,23 @@ describe('the manifest', () => {
     expect(settingsSchema.safeParse({ iriBase: value }).success).toBe(false);
   });
 
-  it('depends on core.settings and registry.services, and on no other module', () => {
+  it('depends on core.authz, core.settings and registry.services, and on no other module', () => {
     const modules = Object.keys(packageJson.dependencies)
       .filter((name) => name.startsWith('@scorpion/'))
       .sort();
     expect(modules).toEqual([
       '@scorpion/contracts',
+      '@scorpion/core-authz',
       '@scorpion/core-settings',
       '@scorpion/kernel',
       '@scorpion/registry-services',
     ]);
-    expect(Object.keys(packageJson.exports)).toEqual(['./module', './public', './package.json']);
+    expect(Object.keys(packageJson.exports)).toEqual([
+      './module',
+      './public',
+      './ui',
+      './package.json',
+    ]);
   });
 });
 
@@ -196,8 +218,12 @@ describe('the schema', () => {
   it('imports no other module except through its public.ts and the packages it declares', () => {
     const allowed = new Set([
       '@scorpion/contracts',
+      '@scorpion/core-authz/public',
       '@scorpion/core-settings/public',
+      '@scorpion/core-ui-shell/public',
       '@scorpion/kernel',
+      '@scorpion/ui-kit',
+      '@scorpion/contracts/client',
     ]);
     for (const file of sourceFiles('.').filter(
       (name) => !name.startsWith('node_modules') && !name.startsWith('test'),
