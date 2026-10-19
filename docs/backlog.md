@@ -641,6 +641,10 @@ Measurements (a development machine, Postgres in a container; the method is in t
 - **No negotiation.** `Accept: text/turtle` on the indicator routes and a page per IRI are out of scope (plan §11).
 - **For M10:** the measurements per period, and the KPIs a service had in a period (see "No history of a service's KPIs" above). The `rimo:KPIValue` node `<indicator IRI>#value` is the one real values attach to; keep them out of `buildRdfModel`, so the public pair stays definitions only.
 
+## Observed by the maintainer (after M9 sprint 4)
+
+- **A `pg` deprecation warning from a node process.** `DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.` Seen once by chance in a local run (pid 58754; which process and command is not known). It means some code issues a second query on one `pg` client before the first has finished (a `Promise.all` over a single client or transaction, a query in an event handler, or a missing `await`). Nothing fails today, but `pg@9` will stop queueing them. To find it: run with `node --trace-deprecation` (`NODE_OPTIONS=--trace-deprecation pnpm test`, or the same for `pnpm dev`) and fix the call site; then make the test setup fail on a deprecation warning (`--throw-deprecation` in the vitest and e2e processes) so it cannot return. Candidates to look at first: code that runs several reads through one `ctx.db.tx()` transaction in parallel (a drizzle transaction is one client), and the test helpers that share one client.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.
