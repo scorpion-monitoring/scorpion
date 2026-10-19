@@ -142,6 +142,12 @@ describe('the audit decision for every declared event', () => {
       type: 'kpi-set',
       id: 'set-1',
     });
+    const kpis = logged('kpi.serviceSet.changed@1');
+    expect(kpis.decision).toBe('log');
+    expect(kpis.critical).toBe(false);
+    const change = { serviceId: 'svc-1', setId: 'set-1', fields: ['set'], actorId: 'user-1' };
+    expect(kpis.actor(change)).toEqual({ kind: 'user', userId: 'user-1' });
+    expect(kpis.subject(change)).toEqual({ type: 'service', id: 'svc-1' });
   });
 
   it('marks a membership that ends as critical when an Admin or a manager ended it, not when the person left', () => {
