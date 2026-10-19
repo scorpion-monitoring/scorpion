@@ -337,6 +337,13 @@ export interface ServicesService {
    * entry, so the rule is written once. `false` for an unknown service.
    */
   isProviderManagerAsSystem: (userId: string, serviceId: string) => Promise<boolean>;
+  /**
+   * Whether the user is an approved **member** of the service's provider, a manager included (a manager is a member too): the group
+   * that holds `service.edit` in the policy `service.member`. The sibling of `isProviderManagerAsSystem`, for a module whose scoped
+   * permission belongs to every approved member (`kpi.ingestion`: submitting measurements). Asked at every call, nothing is cached,
+   * so a removed member is refused at the next call. `false` for an unknown service and for a requested, rejected or left row.
+   */
+  isProviderMemberAsSystem: (userId: string, serviceId: string) => Promise<boolean>;
 }
 
 const CONSTRAINT_ERRORS = new Set(['svc_service_slug_idx', 'svc_slug_history_slug_idx']);
@@ -1554,6 +1561,15 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
       return deps.memberPolicy.allows({
         actor: { kind: 'user', userId, username: '', roles: [], via: 'session' },
         permission: PERMISSION_EDIT_IDENTITY,
+        resource: { type: RESOURCE_TYPE, id: serviceId },
+      });
+    },
+
+    async isProviderMemberAsSystem(userId, serviceId) {
+      if (!deps.memberPolicy || !z.uuid().safeParse(serviceId).success) return false;
+      return deps.memberPolicy.allows({
+        actor: { kind: 'user', userId, username: '', roles: [], via: 'session' },
+        permission: PERMISSION_EDIT,
         resource: { type: RESOURCE_TYPE, id: serviceId },
       });
     },
