@@ -407,6 +407,8 @@ const CREATE_SCHEMA_NAMES = [
   'devConsole',
   'email',
   'en',
+  'equals',
+  'external',
   'fieldTypes',
   'fields',
   'help',
@@ -421,6 +423,7 @@ const CREATE_SCHEMA_NAMES = [
   'memberOnly',
   'min',
   'name',
+  'oneOf',
   'order',
   'orgTypes',
   'path',
@@ -429,6 +432,7 @@ const CREATE_SCHEMA_NAMES = [
   'roles',
   'sameAs',
   'schema',
+  'showIf',
   'slug',
   'steps',
   'title',
@@ -499,6 +503,7 @@ const PROVIDER_ROW = [
 ];
 const SERVICE_ROW = [
   'abbreviation',
+  'category',
   'consortia',
   'consortiaIds',
   'id',
@@ -514,6 +519,32 @@ const V1_ANSWERS: Record<string, readonly string[]> = {
   'GET /providers/{id}': PROVIDER_ROW,
   'GET /services': SERVICE_ROW,
   'GET /services/{id}': [...SERVICE_ROW, 'description', 'sameAs', 'url'],
+};
+// The KPI reads (M9 sprint 3): the legacy names and what is added, pinned like the rows above.
+const CATEGORY_ROW = ['description', 'id', 'indicators', 'iri', 'name', 'rimoCategory'];
+const INDICATOR_ROW = [
+  'canBeAutomatedBy',
+  'description',
+  'example',
+  'id',
+  'iri',
+  'key',
+  'max',
+  'measuredBy',
+  'min',
+  'name',
+  'necessity',
+  'qualitative',
+  'selected',
+  'symbol',
+  'thematicCategory',
+  'type',
+  'unit',
+  'valueType',
+];
+const KPI_ANSWERS: Record<string, readonly string[]> = {
+  'GET /categories': CATEGORY_ROW,
+  'GET /indicators': INDICATOR_ROW,
 };
 /** The properties of the Schema.org `Service` (the profile of the internal route, which has no contact point). */
 const V1_SCHEMA_ORG = [
@@ -586,6 +617,18 @@ describe('the v1 schemas', () => {
     // The nested `@type` of the nodes and the logo repeat names; the contributed properties are the deployment's.
     for (const name of V1_SCHEMA_ORG) expect(profile.has(name), name).toBe(true);
     for (const name of CONTACT_FIELDS) expect(profile.has(name), name).toBe(false);
+  });
+
+  it('name the fields of the KPI rows of the field tables and no field the internal read hides [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start({ kpi: true });
+    const v1 = kernel.routes.filter((entry) => entry.surface === 'v1');
+    expect(v1Violations(v1.map((entry) => entry.route as RouteLike))).toEqual([]);
+    for (const [key, expected] of Object.entries(KPI_ANSWERS)) {
+      const entry = v1.find(({ route }) => `${route.method.toUpperCase()} ${route.path}` === key);
+      const names = v1Names(entry!.route as RouteLike);
+      for (const name of ENVELOPE) names.delete(name);
+      expect([...names].sort(), key).toEqual([...expected].sort());
+    }
   });
 
   it('fail a planted contact field, audit column or screen hint, at any depth [ASVS-8.2.3]', () => {

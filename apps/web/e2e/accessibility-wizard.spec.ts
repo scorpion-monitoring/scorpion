@@ -68,7 +68,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await clean('step 1 with a licence chosen');
       await page.getByRole('button', { name: 'Next' }).click();
 
-      await expect(page.getByRole('heading', { name: 'Step 2 of 3: Who runs it' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Step 2 of 4: Who runs it' })).toBeVisible();
       await clean('step 2');
       await page.getByRole('button', { name: 'Next' }).click();
       await expect(page.getByText('This field is required.')).toBeVisible();
@@ -79,15 +79,18 @@ for (const scheme of ['light', 'dark'] as const) {
         .check();
       await page.getByRole('button', { name: 'Next' }).click();
 
-      await expect(page.getByRole('heading', { name: 'Step 3 of 3: Contact' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Step 3 of 4: Contact' })).toBeVisible();
       await clean('step 3');
       await page.getByLabel(/^Contact address/).fill(`help-${tag}@example.org`);
-      await page.getByRole('button', { name: 'Create service' }).click();
+      await page.getByRole('button', { name: 'Next' }).click();
       await expect(
         page.getByText('Give both an address and a kind of contact, or neither.'),
       ).toBeVisible();
       await clean('step 3 with the pair rule broken');
       await page.getByLabel('Kind of contact').fill('support');
+      await page.getByRole('button', { name: 'Next' }).click();
+      await expect(page.getByRole('heading', { name: 'Step 4 of 4: KPIs' })).toBeVisible();
+      await clean('step 4, the KPIs, without a set chosen');
       await page.getByRole('button', { name: 'Create service' }).click();
 
       await expect(page.getByRole('heading', { name: 'Service created' })).toBeVisible();
@@ -124,7 +127,7 @@ test.describe('the create wizard by keyboard', () => {
     await page.goto(at('/services'));
     await tabTo(page, page.getByRole('link', { name: 'New service' }));
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('heading', { name: 'Step 1 of 3: Basics' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
 
     // Step 1: the two required fields, then a licence searched and chosen from the list of results.
     await tabTo(page, page.getByLabel(/^Short name/));
@@ -142,7 +145,7 @@ test.describe('the create wizard by keyboard', () => {
     await page.keyboard.press('Enter');
 
     // Moving on takes the focus to the heading of the new step.
-    const step2 = page.getByRole('heading', { name: 'Step 2 of 3: Who runs it' });
+    const step2 = page.getByRole('heading', { name: 'Step 2 of 4: Who runs it' });
     await expect(step2).toBeFocused();
     const operated = page.getByLabel(/^Operated by/);
     await tabTo(page, operated);
@@ -152,9 +155,12 @@ test.describe('the create wizard by keyboard', () => {
     await tabTo(page, page.getByRole('button', { name: 'Next' }));
     await page.keyboard.press('Enter');
 
-    // The last step: the same button says what it does, and creating moves the focus to the result.
-    const step3 = page.getByRole('heading', { name: 'Step 3 of 3: Contact' });
+    // The last step is the KPIs: the same button says what it does, and creating moves the focus to the result.
+    const step3 = page.getByRole('heading', { name: 'Step 3 of 4: Contact' });
     await expect(step3).toBeFocused();
+    await tabTo(page, page.getByRole('button', { name: 'Next' }));
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Step 4 of 4: KPIs' })).toBeFocused();
     await tabTo(page, page.getByRole('button', { name: 'Create service' }));
     await page.keyboard.press('Enter');
     const done = page.getByRole('heading', { name: 'Service created' });

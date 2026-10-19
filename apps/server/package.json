@@ -22,6 +22,7 @@
     "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/public-api": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*",

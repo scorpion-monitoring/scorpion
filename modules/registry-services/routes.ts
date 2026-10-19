@@ -553,6 +553,16 @@ const choiceSchema = z.object({
     .describe('A key of the message catalogue, for an option the config lists.'),
 });
 
+const showIfOutSchema = z
+  .object({
+    path: z.string().describe('A JSON pointer into the form: the value that is asked about.'),
+    equals: z.unknown().optional(),
+    oneOf: z.array(z.unknown()).optional(),
+  })
+  .describe(
+    'Shown only when the value at `path` equals `equals` or is one of `oneOf`; a hidden field is not required.',
+  );
+
 const schemaFieldSchema = z.object({
   key: z.string(),
   path: z.string().describe('A JSON pointer into the one nested form object: `/contact/type`.'),
@@ -572,7 +582,14 @@ const schemaFieldSchema = z.object({
     .optional()
     .describe('For a field stored in a column of the service: its name, such as `slug`.'),
   deferred: z.boolean().describe('Not part of the create body: the value is set afterwards.'),
+  external: z
+    .boolean()
+    .optional()
+    .describe(
+      'Changed through the route of the module that owns it, never by a patch of the service: the edit form leaves it out.',
+    ),
   choices: z.array(choiceSchema).optional(),
+  showIf: showIfOutSchema.optional(),
 });
 
 const schemaStepSchema = z.object({
@@ -582,6 +599,7 @@ const schemaStepSchema = z.object({
   intro: z.array(z.string()).describe('Keys of the paragraphs above the fields.'),
   component: z.string().optional(),
   contributed: z.boolean().describe('The step comes from another module.'),
+  showIf: showIfOutSchema.optional(),
   fields: z.array(schemaFieldSchema),
   schema: z
     .record(z.string(), z.unknown())

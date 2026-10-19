@@ -2,7 +2,7 @@
 // schemas and names the contributing module when one fails; only this module and its dependants may
 // contribute. The seeded entries of the module itself are in `field-types.ts`, `facets.ts` and below.
 import { z } from '@scorpion/contracts';
-import type { Db } from '@scorpion/kernel';
+import type { Db, DbTx } from '@scorpion/kernel';
 import type { SQL } from 'drizzle-orm';
 
 export const ORG_ROLE_REGISTRY = 'service.orgRole';
@@ -26,8 +26,12 @@ export const messageKey = z
 const fn = <T>() =>
   z.custom<T>((value) => typeof value === 'function', { message: 'expected a function' });
 
-/** Where a configured field's value is stored (ADR-0035). */
-export const STORAGE_KINDS = ['column', 'organisations', 'value', 'icon'] as const;
+/**
+ * Where a configured field's value is stored (ADR-0035). `module` is the field type's own: the type's `store`
+ * writes the value in the create transaction, into the tables of the module that contributed it (ADR-0040
+ * addendum); nothing goes to `svc_field_value`.
+ */
+export const STORAGE_KINDS = ['column', 'organisations', 'value', 'icon', 'module'] as const;
 export type StorageKind = (typeof STORAGE_KINDS)[number];
 
 /** The properties of a Schema.org `Service` that a configured field may map to (plan §3). */
@@ -131,6 +135,22 @@ export const fieldTypeEntrySchema = z.strictObject({
    * for a type that is not a choice.
    */
   choices: fn<(config: Record<string, unknown>, env: ChoiceEnv) => Promise<Choice[]>>().optional(),
+  /**
+   * For the storage `module`: writes the validated value inside the transaction that creates the service, so
+   * the service and what the value names commit or roll back together. It gets the transaction and the new
+   * service's id; a failure undoes the whole create. Not called for a value the body leaves out.
+   */
+  store: fn<
+    (
+      tx: DbTx,
+      change: {
+        serviceId: string;
+        value: unknown;
+        config: Record<string, unknown>;
+        actorId: string | null;
+      },
+    ) => Promise<void>
+  >().optional(),
   /** Maps the validated value to what is stored (`svc_field_value.value`); the identity when absent. */
   toValue: fn<(value: unknown, config: Record<string, unknown>) => unknown>().optional(),
   /** Whether a value of this type may map to a Schema.org property (a string or a URL). */
@@ -139,6 +159,25 @@ export const fieldTypeEntrySchema = z.strictObject({
 export type FieldTypeEntry = z.output<typeof fieldTypeEntrySchema>;
 
 // ----- service.wizardStep ------------------------------------------------------------------------
+
+/**
+ * A condition that travels (ADR-0040 addendum): the field or step is shown when the value at the JSON pointer
+ * `path` of the form equals `equals` or is one of `oneOf` (a deep comparison). A field that is hidden by it
+ * is not required and its value is dropped; the browser asks the same question of the same data.
+ */
+export const showIfSchema = z
+  .strictObject({
+    path: z
+      .string()
+      .regex(/^(\/[A-Za-z][A-Za-z0-9]*)+$/, 'must be a JSON pointer such as /name or /contact/type')
+      .max(120),
+    equals: z.unknown().optional(),
+    oneOf: z.array(z.unknown()).min(1).max(50).optional(),
+  })
+  .refine((condition) => (condition.equals !== undefined) !== (condition.oneOf !== undefined), {
+    message: 'give exactly one of "equals" and "oneOf"',
+  });
+export type ShowIf = z.output<typeof showIfSchema>;
 
 /** A field of a configured or contributed step: `config/fields.ts` documents the parts. */
 export const fieldConfigSchema = z.strictObject({
@@ -164,7 +203,10 @@ export const fieldConfigSchema = z.strictObject({
     z.strictObject({ kind: z.literal('organisations'), role: z.string().min(1).max(32) }),
     z.strictObject({ kind: z.literal('value') }),
     z.strictObject({ kind: z.literal('icon') }),
+    z.strictObject({ kind: z.literal('module') }),
   ]),
+  /** Shown only when the condition holds; a hidden field is not required. */
+  showIf: showIfSchema.optional(),
   /** The Schema.org property the value maps to; one of {@link FIELD_SCHEMA_ORG_PROPERTIES}. */
   schemaOrg: z.string().min(1).max(32).optional(),
 });
@@ -183,6 +225,8 @@ export const wizardStepEntrySchema = z.strictObject({
   component: z.string().min(1).max(64).optional(),
   /** Whether the step is shown for this form state; the browser asks it, the server ignores it. */
   applies: fn<(form: Record<string, unknown>) => boolean>().optional(),
+  /** The same question as data: the server asks it too, so a hidden step may have required fields. */
+  showIf: showIfSchema.optional(),
 });
 export type WizardStepEntry = z.output<typeof wizardStepEntrySchema>;
 
@@ -247,6 +291,19 @@ export const facetEntrySchema = z.strictObject({
   unknownOf: fn<(keys: readonly string[], env: FacetEnv, db: Db) => Promise<string[]>>().optional(),
   labelsOf:
     fn<(keys: readonly string[], env: FacetEnv) => Promise<Map<string, string>>>().optional(),
+  /**
+   * Adds one field to the rows of the public API and a filter of the same name (ADR-0037, additive): the
+   * facet's value in words. `valuesOf` gives each service its value (`null` for none), `keysOf` turns the
+   * names a client filters by into the facet's keys (a name that names nothing is absent from the map).
+   */
+  v1: z
+    .strictObject({
+      field: z.enum(['category']),
+      valuesOf:
+        fn<(serviceIds: readonly string[], db: Db) => Promise<Map<string, string | null>>>(),
+      keysOf: fn<(names: readonly string[], db: Db) => Promise<Map<string, string>>>(),
+    })
+    .optional(),
 });
 export type FacetEntry = z.output<typeof facetEntrySchema>;
 

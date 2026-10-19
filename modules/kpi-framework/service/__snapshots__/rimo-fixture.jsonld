@@ -1,0 +1,171 @@
+{
+  "@context": {
+    "rimo": "http://w3id.org/RIMO#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "dct": "http://purl.org/dc/terms/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "scorpion": "https://kpi.example.org/kpi/ns#"
+  },
+  "@graph": [
+    {
+      "@id": "https://kpi.example.org/kpi/catalogue/rimo",
+      "dct:conformsTo": {
+        "@id": "http://w3id.org/RIMO"
+      },
+      "dct:hasVersion": "0.2.0"
+    },
+    {
+      "@id": "http://w3id.org/RIMO#Web_application",
+      "@type": "rimo:ServiceCategory"
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/set/own-set",
+      "@type": "rimo:ServiceCategory",
+      "skos:prefLabel": "Our own \"set\"",
+      "dct:description": "For\nthe own services."
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/unit/count",
+      "@type": "scorpion:Unit",
+      "skos:notation": "count",
+      "skos:closeMatch": {
+        "@id": "http://purl.obolibrary.org/obo/UO_0000189"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/unit/my-own-unit",
+      "@type": "scorpion:Unit",
+      "skos:notation": "my-own-unit"
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/unit/percent",
+      "@type": "scorpion:Unit",
+      "skos:notation": "percent",
+      "scorpion:symbol": "%",
+      "skos:closeMatch": {
+        "@id": "http://purl.obolibrary.org/obo/UO_0000187"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/means/web-analytics",
+      "@type": "rimo:MeasurementMeans",
+      "skos:notation": "web-analytics"
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/tool/matomo",
+      "@type": "rimo:AutomationTool",
+      "skos:notation": "matomo"
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/custom",
+      "@type": "rimo:KPI",
+      "rimo:KPIName": "Custom",
+      "rimo:isQualitativeIndicator": false,
+      "scorpion:thematicCategory": "Usage",
+      "rimo:hasValue": {
+        "@id": "https://kpi.example.org/kpi/indicator/custom#value"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/custom#value",
+      "@type": "rimo:KPIValue",
+      "rimo:hasUnit": {
+        "@id": "https://kpi.example.org/kpi/unit/my-own-unit"
+      },
+      "scorpion:unit": {
+        "@id": "https://kpi.example.org/kpi/unit/my-own-unit"
+      },
+      "scorpion:valueType": "integer",
+      "scorpion:maxValue": {
+        "@value": "12.5",
+        "@type": "xsd:decimal"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/page-views",
+      "@type": "rimo:KPI",
+      "rimo:KPIName": "Page views",
+      "rimo:KPIDescription": "How often pages were opened.",
+      "rimo:KPIExample": "12 450 page views in March",
+      "rimo:isQualitativeIndicator": false,
+      "scorpion:thematicCategory": "Usage",
+      "rimo:hasValue": {
+        "@id": "https://kpi.example.org/kpi/indicator/page-views#value"
+      },
+      "rimo:measuredBy": {
+        "@id": "https://kpi.example.org/kpi/means/web-analytics"
+      },
+      "rimo:canBeAutomatedBy": {
+        "@id": "https://kpi.example.org/kpi/tool/matomo"
+      },
+      "rimo:mandatoryFor": {
+        "@id": "http://w3id.org/RIMO#Web_application"
+      },
+      "rimo:appliedTo": {
+        "@id": "https://kpi.example.org/kpi/set/own-set"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/page-views#value",
+      "@type": "rimo:KPIValue",
+      "rimo:hasUnit": {
+        "@id": "http://purl.obolibrary.org/obo/UO_0000189"
+      },
+      "scorpion:unit": {
+        "@id": "https://kpi.example.org/kpi/unit/count"
+      },
+      "scorpion:valueType": "integer",
+      "scorpion:minValue": {
+        "@value": "0",
+        "@type": "xsd:decimal"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/satisfaction",
+      "@type": "rimo:KPI",
+      "rimo:KPIName": "Satisfaction",
+      "rimo:isQualitativeIndicator": true,
+      "scorpion:thematicCategory": "Satisfaction",
+      "rimo:hasValue": {
+        "@id": "https://kpi.example.org/kpi/indicator/satisfaction#value"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/satisfaction#value",
+      "@type": "rimo:KPIValue",
+      "scorpion:valueType": "text"
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/uptime",
+      "@type": "rimo:KPI",
+      "rimo:KPIName": "Uptime",
+      "rimo:isQualitativeIndicator": false,
+      "scorpion:thematicCategory": "Technical",
+      "rimo:hasValue": {
+        "@id": "https://kpi.example.org/kpi/indicator/uptime#value"
+      },
+      "rimo:recommendedFor": {
+        "@id": "http://w3id.org/RIMO#Web_application"
+      }
+    },
+    {
+      "@id": "https://kpi.example.org/kpi/indicator/uptime#value",
+      "@type": "rimo:KPIValue",
+      "rimo:hasUnit": {
+        "@id": "http://purl.obolibrary.org/obo/UO_0000187"
+      },
+      "scorpion:unit": {
+        "@id": "https://kpi.example.org/kpi/unit/percent"
+      },
+      "scorpion:valueType": "percentage",
+      "scorpion:minValue": {
+        "@value": "0",
+        "@type": "xsd:decimal"
+      },
+      "scorpion:maxValue": {
+        "@value": "100",
+        "@type": "xsd:decimal"
+      }
+    }
+  ]
+}

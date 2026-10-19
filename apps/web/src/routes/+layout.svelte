@@ -23,10 +23,14 @@
   import Widgets from '#lib/components/Widgets.svelte';
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
   import { shellMessages } from '#lib/messages.ts';
+  import { forwardWizardExtensions } from '#lib/wizard-extensions.ts';
   import { uiModules } from '../generated/ui.ts';
   import type { LayoutProps } from './$types';
 
   let { data, children }: LayoutProps = $props();
+
+  // What a module contributes to the services wizard and page reaches the pages that read it, once per process.
+  forwardWizardExtensions(uiModules);
 
   const bundles = mergeBundles([
     shellMessages,

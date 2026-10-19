@@ -14,6 +14,10 @@ process.env.SECRETS_KEY = makeSecretsKey();
 
 /** Every v1 path of the full profile. A new one is a decision: add it here in the pull request that adds the route. */
 const EXPECTED_V1_PATHS = [
+  '/categories',
+  '/indicators',
+  '/kpi/rimo.jsonld',
+  '/kpi/rimo.ttl',
   '/openapi.json',
   '/providers',
   '/providers/{id}',

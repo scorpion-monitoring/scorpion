@@ -9,6 +9,7 @@ import type { Component } from 'svelte';
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import ShellHarness from './test/ShellHarness.svelte';
+import { forwardWizardExtensions, resetForwarding } from './lib/wizard-extensions.ts';
 import KpiSetWidget from './test/KpiSetWidget.svelte';
 
 const mod = (file: string) =>
@@ -24,7 +25,6 @@ const { BUILT_IN_WIDGETS } = (await mod('ui/widgets.ts')) as {
   BUILT_IN_WIDGETS: Record<string, unknown>;
 };
 const extensions = (await mod('ui/wizard-extensions.ts')) as {
-  registerFieldWidget: (name: string, component: unknown) => void;
   resetExtensions: () => void;
 };
 const { createSchemaFixture, fixtureFieldType } = (await mod('test/create-schema-fixture.ts')) as {
@@ -72,7 +72,22 @@ const startingAt = (schema: Schema, id: string): Schema => ({
   ],
 });
 
-afterEach(() => extensions.resetExtensions());
+afterEach(() => {
+  extensions.resetExtensions();
+  resetForwarding();
+});
+
+/** The fixture's module reaches the wizard the way a real one does: through the shell's forwarding of its `ui` entry. */
+const registerFixtureModule = () =>
+  forwardWizardExtensions([
+    {
+      package: '@scorpion/fixture-kpi',
+      routes: [],
+      messages: {},
+      widgets: {},
+      wizardExtensions: { widgets: { 'kpi-set': KpiSetWidget }, applies: {} },
+    },
+  ]);
 
 const category = {
   id: 'category',
@@ -266,7 +281,7 @@ describe('a step another module contributes', () => {
   const step = { ...category, applies: undefined };
 
   it('appears in order, with its intro, its field and the widget its module registered', async () => {
-    extensions.registerFieldWidget('kpi-set', KpiSetWidget);
+    registerFixtureModule();
     const schema = await schemaWith({ steps: [step], types: [kpiSet] });
     expect(schema.steps.map((s) => s.id)).toEqual(['category', 'basics', 'provision', 'contact']);
     const html = drawWith({ schema, organisations: organisations() });
@@ -285,7 +300,7 @@ describe('a step another module contributes', () => {
   });
 
   it('is in the person’s language when its module gave one', async () => {
-    extensions.registerFieldWidget('kpi-set', KpiSetWidget);
+    registerFixtureModule();
     const schema = await schemaWith({ steps: [step], types: [kpiSet] });
     const html = drawWith({ schema, organisations: organisations() }, 'de');
     expect(html).toContain('Schritt 1 von 4: Kategorie');

@@ -3,7 +3,7 @@
 // with one entry per field, and the problem path is the field's pointer as a dotted path (`contact.type`).
 import { Invalid, type FieldProblem } from '@scorpion/contracts';
 import type { ResolvedConfig, ResolvedField } from '../config/validate.ts';
-import type { FieldEnv } from './registries.ts';
+import type { FieldEnv, ShowIf } from './registries.ts';
 
 export const dotted = (pointer: string) => pointer.slice(1).replaceAll('/', '.');
 
@@ -18,6 +18,36 @@ export function valueAt(body: Record<string, unknown>, pointer: string): unknown
     current = current[part];
   }
   return current;
+}
+
+const sameJson = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const left = Object.entries(a);
+  if (left.length !== Object.keys(b).length) return false;
+  return left.every(
+    ([key, value]) => Object.hasOwn(b, key) && sameJson(value, (b as Record<string, unknown>)[key]),
+  );
+};
+
+/** Whether a condition (`showIf`) holds for the form as sent: the value at its pointer equals or is one of. */
+export function showIfHolds(condition: ShowIf | undefined, body: Record<string, unknown>): boolean {
+  if (!condition) return true;
+  const value = valueAt(body, condition.path);
+  return condition.oneOf !== undefined
+    ? condition.oneOf.some((option) => sameJson(option, value))
+    : sameJson(condition.equals, value);
+}
+
+/** Whether the field is shown for this form: its own condition and the condition of its step both hold. */
+export function isShown(
+  config: ResolvedConfig,
+  resolved: ResolvedField,
+  body: Record<string, unknown>,
+): boolean {
+  const step = config.steps.find((candidate) => candidate.id === resolved.step);
+  return showIfHolds(resolved.field.showIf, body) && showIfHolds(step?.showIf, body);
 }
 
 /** Every pointer in `body` that is neither a field nor a parent of one. */
@@ -65,6 +95,8 @@ export async function validateBody(
   const parsed: { resolved: ResolvedField; value: unknown }[] = [];
   for (const resolved of config.fields) {
     const { field } = resolved;
+    // A field the form hides is neither required nor stored (ADR-0040 addendum): the browser may still send it.
+    if (!isShown(config, resolved, body)) continue;
     let raw = valueAt(body, field.path);
     if (raw === undefined && field.default !== undefined) raw = field.default;
     if (raw === undefined || raw === null) {
@@ -190,6 +222,10 @@ export async function validatePatch(
     const { field } = resolved;
     if (field.storage.kind === 'icon') {
       problem(field.path, 'The icon is changed through the icon route.');
+      continue;
+    }
+    if (field.storage.kind === 'module') {
+      problem(field.path, 'This field is changed through the route of the module that owns it.');
       continue;
     }
     const raw = valueAt(body, field.path);

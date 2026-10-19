@@ -116,6 +116,40 @@ describe('the audit decision for every declared event', () => {
     ).toEqual({ type: 'service', id: 'svc-1' });
   });
 
+  it('logs a change of an indicator or a KPI set as an ordinary admin event, with the id as its subject', () => {
+    const logged = (name: string) =>
+      EVENT_DECISIONS[name] as {
+        decision: string;
+        critical: boolean;
+        actor: (payload: Record<string, unknown>) => unknown;
+        subject: (payload: Record<string, unknown>) => unknown;
+      };
+    const indicator = logged('kpi.indicator.changed@1');
+    expect(indicator.decision).toBe('log');
+    expect(indicator.critical).toBe(false);
+    const payload = {
+      indicatorId: 'ind-1',
+      change: 'updated',
+      fields: ['unit'],
+      actorId: 'user-1',
+    };
+    expect(indicator.actor(payload)).toEqual({ kind: 'user', userId: 'user-1' });
+    expect(indicator.subject(payload)).toEqual({ type: 'indicator', id: 'ind-1' });
+    const set = logged('kpi.set.changed@1');
+    expect(set.decision).toBe('log');
+    expect(set.critical).toBe(false);
+    expect(set.subject({ setId: 'set-1', change: 'created', fields: [], actorId: null })).toEqual({
+      type: 'kpi-set',
+      id: 'set-1',
+    });
+    const kpis = logged('kpi.serviceSet.changed@1');
+    expect(kpis.decision).toBe('log');
+    expect(kpis.critical).toBe(false);
+    const change = { serviceId: 'svc-1', setId: 'set-1', fields: ['set'], actorId: 'user-1' };
+    expect(kpis.actor(change)).toEqual({ kind: 'user', userId: 'user-1' });
+    expect(kpis.subject(change)).toEqual({ type: 'service', id: 'svc-1' });
+  });
+
   it('marks a membership that ends as critical when an Admin or a manager ended it, not when the person left', () => {
     const left = EVENT_DECISIONS['registry.membership.left@1'];
     expect(left?.decision).toBe('log');

@@ -17,6 +17,7 @@
     failureOf,
     getShell,
     sameJson,
+    setWizardFieldContext,
     type WizardStep as KitStep,
   } from '@scorpion/ui-kit';
   import { tick, untrack } from 'svelte';
@@ -26,6 +27,7 @@
   import {
     checkStep,
     failureView,
+    fieldShown,
     firstStepWithError,
     getAt,
     noErrors,
@@ -36,6 +38,7 @@
     toBody,
     unknownPointers,
     visibleSteps,
+    withoutHidden,
     withoutStep,
   } from './form-state.ts';
   import { iconTexts, removeIcon as dropIcon, uploadIcon } from './icon.ts';
@@ -53,6 +56,10 @@
   const schema = data.schema;
   const allFields = schema.steps.flatMap((step) => step.fields);
 
+  // What a widget of another module may read of its field: its config and the options the server sent.
+  setWizardFieldContext({
+    field: (pointer) => allFields.find((field) => field.path === pointer),
+  });
   setWizardContext({
     field: (pointer) => allFields.find((field) => field.path === pointer),
     organisations: (role) => data.organisations[role] ?? { options: [], truncated: false },
@@ -61,8 +68,10 @@
   // ----- the form: one nested object ---------------------------------------------------------------
 
   let form = $state<Record<string, unknown>>(startForm(schema));
-  const body = $derived(toBody($state.snapshot(form), schema));
-  const initialBody = toBody(startForm(schema), schema);
+  const body = $derived(
+    withoutHidden(toBody($state.snapshot(form), schema), schema, $state.snapshot(form)),
+  );
+  const initialBody = withoutHidden(toBody(startForm(schema), schema), schema, startForm(schema));
   const dirty = $derived(!sameJson(body, initialBody));
   const steps = $derived(visibleSteps(schema.steps, $state.snapshot(form), stepConditions()));
   const kitSteps = $derived<KitStep[]>(
@@ -282,7 +291,7 @@
     {#each current.intro as key (key)}
       <p>{t(key)}</p>
     {/each}
-    {#each current.fields as field (field.key)}
+    {#each current.fields.filter((candidate) => fieldShown(candidate, form)) as field (field.key)}
       {#if widgetEntry(field.widget) === undefined}
         <Alert kind="error">
           {t('services.wizard.noWidget', { widget: field.widget, field: t(field.label) })}

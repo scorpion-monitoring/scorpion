@@ -1,0 +1,57 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "*.ts",
+    "package.json",
+    "config",
+    "config/rimo-seed.json",
+    "db",
+    "scripts",
+    "service",
+    "test",
+    "ui"
+  ],
+  "references": [
+    {
+      "path": "../../packages/kernel"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/testing"
+    },
+    {
+      "path": "../core-authz"
+    },
+    {
+      "path": "../core-blob"
+    },
+    {
+      "path": "../core-identity"
+    },
+    {
+      "path": "../core-notifications"
+    },
+    {
+      "path": "../core-settings"
+    },
+    {
+      "path": "../registry-organisations"
+    },
+    {
+      "path": "../registry-services"
+    },
+    {
+      "path": "../core-ui-shell"
+    },
+    {
+      "path": "../../packages/ui-kit"
+    }
+  ]
+}

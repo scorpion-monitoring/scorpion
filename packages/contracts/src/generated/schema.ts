@@ -9404,6 +9404,13 @@ export interface paths {
                                 component?: string;
                                 /** @description The step comes from another module. */
                                 contributed: boolean;
+                                /** @description Shown only when the value at `path` equals `equals` or is one of `oneOf`; a hidden field is not required. */
+                                showIf?: {
+                                    /** @description A JSON pointer into the form: the value that is asked about. */
+                                    path: string;
+                                    equals?: unknown;
+                                    oneOf?: unknown[];
+                                };
                                 fields: {
                                     key: string;
                                     /** @description A JSON pointer into the one nested form object: `/contact/type`. */
@@ -9427,6 +9434,8 @@ export interface paths {
                                     column?: string;
                                     /** @description Not part of the create body: the value is set afterwards. */
                                     deferred: boolean;
+                                    /** @description Changed through the route of the module that owns it, never by a patch of the service: the edit form leaves it out. */
+                                    external?: boolean;
                                     choices?: {
                                         value: string;
                                         /** @description Text that is ready to show, in the language asked for. */
@@ -9434,6 +9443,13 @@ export interface paths {
                                         /** @description A key of the message catalogue, for an option the config lists. */
                                         labelKey?: string;
                                     }[];
+                                    /** @description Shown only when the value at `path` equals `equals` or is one of `oneOf`; a hidden field is not required. */
+                                    showIf?: {
+                                        /** @description A JSON pointer into the form: the value that is asked about. */
+                                        path: string;
+                                        equals?: unknown;
+                                        oneOf?: unknown[];
+                                    };
                                 }[];
                                 /** @description A JSON Schema (an object with the fields at their pointers). The browser checks a step against it before it lets the person go on; the server validates the same fields with the Zod schemas of the same field types. */
                                 schema: {
@@ -10594,6 +10610,1806 @@ export interface paths {
                 };
             };
         };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/indicators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                    /** @description Matches the name, slug or description, without case. */
+                    q?: string;
+                    thematic?: string;
+                    unit?: string;
+                    /** @description `true` for qualitative indicators only, `false` for the others. */
+                    qualitative?: "true" | "false";
+                    /** @description The first sort key; ties are broken by name, then id. */
+                    sort?: "name" | "thematic" | "unit" | "valueType";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Indicators by the sort key, then name, then id. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                /** @description Never changes; the identifier is built from it. */
+                                slug: string;
+                                /** @description The identifier of the indicator. It identifies; it does not dereference. */
+                                iri: string;
+                                name: string;
+                                description: string | null;
+                                example: string | null;
+                                qualitative: boolean;
+                                /** @description A key of the registry `kpi.valueType` (see `GET /kpi/value-types`). */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                min: number | null;
+                                max: number | null;
+                                /** @description A term of the vocabulary `thematic-category`. */
+                                thematic: string;
+                                /** @description Terms of the vocabulary `kpi.measured-by`. */
+                                measuredBy: string[];
+                                /** @description Terms of the vocabulary `kpi.automation-tool`. */
+                                canBeAutomatedBy: string[];
+                                /** @description In how many KPI sets the indicator is a row. */
+                                setCount: number;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                                createdBy: string | null;
+                                updatedBy: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        slug?: string;
+                        name: string;
+                        description?: string | null;
+                        example?: string | null;
+                        qualitative?: boolean;
+                        valueType: string;
+                        unit?: string | null;
+                        min?: number | null;
+                        max?: number | null;
+                        thematic: string;
+                        measuredBy?: string[];
+                        canBeAutomatedBy?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The indicator. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @description Never changes; the identifier is built from it. */
+                            slug: string;
+                            /** @description The identifier of the indicator. It identifies; it does not dereference. */
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            example: string | null;
+                            qualitative: boolean;
+                            /** @description A key of the registry `kpi.valueType` (see `GET /kpi/value-types`). */
+                            valueType: string;
+                            /** @description A term of the vocabulary `kpi.unit`. */
+                            unit: string | null;
+                            min: number | null;
+                            max: number | null;
+                            /** @description A term of the vocabulary `thematic-category`. */
+                            thematic: string;
+                            /** @description Terms of the vocabulary `kpi.measured-by`. */
+                            measuredBy: string[];
+                            /** @description Terms of the vocabulary `kpi.automation-tool`. */
+                            canBeAutomatedBy: string[];
+                            /** @description In how many KPI sets the indicator is a row. */
+                            setCount: number;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The name or the slug is taken (the field is named). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/value-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The registered value types, by id, all on page 0. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                /** @description Whether the type has an order: only then may an indicator have `min` and `max`. */
+                                numeric: boolean;
+                                /** @description The range the type allows by itself (a percentage is 0 to 100). */
+                                range?: {
+                                    min?: number;
+                                    max?: number;
+                                };
+                                /** @description The terms of `aggregate` that make sense for the type. */
+                                aggregates: string[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/indicators/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One indicator. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @description Never changes; the identifier is built from it. */
+                            slug: string;
+                            /** @description The identifier of the indicator. It identifies; it does not dereference. */
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            example: string | null;
+                            qualitative: boolean;
+                            /** @description A key of the registry `kpi.valueType` (see `GET /kpi/value-types`). */
+                            valueType: string;
+                            /** @description A term of the vocabulary `kpi.unit`. */
+                            unit: string | null;
+                            min: number | null;
+                            max: number | null;
+                            /** @description A term of the vocabulary `thematic-category`. */
+                            thematic: string;
+                            /** @description Terms of the vocabulary `kpi.measured-by`. */
+                            measuredBy: string[];
+                            /** @description Terms of the vocabulary `kpi.automation-tool`. */
+                            canBeAutomatedBy: string[];
+                            /** @description In how many KPI sets the indicator is a row. */
+                            setCount: number;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such indicator. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        description?: string | null;
+                        example?: string | null;
+                        qualitative?: boolean;
+                        valueType: string;
+                        unit?: string | null;
+                        min?: number | null;
+                        max?: number | null;
+                        thematic: string;
+                        measuredBy?: string[];
+                        canBeAutomatedBy?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The indicator after the change. A field left out is cleared; the slug never changes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @description Never changes; the identifier is built from it. */
+                            slug: string;
+                            /** @description The identifier of the indicator. It identifies; it does not dereference. */
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            example: string | null;
+                            qualitative: boolean;
+                            /** @description A key of the registry `kpi.valueType` (see `GET /kpi/value-types`). */
+                            valueType: string;
+                            /** @description A term of the vocabulary `kpi.unit`. */
+                            unit: string | null;
+                            min: number | null;
+                            max: number | null;
+                            /** @description A term of the vocabulary `thematic-category`. */
+                            thematic: string;
+                            /** @description Terms of the vocabulary `kpi.measured-by`. */
+                            measuredBy: string[];
+                            /** @description Terms of the vocabulary `kpi.automation-tool`. */
+                            canBeAutomatedBy: string[];
+                            /** @description In how many KPI sets the indicator is a row. */
+                            setCount: number;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such indicator. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The name is taken, or a KPI set uses the indicator as its headline with an aggregate that the new value type does not allow. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such indicator. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `kpi-in-use`: a KPI set (or an evaluation) still uses it. The problem names the module and the count. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 100. */
+                    pageSize?: string;
+                    /** @description Matches the name, slug or description, without case. */
+                    q?: string;
+                    rimoCategory?: string;
+                    /** @description The first sort key; ties are broken by name, then id. */
+                    sort?: "name" | "rimoCategory";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description KPI sets by the sort key, then name, then id. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                slug: string;
+                                iri: string;
+                                name: string;
+                                description: string | null;
+                                /** @description A term of the vocabulary `kpi.service-category`. */
+                                rimoCategory: string | null;
+                                indicatorCount: number;
+                                /** @description Rows per term of the vocabulary `necessity`. */
+                                necessityCounts: {
+                                    [key: string]: number;
+                                };
+                                hasEvaluation: boolean;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        slug?: string;
+                        name: string;
+                        description?: string | null;
+                        rimoCategory?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description The KPI set, without indicators. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            /** @description A term of the vocabulary `kpi.service-category`. */
+                            rimoCategory: string | null;
+                            indicatorCount: number;
+                            /** @description Rows per term of the vocabulary `necessity`. */
+                            necessityCounts: {
+                                [key: string]: number;
+                            };
+                            hasEvaluation: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            indicators: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                /** @description A term of the vocabulary `necessity`. */
+                                necessity: string;
+                                valueType: string;
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            evaluation: {
+                                setId: string;
+                                indicatorId: string;
+                                /** @description A term of the vocabulary `aggregate`. */
+                                aggregate: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The name or the slug is taken (the field is named). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One KPI set with its indicators and its evaluation. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            /** @description A term of the vocabulary `kpi.service-category`. */
+                            rimoCategory: string | null;
+                            indicatorCount: number;
+                            /** @description Rows per term of the vocabulary `necessity`. */
+                            necessityCounts: {
+                                [key: string]: number;
+                            };
+                            hasEvaluation: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            indicators: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                /** @description A term of the vocabulary `necessity`. */
+                                necessity: string;
+                                valueType: string;
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            evaluation: {
+                                setId: string;
+                                indicatorId: string;
+                                /** @description A term of the vocabulary `aggregate`. */
+                                aggregate: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such KPI set. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        description?: string | null;
+                        rimoCategory?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description The KPI set after the change. A field left out is cleared; the slug never changes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            /** @description A term of the vocabulary `kpi.service-category`. */
+                            rimoCategory: string | null;
+                            indicatorCount: number;
+                            /** @description Rows per term of the vocabulary `necessity`. */
+                            necessityCounts: {
+                                [key: string]: number;
+                            };
+                            hasEvaluation: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            indicators: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                /** @description A term of the vocabulary `necessity`. */
+                                necessity: string;
+                                valueType: string;
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            evaluation: {
+                                setId: string;
+                                indicatorId: string;
+                                /** @description A term of the vocabulary `aggregate`. */
+                                aggregate: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such KPI set. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The name is taken. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted, with its rows and its evaluation. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such KPI set. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `kpi-in-use`: a service uses the set (from M9 sprint 3). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/sets/{id}/indicators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        indicators: {
+                            /** Format: uuid */
+                            indicatorId: string;
+                            necessity: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The set after the change. The rows listed replace the rows the set had, in one transaction; an indicator not listed is removed, and the evaluation with it when it was the headline. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            slug: string;
+                            iri: string;
+                            name: string;
+                            description: string | null;
+                            /** @description A term of the vocabulary `kpi.service-category`. */
+                            rimoCategory: string | null;
+                            indicatorCount: number;
+                            /** @description Rows per term of the vocabulary `necessity`. */
+                            necessityCounts: {
+                                [key: string]: number;
+                            };
+                            hasEvaluation: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            indicators: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                /** @description A term of the vocabulary `necessity`. */
+                                necessity: string;
+                                valueType: string;
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            evaluation: {
+                                setId: string;
+                                indicatorId: string;
+                                /** @description A term of the vocabulary `aggregate`. */
+                                aggregate: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such KPI set. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description An indicator of the list was deleted while the request ran. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description An unknown indicator, an indicator listed twice, or a necessity that is not an active term (an empty one included); `errors` names `indicators[i].indicatorId` or `indicators[i].necessity`. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/sets/{id}/evaluation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The headline of the set. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description `null` while the set has no headline. */
+                            evaluation: {
+                                setId: string;
+                                indicatorId: string;
+                                /** @description A term of the vocabulary `aggregate`. */
+                                aggregate: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such KPI set. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        indicatorId: string;
+                        aggregate: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The headline after the change. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            setId: string;
+                            indicatorId: string;
+                            /** @description A term of the vocabulary `aggregate`. */
+                            aggregate: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such KPI set. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The indicator is not in the set, the aggregate does not fit its value type, or the aggregate is not an active term. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/services/{id}/kpis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The KPI set, the extras and the effective set of the service. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            serviceId: string;
+                            /** @description The KPI set of the service; `null` while it has none. */
+                            set: {
+                                id: string;
+                                slug: string;
+                                iri: string;
+                                name: string;
+                                description: string | null;
+                                rimoCategory: string | null;
+                            } | null;
+                            /** @description The effective KPI set: the rows of the set with their necessity, then the extras the set does not contain. */
+                            rows: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                                /** @description A term of the vocabulary `necessity`; `optional` for an extra. */
+                                necessity: string;
+                                /** @enum {string} */
+                                source: "set" | "extra";
+                            }[];
+                            /** @description The indicators the service chose beyond its set. */
+                            extras: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            /** @description Whether the caller may change them (Admin, or an approved manager of the provider). */
+                            canEdit: boolean;
+                            /** @description Whether the caller may change which set the service has (Admin, or an approved manager of the provider). */
+                            canChangeSet: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        setId: string | null;
+                        extras: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The KPIs after the change. The set and the extras are replaced (managers of the provider and administrators only); an extra the set contains is dropped. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            serviceId: string;
+                            /** @description The KPI set of the service; `null` while it has none. */
+                            set: {
+                                id: string;
+                                slug: string;
+                                iri: string;
+                                name: string;
+                                description: string | null;
+                                rimoCategory: string | null;
+                            } | null;
+                            /** @description The effective KPI set: the rows of the set with their necessity, then the extras the set does not contain. */
+                            rows: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                                /** @description A term of the vocabulary `necessity`; `optional` for an extra. */
+                                necessity: string;
+                                /** @enum {string} */
+                                source: "set" | "extra";
+                            }[];
+                            /** @description The indicators the service chose beyond its set. */
+                            extras: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            /** @description Whether the caller may change them (Admin, or an approved manager of the provider). */
+                            canEdit: boolean;
+                            /** @description Whether the caller may change which set the service has (Admin, or an approved manager of the provider). */
+                            canChangeSet: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not change the KPIs of this service. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The set or an indicator was deleted while the request ran. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/kpi/rimo.ttl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the KPI definitions as RDF (Turtle), public
+         * @description The definitions of the indicators and KPI sets as RDF (Turtle), without a token. Definitions only: no value, no service, no person. `Cache-Control: public, max-age=300` and an ETag: a client that sends `If-None-Match` with the tag gets 304. The identifiers in the answer identify; they do not dereference.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The definitions as Turtle. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/turtle": string;
+                    };
+                };
+                /** @description The caller has this document (`If-None-Match` matches the ETag). */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/kpi/rimo.jsonld": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the KPI definitions as RDF (JSON-LD), public
+         * @description The definitions of the indicators and KPI sets as RDF (JSON-LD), without a token. Definitions only: no value, no service, no person. `Cache-Control: public, max-age=300` and an ETag: a client that sends `If-None-Match` with the tag gets 304. The identifiers in the answer identify; they do not dereference.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The definitions as JSON-LD. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @description The prefixes of the document. */
+                            "@context": {
+                                [key: string]: string;
+                            };
+                            /** @description The nodes, in a fixed order. */
+                            "@graph": {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+                /** @description The caller has this document (`If-None-Match` matches the ETag). */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;

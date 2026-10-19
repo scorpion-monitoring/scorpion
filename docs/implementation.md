@@ -263,6 +263,8 @@ Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [A
 - A registry profile (without KPI modules; added by M6, ADR-0030) runs on staging with real organisation and service data from a partial migration dry run.
 - Catalogue, wizard and edit flows pass E2E. The v1 contract tests pass.
 
+**Status (2026-10-14): conditionally passed** ([ADR-0039](adr/0039-gate-2-conditional-pass.md)). The evidence is in [m8-sprint-plan.md](m8-sprint-plan.md) §12; the one open line, the staging dry run with real data, waits for the migration tool of M13 and is the maintainer's check.
+
 ---
 
 ## 5. Phase 3: KPIs
@@ -275,6 +277,14 @@ Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [A
 - Contributes the `kpi-set` wizard step and service-detail section to `registry.services`.
 - Effective KPI set = one tested query function. Changing a service's category replaces the set in one transaction; removing extra KPIs works (defect 14, KPI part).
 - Adds the v1 `categories` and `indicators` endpoints (`totalCount` respects filters).
+
+Additions agreed in [m9-sprint-plan.md](m9-sprint-plan.md) §12 (four sprints, [ADR-0039](adr/0039-gate-2-conditional-pass.md) and [ADR-0040](adr/0040-indicators-follow-rimo.md) from sprint 1):
+
+- **Indicators follow the Research Infrastructure Metrics Ontology (RIMO 0.2.0):** the fields `example`, `qualitative` (needs the value type `text`), `unit`, `measuredBy` and `canBeAutomatedBy`; a KPI set optionally maps to one of the 16 seeded `rimo:ServiceCategory` terms; necessity maps to `mandatoryFor`, `recommendedFor` and `appliedTo`. `rimo:requestedBy` is not in M9.
+- **Vocabularies** `kpi.unit` (seeded with Units Ontology IRIs), `kpi.measured-by`, `kpi.automation-tool` and `kpi.service-category`; `usage` checks and `validateTerm` for `thematic-category`, `necessity` and `aggregate`.
+- **Stable IRIs** minted from the setting `kpi.iriBase`; **RIMO-shaped Turtle and JSON-LD reads** (a token route in v1 and a public pair with definitions only), written without a new dependency.
+- The service's link to its KPI set lives in `kpi.framework`'s own tables (`kpif_` prefix); the v1 `categories` and `indicators` keep the legacy shape and add fields.
+- A fourth `ui` export for wizard extensions and a serialisable `showIf` (closes two M7 backlog items).
 
 ### M10: `kpi.ingestion` (L)
 

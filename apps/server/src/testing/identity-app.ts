@@ -33,6 +33,8 @@ import publicApiModule from '@scorpion/public-api/module';
 import publicApiPackage from '@scorpion/public-api/package.json' with { type: 'json' };
 import organisationsModule from '@scorpion/registry-organisations/module';
 import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
+import kpiFrameworkModule from '@scorpion/kpi-framework/module';
+import kpiFrameworkPackage from '@scorpion/kpi-framework/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
 import servicesPackage from '@scorpion/registry-services/package.json' with { type: 'json' };
 import uiShellModule from '@scorpion/core-ui-shell/module';
@@ -89,6 +91,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   secretsKeyNext?: string;
   /** Start over a database that another app already uses (a second server process). */
   databaseUrl?: string;
+  /** Loads kpi.framework (needs the registry modules, which are on by default). */
+  kpi?: boolean;
   /** Fixture modules that depend on core.settings, for example one that registers user preferences. */
   extraModules?: {
     id: string;
@@ -197,6 +201,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
             ...(options.organisations === false || options.services === false
               ? []
               : ['registry.services']),
+            ...(options.kpi ? ['kpi.framework'] : []),
             ...(options.publicApi ? ['public-api'] : []),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
@@ -231,6 +236,9 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           ...(options.organisations === false || options.services === false
             ? []
             : [{ manifest: servicesModule, packageJson: servicesPackage }]),
+          ...(options.kpi
+            ? [{ manifest: kpiFrameworkModule, packageJson: kpiFrameworkPackage }]
+            : []),
           ...(options.publicApi
             ? [{ manifest: publicApiModule, packageJson: publicApiPackage }]
             : []),
@@ -255,6 +263,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           'core.ui-shell': '@scorpion/core-ui-shell',
           'registry.organisations': '@scorpion/registry-organisations',
           'registry.services': '@scorpion/registry-services',
+          'kpi.framework': '@scorpion/kpi-framework',
           'public-api': '@scorpion/public-api',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [

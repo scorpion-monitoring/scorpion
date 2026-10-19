@@ -455,7 +455,7 @@
         "permission": "registry.services.v1.read",
         "audit": true,
         "summary": "List the services",
-        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, and a stage or licence that names nothing, is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
+        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -524,6 +524,17 @@
             "description": "SPDX licence ids, comma-separated.",
             "name": "license",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 3250,
+              "description": "Names of KPI sets, comma-separated: the services that use one of them."
+            },
+            "required": false,
+            "description": "Names of KPI sets, comma-separated: the services that use one of them.",
+            "name": "category",
+            "in": "query"
           }
         ],
         "responses": {
@@ -555,7 +566,8 @@
                       "consortiaIds": [
                         "0198f3a3-02b9-7a14-8c6d-5b7e1f9a3d20",
                         "0198f3a3-5e87-7c90-b2f4-6a1d8e0c4b31"
-                      ]
+                      ],
+                      "category": "Data resources"
                     }
                   ]
                 },
@@ -647,6 +659,13 @@
                               "type": "string"
                             },
                             "description": "The ids of the consortia, in the order of `consortia`."
+                          },
+                          "category": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The name of the KPI set of the service (the legacy `category`); `null` for a service without one."
                           }
                         },
                         "required": [
@@ -659,7 +678,8 @@
                           "provider",
                           "providerId",
                           "consortia",
-                          "consortiaIds"
+                          "consortiaIds",
+                          "category"
                         ]
                       }
                     }
@@ -765,6 +785,7 @@
                     "0198f3a3-02b9-7a14-8c6d-5b7e1f9a3d20",
                     "0198f3a3-5e87-7c90-b2f4-6a1d8e0c4b31"
                   ],
+                  "category": "Data resources",
                   "description": "A portal for example data.",
                   "url": "https://portal.example.org",
                   "sameAs": []
@@ -826,6 +847,13 @@
                       },
                       "description": "The ids of the consortia, in the order of `consortia`."
                     },
+                    "category": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The name of the KPI set of the service (the legacy `category`); `null` for a service without one."
+                    },
                     "description": {
                       "type": [
                         "string",
@@ -857,6 +885,7 @@
                     "providerId",
                     "consortia",
                     "consortiaIds",
+                    "category",
                     "description",
                     "url",
                     "sameAs"
@@ -1211,6 +1240,673 @@
           }
         },
         "x-permission": "registry.services.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/categories": {
+      "get": {
+        "permission": "kpi.framework.v1.read",
+        "audit": true,
+        "summary": "List the KPI sets",
+        "description": "The KPI sets (the legacy \"categories\"), each once. Sorted by name without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the number of sets.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 0,
+              "description": "Page number, counted from 0."
+            },
+            "required": false,
+            "description": "Page number, counted from 0.",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 100,
+              "description": "Items per page, 1 to 100."
+            },
+            "required": false,
+            "description": "Items per page, 1 to 100.",
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of KPI sets.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "metadata": {
+                    "currentPage": 0,
+                    "pageSize": 100,
+                    "totalCount": 1,
+                    "totalPages": 1
+                  },
+                  "result": [
+                    {
+                      "name": "Data resources",
+                      "id": "0198f3a8-5b21-7d40-9c1e-2a7f6b3d9e10",
+                      "iri": "https://registry.example.org/kpi/set/data-resources",
+                      "description": "Services that offer data to researchers.",
+                      "rimoCategory": "http://w3id.org/RIMO#DataResource",
+                      "indicators": 12
+                    }
+                  ]
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "currentPage": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "totalCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "currentPage",
+                        "pageSize",
+                        "totalCount",
+                        "totalPages"
+                      ]
+                    },
+                    "result": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "The name of the KPI set (the legacy category)."
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "The id of the KPI set (a UUID)."
+                          },
+                          "iri": {
+                            "type": "string",
+                            "description": "The identifier of the set. It identifies; it does not dereference."
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Plain text."
+                          },
+                          "rimoCategory": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The IRI of the RIMO service category the set maps to, or `null`."
+                          },
+                          "indicators": {
+                            "type": "integer",
+                            "description": "How many indicators the set has."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "id",
+                          "iri",
+                          "description",
+                          "rimoCategory",
+                          "indicators"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "metadata",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "kpi.framework.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/indicators": {
+      "get": {
+        "permission": "kpi.framework.v1.read",
+        "audit": true,
+        "summary": "List the indicators",
+        "description": "The indicators. `category` (the name of a KPI set, without case) keeps the indicators of that set and gives their necessity in it. `service` (the abbreviation of a service, without case) marks the indicators of its effective KPI set with `selected: true` and, without `category`, gives their necessity there; it does not remove the others. A `category` that names no set and a `service` that names no service is 422. Sorted by name without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 0,
+              "description": "Page number, counted from 0."
+            },
+            "required": false,
+            "description": "Page number, counted from 0.",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,9}$",
+              "default": 100,
+              "description": "Items per page, 1 to 100."
+            },
+            "required": false,
+            "description": "Items per page, 1 to 100.",
+            "name": "pageSize",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "The name of a KPI set."
+            },
+            "required": false,
+            "description": "The name of a KPI set.",
+            "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The abbreviation of a service."
+            },
+            "required": false,
+            "description": "The abbreviation of a service.",
+            "name": "service",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of indicators.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "metadata": {
+                    "currentPage": 0,
+                    "pageSize": 100,
+                    "totalCount": 1,
+                    "totalPages": 1
+                  },
+                  "result": [
+                    {
+                      "name": "Page views",
+                      "description": "How often the pages of the service were opened.",
+                      "type": "number",
+                      "thematicCategory": "Usage",
+                      "selected": true,
+                      "necessity": "mandatory",
+                      "id": "0198f3a8-9e03-7a52-b4c7-81d05f2e6a47",
+                      "iri": "https://registry.example.org/kpi/indicator/page-views",
+                      "example": "12 450 page views in March",
+                      "valueType": "integer",
+                      "qualitative": false,
+                      "unit": {
+                        "key": "count",
+                        "symbol": null,
+                        "iri": "http://purl.obolibrary.org/obo/UO_0000189"
+                      },
+                      "min": 0,
+                      "max": null,
+                      "measuredBy": [
+                        "web-analytics"
+                      ],
+                      "canBeAutomatedBy": []
+                    }
+                  ]
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "currentPage": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "totalCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "currentPage",
+                        "pageSize",
+                        "totalCount",
+                        "totalPages"
+                      ]
+                    },
+                    "result": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Plain text."
+                          },
+                          "type": {
+                            "type": "string",
+                            "description": "The legacy name of the value type: `number` for an integer, else the key of `valueType`."
+                          },
+                          "thematicCategory": {
+                            "type": "string",
+                            "description": "A term of the vocabulary `thematic-category` (Bibliographic, Usage, ...)."
+                          },
+                          "selected": {
+                            "type": "boolean",
+                            "description": "Whether the indicator is in the effective KPI set of the service asked for with `service`; always `false` without one."
+                          },
+                          "necessity": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "A term of the vocabulary `necessity`: the necessity in the set asked for with `category`, else in the effective KPI set of the service asked for with `service`, else `null`."
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "The id of the indicator (a UUID)."
+                          },
+                          "iri": {
+                            "type": "string",
+                            "description": "The identifier of the indicator. It identifies; it does not dereference."
+                          },
+                          "example": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "valueType": {
+                            "type": "string",
+                            "description": "A key of the registry `kpi.valueType`."
+                          },
+                          "qualitative": {
+                            "type": "boolean"
+                          },
+                          "unit": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "symbol": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "iri": {
+                                "type": "string",
+                                "description": "The Units Ontology IRI of a seeded unit, else an IRI minted here."
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "symbol",
+                              "iri"
+                            ]
+                          },
+                          "min": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "max": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "measuredBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Terms of the vocabulary `kpi.measured-by`."
+                          },
+                          "canBeAutomatedBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Terms of the vocabulary `kpi.automation-tool`."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "type",
+                          "thematicCategory",
+                          "selected",
+                          "necessity",
+                          "id",
+                          "iri",
+                          "example",
+                          "valueType",
+                          "qualitative",
+                          "unit",
+                          "min",
+                          "max",
+                          "measuredBy",
+                          "canBeAutomatedBy"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "metadata",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "kpi.framework.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/kpi/rimo.ttl": {
+      "get": {
+        "permission": "kpi.framework.v1.read",
+        "audit": true,
+        "summary": "Read the indicators and KPI sets as RDF (Turtle)",
+        "description": "The indicators and KPI sets as RDF (Turtle) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /public/kpi/rimo.ttl` and `/public/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "responses": {
+          "200": {
+            "description": "The model as Turtle.",
+            "content": {
+              "text/turtle": {
+                "schema": {
+                  "type": "string",
+                  "description": "Turtle (`text/turtle`), UTF-8."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "kpi.framework.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/kpi/rimo.jsonld": {
+      "get": {
+        "permission": "kpi.framework.v1.read",
+        "audit": true,
+        "summary": "Read the indicators and KPI sets as RDF (JSON-LD)",
+        "description": "The indicators and KPI sets as RDF (JSON-LD) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /public/kpi/rimo.ttl` and `/public/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "responses": {
+          "200": {
+            "description": "The model as JSON-LD.",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "@context": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "The prefixes of the document."
+                    },
+                    "@graph": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "description": "The nodes, in a fixed order."
+                    }
+                  },
+                  "required": [
+                    "@context",
+                    "@graph"
+                  ],
+                  "description": "JSON-LD (`application/ld+json`), UTF-8: a flat `@graph` and the `@context` of its prefixes."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "kpi.framework.v1.read",
         "security": [
           {
             "HTTPBearer": []

@@ -198,3 +198,12 @@ visitor's own session, as it does for every page; that is the shell's, not the p
 - The provider is the only owner. A service with no provider cannot exist (`min: 1`), so the policy never has a service nobody owns.
 - Moving a service between providers changes at once who may edit it; a manager can hand a service only to an organisation they manage.
 - The identity fields are a code table (`IDENTITY_FIELDS`), not configuration: a field a deployment adds is an `edit` field.
+
+## Part 4 (M9 sprint 3): a second scoped permission for services
+
+`kpi.framework.service.kpis.edit` (scope `service`) follows the table above, in the manager column: Admin everywhere and the approved **managers** of the
+service's provider; a plain member of the provider reads the KPIs and cannot change them (the maintainer's decision, M9 sprint 3), and nobody else may. Choosing a set while creating the service is part of the create, which a member may do. `kpi.framework` contributes its own `authz.resourcePolicy` entry for the resource type `service` and asks
+`registry.services` through `isProviderManagerAsSystem` (`registry.services/public`), which runs the policy `service.member` for
+`service.edit-identity`; the rule is therefore written once and read at every call. The route carries the plain `kpi.framework.set.read` and the
+service calls `ctx.authz.require` with the service (ADR-0034); the order is 404, 403, 422. Tests: a plain member, a manager of another provider, a plain user,
+a requested and a left membership and an anonymous caller are refused, and a demotion is seen at the next call (`[ASVS-8.2.1]`, `[ASVS-8.3.1]`).

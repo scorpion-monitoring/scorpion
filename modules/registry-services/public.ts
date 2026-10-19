@@ -39,7 +39,11 @@ export { getServiceSchemaOrgV1Route, getServiceV1Route, listServicesV1Route } fr
 
 export type ServicesPublic = Pick<
   ServicesService,
-  'findByIdsAsSystem' | 'findBySlugAsSystem' | 'listByOrganisationAsSystem' | 'existsAsSystem'
+  | 'findByIdsAsSystem'
+  | 'findBySlugAsSystem'
+  | 'listByOrganisationAsSystem'
+  | 'existsAsSystem'
+  | 'isProviderManagerAsSystem'
 >;
 
 declare module '@scorpion/kernel' {
