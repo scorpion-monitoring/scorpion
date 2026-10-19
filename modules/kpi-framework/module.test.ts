@@ -34,35 +34,49 @@ const TABLES = [
   'kpif_indicator_tool',
   'kpif_kpi_set',
   'kpif_kpi_set_indicator',
+  'kpif_service_extra_indicator',
+  'kpif_service_set',
 ];
 
 describe('the manifest', () => {
-  it('has the id, the table prefix kpif_ and the four permissions of the indicator and set families', () => {
+  it('has the id, the table prefix kpif_ and the permissions of the indicator and set families, the service KPIs and the v1 read', () => {
     expect(manifest.id).toBe('kpi.framework');
     expect(manifest.tablePrefix).toBe('kpif_');
     expect(Object.keys(manifest.permissions ?? {}).sort()).toEqual([
       'kpi.framework.indicator.manage',
       'kpi.framework.indicator.read',
+      'kpi.framework.service.kpis.edit',
       'kpi.framework.set.manage',
       'kpi.framework.set.read',
+      'kpi.framework.v1.read',
+    ]);
+    // Only the service-scoped one has a scope (ADR-0036): the policy `service.member` grants it to a provider's members.
+    const scoped = Object.entries(manifest.permissions ?? {}).filter(([, value]) => value.scope);
+    expect(scoped.map(([id, value]) => [id, value.scope])).toEqual([
+      ['kpi.framework.service.kpis.edit', 'service'],
     ]);
     for (const permission of Object.values(manifest.permissions ?? {}))
       expect(permission.description.length).toBeGreaterThan(10);
   });
 
-  it('gives the role user the two read permissions and nobody else a default grant (Admin holds everything)', () => {
+  it('gives the role user the two read permissions and the v1 read, and nobody else a default grant (Admin holds everything)', () => {
     expect(manifest.contributes?.['authz.defaultRole']).toEqual([
       {
         role: 'user',
-        permissions: ['kpi.framework.indicator.read', 'kpi.framework.set.read'],
+        permissions: [
+          'kpi.framework.indicator.read',
+          'kpi.framework.set.read',
+          'kpi.framework.v1.read',
+        ],
       },
     ]);
   });
 
-  it('declares the two events, the value type registry and the contributions', () => {
+  it('declares the three events, the value type registry and the contributions', () => {
     expect(Object.keys(manifest.events?.emits ?? {})).toEqual([
       'kpi.indicator.changed@1',
       'kpi.set.changed@1',
+      'kpi.serviceSet.changed@1',
     ]);
     expect(Object.keys(manifest.registries ?? {})).toEqual(['kpi.valueType']);
     const contributes = manifest.contributes ?? {};
@@ -82,6 +96,22 @@ describe('the manifest', () => {
       'necessity',
       'aggregate',
     ]);
+    // What it adds to the registries of registry.services (ADR-0040 addendum): one field type, step and facet, and
+    // the policy of its scoped permission.
+    expect((contributes['service.fieldType'] as { id: string }[]).map((t) => t.id)).toEqual([
+      'kpi-set',
+    ]);
+    expect((contributes['service.wizardStep'] as { id: string }[]).map((t) => t.id)).toEqual([
+      'kpi-set',
+    ]);
+    expect((contributes['service.facet'] as { id: string }[]).map((t) => t.id)).toEqual([
+      'kpi-set',
+    ]);
+    expect(
+      (contributes['authz.resourcePolicy'] as { resourceType: string }[]).map(
+        (t) => t.resourceType,
+      ),
+    ).toEqual(['service']);
   });
 
   it('declares iriBase with a default, a title and a description', () => {
@@ -175,6 +205,17 @@ describe('the events carry ids and field names, never text', () => {
     ).toBe(false);
   });
 
+  it('has a payload for the KPIs of a service that holds ids and field names only', () => {
+    const schema = emits['kpi.serviceSet.changed@1']!;
+    const base = { serviceId: id, setId: id, fields: ['set', 'extras'], actorId: null };
+    expect(schema.safeParse(base).success).toBe(true);
+    expect(schema.safeParse({ ...base, setId: null }).success).toBe(true);
+    for (const extra of [{ name: 'KPI' }, { extras: [id] }, { indicatorIds: [id] }])
+      expect(schema.safeParse({ ...base, ...extra }).success, JSON.stringify(extra)).toBe(false);
+    expect(schema.safeParse({ ...base, serviceId: 'svc' }).success).toBe(false);
+    expect(schema.safeParse({ ...base, setId: 'set' }).success).toBe(false);
+  });
+
   it('refuses an unknown change and an id that is not a UUID', () => {
     expect(
       emits['kpi.set.changed@1']!.safeParse({
@@ -200,7 +241,7 @@ describe('the schema', () => {
     (value): value is PgTable => is(value, PgTable),
   );
 
-  it('has the six tables, each with the prefix of the manifest', () => {
+  it('has the eight tables, each with the prefix of the manifest', () => {
     expect(tables.map((table) => getTableName(table)).sort()).toEqual(TABLES);
     for (const table of tables)
       expect(getTableName(table).startsWith(manifest.tablePrefix!)).toBe(true);
@@ -221,6 +262,7 @@ describe('the schema', () => {
       '@scorpion/core-authz/public',
       '@scorpion/core-settings/public',
       '@scorpion/core-ui-shell/public',
+      '@scorpion/registry-services/public',
       '@scorpion/kernel',
       '@scorpion/ui-kit',
       '@scorpion/contracts/client',
@@ -236,7 +278,7 @@ describe('the schema', () => {
 });
 
 describe('in a profile', () => {
-  it('starts: the loader accepts the prefix, the migration creates exactly the six tables, and every foreign key stays inside the module', async () => {
+  it('starts: the loader accepts the prefix, the migration creates exactly the eight tables, and every foreign key stays inside the module', async () => {
     const s = await h.start();
     const { rows } = await s.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables

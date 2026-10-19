@@ -98,7 +98,7 @@ export function renderBadgeBlock(statuses: ReadonlyMap<string, DerivedStatus>): 
     BADGE_START,
     '',
     `[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/${BEST_PRACTICES_ID}/badge)](https://www.bestpractices.dev/projects/${BEST_PRACTICES_ID})`,
-    `[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/${org}/${repo}/badge)](https://scorecard.dev/viewer/?uri=github.com/${org}/${repo})`,
+    `[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/${org}/${repo}/badge)](https://api.scorecard.dev/projects/github.com/${org}/${repo})`,
   ];
   for (const config of CHAPTERS) {
     const status = statuses.get(config.chapter) ?? 'in progress';

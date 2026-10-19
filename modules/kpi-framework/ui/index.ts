@@ -1,39 +1,18 @@
-// The browser half of the pages of kpi.framework. Only the web app imports this file (ADR-0027); the server half
-// (who may open them) is `./routes.ts`, and `ui.test.ts` checks that the two agree.
-import type { UiRoute, UiWidgets } from '@scorpion/contracts';
-import {
-  loadIndicator,
-  loadIndicators,
-  loadNewIndicator,
-  loadNewSet,
-  loadSet,
-  loadSets,
-} from './loaders.ts';
+// The browser half of kpi.framework. Only the web app imports this file (ADR-0027); the server half (who may open
+// the pages) is `./routes.ts`, and `ui.test.ts` checks that the two agree. Three exports: the pages and their texts
+// (`pages.ts`), and what the module adds to the services wizard and the service page.
+import type { WizardExtensions } from '@scorpion/ui-kit';
+import KpiSetWidget from './KpiSetWidget.svelte';
+import ServiceKpis from './ServiceKpis.svelte';
 
-export { messages } from './messages.ts';
+export { default, messages, widgets } from './pages.ts';
 
-/** No dashboard card yet. */
-export const widgets: UiWidgets = {};
-
-const routes: UiRoute[] = [
-  {
-    path: '/kpi/indicators',
-    load: loadIndicators,
-    component: () => import('./Indicators.svelte'),
-  },
-  {
-    path: '/kpi/indicators/new',
-    load: loadNewIndicator,
-    component: () => import('./IndicatorEdit.svelte'),
-  },
-  {
-    path: '/kpi/indicators/:id',
-    load: loadIndicator,
-    component: () => import('./IndicatorEdit.svelte'),
-  },
-  { path: '/kpi/sets', load: loadSets, component: () => import('./Sets.svelte') },
-  { path: '/kpi/sets/new', load: loadNewSet, component: () => import('./SetEdit.svelte') },
-  { path: '/kpi/sets/:id', load: loadSet, component: () => import('./SetEdit.svelte') },
-];
-
-export default routes;
+/**
+ * What the module adds to the services wizard and the service page (ADR-0040 addendum): the widget of its field
+ * type, the section of the page. The shell forwards it; the step needs no `applies` (it is always offered).
+ */
+export const wizardExtensions: WizardExtensions = {
+  widgets: { 'kpi-set': KpiSetWidget },
+  applies: {},
+  sections: { kpis: ServiceKpis },
+};

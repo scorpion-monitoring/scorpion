@@ -9,6 +9,13 @@ export interface WizardChoice {
   labelKey?: string | undefined;
 }
 
+/** A condition on the form that the server sends (`showIf`): the value at `path` equals `equals` or is one of `oneOf`. */
+export interface WizardShowIf {
+  path: string;
+  equals?: unknown;
+  oneOf?: unknown[] | undefined;
+}
+
 export interface WizardField {
   key: string;
   /** A JSON pointer into the one nested form object. */
@@ -24,7 +31,11 @@ export interface WizardField {
   column?: string | undefined;
   /** Not part of the create body (the icon). */
   deferred: boolean;
+  /** Changed through the route of the module that owns it: drawn by the wizard, never by the edit form. */
+  external?: boolean | undefined;
   choices?: WizardChoice[] | undefined;
+  /** Shown only when it holds; a hidden field is not required and its value is not sent. */
+  showIf?: WizardShowIf | undefined;
 }
 
 export interface WizardStep {
@@ -34,6 +45,7 @@ export interface WizardStep {
   intro: string[];
   component?: string | undefined;
   contributed: boolean;
+  showIf?: WizardShowIf | undefined;
   fields: WizardField[];
   schema: JsonSchema;
 }

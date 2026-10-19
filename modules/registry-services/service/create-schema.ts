@@ -21,7 +21,7 @@ import {
   MAX_URL_LENGTH,
 } from './fields.ts';
 import { OWNER_ROLE } from './permissions.ts';
-import type { Choice, OrgRoleEntry } from './registries.ts';
+import type { Choice, OrgRoleEntry, ShowIf } from './registries.ts';
 
 /** The most a create body may weigh: the longest values are 4000 characters, the lists are short. */
 export const MAX_CREATE_BODY_BYTES = 64 * 1024;
@@ -72,8 +72,12 @@ export interface SchemaField {
   column?: string;
   /** Not part of the create body: the value is set after the service exists (the icon). */
   deferred: boolean;
+  /** Changed through the route of the module that owns it (the storage `module`): the edit form leaves it out. */
+  external?: boolean;
   /** The options of a choice field. */
   choices?: Choice[];
+  /** Shown only when the condition holds on the form (a hidden field is not required); absent: always shown. */
+  showIf?: ShowIf;
 }
 
 export interface SchemaStep {
@@ -84,6 +88,8 @@ export interface SchemaStep {
   /** The name of a UI component for a step that is not a list of fields. */
   component?: string;
   contributed: boolean;
+  /** The same condition for the whole step (its fields are not required while it is hidden). */
+  showIf?: ShowIf;
   fields: SchemaField[];
   /** What the browser checks before it lets the person go on: the same rules the server applies to these fields. */
   schema: JsonSchemaObject;
@@ -179,7 +185,13 @@ export function stepSchema(fields: readonly ResolvedField[]): JsonSchemaObject {
     const segments = parts(resolved.field.path);
     const parent = nodeAt(segments.length === 1 ? '' : `/${segments.slice(0, -1).join('/')}`);
     parent.properties[segments.at(-1)!] = propertySchema(resolved);
-    if (resolved.field.required && resolved.field.default === undefined) {
+    // A field with a condition is required only while it is shown: the server enforces that (`body.ts`), the
+    // browser's schema leaves it out of `required` and the page asks the condition itself.
+    if (
+      resolved.field.required &&
+      resolved.field.default === undefined &&
+      resolved.field.showIf === undefined
+    ) {
       parent.required.push(segments.at(-1)!);
     }
     const storage = resolved.field.storage;
@@ -241,7 +253,9 @@ function fieldOut(resolved: ResolvedField, choices: ReadonlyMap<string, Choice[]
     ...(role !== undefined && { role }),
     ...(column !== undefined && { column }),
     deferred: isDeferred(resolved),
+    ...(field.storage.kind === 'module' && { external: true }),
     ...(options !== undefined && { choices: options }),
+    ...(field.showIf !== undefined && { showIf: field.showIf }),
   };
 }
 
@@ -273,6 +287,7 @@ export function buildCreateSchema(
       intro: [...step.intro],
       ...(step.component !== undefined && { component: step.component }),
       contributed: step.source === 'contributed',
+      ...(step.showIf !== undefined && { showIf: step.showIf }),
       fields: own.map((resolved) => fieldOut(resolved, choices)),
       schema: stepSchema(own),
     };

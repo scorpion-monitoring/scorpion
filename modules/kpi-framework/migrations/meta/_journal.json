@@ -8,6 +8,13 @@
       "when": 1791986583541,
       "tag": "0000_kpi_model",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792389487953,
+      "tag": "0001_service_link",
+      "breakpoints": true
     }
   ]
 }

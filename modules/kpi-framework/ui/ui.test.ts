@@ -4,7 +4,7 @@
 import { catalogueProblems } from '@scorpion/ui-kit/i18n';
 import { describe, expect, it } from 'vitest';
 import manifest from '../module.ts';
-import routes, { messages } from './index.ts';
+import routes, { messages } from './pages.ts';
 import { KPI_NAV, KPI_ROUTES } from './routes.ts';
 
 describe('the pages of kpi.framework', () => {

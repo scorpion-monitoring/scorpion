@@ -180,3 +180,10 @@ second query that could drift from the screen. A service that is not public is r
 - **Serving the spec from the server mount** (like `/healthz`): the document would then not come from the same registrar as the routes it describes.
 - **Wildcard origins, or reflecting the request's `Origin`:** it makes the allow-list meaningless.
 - **Authenticating before the rate limit** so that a 429 can name the token: it costs a hash per guessed token.
+
+## Addendum (M9 sprint 3): the KPI reads and the `category` of a service
+
+`GET /api/v1/categories` and `GET /api/v1/indicators` keep the legacy shape and add fields (`kpi.framework.v1.read`, role `user`); the row of
+`GET /api/v1/services` gains `category` and a `category` filter. All additions: the OpenAPI diff against `v0.10.0` shows additions only. The
+shapes, the meaning of `category` and `service` on `/indicators` (`category` filters, `service` marks) and the `totalCount` that follows the
+filters (defect 15) are in the README of `kpi.framework`.

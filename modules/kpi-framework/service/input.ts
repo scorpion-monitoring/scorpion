@@ -11,6 +11,7 @@ export const MAX_EXAMPLE = 1000;
 export const MAX_KEY = 64;
 export const MAX_TERMS = 50;
 export const MAX_SET_ROWS = 500;
+export const MAX_EXTRAS = 200;
 
 /** Text that is trimmed; an empty text is "none" (`null`). */
 const optionalText = (max: number) =>
@@ -93,6 +94,20 @@ export const setIndicatorsSchema = z.strictObject({
     .max(MAX_SET_ROWS),
 });
 export type SetIndicatorsInput = z.output<typeof setIndicatorsSchema>;
+
+/**
+ * What a service's KPIs are set to: its KPI set (`null` for none) and the indicators it opted into beyond the
+ * set. The same body is the value of the wizard's field. An indicator listed twice counts once; one that the
+ * set contains is dropped by the service, not refused.
+ */
+export const serviceKpisSchema = z.strictObject({
+  setId: z.uuid().nullable(),
+  extras: z
+    .array(z.uuid())
+    .max(MAX_EXTRAS)
+    .transform((list) => [...new Set(list)]),
+});
+export type ServiceKpisInput = z.output<typeof serviceKpisSchema>;
 
 export const evaluationSchema = z.strictObject({
   indicatorId: z.uuid(),

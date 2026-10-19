@@ -177,9 +177,10 @@ Permission `registry.services.v1.read` (granted to `user` by default) for all th
 (the token owner may read it internally); the row says so with `public`. Never the contact point.
 
 **`GET /api/v1/services`** (list row). Query: `page`, `pageSize` (default and maximum 100; more is 422), and the filters `service` and `provider` (abbreviations,
-comma-separated, case-insensitive, at most 50; an unknown abbreviation is 422), `stage`, `license` (comma-separated like the others; an unknown value is 422 and `:none` is refused). An unknown
-parameter is a 422. Sorted by abbreviation (without case), then id. Shaped after the legacy `Service`: the same names and types, without `category`
-(M9 adds it).
+comma-separated, case-insensitive, at most 50; an unknown abbreviation is 422), `stage`, `license` (comma-separated like the others; an unknown value is 422 and `:none` is refused) and `category` (names of KPI sets, comma-separated, without case,
+at most 50; M9 sprint 3: it is 422 in a profile without a module that contributes a facet with `v1.field: 'category'`). An unknown
+parameter is a 422. Sorted by abbreviation (without case), then id. Shaped after the legacy `Service`: the same names and types, plus
+`category` (the name of the service's KPI set; `null` for a service without one and in a profile without KPI sets), added in M9 sprint 3.
 
 | Field          | Type                  | Source                                                                                                                 |
 | -------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -278,9 +279,17 @@ itself from `GET /services/schema` and holds no field, step, limit or type of it
   step schemas, plus a key no field owns). It exists only when the schema says `devConsole: true`, which the server derives from
   `NODE_ENV !== 'production'` when it starts; the page does not draw it otherwise, so a production page has no console in its DOM.
 - **Another module** adds a step through the registry, a field type with its widget name, and, for the browser, the control and the condition
-  of its step through `ui/wizard-extensions.ts` (`registerFieldWidget`, `registerStepApplies`). How the `ui` entry of a contributing module
-  reaches that file is M9's to settle (see the backlog); the fixture of the page tests calls it directly. A step that `applies` hides must not
-  have required fields: the server validates every configured field.
+  of its step and a section of the service page through the **fourth export of its `ui` entry**, `wizardExtensions: { widgets, applies,
+sections }` (ADR-0040 addendum). The shell forwards it once per process (`apps/web/src/lib/wizard-extensions.ts`) to the registry in
+  `@scorpion/ui-kit` (`wizard-extensions.ts`, which `ui/wizard-extensions.ts` re-exports), so nothing here depends on a module that a profile
+  may leave out; the fixture of the page tests goes through the same forwarding. A step or a field that must be hidden for some forms uses
+  the serialisable **`showIf`** (below), which the server asks as well; `applies` stays a browser-only function.
+- **`showIf`** on a field or a contributed step: `{ path: '/pointer', equals }` or `{ path, oneOf: [...] }` (a deep comparison on the form
+  as sent). A field or step that the form hides is not required and its value is dropped by the server (`service/body.ts`, one function
+  for both); the schema sends the condition with the field and the step, and the browser asks the same question (`ui/form-state.ts`).
+  The step's JSON Schema leaves a field with a condition out of `required`, so the browser is looser than the server there and the server's
+  422 lands on the field. The start refuses a condition that asks about a pointer no field has. A condition governs the create wizard; a
+  patch of a stored service is unaffected.
 
 ## The service page, publication and the public pages (sprint 6)
 
@@ -332,7 +341,8 @@ then `/services`, the public pages and the routes do not exist. A profile proper
 Typed TypeScript, the successors of `service_schema.json` and `steps.json`, validated when the module starts. A **field** has a `key`,
 a JSON pointer `path`, a `type` (an entry of `service.fieldType`), `label` and `help` message keys, `required`, an optional `default`,
 a type-specific `config`, a `storage` (`column`: a column of `svc_service`; `organisations`: a role of `service.orgRole`; `value`: a key
-of `svc_field_value`; `icon`: set by the icon routes of sprint 2) and an optional `schemaOrg` property (`termsOfService`,
+of `svc_field_value`; `icon`: set by the icon routes of sprint 2; `module`: written by the field type's own `store` in the create
+transaction, for a module that keeps the value in its own tables), an optional `showIf` and an optional `schemaOrg` property (`termsOfService`,
 `areaServed`, `audience` or `slogan`). A **step** has an `id`, an `order`, a `title` message key, `intro` message keys (the legacy
 `texts`) and the keys of its `fields`, or a `component`. The shipped steps are **basics** (slug, name, licence, stage, icon,
 description, URL, `sameAs`), **provision** (provider, consortia) and **contact** (the contact point).
@@ -350,13 +360,13 @@ same function. A change to these files means a rebuild.
 All five are declared here; the loader validates each entry with Zod and names the contributing module when one is wrong, and only a
 module that declares `registry.services` as a dependency may contribute.
 
-| Registry                     | Entry                                                                                                                        | This module contributes                                                     |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`                                                                                  | `provider` (1..1, type `provider`), `consortium` (0..20, type `consortium`) |
-| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), choices?, check?, toValue?, schemaOrg? }` | `text`, `select`, `multi-select`, `license`, `organisation`, `image`        |
-| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies? }`                                                                  | none (its own steps are `config/steps.ts`)                                  |
-| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf? }`               | `consortium`, `stage`, `license`, `provider`                                |
-| `service.profileContributor` | `{ id, contribute(service, ctx) }`                                                                                           | none (the Schema.org builder enforces the allow-list)                       |
+| Registry                     | Entry                                                                                                                                | This module contributes                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`                                                                                          | `provider` (1..1, type `provider`), `consortium` (0..20, type `consortium`) |
+| `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), choices?, check?, store?, toValue?, schemaOrg? }` | `text`, `select`, `multi-select`, `license`, `organisation`, `image`        |
+| `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies?, showIf? }`                                                                 | none (its own steps are `config/steps.ts`)                                  |
+| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf?, v1? }`                  | `consortium`, `stage`, `license`, `provider`                                |
+| `service.profileContributor` | `{ id, contribute(service, ctx) }`                                                                                                   | none (the Schema.org builder enforces the allow-list)                       |
 
 It also contributes `org.publicReference` (the public services an organisation is named by; see the public reads), `notify.template`, and `org.usage` (an organisation with `svc_service_organisation` rows cannot be deleted and its type cannot change,
 the 409 names `registry.services`) and the `usage` of the `stage` vocabulary (a term a service has is deactivated, never deleted).
@@ -378,13 +388,22 @@ its manifest; nothing in this module changes.
   contributed field with `storage: { kind: 'value' }` land in `svc_field_value`. The step appears in the schema in its order, with its
   fields' JSON Schema; its values are validated by the type's own `schema` and `check` on the server, and a failure in any of them, also
   inside the transaction, leaves no service, link, value or event. `applies(form)` is a function the browser asks (`registerStepApplies`);
-  the server ignores it and the schema route does not send it.
+  the server ignores it and the schema route does not send it. A field with `storage: { kind: 'module' }` (its type must have a `store`)
+  is written by `store(tx, { serviceId, value, config, actorId })` inside the create transaction, after the service row and before the
+  `registry.service.created@1` event: the module's rows and the service commit or roll back together. A patch that names such a field is
+  422 (the module has its own route for it); `GET /services/schema` sends it like any field.
 - **An organisation role** (`service.orgRole`): `id`, `labels`, the `org.type` ids that may take it (they must be registered), `min`
   and `max`; a field with `storage: { kind: 'organisations', role }` writes it.
 - **A facet** (`service.facet`): `id`, `labels`, `order`, `emptyLabel` for the services with no value, `where(selection, serviceId)` and
   `values(matching, db)`; neither names a table of this module (ADR-0035 addendum). For a value kept in `svc_field_value` (a text or a
   list of texts) call `fieldValueFacet(id, fieldKey, { labels, order, emptyLabel?, labelsOf? })` from `@scorpion/registry-services/public`.
-  The facet then is a filter of `GET /services` under its id and a facet of `GET /services/facets` with no further change.
+  The facet then is a filter of `GET /services` under its id and a facet of `GET /services/facets` with no further change. With
+  `v1: { field: 'category', valuesOf(serviceIds, db), keysOf(names, db) }` the facet also adds `category` to the rows of the public API
+  (`GET /api/v1/services`, additive) and a `category` filter that takes the names `keysOf` knows; without such a facet `category` is `null`
+  and the filter is 422. `field` is an allow-list (today only `category`), so a module cannot add an arbitrary key to a v1 row.
+- **A rule about the provider's managers** (a permission scoped to `service` of another module): ask `isProviderManagerAsSystem(userId,
+serviceId)` of `@scorpion/registry-services/public` in an `authz.resourcePolicy` entry of that module, so the rule of ADR-0036 is written
+  once. `kpi.framework` does it for `kpi.framework.service.kpis.edit`.
 - **A profile property** (`service.profileContributor`): `contribute(service, ctx)` returns Schema.org properties; the allow-list
   (`serviceType`, `category`, `audience`, `areaServed`, `termsOfService`, `slogan`, `serviceOutput`) is enforced when the profile is
   built (sprint 3): other names are dropped, and `@id`, `@type`, `name`, `provider` and `license` can never be replaced.

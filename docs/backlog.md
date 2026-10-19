@@ -396,7 +396,7 @@ Found while using the instance; not yet investigated.
 
 ## Services follow-ups (M7 sprint 4)
 
-- **The facet entry shape changed in sprint 4** (ADR-0035 addendum): `where(selection, serviceId)` and `values(matching, db)` replace `where(selected)` and `values(scope, db)`, and `unknownOf` and `labelsOf` are new. No contributor existed yet, so nothing broke. M9's category should use `fieldValueFacet()`; if its values need a label from `kpi.framework` it brings a `labelsOf`.
+- **The facet entry shape changed in sprint 4** (ADR-0035 addendum): `where(selection, serviceId)` and `values(matching, db)` replace `where(selected)` and `values(scope, db)`, and `unknownOf` and `labelsOf` are new. No contributor existed yet, so nothing broke. M9's category should use `fieldValueFacet()`; if its values need a label from `kpi.framework` it brings a `labelsOf`. (Done in M9 sprint 3: the facet `kpi-set` has its own `where` over `kpif_service_set`, `labelsOf` and `unknownOf`; `fieldValueFacet` was not usable because the link is not in `svc_field_value`.)
 - **The facet lists are not capped.** A facet draws every value with a service in the set: a few hundred providers would make a long list. Not a problem at today's numbers; when it is, a "show more" and a search inside a facet belong to `Facets` in `packages/ui-kit` (the API already returns the values by count).
 - ~~**A stored licence that SPDX no longer lists**~~ Done in M7 sprint 7: `unknownOf` takes the database as a third argument and the licence facet accepts a value a service has (`catalogue.test.ts`: counted, chosen, returned; a value nobody has and SPDX does not list is still a 422). (was: it shows in the licence facet (it is counted) and is a 422 when chosen as a filter (`unknownOf` asks the SPDX list; a deprecated id is accepted, a removed one is not). Make `unknownOf` for the licence accept what a service has, if it ever happens.)
 - **The sort by stage is by the term key** (`DEV`, `DEMO`, `PROD`, `TERM`), not by the vocabulary's order or label. Sorting by the vocabulary's `sortOrder` needs the terms in the query (as the provider sort does with the names); not built.
@@ -410,14 +410,8 @@ Found while using the instance; not yet investigated.
 
 ## Services follow-ups (M7 sprint 5)
 
-- **How a contributing module's `ui` entry reaches the wizard.** The server side is complete (a contributed step appears in the schema, its values are
-  stored and its failures roll back, proved with a fixture). In the browser the page offers `registerFieldWidget` and `registerStepApplies`
-  (`ui/wizard-extensions.ts`), but the shell forwards only routes, messages and widgets of a `ui` entry, so a contributing module has no way to call them
-  yet. M9's category step settles it: either a fourth export of the `ui` entry that the shell forwards, or the module's own widget list under the
-  existing `widgets` export. Until then the fixture of `wizard-page.test.ts` registers directly.
-- **A step that `applies` hides cannot have a required field,** because the server validates every configured field (the plan's `applies` is per step
-  and client side only). If M9 needs a conditionally required field, the server must learn the condition (a serialisable `showIf`, which is also the
-  field-level condition already in the backlog above).
+- ~~**How a contributing module's `ui` entry reaches the wizard.**~~ Done in M9 sprint 3 (ADR-0040 addendum): a fourth export `wizardExtensions: { widgets, applies, sections }` that the shell forwards once to a registry in `@scorpion/ui-kit`; the fixture of the page test goes through the same forwarding.
+- ~~**A step that `applies` hides cannot have a required field.**~~ Done in M9 sprint 3: the serialisable `showIf` on a field and a step; the server drops a hidden field and does not require it.
 - **The browser's schema is looser than the server's where the server needs data or normalises.** A reserved or id-shaped slug, a licence SPDX does not
   list, a stage nobody declared, a URL with credentials and a name that is long only before its white space is collapsed pass the browser's check and
   are a 422 on the field. The other way round (a value the browser refuses and the server accepts) is a bug and the agreement table fails on it.
@@ -477,8 +471,7 @@ Found while using the instance; not yet investigated.
 
 ## Public API follow-ups (M8 sprint 2)
 
-- **`category` in the service row.** The legacy `Service` has a required `category` (the KPI category). It is not in the v1 row until M9 (`kpi.framework`); then it is
-  added as a new field (additive). Until then a client that requires it breaks.
+- ~~**`category` in the service row.**~~ Done in M9 sprint 3: the v1 row has `category` (the name of the KPI set, `null` without one) and `GET /api/v1/services?category=` filters by it.
 - **A by-slug read of a service.** `GET /api/v1/providers/{id}` was added in sprint 2, so a client can follow `providerId`; there is no
   `GET /services/by-slug/{slug}` (the internal route follows old slugs with `redirectedFrom`) and no read of a consortium.
 - **Names and ids beside the abbreviations.** `provider` and `consortia` are abbreviations as in the legacy API, with `providerId` and `consortiaIds` beside
@@ -486,7 +479,7 @@ Found while using the instance; not yet investigated.
   consortium read in v1).
 - **Logos and icons in v1.** `logoUrl` and `iconUrl` are paths below the internal API and are not in v1 rows; the Schema.org profile has the `logo` it always had.
   A v1 file route (or an absolute public URL) would add them.
-- **`values` (configured fields) in the service record.** Left out: its shape is open and M9 fills it with categories. It would be added with the category routes.
+- **`values` (configured fields) in the service record.** Left out: its shape is open. M9 did not need it (the category has its own field and the KPIs their own routes); it stays out until a consumer asks.
 - **A comma in an organisation abbreviation.** `provider=A,B` splits on commas, so an abbreviation that contains one cannot be asked for by `provider` (the
   schema allows it; slugs cannot contain one). Repeated parameters would remove the limit; the legacy document does not say which one legacy used.
 - **A consortium filter and a `q` search in v1.** The internal catalogue has them; v1 has only the legacy filters and the cheap catalogue ones (`stage`, `license`).
@@ -575,7 +568,7 @@ Found while using the instance; not yet investigated.
 
 What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in the plan for it:
 
-- **Deleting a service.** `TERM` is the end of a service's life and no route deletes one. A delete needs a `service.usage` check that the KPI modules contribute (like `org.usage`); revisit with M9.
+- **Deleting a service.** `TERM` is the end of a service's life and no route deletes one. A delete needs a `service.usage` check that the KPI modules contribute (like `org.usage`). M9 sprint 3 did the half that exists today: a KPI set or an indicator that a service uses cannot be deleted (409). The registry `service.usage` itself, and what `kpi.framework` does with its rows when a service goes (`kpif_service_set` and `kpif_service_extra_indicator` hold the id without a foreign key, so they would stay), arrive with the delete.
 - **Other schema.org properties and types.** A `service.type` registry (the builder takes the type as an argument), `offers`, `availableChannel`, `hoursAvailable`, `areaServed` and `audience` as stored fields (a configured field can map to a few of them), and a contact point in the JSON-LD (the property does not exist on `Service`) are not built.
 - **More than one provider per service,** and a custom licence reference (`LicenseRef-…`; see sprint 1).
 - **A review queue for member edits,** a request-and-approve flow for publication (a Reviewer or Admin sets the flag today) and a preview of the public page before publishing.
@@ -607,6 +600,20 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **A rename that frees a name for another indicator.** Names are unique without case and a delete frees the name; the slug of a deleted indicator is free too, so a new indicator of the same name gets the same IRI. IRIs of deleted rows are not reserved (services have a slug history; indicators do not). Decide before the RDF reads of sprint 4 are public.
 - **The picker of a set loads from the API on the client.** It is the one place that calls `GET /kpi/indicators` from the browser instead of a page loader; the server-rendered page shows an empty picker until the first answer. A loader with the search in the address would make it linkable.
 - **The `kept` rule for means and tools is per term.** A deactivated means a row has stays valid for that row; a second indicator that names it is refused. The form offers a deactivated term only where the row has it.
+
+## KPI framework follow-ups (M9 sprint 3)
+
+- **`service.usage` is not a registry yet.** The plan asked for a "`service.usage`-style" contribution. The services delete does not exist, so there is nothing to call it: what is built is the other direction (a set or an indicator that a service uses is a 409 naming `kpi.framework` and the count). When a service can be deleted, `registry.services` declares `service.usage` (like `org.usage`), `kpi.framework` contributes its two tables to it, and the delete removes `kpif_service_set` and `kpif_service_extra_indicator` rows (they hold the service id as a plain column, so nothing cascades).
+- **The service section loads on the client.** It draws "Loading the KPIs ..." on the server and fills in after hydration with one call; a no-JavaScript reader sees the heading and the state. The page loader of `registry.services` could carry the call if a contributed section could name data for the loader (a `load` on the section); not built because it adds a hook to the page for one section.
+- **Calls added.** The service page makes one call more (`GET /kpi/services/{id}/kpis`) and, once per browser session and only when the service has rows, two reads of vocabularies for the necessity and unit labels (kept in memory); editing adds `GET /kpi/sets?pageSize=100`. The wizard step makes none on arrival (the sets are in the schema's `choices`); a chosen set costs one `GET /kpi/sets/{id}` (and the two vocabulary reads the first time) and each search one `GET /kpi/indicators`. `kpi-framework.spec.ts` counts them. Folding the labels into the answers (`necessityLabel`, `unitLabel` by locale) would remove the two vocabulary reads.
+- **The set select lists at most 100 sets** (the service section) and all sets in the wizard (the schema carries them all). With hundreds of sets a searchable picker and a `choices` cap are needed; the page shows every set today.
+- **The optional filter of the wizard step by RIMO category is a config of the field** (`config: { rimoCategory }`), not a control on the page. A deployment that wants one wizard per category lists the field with that config; a filter the person sets themselves needs a second select and the sets with their category in the choices.
+- **`showIf` governs the create wizard only.** A patch of a stored service ignores conditions (a field is required to stay set whatever another field says), and the browser leaves a field with a condition out of `required` (the server decides). A condition on more than one field (and/or) is not expressible; `oneOf` and `equals` on one pointer were all the module needed.
+- **The `category` of the v1 row is the set's name.** Names are unique without case, so the filter is exact, but a rename of a set changes the `category` of every service that uses it; the stable identifier is the set's `id` (`GET /api/v1/categories`). The legacy `type` of an indicator is `number` for an integer (a one-entry map in `service/v1.ts`); `duration` and `percentage` are new and keep their keys.
+- **`GET /api/v1/indicators?service=` marks and does not filter.** The legacy documentation said "a `selected` flag"; filtering the list to the service's effective set would make `selected` always true. If a client wants only the effective set, `selected=true` as a filter is the additive way.
+- **The wizard step is order 40.** A deployment that adds a step of its own picks another order (the loader names the clash); the KPI step is last in the `full` profile and its end-to-end tests (`services.spec.ts`, `accessibility-wizard.spec.ts`) were changed from three steps to four.
+- **No history of a service's KPIs.** The event `kpi.serviceSet.changed@1` says that the set or the extras changed and who did it, never which indicators; the audit trail answers "when and by whom" but not "what was it before". Measurements (M10) will need the KPIs a service had in a period; decide there whether the table gets a validity range.
+- **The extras of a service are not checked against the set's necessity.** An extra is `optional` by definition; promoting one to `recommended` for one service is not possible, and not asked for.
 
 ## Later
 

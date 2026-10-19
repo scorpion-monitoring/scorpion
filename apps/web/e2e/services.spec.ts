@@ -256,7 +256,7 @@ test.describe('journey 1: the create wizard', () => {
     await page.getByRole('link', { name: 'New service' }).click();
     await expect(page).toHaveURL(at('/services/new'));
     await expect(page.getByRole('heading', { name: 'New service', level: 1 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Step 1 of 3: Basics' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
     // The intro of the step is above its fields.
     await expect(page.getByText('Give the service a short name')).toBeVisible();
 
@@ -283,7 +283,7 @@ test.describe('journey 1: the create wizard', () => {
     await page.getByRole('button', { name: 'Next' }).click();
 
     // Step 2: only the organisation this person is a member of is offered, never the other provider.
-    await expect(page.getByRole('heading', { name: 'Step 2 of 3: Who runs it' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 2 of 4: Who runs it' })).toBeVisible();
     const operated = page.getByLabel(/^Operated by/);
     await expect(
       operated.getByRole('option', { name: `${provider.name} (${provider.abbreviation})` }),
@@ -298,7 +298,7 @@ test.describe('journey 1: the create wizard', () => {
     await page.getByRole('button', { name: 'Next' }).click();
 
     // Step 3: the contact point is a role address, and the step says so.
-    await expect(page.getByRole('heading', { name: 'Step 3 of 3: Contact' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 3 of 4: Contact' })).toBeVisible();
     await expect(page.getByText('not a personal one').first()).toBeVisible();
     await page.getByLabel(/^Contact address/).fill(`helpdesk-${tag}@example.org`);
     await page.getByLabel('Kind of contact').fill('support');
@@ -311,6 +311,10 @@ test.describe('journey 1: the create wizard', () => {
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByLabel(/^Contact address/)).toHaveValue(`helpdesk-${tag}@example.org`);
+
+    // The last step is the KPIs: it is optional, so the person goes on without choosing a set.
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByRole('heading', { name: 'Step 4 of 4: KPIs' })).toBeVisible();
 
     // One request creates the service; the next screen offers the icon.
     await page.getByRole('button', { name: 'Create service' }).click();
@@ -383,7 +387,7 @@ test.describe('journey 1: the create wizard', () => {
     await openWizard(page, at);
     // The browser checks a step before it lets the person go on: nothing is sent for an empty step.
     await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page.getByRole('heading', { name: 'Step 1 of 3: Basics' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
     await expect(page.getByText('Some answers need attention')).toBeVisible();
     await expect(page.getByText('This field is required.')).toHaveCount(2);
     await expect(page.getByLabel(/^Short name/)).toHaveAttribute('aria-invalid', 'true');
@@ -394,8 +398,9 @@ test.describe('journey 1: the create wizard', () => {
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByLabel(/^Operated by/).selectOption(provider.id);
     await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Create service' }).click();
-    await expect(page.getByRole('heading', { name: 'Step 1 of 3: Basics' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
     const slugField = page.getByLabel(/^Short name/);
     await expect(slugField).toHaveAttribute('aria-invalid', 'true');
     const slugError = page.getByText('This short name is already taken');
@@ -424,8 +429,9 @@ test.describe('journey 1: the create wizard', () => {
     await expect(page.getByText('Chosen licence: No-Such-Licence-1.0')).toBeVisible();
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Create service' }).click();
-    await expect(page.getByRole('heading', { name: 'Step 1 of 3: Basics' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
     await expect(page.getByText(/is not an SPDX licence id/)).toBeVisible();
     await expect(page.getByLabel(/^Short name/)).toHaveValue(fresh);
     await expect(page.getByLabel(/^Name/)).toHaveValue(`${tag} Duplicate`);
@@ -435,6 +441,7 @@ test.describe('journey 1: the create wizard', () => {
 
     // Remove the licence and the same form is created.
     await page.getByRole('button', { name: 'Remove the licence' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Create service' }).click();

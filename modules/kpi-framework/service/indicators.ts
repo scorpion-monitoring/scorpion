@@ -14,6 +14,7 @@ import {
   indicatorMeans,
   indicatorTool,
   kpiSetIndicator,
+  serviceExtraIndicator,
 } from '../db/schema.ts';
 import { Duplicate, InUse, type Use } from './errors.ts';
 import {
@@ -462,7 +463,7 @@ export function createIndicatorsService(
       await db.tx(async (tx) => {
         await load(tx, id, true);
         // The database would refuse (`restrict`) with a 500; the answer names the module and the count.
-        const [rows, evaluations] = await Promise.all([
+        const [rows, evaluations, extras] = await Promise.all([
           tx
             .select({ n: sql<number>`count(*)::int` })
             .from(kpiSetIndicator)
@@ -471,12 +472,19 @@ export function createIndicatorsService(
             .select({ n: sql<number>`count(*)::int` })
             .from(evaluation)
             .where(eq(evaluation.indicatorId, id)),
+          tx
+            .select({ n: sql<number>`count(*)::int` })
+            .from(serviceExtraIndicator)
+            .where(eq(serviceExtraIndicator.indicatorId, id)),
         ]);
         const uses: Use[] = [];
         if ((rows[0]?.n ?? 0) > 0)
           uses.push({ module: 'kpi.framework', what: 'sets', count: rows[0]!.n });
         if ((evaluations[0]?.n ?? 0) > 0)
           uses.push({ module: 'kpi.framework', what: 'evaluations', count: evaluations[0]!.n });
+        // A service that opted into the indicator as an extra (the set rows above cover the sets' services).
+        if ((extras[0]?.n ?? 0) > 0)
+          uses.push({ module: 'kpi.framework', what: 'services', count: extras[0]!.n });
         if (uses.length > 0) throw new InUse('indicator', uses);
         // By id and nothing else; the links go with it (cascade).
         await tx.delete(indicator).where(eq(indicator.id, id));

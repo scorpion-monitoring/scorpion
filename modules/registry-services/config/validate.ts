@@ -8,6 +8,7 @@ import {
   type FieldConfig,
   type FieldTypeEntry,
   type OrgRoleEntry,
+  type ShowIf,
   type WizardStepEntry,
 } from '../service/registries.ts';
 import { stepConfigSchema, type StepConfig } from './types.ts';
@@ -66,6 +67,7 @@ export interface ResolvedStep {
   /** Where the step comes from: this module's config file, or a module that contributes it. */
   source: 'config' | 'contributed';
   applies?: WizardStepEntry['applies'];
+  showIf?: ShowIf | undefined;
 }
 
 export interface ResolvedConfig {
@@ -176,6 +178,7 @@ export function validateServicesConfig(input: ValidateInput): ResolvedConfig {
       fields: stepFields,
       component: step.component,
       source: 'config',
+      ...(step.showIf && { showIf: step.showIf }),
     });
   }
 
@@ -204,6 +207,7 @@ export function validateServicesConfig(input: ValidateInput): ResolvedConfig {
       component: step.component,
       source: 'contributed',
       ...(step.applies && { applies: step.applies }),
+      ...(step.showIf && { showIf: step.showIf }),
     });
   }
 
@@ -221,6 +225,19 @@ export function validateServicesConfig(input: ValidateInput): ResolvedConfig {
     const firstPath = paths.get(field.path);
     if (firstPath !== undefined) problems.push(`${where}: the path "${field.path}" is used twice`);
     else paths.set(field.path, where);
+  }
+  // A condition must ask about a field of the form, or it could never hold (a typo would hide a field for good).
+  for (const { field, where } of origins) {
+    if (field.showIf && !paths.has(field.showIf.path)) {
+      problems.push(`${where}: showIf asks about "${field.showIf.path}", which no field has`);
+    }
+  }
+  for (const step of resolvedSteps) {
+    if (step.showIf && !paths.has(step.showIf.path)) {
+      problems.push(
+        `step "${step.id}": showIf asks about "${step.showIf.path}", which no field has`,
+      );
+    }
   }
   // A pointer that is a prefix of another (`/contact` and `/contact/type`) cannot both hold a value.
   for (const path of paths.keys()) {
@@ -251,6 +268,12 @@ export function validateServicesConfig(input: ValidateInput): ResolvedConfig {
     if (!type.storages.includes(field.storage.kind)) {
       problems.push(
         `${where}: a field of type "${type.id}" cannot use the storage "${field.storage.kind}" (allowed: ${type.storages.join(', ')})`,
+      );
+    }
+
+    if (field.storage.kind === 'module' && !type.store) {
+      problems.push(
+        `${where}: the storage "module" needs a field type with a "store" function, and "${type.id}" has none`,
       );
     }
 

@@ -202,3 +202,37 @@ export const evaluation = pgTable(
     check('kpif_evaluation_aggregate_check', sql`char_length(${table.aggregate}) > 0`),
   ],
 );
+
+/**
+ * The KPI set a service uses (Decision 6 of the M9 plan). `service_id` is a plain column, not a foreign key:
+ * the service layer checks that the service exists through `registry.services/public`, so this module holds no
+ * reference into another module's tables. One set per service. A set that a service uses is not deleted from
+ * under it: the service layer answers 409 first and the key refuses as the last guard.
+ */
+export const serviceSet = pgTable(
+  'kpif_service_set',
+  {
+    serviceId: uuid('service_id').primaryKey(),
+    setId: uuid('set_id')
+      .notNull()
+      .references(() => kpiSet.id, { onDelete: 'restrict' }),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    updatedBy: uuid('updated_by'),
+  },
+  (table) => [index('kpif_service_set_set_idx').on(table.setId)],
+);
+
+/** An indicator a service opted into beyond its set. An indicator that is in the set is not an extra. */
+export const serviceExtraIndicator = pgTable(
+  'kpif_service_extra_indicator',
+  {
+    serviceId: uuid('service_id').notNull(),
+    indicatorId: uuid('indicator_id')
+      .notNull()
+      .references(() => indicator.id, { onDelete: 'restrict' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serviceId, table.indicatorId] }),
+    index('kpif_service_extra_indicator_indicator_idx').on(table.indicatorId),
+  ],
+);

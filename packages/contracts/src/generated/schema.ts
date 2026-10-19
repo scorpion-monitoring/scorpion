@@ -9404,6 +9404,13 @@ export interface paths {
                                 component?: string;
                                 /** @description The step comes from another module. */
                                 contributed: boolean;
+                                /** @description Shown only when the value at `path` equals `equals` or is one of `oneOf`; a hidden field is not required. */
+                                showIf?: {
+                                    /** @description A JSON pointer into the form: the value that is asked about. */
+                                    path: string;
+                                    equals?: unknown;
+                                    oneOf?: unknown[];
+                                };
                                 fields: {
                                     key: string;
                                     /** @description A JSON pointer into the one nested form object: `/contact/type`. */
@@ -9427,6 +9434,8 @@ export interface paths {
                                     column?: string;
                                     /** @description Not part of the create body: the value is set afterwards. */
                                     deferred: boolean;
+                                    /** @description Changed through the route of the module that owns it, never by a patch of the service: the edit form leaves it out. */
+                                    external?: boolean;
                                     choices?: {
                                         value: string;
                                         /** @description Text that is ready to show, in the language asked for. */
@@ -9434,6 +9443,13 @@ export interface paths {
                                         /** @description A key of the message catalogue, for an option the config lists. */
                                         labelKey?: string;
                                     }[];
+                                    /** @description Shown only when the value at `path` equals `equals` or is one of `oneOf`; a hidden field is not required. */
+                                    showIf?: {
+                                        /** @description A JSON pointer into the form: the value that is asked about. */
+                                        path: string;
+                                        equals?: unknown;
+                                        oneOf?: unknown[];
+                                    };
                                 }[];
                                 /** @description A JSON Schema (an object with the fields at their pointers). The browser checks a step against it before it lets the person go on; the server validates the same fields with the Zod schemas of the same field types. */
                                 schema: {
@@ -12001,6 +12017,245 @@ export interface paths {
                     content?: never;
                 };
                 /** @description The indicator is not in the set, the aggregate does not fit its value type, or the aggregate is not an active term. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/services/{id}/kpis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The KPI set, the extras and the effective set of the service. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            serviceId: string;
+                            /** @description The KPI set of the service; `null` while it has none. */
+                            set: {
+                                id: string;
+                                slug: string;
+                                iri: string;
+                                name: string;
+                                description: string | null;
+                                rimoCategory: string | null;
+                            } | null;
+                            /** @description The effective KPI set: the rows of the set with their necessity, then the extras the set does not contain. */
+                            rows: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                                /** @description A term of the vocabulary `necessity`; `optional` for an extra. */
+                                necessity: string;
+                                /** @enum {string} */
+                                source: "set" | "extra";
+                            }[];
+                            /** @description The indicators the service chose beyond its set. */
+                            extras: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            /** @description Whether the caller may change them (Admin, or an approved manager of the provider). */
+                            canEdit: boolean;
+                            /** @description Whether the caller may change which set the service has (Admin, or an approved manager of the provider). */
+                            canChangeSet: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        setId: string | null;
+                        extras: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The KPIs after the change. The set and the extras are replaced (managers of the provider and administrators only); an extra the set contains is dropped. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            serviceId: string;
+                            /** @description The KPI set of the service; `null` while it has none. */
+                            set: {
+                                id: string;
+                                slug: string;
+                                iri: string;
+                                name: string;
+                                description: string | null;
+                                rimoCategory: string | null;
+                            } | null;
+                            /** @description The effective KPI set: the rows of the set with their necessity, then the extras the set does not contain. */
+                            rows: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                                /** @description A term of the vocabulary `necessity`; `optional` for an extra. */
+                                necessity: string;
+                                /** @enum {string} */
+                                source: "set" | "extra";
+                            }[];
+                            /** @description The indicators the service chose beyond its set. */
+                            extras: {
+                                indicatorId: string;
+                                slug: string;
+                                name: string;
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                thematic: string;
+                                qualitative: boolean;
+                            }[];
+                            /** @description Whether the caller may change them (Admin, or an approved manager of the provider). */
+                            canEdit: boolean;
+                            /** @description Whether the caller may change which set the service has (Admin, or an approved manager of the provider). */
+                            canChangeSet: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The caller may not change the KPIs of this service. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The set or an indicator was deleted while the request ran. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid input; `errors` names every bad path (an unknown term, a bound the value type does not allow, …). */
                 422: {
                     headers: {
                         [name: string]: unknown;

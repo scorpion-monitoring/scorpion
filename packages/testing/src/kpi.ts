@@ -137,3 +137,30 @@ export async function makeKpiSet(db: Queryable, overrides: MakeKpiSet = {}): Pro
     );
   return rows[0]!;
 }
+
+export interface MakeServiceKpis {
+  serviceId: string;
+  /** The KPI set of the service; none when absent. */
+  setId?: string | null;
+  /** Indicator ids the service opted into beyond its set. */
+  extras?: readonly string[];
+  updatedBy?: string | null;
+}
+
+/**
+ * The link of a service to its KPI set and extra indicators (`kpif_service_set`, `kpif_service_extra_indicator`),
+ * inserted directly. It does not check that the service exists (the table holds a plain column) and it does not
+ * drop an extra that the set already contains: that is the service layer's rule, so a test can build the odd cases.
+ */
+export async function makeServiceKpis(db: Queryable, input: MakeServiceKpis): Promise<void> {
+  if (input.setId)
+    await db.query(
+      'insert into kpif_service_set (service_id, set_id, updated_by) values ($1, $2, $3)',
+      [input.serviceId, input.setId, input.updatedBy ?? null],
+    );
+  for (const indicatorId of input.extras ?? [])
+    await db.query(
+      'insert into kpif_service_extra_indicator (service_id, indicator_id) values ($1, $2)',
+      [input.serviceId, indicatorId],
+    );
+}

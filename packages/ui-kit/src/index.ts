@@ -107,3 +107,19 @@ export {
   type JsonSchema,
 } from './schema-form.ts';
 export { checkJsonSchema, type SchemaIssue } from './json-schema-check.ts';
+export {
+  contributedWidget,
+  getWizardFieldContext,
+  registerFieldWidget,
+  registerServiceSection,
+  registerStepApplies,
+  registerWizardExtensions,
+  resetExtensions,
+  serviceSections,
+  setWizardFieldContext,
+  stepConditions,
+  type ServiceSectionProps,
+  type WizardExtensions,
+  type WizardFieldContext,
+  type WizardFieldInfo,
+} from './wizard-extensions.ts';
