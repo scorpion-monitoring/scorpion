@@ -11,11 +11,13 @@ import {
 } from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
 import type { KpiFrameworkService } from './module.ts';
+import type { ServiceKpisView } from './service/service-kpis.ts';
 import {
   createIndicatorSchema,
   createSetSchema,
   evaluationSchema,
   indicatorListQuery,
+  serviceKpisSchema,
   setIndicatorsSchema,
   setListQuery,
   updateIndicatorSchema,
@@ -397,6 +399,118 @@ const valueTypeOut = (v: ValueTypeView) => ({
   aggregates: v.aggregates,
 });
 
+// ----- the KPIs of a service -----------------------------------------------------------------------
+
+const effectiveIndicatorSchema = z.object({
+  indicatorId: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  valueType: z.string(),
+  unit: z.string().nullable().describe('A term of the vocabulary `kpi.unit`.'),
+  thematic: z.string(),
+  qualitative: z.boolean(),
+});
+
+const serviceKpisOutSchema = z.object({
+  serviceId: z.string(),
+  set: z
+    .object({
+      id: z.string(),
+      slug: z.string(),
+      iri: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      rimoCategory: z.string().nullable(),
+    })
+    .nullable()
+    .describe('The KPI set of the service; `null` while it has none.'),
+  rows: z
+    .array(
+      effectiveIndicatorSchema.extend({
+        necessity: z
+          .string()
+          .describe('A term of the vocabulary `necessity`; `optional` for an extra.'),
+        source: z.enum(['set', 'extra']),
+      }),
+    )
+    .describe(
+      'The effective KPI set: the rows of the set with their necessity, then the extras the set does not contain.',
+    ),
+  extras: z
+    .array(effectiveIndicatorSchema)
+    .describe('The indicators the service chose beyond its set.'),
+  canEdit: z
+    .boolean()
+    .describe(
+      'Whether the caller may change them (Admin, or an approved manager of the provider).',
+    ),
+  canChangeSet: z
+    .boolean()
+    .describe(
+      'Whether the caller may change which set the service has (Admin, or an approved manager of the provider).',
+    ),
+});
+
+const serviceIdParam = z.object({ id: z.uuid().describe('The id of the service.') });
+
+export const getServiceKpisRoute = createRoute({
+  method: 'get',
+  path: '/kpi/services/{id}/kpis',
+  permission: PERMISSION_SET_READ,
+  request: { params: serviceIdParam },
+  responses: {
+    200: ok('The KPI set, the extras and the effective set of the service.', serviceKpisOutSchema),
+    404: { description: 'No such service.' },
+  },
+});
+
+export const setServiceKpisRoute = createRoute({
+  method: 'put',
+  path: '/kpi/services/{id}/kpis',
+  // Delegated (ADR-0034): the route needs only the plain read permission, which every signed-in person holds;
+  // the service checks the scoped `kpi.framework.service.kpis.edit` against this service, so a member of the
+  // provider passes and a member of another provider does not. The order is 404, 403, 422.
+  permission: PERMISSION_SET_READ,
+  audit: true,
+  request: { params: serviceIdParam, body: body(serviceKpisSchema) },
+  responses: {
+    200: ok(
+      'The KPIs after the change. The set and the extras are replaced (managers of the provider and administrators only); an extra the set contains is dropped.',
+      serviceKpisOutSchema,
+    ),
+    403: { description: 'The caller may not change the KPIs of this service.' },
+    404: { description: 'No such service.' },
+    409: { description: 'The set or an indicator was deleted while the request ran.' },
+    422: R422,
+  },
+});
+
+const serviceKpisOut = (v: ServiceKpisView) => ({
+  serviceId: v.serviceId,
+  set: v.set,
+  rows: v.rows.map((row) => ({
+    indicatorId: row.indicatorId,
+    slug: row.slug,
+    name: row.name,
+    valueType: row.valueType,
+    unit: row.unit,
+    thematic: row.thematic,
+    qualitative: row.qualitative,
+    necessity: row.necessity,
+    source: row.source,
+  })),
+  extras: v.extras.map((row) => ({
+    indicatorId: row.indicatorId,
+    slug: row.slug,
+    name: row.name,
+    valueType: row.valueType,
+    unit: row.unit,
+    thematic: row.thematic,
+    qualitative: row.qualitative,
+  })),
+  canEdit: v.canEdit,
+});
+
 export function registerKpiRoutes(r: RouteRegistrar, service: KpiFrameworkService) {
   r.internal(listIndicatorsRoute, (async (c) => {
     const { page, pageSize, ...filter } = c.req.valid('query');
@@ -493,4 +607,20 @@ export function registerKpiRoutes(r: RouteRegistrar, service: KpiFrameworkServic
     );
     return c.json(evaluationOut(saved), 200);
   }) satisfies RouteHandler<typeof setEvaluationRoute, AppEnv>);
+
+  r.internal(getServiceKpisRoute, (async (c) => {
+    return c.json(
+      serviceKpisOut(await service.serviceKpis.get(c.get('actor'), c.req.valid('param').id)),
+      200,
+    );
+  }) satisfies RouteHandler<typeof getServiceKpisRoute, AppEnv>);
+
+  r.internal(setServiceKpisRoute, (async (c) => {
+    const saved = await service.serviceKpis.set(
+      c.get('actor'),
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    );
+    return c.json(serviceKpisOut(saved), 200);
+  }) satisfies RouteHandler<typeof setServiceKpisRoute, AppEnv>);
 }

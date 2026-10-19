@@ -35,6 +35,9 @@ export {
   UNIT_VOCABULARY,
 } from './service/vocabularies.ts';
 export { SEED_UNITS, unitMetadata, type UnitSeed } from './config/units.ts';
+// The v1 route definitions, for their contract test (`apps/server/src/kpi.contract.test.ts`).
+export { listCategoriesV1Route, listIndicatorsV1Route } from './routes-v1.ts';
+export { EXTRA_NECESSITY, mergeEffective } from './service/merge.ts';
 
 import type { KpiFrameworkService } from './module.ts';
 

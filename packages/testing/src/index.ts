@@ -28,10 +28,12 @@ export { makeService, type MakeService, type ServiceRow } from './services.ts';
 export {
   makeIndicator,
   makeKpiSet,
+  makeServiceKpis,
   type IndicatorRow,
   type KpiSetRow,
   type MakeIndicator,
   type MakeKpiSet,
+  type MakeServiceKpis,
 } from './kpi.ts';
 export {
   makePreference,

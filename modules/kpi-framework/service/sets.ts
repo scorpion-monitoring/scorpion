@@ -6,8 +6,8 @@ import type { AuthzService } from '@scorpion/core-authz/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import { ids, type Db, type ModuleContext } from '@scorpion/kernel';
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
-import { evaluation, indicator, kpiSet, kpiSetIndicator } from '../db/schema.ts';
-import { Duplicate } from './errors.ts';
+import { evaluation, indicator, kpiSet, kpiSetIndicator, serviceSet } from '../db/schema.ts';
+import { Duplicate, InUse } from './errors.ts';
 import {
   createSetSchema,
   parseInput,
@@ -335,7 +335,15 @@ export function createSetsService(ctx: ModuleContext, deps: SetsDeps): SetsServi
       requireId(id);
       await db.tx(async (tx) => {
         await loadSet(tx, id, true);
-        // Sprint 3: a set that a service uses is a 409 here (`InUse` with the module and the count).
+        // The database would refuse (`restrict`) with a 500; the answer names the module and the count.
+        const [used] = await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(serviceSet)
+          .where(eq(serviceSet.setId, id));
+        if ((used?.n ?? 0) > 0)
+          throw new InUse('KPI set', [
+            { module: 'kpi.framework', what: 'services', count: used!.n },
+          ]);
         // By id and nothing else; the rows and the evaluation go with it (cascade).
         await tx.delete(kpiSet).where(eq(kpiSet.id, id));
         await ctx.events.emit('kpi.set.changed@1', {
