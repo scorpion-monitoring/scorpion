@@ -160,7 +160,8 @@ validFrom, rows }` (`rows` is the effective list of that state through the same 
   `kpi.framework.indicator.read` or the call is 403 (probed: submit alone, 403; submit and set, 403; all three, 200). A write token would need
   three scopes besides `kpi.ingestion.v1.write`. The way out is for `kpi.framework` to offer a trusted read (an `…AsSystem` read of the effective
   rows with their bounds, checked after this module's own scoped check) and for `upsertBatch` to use it; it is an additive change of
-  `kpi.framework/public` and does not change this ADR's rules. **Sprint 2 decides before the route is written.**
+  `kpi.framework/public` and does not change this ADR's rules. **Sprint 2 decides before the route is written.** _(Decided in sprint 2: see
+  "Amended in sprint 2", item 1; a token now needs `submit` and nothing of `kpi.framework`.)_
 
 ### 5. Our own CSV parser
 
@@ -205,7 +206,7 @@ turns the table into tests (the cookie case tagged `[ASVS-7.2.1]`) and makes the
   `defect-01.privilege-escalation.test.ts` has to get a row for the routes of sprint 2 that expects 403 for a plain User.
 - The XLSX libraries bring more packages than the plan said, and the reader has no inflation cap: sprint 3 must write and test the guard
   before the first upload route exists.
-- A token cannot yet submit with the scopes the plan names (see decision 4); sprint 2 resolves it first.
+- A token could not submit with the scopes the plan names (see decision 4); sprint 2 resolved it first ("Amended in sprint 2", item 1).
 
 ## Amended in sprint 1
 
@@ -219,3 +220,64 @@ Where building changed or added to the plan. The plan carries the same list unde
 6. The dependency tree of the XLSX libraries is larger than the plan said, and a guard is required (decision 2).
 7. `upsertBatch` needs three token scopes beyond the route's until `kpi.framework` offers a trusted read (decision 4).
 8. `kpi.framework`'s `effectiveSet` is split into `effectiveSet` and `effectiveOf` so that the past and the present share one rule.
+
+## Amended in sprint 2
+
+What building the API changed or added. The plan carries the same list under "Amended in sprint 2".
+
+1. **A token needs `submit` and nothing of `kpi.framework` (the decision of decision 4's "Known consequence").** `kpi.framework` gets one additive trusted
+   read, `effectiveIndicatorsAsSystem(serviceId)` (service and `public.ts`): the effective rows of a service with the indicator id, name, value type, unit,
+   necessity, source and the **bounds** (`min`, `max`), checking no permission (the `AsSystem` rule: the caller checks its own). `upsertBatch` calls it
+   **after** its own scoped check and no longer calls `serviceKpis.get` or `indicators.get`. A token for `POST /api/v1/measurements` therefore names
+   `kpi.ingestion.v1.write` (the route) and `kpi.ingestion.measurement.submit` (the service) and needs an owner who may submit; the three scopes of sprint 1 are
+   gone. The test that named them is `access.test.ts` ("turns a token away unless it names the scope"), now tagged `[ASVS-8.2.1] [ASVS-8.3.1]` and asserting that
+   `submit` alone passes the service and the two `kpi.framework` read scopes alone do not. The bounds come from a second query of the same function (the
+   indicator's two columns) and not from `effectiveOf`, so the rows `serviceKpis.get` answers with are unchanged.
+2. **A second trusted read was needed, for the reads: `indicatorsByIdAsSystem(ids)`.** The time series shows the name, IRI and value type of each indicator,
+   in the order of the names, and a measurement of an indicator the service has since dropped stays (decision 1), so the effective set cannot name every
+   indicator that is read. `kpii_measurement` has no name column and this module reads no table of another module, so `kpi.framework` offers the
+   second read (name, IRI, value type and unit by id, at most 5 000 ids; the IRI needs `kpi.framework`'s `iriBase` setting, which this module cannot read).
+   It is of the same kind and for the same reason as the first (additive, no permission check, descriptive fields only, called after this module's own
+   check); it goes beyond "one trusted read" and is recorded here so the maintainer can say no. Nothing else was added to `kpi.framework`.
+3. **The names.** `resolveIndicatorRef(choices, reference)` (`service/names.ts`, exported from `public.ts`) is the one function that turns the legacy `kpi`
+   (and, in sprint 3, a column header) into an indicator id: an id of the effective set, else a name without case (surrounding spaces ignored, composed
+   and decomposed letters the same) that exactly one indicator has; unknown and ambiguous are problems that never repeat the input. The database allows two
+   indicators whose names differ only in a composed or decomposed letter (the unique index is `lower(name)`), so "ambiguous" is real and says to use the
+   id. `upsertByName(actor, service, items)` is the service method behind `POST /api/v1/measurements`; it shares `upsertBatch`'s code, and only the **naming**
+   of a problem differs (`[3].kpi`, `[3].value`, `[3].date`, and `` for the batch as a whole, instead of `rows[3].indicator`, `.value`, `.period`, `rows`). The
+   shape errors Zod finds in the body keep the pipeline's own form (`0.kpi`), which the route's description says. The source is `api`.
+4. **The order of the answers on the routes differs from `upsertBatch`'s, on purpose.** The route resolves the service by id or **abbreviation** before the
+   scoped check (an abbreviation cannot be authorised before it is a service), so an unknown service is 422 naming `service` for anyone who may use the route.
+   A service is readable by every signed-in person (ADR-0036), so naming an unknown one discloses nothing. `upsertBatch` keeps its order (401, 403, 404, 422).
+   The order of the route is: 401 (no credentials), 403 (the pipeline: scope or owner lacks `kpi.ingestion.v1.write`), 422 (unknown service), 403 (the scoped
+   permission), 422 (the body), 200.
+5. **The body limit is 3 MiB.** The route sets `maxBodyBytes` (the existing mechanism; no change to `pipeline/**`). 500 items of the legacy shape are about
+   60 kB, but a text value may be 4 000 characters, a name 200 and a date 32: 500 x (4 000 + 200 + 32 + about 40 of JSON) is 2.14 MB of plain ASCII, so the
+   limit is 3 MiB; a test sends 500 values of 4 000 characters (about 2 MB, over the server-wide 1 MiB) and gets 200, and a body over the limit is 413 before
+   it is read. The rate limiter counts requests, not items: a test sends three batches of 500 through a bucket of five.
+6. **The preflight needed no change in `apps/server/src/pipeline/**`.** `cors()` takes one list of methods, so `app.ts` builds one `cors()` per distinct list
+   (`apps/server/src/preflight.ts`) and picks by the path of the request from the registered routes: `GET, POST, OPTIONS` for `/api/v1/measurements`,
+   `GET, OPTIONS` for the other v1 paths, and the methods of the whole surface for a path no route has (as before). This closes the backlog item "The preflight
+   answer lists the methods v1 has overall". `cors.ts` and its tests are unchanged; `docs/security/**` changes for the notes only (V7 and V8).
+7. **The CSRF prototype became tests.** A session cookie on `POST /api/v1/measurements` without `X-CSRF-Token`, with a wrong one or with another session's
+   is 401 and writes nothing; with the right one it writes as the signed-in person; a token with a stale cookie works; a made-up token is 401; `X-API-Key` works
+   (`measurements.contract.test.ts`, the cookie cases tagged `[ASVS-7.2.1]`).
+8. **The reads.** `GET /api/v1/measurements` reads one service (`service` required: id or abbreviation). The order is month, indicator name without case, id: the
+   name is not in this module's table, so the few indicators of the service are ranked in memory and the database sorts by that rank (`array_position`), month
+   first, so the order holds across pages. The indicators that can be named in `indicators` are the service's effective KPIs and every indicator it has a value
+   for (a real indicator unrelated to the service is 422). `start` and `stop` mean the month they name (any day of it) and may lie in the future; `start`
+   after `stop` is compared by month. `value` is `valueType.format(canonical)` (the legacy text) and `valueNumber` the number; a value type that is no longer
+   registered is shown as its canonical text. The internal reads share the way a value is shown (`present`) and the service check with the time series: the grid is the effective set with the
+   stored value of one month, and the coverage counts, per month of the last 12 (at most 36), the effective indicators and the mandatory ones that have a value. The
+   mandatory ones are those with the necessity term `mandatory` of the set **as it is now** (the key is the legacy and RIMO's `mandatoryFor`; it is the one
+   place the module names a term of that vocabulary), and a month is `complete` when none of them is missing, also while nothing is mandatory.
+9. **Compared with the legacy API documentation (FEATURES §3.16).** What matches: the path and the parameters `service`, `indicators`, `start`, `stop`; the row
+   `{ kpi, value, date }` (kept, with additions); the envelope `{ metadata: { currentPage, pageSize, totalCount, totalPages }, result }` with 0-based pages;
+   `POST` upserting `[{ kpi, value, date }]`, accepting only the service's KPIs, type-checking the values and turning `YYYY-MM` into the month end. What differs, each
+   a fix of a defect in FEATURES §3.16 or a consequence of the shared rules of v1: the list is under `result`, not `data`; the order is stable across pages;
+   `POST` checks that the caller may submit for the service; `pageSize` is at most 100 with a default of 100 like every v1 list (the legacy default was 1 000);
+   `service` is required; an unknown service, indicator or month is a 422 naming it; a value of a month after the current one is refused; the same indicator and
+   month twice in one batch is refused (never "the last one wins"). What the documentation does not say, so the choice is recorded here: the legacy format of
+   `date` (an ISO date or a time stamp) and whether `value` was text or a number are not in FEATURES §3.16 and the repository holds no legacy source. `date` is
+   `YYYY-MM-DD` (the month end) and `value` the canonical text, with `valueNumber` added, which keeps a client that read `value` as text working and lets a new one
+   read a number. A client of the legacy API that read `data` or relied on a `pageSize` of 1 000 has to change; the changeset says so.

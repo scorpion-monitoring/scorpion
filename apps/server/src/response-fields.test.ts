@@ -474,6 +474,11 @@ describe('the schema of the create wizard', () => {
 // list and through the v1 rows of the field tables in docs/security/authorization.md.
 const V1_NEVER = [
   ...CONTACT_FIELDS,
+  // The measurements (M10): no person's id, no file name, no run and no source adapter in an answer.
+  'actorId',
+  'fileName',
+  'runId',
+  'source',
   'editableFields',
   'allowedActions',
   'createdBy',
@@ -649,5 +654,83 @@ describe('the v1 schemas', () => {
       }
     }
     expect(v1Violations([planted(row)])).toEqual([]);
+  });
+});
+
+// The measurements (M10 sprint 2): the names of every answer of the two v1 routes and the two internal reads are pinned, as the
+// rows above are. A measurement answer never holds the id of the person who wrote the value, a file name, a run or the adapter
+// that wrote it (`V1_NEVER` fails a route that declares one), and a field that is added passes through this list and through the
+// field tables of docs/security/authorization.md.
+const MEASUREMENT_ROW = [
+  'date',
+  'id',
+  'indicatorId',
+  'iri',
+  'kpi',
+  'period',
+  'service',
+  'value',
+  'valueNumber',
+];
+const MEASUREMENT_ANSWERS: Record<string, readonly string[]> = {
+  'GET /measurements': MEASUREMENT_ROW,
+};
+const SUBMITTED = ['inserted', 'unchanged', 'updated'];
+const GRID_ROW = [
+  'id',
+  'indicatorId',
+  'max',
+  'measurement',
+  'min',
+  'name',
+  'necessity',
+  'unit',
+  'value',
+  'valueNumber',
+  'valueType',
+];
+const COVERAGE_ROW = ['complete', 'mandatory', 'mandatoryReported', 'period', 'reported'];
+
+describe('the measurement answers', () => {
+  it('name the fields of the measurement rows of the field tables, and no person, file, run or source [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start({ kpi: true, ingestion: true });
+    const routes = kernel.routes.filter((entry) => entry.route.path.includes('measurements'));
+    const key = (entry: { route: { method: string; path: string } }) =>
+      `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+    expect(routes.map(key).sort()).toEqual([
+      'GET /kpi/measurements',
+      'GET /kpi/measurements/coverage',
+      'GET /measurements',
+      'POST /measurements',
+    ]);
+    expect(v1Violations(routes.map((entry) => entry.route as RouteLike))).toEqual([]);
+    const names = (route: unknown, status = '200') => {
+      const found = v1Names(route as RouteLike, status);
+      for (const name of ENVELOPE) found.delete(name);
+      return [...found].sort();
+    };
+    for (const [path, expected] of Object.entries(MEASUREMENT_ANSWERS)) {
+      const entry = routes.find((candidate) => key(candidate) === path)!;
+      expect(names(entry.route), path).toEqual([...expected].sort());
+    }
+    expect(names(routes.find((entry) => key(entry) === 'POST /measurements')!.route)).toEqual(
+      SUBMITTED,
+    );
+    expect(names(routes.find((entry) => key(entry) === 'GET /kpi/measurements')!.route)).toEqual(
+      GRID_ROW,
+    );
+    expect(
+      names(routes.find((entry) => key(entry) === 'GET /kpi/measurements/coverage')!.route),
+    ).toEqual(COVERAGE_ROW);
+  });
+
+  it('is not carried by the event either: measurement.recorded@1 names ids, months and counts [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start({ kpi: true, ingestion: true });
+    const event = kernel.composition.events.get('measurement.recorded@1')!;
+    expect(
+      propertyNames(event.schema)
+        .map((at) => at.slice(at.lastIndexOf('.') + 1))
+        .sort(),
+    ).toEqual(['actorId', 'inserted', 'periods', 'runId', 'serviceId', 'updated']);
   });
 });

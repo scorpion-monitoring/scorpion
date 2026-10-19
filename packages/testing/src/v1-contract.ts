@@ -13,7 +13,7 @@
 // What it checks for every route: it is never public (unless `publicReason` names the exception), 401
 // without a token and for a made-up one, 403 for a valid token that lacks the scope, 200 for `Authorization:
 // Bearer` and the same answer for `X-API-Key`, and the answer matches the declared schema and content
-// type. For a list route (`list`): the legacy envelope with 0-based pages, `totalPages`, a stable order
+// type. A write route gives `body` (its JSON) and `answersDiffer: true`. For a list route (`list`): the legacy envelope with 0-based pages, `totalPages`, a stable order
 // (key, then id) that holds across pages, the last page, a page past the end (empty, same metadata) and a
 // `pageSize` larger than the total (defect 15).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -32,6 +32,8 @@ export interface V1Request {
   /** Relative to `/api/v1`, with the query string: `/providers?is_member=true`. */
   path: string;
   headers: Record<string, string>;
+  /** The JSON body of a write (`ctx.body`); absent for a read. */
+  body?: unknown;
 }
 
 export interface V1ContractContext {
@@ -54,6 +56,13 @@ export interface V1ContractContext {
     pageParam?: string;
     pageSizeParam?: string;
   };
+  /** The JSON body of a write route: sent with every call of the standard cases (the auth cases never get as far as reading it). */
+  body?: unknown;
+  /**
+   * A write answers differently the second time (`inserted`, then `unchanged`), so `X-API-Key` and `Authorization: Bearer` are
+   * expected to answer 200 and match the schema but not to answer the same body. Default `false`: the same body.
+   */
+  answersDiffer?: boolean;
   /** The route is `public: true` on purpose (ADR-0037: only the spec). The auth cases are skipped. */
   publicReason?: string;
 }
@@ -158,7 +167,7 @@ export function v1ContractTests(route: AppRoute, ctx: V1ContractContext): void {
     headers: Record<string, string>,
     query = ctx.query,
     path = pathOf(route, ctx, query),
-  ) => ctx.call({ method, path, headers });
+  ) => ctx.call({ method, path, headers, ...(ctx.body === undefined ? {} : { body: ctx.body }) });
 
   describe(`v1 contract: ${name}`, () => {
     if (ctx.publicReason === undefined) {
@@ -202,7 +211,8 @@ export function v1ContractTests(route: AppRoute, ctx: V1ContractContext): void {
       if (ctx.publicReason === undefined) {
         const viaKey = await send({ 'x-api-key': ctx.token });
         expect(viaKey.status).toBe(200);
-        expect(viaKey.body).toEqual(viaBearer.body);
+        if (ctx.answersDiffer) expectReplyMatchesRoute(route, viaKey);
+        else expect(viaKey.body).toEqual(viaBearer.body);
       }
     });
 

@@ -104,8 +104,6 @@ describe('who may submit measurements for a service', () => {
   it('turns a token away unless it names the scope, and never lets it do more than its owner [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
     const w = await world();
     const rows = [w.row(w.ind.downloads, '2026-01', 1)];
-    // The scopes of the reads that the batch makes on the way (the KPIs of the service and the indicator's bounds).
-    const reads = ['kpi.framework.set.read', 'kpi.framework.indicator.read'];
     const token = (owner: UserActor, scopes: string[]): UserActor => ({
       ...owner,
       via: 'token',
@@ -113,18 +111,21 @@ describe('who may submit measurements for a service', () => {
     });
     const call = (who: Actor) =>
       w.ingestion.measurements.upsertBatch(who, w.svc.id, rows, { source: 'test' });
-    // the owner is a member: the scope decides
-    await expect(call(token(w.people.member, [...reads]))).rejects.toBeInstanceOf(Forbidden);
+    // the owner is a member: the scope decides. A token needs `submit` and nothing of kpi.framework's reads (ADR-0041,
+    // "Amended in sprint 2"): the KPIs and bounds are read through a trusted read after the scoped check.
     await expect(call(token(w.people.member, []))).rejects.toBeInstanceOf(Forbidden);
-    expect((await call(token(w.people.member, [PERMISSION_SUBMIT, ...reads]))).inserted).toBe(1);
+    await expect(
+      call(token(w.people.member, ['kpi.framework.set.read', 'kpi.framework.indicator.read'])),
+    ).rejects.toBeInstanceOf(Forbidden);
+    expect((await call(token(w.people.member, [PERMISSION_SUBMIT]))).inserted).toBe(1);
     // an Admin's token without the scope, and a plain user's token that names it, are both refused
-    await expect(call(token(w.people.admin, [...reads]))).rejects.toBeInstanceOf(Forbidden);
-    await expect(call(token(w.people.plain, [PERMISSION_SUBMIT, ...reads]))).rejects.toBeInstanceOf(
+    await expect(call(token(w.people.admin, []))).rejects.toBeInstanceOf(Forbidden);
+    await expect(call(token(w.people.plain, [PERMISSION_SUBMIT]))).rejects.toBeInstanceOf(
       Forbidden,
     );
-    await expect(
-      call(token(w.people.elsewhere, [PERMISSION_SUBMIT, ...reads])),
-    ).rejects.toBeInstanceOf(Forbidden);
+    await expect(call(token(w.people.elsewhere, [PERMISSION_SUBMIT]))).rejects.toBeInstanceOf(
+      Forbidden,
+    );
   });
 });
 

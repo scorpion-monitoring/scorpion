@@ -10,3 +10,19 @@
 export const PERMISSION_SUBMIT = 'kpi.ingestion.measurement.submit';
 /** The resource type (and `scope`) of the scoped permission: a service of `registry.services`. */
 export const RESOURCE_SERVICE = 'service';
+
+/**
+ * Read the measurements of a service through the public API (`GET /api/v1/measurements`) with a token that holds this scope. The
+ * role `user` holds it: every signed-in person reads every service's measurements, as services and KPI definitions are
+ * (decision 4 of the plan). Never anonymous, never public.
+ */
+export const PERMISSION_V1_READ = 'kpi.ingestion.v1.read';
+/**
+ * Write measurements through the public API (`POST /api/v1/measurements`) with a token that holds this scope. The role `user`
+ * holds it, and it is **not** enough: the service checks the scoped `kpi.ingestion.measurement.submit` for the token's owner
+ * (ADR-0015), so a token without write access to that service is refused (the legacy "anyone with a key can write to any
+ * service" gap).
+ */
+export const PERMISSION_V1_WRITE = 'kpi.ingestion.v1.write';
+/** Read the grid of a month and the coverage of a service on the signed-in pages (the Data Submission page of sprint 4). */
+export const PERMISSION_MEASUREMENT_READ = 'kpi.ingestion.measurement.read';

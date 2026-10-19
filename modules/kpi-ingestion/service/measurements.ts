@@ -11,8 +11,10 @@ import type { KpiFrameworkPublic } from '@scorpion/kpi-framework/public';
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { and, inArray, eq, sql } from 'drizzle-orm';
 import { measurement } from '../db/schema.ts';
+import { resolveIndicatorRef, type IndicatorChoice, type IndicatorRefResult } from './names.ts';
 import { normalisePeriod } from './period.ts';
-import { PERMISSION_SUBMIT, RESOURCE_SERVICE } from './permissions.ts';
+import { PERMISSION_SUBMIT, PERMISSION_V1_WRITE, RESOURCE_SERVICE } from './permissions.ts';
+import { resolveServiceRef, type ServiceLookup } from './service-ref.ts';
 import { sameColumns, toColumns, type ValueColumns } from './values.ts';
 
 /** The most rows one batch holds (the size of an upload: the plan's limit of 5 000 data rows). */
@@ -74,19 +76,71 @@ export interface MeasurementsService {
     rows: readonly MeasurementInput[],
     options: UpsertOptions,
   ): Promise<UpsertResult>;
+
+  /**
+   * `POST /api/v1/measurements` as a service call (M10 sprint 2): the same batch as `upsertBatch` in the legacy shape. `service`
+   * is the id or the abbreviation of a service; each item is `{ kpi, value, date }` with `kpi` the indicator's **name without
+   * case** or its id (`resolveIndicatorRef`). It needs the plain `kpi.ingestion.v1.write` (the order of the answers is 401, 403
+   * for that, 422 for an unknown service) and then `upsertBatch`'s own scoped check on the service, for the actor, so a token
+   * of a person who may not submit for that service is 403. Problems are named in the shape of the request:
+   * `[3].kpi`, `[3].value`, `[3].date`. The source is `api`.
+   */
+  upsertByName(
+    actor: Actor,
+    service: string,
+    items: readonly unknown[],
+  ): Promise<Omit<UpsertResult, 'rows'>>;
 }
 
 export interface MeasurementsDeps {
   authz: Pick<AuthzService, 'require'>;
-  services: Pick<ServicesPublic, 'existsAsSystem'>;
-  kpi: Pick<KpiFrameworkPublic, 'serviceKpis' | 'indicators' | 'findValueType'>;
+  services: Pick<ServicesPublic, 'existsAsSystem'> & ServiceLookup;
+  kpi: Pick<KpiFrameworkPublic, 'effectiveIndicatorsAsSystem' | 'findValueType'>;
   /** "Now", for the current month. Injected so tests do not depend on the date they run on. */
   clock: () => Date;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sourcePattern = /^[a-z][a-z0-9-]{0,63}$/;
-const KNOWN_KEYS = new Set(['indicator', 'period', 'value']);
+
+/**
+ * How a batch names its parts, so a 422 speaks the language of the request: `upsertBatch` takes `rows[i].indicator`,
+ * `.period`, `.value`; the legacy API takes `[i].kpi`, `.value`, `.date`. The checks are the same.
+ */
+interface Naming {
+  /** The path of row `i`: `rows[3]` or `[3]`. */
+  row: (index: number) => string;
+  indicator: string;
+  period: string;
+  value: string;
+  /** The path of a problem with the batch as a whole (`rows`; the root of the body is ''). */
+  whole: string;
+  /** What the indicator reference may be: an id only, or a name or an id (the legacy `kpi`). */
+  resolve: (choices: readonly IndicatorChoice[], reference: unknown) => IndicatorRefResult;
+}
+
+const BY_ID: Naming = {
+  row: (index) => `rows[${index}]`,
+  indicator: 'indicator',
+  period: 'period',
+  value: 'value',
+  whole: 'rows',
+  resolve: (choices, reference) =>
+    typeof reference !== 'string' || !uuidPattern.test(reference)
+      ? { ok: false, problem: 'must be the id of an indicator' }
+      : choices.some((choice) => choice.indicatorId === reference)
+        ? { ok: true, indicatorId: reference }
+        : { ok: false, problem: 'is not one of the KPIs of this service' },
+};
+
+const LEGACY: Naming = {
+  row: (index) => `[${index}]`,
+  indicator: 'kpi',
+  period: 'date',
+  value: 'value',
+  whole: '',
+  resolve: resolveIndicatorRef,
+};
 
 const problem = (path: string, message: string): FieldProblem => ({ in: 'body', path, message });
 const fail = (problems: readonly FieldProblem[], total = problems.length) =>
@@ -125,29 +179,15 @@ export function createMeasurementsService(
   const actorId = (actor: Actor): string | null => (actor.kind === 'user' ? actor.userId : null);
 
   /** Every row of the batch against the KPIs of the service, its value types and the calendar. */
-  async function check(actor: Actor, serviceId: string, rows: readonly unknown[]) {
-    const view = await deps.kpi.serviceKpis.get(actor, serviceId);
-    const allowed = new Map(view.rows.map((row) => [row.indicatorId, row]));
-    const now = deps.clock();
-
-    // The bounds of an indicator are not part of the effective set: read each indicator the batch uses, once.
-    const used = new Set<string>();
-    for (const row of rows) {
-      const id = (row as { indicator?: unknown } | null)?.indicator;
-      if (typeof id === 'string' && allowed.has(id)) used.add(id);
-    }
-    const bounds = new Map<string, { min: number | null; max: number | null }>();
-    await Promise.all(
-      [...used].map(async (id) => {
-        try {
-          const found = await deps.kpi.indicators.get(actor, id);
-          bounds.set(id, { min: found.min, max: found.max });
-        } catch (error) {
-          // Deleted since the set was read: the row reports it below, nothing is thrown from here.
-          if (!(error instanceof NotFound)) throw error;
-        }
-      }),
+  async function check(serviceId: string, rows: readonly unknown[], naming: Naming) {
+    // The trusted read: the scoped permission was checked above, so the actor needs no plain read permission of kpi.framework
+    // (a token would otherwise need its scopes too; ADR-0041 "Amended in sprint 2"). The bounds come with the rows.
+    const allowed = new Map(
+      (await deps.kpi.effectiveIndicatorsAsSystem(serviceId)).map((row) => [row.indicatorId, row]),
     );
+    const choices: IndicatorChoice[] = [...allowed.values()];
+    const known = new Set([naming.indicator, naming.period, naming.value]);
+    const now = deps.clock();
 
     const problems: FieldProblem[] = [];
     const results: RowResult[] = [];
@@ -156,51 +196,58 @@ export function createMeasurementsService(
 
     rows.forEach((raw, index) => {
       const here: FieldProblem[] = [];
-      const at = (field: string) => `rows[${index}].${field}`;
+      const at = (field: string) => `${naming.row(index)}.${field}`;
       if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-        here.push(problem(`rows[${index}]`, 'must be an object with indicator, period and value'));
+        here.push(
+          problem(
+            naming.row(index),
+            `must be an object with ${naming.indicator}, ${naming.period} and ${naming.value}`,
+          ),
+        );
       } else {
         const row = raw as Record<string, unknown>;
         for (const key of Object.keys(row))
-          if (!KNOWN_KEYS.has(key))
+          if (!known.has(key))
             here.push(problem(at(key.slice(0, 64)), 'is not a field of a measurement'));
 
         // The indicator.
         let indicatorId: string | undefined;
-        if (typeof row.indicator !== 'string' || !uuidPattern.test(row.indicator))
-          here.push(problem(at('indicator'), 'must be the id of an indicator'));
-        else if (!allowed.has(row.indicator) || !bounds.has(row.indicator))
-          here.push(problem(at('indicator'), 'is not one of the KPIs of this service'));
-        else indicatorId = row.indicator;
+        const found = naming.resolve(choices, row[naming.indicator]);
+        if (!found.ok) here.push(problem(at(naming.indicator), found.problem));
+        else indicatorId = found.indicatorId;
 
         // The period.
-        const period = normalisePeriod(row.period, now);
-        if (!period.ok) here.push(problem(at('period'), period.problem));
+        const period = normalisePeriod(row[naming.period], now);
+        if (!period.ok) here.push(problem(at(naming.period), period.problem));
 
         // The value, by the type and the bounds of its indicator.
         let columns: ValueColumns | undefined;
-        if (!('value' in row) || row.value === undefined)
-          here.push(problem(at('value'), 'is required'));
+        const given = row[naming.value];
+        if (!(naming.value in row) || given === undefined)
+          here.push(problem(at(naming.value), 'is required'));
         else if (indicatorId !== undefined) {
           const indicator = allowed.get(indicatorId)!;
           const type = deps.kpi.findValueType(indicator.valueType);
           if (!type)
             here.push(
               problem(
-                at('value'),
+                at(naming.value),
                 'cannot be checked: the value type of this indicator is not available',
               ),
             );
           else {
-            const parsed = type.schema(bounds.get(indicatorId)).safeParse(row.value);
+            const parsed = type.schema({ min: indicator.min, max: indicator.max }).safeParse(given);
             if (!parsed.success)
               here.push(
-                problem(at('value'), parsed.error.issues[0]?.message ?? 'is not a valid value'),
+                problem(
+                  at(naming.value),
+                  parsed.error.issues[0]?.message ?? 'is not a valid value',
+                ),
               );
             else {
               const mapped = toColumns(type.numeric, parsed.data);
               if (mapped.ok) columns = mapped.value;
-              else here.push(problem(at('value'), mapped.problem));
+              else here.push(problem(at(naming.value), mapped.problem));
             }
           }
         }
@@ -212,8 +259,8 @@ export function createMeasurementsService(
           if (earlier !== undefined)
             here.push(
               problem(
-                at('period'),
-                `repeats rows[${earlier}]: the same indicator and month twice in one batch`,
+                at(naming.period),
+                `repeats ${naming.row(earlier)}: the same indicator and month twice in one batch`,
               ),
             );
           else {
@@ -271,132 +318,176 @@ export function createMeasurementsService(
     return verdicts;
   }
 
+  /**
+   * The checks that come before anything about the batch: the scoped permission first (an anonymous caller is 401 and anyone who
+   * may not submit is 403, whether or not the service exists: the answer must not tell a stranger which ids are services; Admin
+   * passes and learns 404 below), then that the service exists.
+   */
+  async function guard(actor: Actor, serviceId: string): Promise<void> {
+    await deps.authz.require(actor, PERMISSION_SUBMIT, { type: RESOURCE_SERVICE, id: serviceId });
+    if (!uuidPattern.test(serviceId))
+      throw new Invalid('The request is not valid.', [
+        problem('service', 'must be the id of a service'),
+      ]);
+    if (!(await deps.services.existsAsSystem(serviceId)))
+      throw new NotFound('There is no such service.');
+  }
+
+  /** The batch itself, after `guard`: its shape, every row, then the write (or the verdicts of a dry run). */
+  async function run(
+    actor: Actor,
+    serviceId: string,
+    rows: readonly unknown[],
+    options: UpsertOptions,
+    naming: Naming,
+  ): Promise<UpsertResult> {
+    const parameter: FieldProblem[] = [];
+    if (typeof options?.source !== 'string' || !sourcePattern.test(options.source))
+      parameter.push(
+        problem('source', 'must be an adapter id of lower-case letters, digits and "-"'),
+      );
+    if (
+      options?.runId != null &&
+      (typeof options.runId !== 'string' || !uuidPattern.test(options.runId))
+    )
+      parameter.push(problem('runId', 'must be the id of a run'));
+    if (!Array.isArray(rows))
+      parameter.push(problem(naming.whole, 'must be a list of measurements'));
+    else if (rows.length === 0)
+      parameter.push(problem(naming.whole, 'must hold at least one measurement'));
+    else if (rows.length > MAX_BATCH_ROWS)
+      parameter.push(problem(naming.whole, `must hold at most ${MAX_BATCH_ROWS} measurements`));
+    if (parameter.length > 0) throw fail(parameter);
+
+    const { problems, results, good, months } = await check(serviceId, rows, naming);
+    if (months.size > MAX_BATCH_MONTHS)
+      throw fail([
+        problem(naming.whole, `must cover at most ${MAX_BATCH_MONTHS} months; split the batch`),
+      ]);
+
+    const dryRun = options.dryRun === true;
+    if (problems.length > 0 && !dryRun) throw fail(problems);
+
+    if (dryRun) {
+      const verdicts = await classify(serviceId, good);
+      for (const result of results)
+        if (result.verdict !== 'reject') result.verdict = verdicts.get(result.index)!;
+      return tally(results);
+    }
+
+    // Rows go in one order whatever the batch's, so two batches for the same service never wait for each other in a circle.
+    const ordered = [...good].sort(
+      (a, b) => a.indicatorId.localeCompare(b.indicatorId) || a.period.localeCompare(b.period),
+    );
+    const by = actorId(actor);
+    try {
+      return await db.tx(async (tx) => {
+        const written = new Map<string, boolean>();
+        for (let from = 0; from < ordered.length; from += CHUNK) {
+          const chunk = ordered.slice(from, from + CHUNK);
+          const returned = await tx
+            .insert(measurement)
+            .values(
+              chunk.map((row) => ({
+                id: ids.uuidv7(),
+                serviceId,
+                indicatorId: row.indicatorId,
+                period: row.period,
+                valueNumeric: row.columns.valueNumeric,
+                valueText: row.columns.valueText,
+                source: options.source,
+                runId: options.runId ?? null,
+                createdBy: by,
+                updatedBy: by,
+              })),
+            )
+            .onConflictDoUpdate({
+              target: [measurement.serviceId, measurement.indicatorId, measurement.period],
+              set: {
+                valueNumeric: sql`excluded.value_numeric`,
+                valueText: sql`excluded.value_text`,
+                source: sql`excluded.source`,
+                runId: sql`excluded.run_id`,
+                updatedAt: sql`now()`,
+                updatedBy: sql`excluded.updated_by`,
+              },
+              // The same value again changes nothing: no write, no new `updated_at`, and the row is not returned.
+              setWhere: sql`(${measurement.valueNumeric}, ${measurement.valueText}) is distinct from (excluded.value_numeric, excluded.value_text)`,
+            })
+            .returning({
+              indicatorId: measurement.indicatorId,
+              period: measurement.period,
+              // `xmax` is 0 on a row this statement inserted and not on one it updated.
+              inserted: sql<boolean>`(xmax = 0)`,
+            });
+          for (const row of returned) written.set(keyOf(row.indicatorId, row.period), row.inserted);
+        }
+        for (const row of good) {
+          const state = written.get(keyOf(row.indicatorId, row.period));
+          results[row.index]!.verdict =
+            state === undefined ? 'unchanged' : state ? 'insert' : 'update';
+        }
+        const summary = tally(results);
+        if (summary.inserted + summary.updated > 0) {
+          const changed = new Set(
+            good
+              .filter((row) => results[row.index]!.verdict !== 'unchanged')
+              .map((row) => row.period),
+          );
+          await ctx.events.emit('measurement.recorded@1', {
+            serviceId,
+            runId: options.runId ?? null,
+            periods: [...changed].sort(),
+            inserted: summary.inserted,
+            updated: summary.updated,
+            actorId: by,
+          });
+        }
+        return summary;
+      });
+    } catch (error) {
+      const key = foreignKeyViolation(error);
+      if (key === undefined) throw error;
+      // The run does not exist; or an indicator was deleted after its KPI set was read (the key `restrict`s the other way).
+      if (key.includes('run_id'))
+        throw new Invalid('The request is not valid.', [
+          problem('runId', 'is not a run that exists'),
+        ]);
+      throw new Conflict('An indicator was deleted meanwhile; nothing was recorded, try again.');
+    }
+  }
+
   return {
     async upsertBatch(actor, serviceId, rows, options) {
-      // The scoped permission first: an anonymous caller is 401 and anyone who may not submit is 403, whether or not the
-      // service exists (the answer must not tell a stranger which ids are services). Admin passes and learns 404 below.
-      await deps.authz.require(actor, PERMISSION_SUBMIT, { type: RESOURCE_SERVICE, id: serviceId });
-      if (!uuidPattern.test(serviceId))
-        throw new Invalid('The request is not valid.', [
-          problem('service', 'must be the id of a service'),
-        ]);
-      if (!(await deps.services.existsAsSystem(serviceId)))
-        throw new NotFound('There is no such service.');
+      await guard(actor, serviceId);
+      return run(actor, serviceId, rows, options, BY_ID);
+    },
 
-      const parameter: FieldProblem[] = [];
-      if (typeof options?.source !== 'string' || !sourcePattern.test(options.source))
-        parameter.push(
-          problem('source', 'must be an adapter id of lower-case letters, digits and "-"'),
-        );
-      if (
-        options?.runId != null &&
-        (typeof options.runId !== 'string' || !uuidPattern.test(options.runId))
-      )
-        parameter.push(problem('runId', 'must be the id of a run'));
-      if (!Array.isArray(rows)) parameter.push(problem('rows', 'must be a list of measurements'));
-      else if (rows.length === 0)
-        parameter.push(problem('rows', 'must hold at least one measurement'));
-      else if (rows.length > MAX_BATCH_ROWS)
-        parameter.push(problem('rows', `must hold at most ${MAX_BATCH_ROWS} measurements`));
-      if (parameter.length > 0) throw fail(parameter);
-
-      const { problems, results, good, months } = await check(actor, serviceId, rows);
-      if (months.size > MAX_BATCH_MONTHS)
-        throw fail([
-          problem('rows', `must cover at most ${MAX_BATCH_MONTHS} months; split the batch`),
-        ]);
-
-      const dryRun = options.dryRun === true;
-      if (problems.length > 0 && !dryRun) throw fail(problems);
-
-      if (dryRun) {
-        const verdicts = await classify(serviceId, good);
-        for (const result of results)
-          if (result.verdict !== 'reject') result.verdict = verdicts.get(result.index)!;
-        return tally(results);
-      }
-
-      // Rows go in one order whatever the batch's, so two batches for the same service never wait for each other in a circle.
-      const ordered = [...good].sort(
-        (a, b) => a.indicatorId.localeCompare(b.indicatorId) || a.period.localeCompare(b.period),
+    async upsertByName(actor, service, items) {
+      // The plain scope of the route first, then the service: an abbreviation cannot be authorised before it is a service. A
+      // service is readable by every signed-in person (ADR-0036), so naming an unknown one discloses nothing.
+      await deps.authz.require(actor, PERMISSION_V1_WRITE);
+      const found = await resolveServiceRef(
+        deps.services,
+        typeof service === 'string' ? service : '',
       );
-      const by = actorId(actor);
-      try {
-        return await db.tx(async (tx) => {
-          const written = new Map<string, boolean>();
-          for (let from = 0; from < ordered.length; from += CHUNK) {
-            const chunk = ordered.slice(from, from + CHUNK);
-            const returned = await tx
-              .insert(measurement)
-              .values(
-                chunk.map((row) => ({
-                  id: ids.uuidv7(),
-                  serviceId,
-                  indicatorId: row.indicatorId,
-                  period: row.period,
-                  valueNumeric: row.columns.valueNumeric,
-                  valueText: row.columns.valueText,
-                  source: options.source,
-                  runId: options.runId ?? null,
-                  createdBy: by,
-                  updatedBy: by,
-                })),
-              )
-              .onConflictDoUpdate({
-                target: [measurement.serviceId, measurement.indicatorId, measurement.period],
-                set: {
-                  valueNumeric: sql`excluded.value_numeric`,
-                  valueText: sql`excluded.value_text`,
-                  source: sql`excluded.source`,
-                  runId: sql`excluded.run_id`,
-                  updatedAt: sql`now()`,
-                  updatedBy: sql`excluded.updated_by`,
-                },
-                // The same value again changes nothing: no write, no new `updated_at`, and the row is not returned.
-                setWhere: sql`(${measurement.valueNumeric}, ${measurement.valueText}) is distinct from (excluded.value_numeric, excluded.value_text)`,
-              })
-              .returning({
-                indicatorId: measurement.indicatorId,
-                period: measurement.period,
-                // `xmax` is 0 on a row this statement inserted and not on one it updated.
-                inserted: sql<boolean>`(xmax = 0)`,
-              });
-            for (const row of returned)
-              written.set(keyOf(row.indicatorId, row.period), row.inserted);
-          }
-          for (const row of good) {
-            const state = written.get(keyOf(row.indicatorId, row.period));
-            results[row.index]!.verdict =
-              state === undefined ? 'unchanged' : state ? 'insert' : 'update';
-          }
-          const summary = tally(results);
-          if (summary.inserted + summary.updated > 0) {
-            const changed = new Set(
-              good
-                .filter((row) => results[row.index]!.verdict !== 'unchanged')
-                .map((row) => row.period),
-            );
-            await ctx.events.emit('measurement.recorded@1', {
-              serviceId,
-              runId: options.runId ?? null,
-              periods: [...changed].sort(),
-              inserted: summary.inserted,
-              updated: summary.updated,
-              actorId: by,
-            });
-          }
-          return summary;
-        });
-      } catch (error) {
-        const key = foreignKeyViolation(error);
-        if (key === undefined) throw error;
-        // The run does not exist; or an indicator was deleted after its KPI set was read (the key `restrict`s the other way).
-        if (key.includes('run_id'))
-          throw new Invalid('The request is not valid.', [
-            problem('runId', 'is not a run that exists'),
-          ]);
-        throw new Conflict('An indicator was deleted meanwhile; nothing was recorded, try again.');
-      }
+      if (!found)
+        throw new Invalid('The request is not valid.', [
+          {
+            in: 'query',
+            path: 'service',
+            message: 'must be the id or the abbreviation of a service',
+          },
+        ]);
+      await guard(actor, found.id);
+      const { inserted, updated, unchanged, rejected } = await run(
+        actor,
+        found.id,
+        items,
+        { source: 'api' },
+        LEGACY,
+      );
+      return { inserted, updated, unchanged, rejected };
     },
   };
 }
