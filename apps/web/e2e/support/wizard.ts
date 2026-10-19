@@ -8,7 +8,7 @@ export async function openWizard(page: Page, at: (path: string) => string): Prom
   await page.goto(at('/services'));
   await page.getByRole('link', { name: 'New service' }).click();
   await expect(page).toHaveURL(at('/services/new'));
-  await expect(page.getByRole('heading', { name: 'Step 1 of 3: Basics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
 }
 
 /** The two fields the first step needs; the rest stays as the page starts it. */
