@@ -103,7 +103,10 @@ export async function callFromReference(
   const status = dialog.getByText(`${code} `).first();
   await expect(status).toBeVisible();
   const line = await status.innerText();
-  const body = await dialog.locator('.cm-content').last().innerText();
+  // A JSON answer is drawn in the code viewer; a plain-text one (Turtle) may not be, so fall back to the dialog's text.
+  const viewer = dialog.locator('.cm-content');
+  const body =
+    (await viewer.count()) > 0 ? await viewer.last().innerText() : await dialog.innerText();
   await page.getByRole('button', { name: 'Close Client' }).click();
   return { status: line, body };
 }

@@ -141,7 +141,7 @@ describe('what the RDF reads never say', () => {
   it('has no service, person, token, contact or value in any of the four answers, on a database full of them [ASVS-8.3.1]', async () => {
     const s = await app.start({ kpi: true, publicApi: true });
     const pool = s.kernel.pool;
-    const { a, b, set } = await world(s);
+    const { b, set } = await world(s);
     const mark = 'leakmark7731';
     const owner = await s.signedIn(`${mark}owner`, { email: `${mark}@secret.example.org` });
     const provider = await makeOrganisation(pool, {
@@ -203,7 +203,7 @@ describe('what the RDF reads never say', () => {
 
 describe('who is refused on the token-bearing reads', () => {
   it.each(V1)(
-    '%s: no credentials 401, a made-up token 401, a token of another scope 403, as problem+json',
+    '%s: no credentials 401, a made-up token 401, a token of another scope 403, as problem+json [ASVS-7.2.1]',
     async (path) => {
       const s = await app.start({ kpi: true, publicApi: true });
       const who = await s.signedIn('rdf-denied');

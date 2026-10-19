@@ -1,7 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import http from 'node:http';
 import {
   admin,
+  createUser,
   expect,
+  person,
   productName,
   saveSettings,
   signIn,
@@ -124,6 +127,49 @@ test.describe('the shell', () => {
       await page.getByRole('button', { name: 'Expand the sidebar' }).click();
       await page.getByRole('button', { name: 'System' }).click();
     }
+  });
+
+  test('the KPI entries are in the Administration section of an Admin, under the base path, and not in anyone else’s navigation', async ({
+    page,
+    request,
+    browser,
+    baseURL,
+    at,
+  }) => {
+    await signInThroughPage(page, at, admin);
+    await page.goto(at('/'));
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    await expect(nav.getByText('Administration')).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Indicators', exact: true })).toHaveAttribute(
+      'href',
+      at('/kpi/indicators'),
+    );
+    await expect(nav.getByRole('link', { name: 'KPI sets', exact: true })).toHaveAttribute(
+      'href',
+      at('/kpi/sets'),
+    );
+    await nav.getByRole('link', { name: 'KPI sets', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${at('/kpi/sets')}$`));
+    await expect(page.getByRole('heading', { name: 'KPI sets', level: 1 })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'KPI sets', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    // A person without the administrator's permissions is shown neither link, and the page refuses them.
+    const who = person(`shellkpi${randomBytes(3).toString('hex')}`);
+    await createUser(request, at, who);
+    const context = await browser.newContext({ baseURL });
+    const other = await context.newPage();
+    await signInThroughPage(other, at, who);
+    await other.goto(at('/'));
+    const theirs = other.getByRole('navigation', { name: 'Main navigation' });
+    await expect(theirs.getByRole('link', { name: 'Home' })).toBeVisible();
+    await expect(theirs.getByRole('link', { name: 'Indicators', exact: true })).toHaveCount(0);
+    await expect(theirs.getByRole('link', { name: 'KPI sets', exact: true })).toHaveCount(0);
+    await other.goto(at('/kpi/sets'));
+    await expect(other.getByRole('heading', { name: 'KPI sets', level: 1 })).toHaveCount(0);
+    await context.close();
   });
 
   test('an unknown path is the error page with 404 and a way home under the base path', async ({

@@ -157,3 +157,47 @@ catalogue is `?kpi-set=<id>`.
 **Consequences.** The wizard of the `full` profile has four steps (the KPIs are last) and its end-to-end tests changed with it. The service
 page makes one call more (`GET /kpi/services/{id}/kpis`) and the wizard none until a set is chosen; the numbers are measured in sprint 4.
 A profile without `kpi.framework` has the wizard and the page it had.
+
+## Addendum (M9 sprint 4): the RDF reads, and a parser for the tests
+
+Sprint 4 writes the RDF. Seven decisions, each recorded because it departs from the text above or from the plan.
+
+1. **Two dev dependencies, for the tests only.** Section 5 above said that no parser joins the repository's dependencies, "not even for tests", and that
+   the round-trip tests would check structure and escaping with fixtures. The sprint's task replaced that with a requirement of the maintainer: round-trip the hostile names
+   through a real parser. `n3` (Turtle and N-Quads) and `jsonld` (JSON-LD to N-Quads), with their `@types`, are **devDependencies of
+   `@scorpion/kpi-framework`**: no runtime dependency changed, nothing imports them outside `*.test.ts`, and the image does not contain them. They
+   already found a defect (an IRI such as `https:///a`, which the WHATWG parser repairs and the writer would have written as it is; `assertIri` now
+   checks the text, not the parsed URL). The decision of section 5 against a _runtime_ parser stands (nothing reads RDF at run time).
+2. **One graph, two renderers.** Turtle and JSON-LD are rendered from one list of nodes (`graphOf`), so the two formats carry the same triples by
+   construction, and a test compares them with the two parsers. The model has no field for a service, a person or a measurement; the public
+   pair cannot say one, whatever a later change does to a query.
+3. **A set that maps to a RIMO category is that category.** The plan's wording ("the RIMO IRI when mapped") makes the category node the RIMO one. The
+   consequences are written down: two sets that map to the same category merge, an indicator keeps the strongest relation (mandatory, recommended,
+   then `appliedTo`) so that it never asserts both, and the name of a mapped set is not in the export (RIMO defines the words of its own
+   categories; this instance does not redefine them). The v1 `categories` read keeps the set names.
+4. **The `rimo:KPIValue` node also names the unit this instance minted** (`scorpion:unit`). Several seeded units share the UO term `count unit`
+   (section 4); `rimo:hasUnit` gives the UO term, `scorpion:unit` keeps `request`, `user`, `publication` and `citation` apart. The minted unit node
+   carries `skos:closeMatch` to the UO term. The value node also carries the value type and the bounds (`xsd:decimal`), because the §3 table lists
+   them as part of what an indicator's value is.
+5. **The public pair is on the internal surface**, at `/public/kpi/rimo.ttl` and `.jsonld` like `/public/services/{ref}`, not under
+   `/api/v1`: v1 never has a public route except the specification (ADR-0037), and a public read does not belong to the versioned contract. So the
+   two public routes are **not in the v1 document** and are not listed on the landing page `/docs`, which draws that document; the
+   description of the v1 pair names them, the README and `docs/security/authorization.md` list them, and the table of every route (generated) has
+   them as `public`. A query string is 422 on all four routes, so junk parameters cannot fragment a shared cache. The `max-age` is 300 seconds (a
+   definition changes rarely, unlike the unpublish of a service, whose 60 seconds the public service reads use); the ETag is strong, the hash of
+   the bytes, and `If-None-Match` in any usual form (strong, weak, a list, `*`) gets 304.
+6. **No switch for the public pair.** The public service reads can be switched off (`service.allowPublic`); the public KPI pair cannot. The
+   definitions are the shared vocabulary of an instance and hold nothing about who runs what, so the plan did not ask for one; an operator who
+   wants none removes `kpi.framework` from the profile. Backlog: a setting, if an instance asks.
+
+7. **IRIs of deleted indicators are not reserved.** The sprint 2 backlog asked for a decision before the reads were public. An indicator or a set
+   that something uses cannot be deleted (409), and the slug of a deleted row is free again, so a later indicator of the same name gets the same
+   IRI. A tombstone table that reserves every slug ever published would be the only complete answer; it adds a table, a rule on every create and a
+   way to release a slug, for a case (delete an unused indicator that was published, then create another one with the same name and a different
+   meaning) that an administrator can avoid by renaming. So M9 documents the rule (the README of the module and the backlog) and does not build the
+   reservation. If a consumer ever stores these IRIs as keys, the reservation is the first thing to add.
+
+**Consequences.** The writer is about 370 lines and its tests are the safety argument; a new RIMO shape or a new field of the model is a visible
+change to one file. The model builder reads in one read-only repeatable-read transaction, so a concurrent edit never gives a category that
+an indicator list lacks. M10 reuses the `rimo:KPIValue` node: its measurements per period become triples on that node (or on nodes that point to
+it) and stay out of the shared model, so the public pair keeps saying definitions only.
