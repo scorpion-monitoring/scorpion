@@ -115,3 +115,45 @@ the prototype's result is recorded here).
 - Units and the RIMO category IRI live in code and in the seed, not on the vocabulary term; an administrator's own unit has no IRI of its
   own. Metadata on vocabulary terms is a backlog item.
 - A later RIMO version is an ordinary change with a visible diff; it is not adopted by accident.
+
+## Addendum (M9 sprint 3): how a module takes part in the service wizard and the service page
+
+Sprint 3 links a service to its KPI set and has to put a wizard step, a field and a section into pages that `registry.services` owns, from a
+module it does not depend on. Four decisions, each the smallest change that works and each additive:
+
+1. **The fourth export of a `ui` entry: `wizardExtensions: { widgets, applies, sections }`.** The shell forwards it once per process
+   (`apps/web/src/lib/wizard-extensions.ts`, called from the root layout; the generated `ui.ts` reads it with `wizardExtensionsOf(entry)`,
+   so a module without one is `undefined`) to a registry in **`@scorpion/ui-kit`** (`wizard-extensions.ts`), and the pages of
+   `registry.services` read it back (`registerFieldWidget`, `registerStepApplies`, `registerServiceSection` live there; the file in
+   `registry.services/ui` re-exports them). The registry is in the kit, not in `registry.services`, because the shell would otherwise import a
+   module that a profile (`core-only`) leaves out. `sections` is the one addition to the plan's `{ widgets, applies }`: the service page had
+   no extension point, and a section is a component like a widget, forwarded the same way. A fixture of a page test uses the same forwarding.
+2. **The storage `module` and a `store` function on the field type.** The plan said the wizard value lands through the field type "so the
+   existing create transaction writes it" and, in the same sprint, that the link lives in this module's own tables (Decision 6), not in
+   `svc_field_value`. Both hold only if the create transaction can call the module. A field with `storage: { kind: 'module' }` has a type with
+   `store(tx, { serviceId, value, config, actorId })`, which `create` calls after the service row and before its event; a failure of any
+   part (a KPI table, the event) takes the service back. A patch of such a field is 422: the module has its own route. The plan also said the
+   module _consumes_ `registry.service.created@1`; the outbox delivers after the commit, so that could not be one transaction and it is not
+   used. Nothing about validation changed beyond the field config: `check` still answers on the field, and `body.ts` skips what the form hides.
+3. **`showIf` on a field and on a contributed step**, `{ path, equals }` or `{ path, oneOf }`, a deep comparison on the form as sent. The
+   server asks it (`service/body.ts`): a hidden field is not required and its value is dropped. The browser asks the same question of the same
+   data. A step's JSON Schema leaves a field with a condition out of `required` (the browser is looser than the server there, the allowed
+   direction). The start refuses a condition that asks about a pointer no field has. `applies` stays a browser-only function. This closes the
+   two backlog items "a step that `applies` hides cannot have a required field" and "field-level conditions".
+4. **A facet may add a field to the v1 service row.** `v1: { field: 'category', valuesOf, keysOf }` on a `service.facet` entry adds
+   `category` to the rows of `GET /api/v1/services` and a `category` filter (names, without case). `field` is an allow-list with one value,
+   so a module cannot add an arbitrary key to a public row. Without such a facet `category` is `null` and the filter is 422. The change to
+   the v1 document is additive (the diff job checks it).
+
+A fifth, small one: **`isProviderManagerAsSystem(userId, serviceId)`** on `registry.services/public` answers the question that the policy
+`service.member` (ADR-0036) answers for `service.edit-identity` (an approved manager of the provider), so `kpi.framework` can contribute its own `authz.resourcePolicy` entry for
+`kpi.framework.service.kpis.edit` (scope `service`) without a second copy of the rule. The policy still decides at every call and caches
+nothing; a removal is seen at the next one.
+
+**Names.** The event is `kpi.serviceSet.changed@1`, not the `kpi.service-set.changed@1` of the plan: the kernel's event names are
+camel-case segments (`registry.service.slugChanged@1`) and refuse a hyphen. The facet and the field type are `kpi-set`; the filter of the
+catalogue is `?kpi-set=<id>`.
+
+**Consequences.** The wizard of the `full` profile has four steps (the KPIs are last) and its end-to-end tests changed with it. The service
+page makes one call more (`GET /kpi/services/{id}/kpis`) and the wizard none until a set is chosen; the numbers are measured in sprint 4.
+A profile without `kpi.framework` has the wizard and the page it had.

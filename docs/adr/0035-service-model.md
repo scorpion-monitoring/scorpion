@@ -175,3 +175,10 @@ registered on the server and listed in `NOT_OFFERED`; the catalogue links to the
   M7 plan); the pointers of the fields are absolute today.
 - **The choice fields** carry their options: a field type's optional `choices(config, env)` returns them, so the page has no `if (type === 'select')`
   and a contributed choice type needs no change here.
+
+## Addendum (M9 sprint 3): the storage `module`, `showIf` and a v1 field
+
+`service.fieldType` gains an optional `store(tx, change)` and the storage kind `module` (the field's type writes the value itself, inside the
+create transaction); `service.wizardStep` and a field gain the serialisable `showIf`; `service.facet` gains an optional
+`v1: { field: 'category', valuesOf, keysOf }`. All are additive and none changes what an existing entry means. The reasons and the rules are in
+the addendum of [ADR-0040](0040-indicators-follow-rimo.md).
