@@ -19,6 +19,9 @@ export const PUBLIC_RDF_CACHE_CONTROL = `public, max-age=${PUBLIC_RDF_MAX_AGE_SE
 const PUBLIC_REASON =
   'The definitions of the indicators and KPI sets are the shared vocabulary of the instance (the same words as RIMO), meant to be read by other systems and by people who have no account. The answer has no value, no service, no person and no token: the model it is written from has no field for any of them.';
 
+/** The reads take no parameter: a query string is 422, so a shared cache is not fragmented by junk parameters. */
+const noQuery = z.strictObject({});
+
 const turtleSchema = z.string().describe('Turtle (`text/turtle`), UTF-8.');
 const jsonLdSchema = z
   .object({
@@ -39,6 +42,7 @@ export const getRimoTurtleV1Route = createRoute({
   audit: true,
   summary: 'Read the indicators and KPI sets as RDF (Turtle)',
   description: V1_DESCRIPTION('Turtle'),
+  request: { query: noQuery },
   responses: {
     200: {
       description: 'The model as Turtle.',
@@ -54,6 +58,7 @@ export const getRimoJsonLdV1Route = createRoute({
   audit: true,
   summary: 'Read the indicators and KPI sets as RDF (JSON-LD)',
   description: V1_DESCRIPTION('JSON-LD'),
+  request: { query: noQuery },
   responses: {
     200: {
       description: 'The model as JSON-LD.',
@@ -76,6 +81,7 @@ export const getPublicRimoTurtleRoute = createRoute({
   publicReason: PUBLIC_REASON,
   summary: 'Read the KPI definitions as RDF (Turtle), public',
   description: PUBLIC_DESCRIPTION('Turtle'),
+  request: { query: noQuery },
   responses: {
     200: {
       description: 'The definitions as Turtle.',
@@ -92,6 +98,7 @@ export const getPublicRimoJsonLdRoute = createRoute({
   publicReason: PUBLIC_REASON,
   summary: 'Read the KPI definitions as RDF (JSON-LD), public',
   description: PUBLIC_DESCRIPTION('JSON-LD'),
+  request: { query: noQuery },
   responses: {
     200: {
       description: 'The definitions as JSON-LD.',

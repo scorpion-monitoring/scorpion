@@ -1756,6 +1756,167 @@
         ]
       }
     },
+    "/kpi/rimo.ttl": {
+      "get": {
+        "permission": "kpi.framework.v1.read",
+        "audit": true,
+        "summary": "Read the indicators and KPI sets as RDF (Turtle)",
+        "description": "The indicators and KPI sets as RDF (Turtle) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /public/kpi/rimo.ttl` and `/public/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "responses": {
+          "200": {
+            "description": "The model as Turtle.",
+            "content": {
+              "text/turtle": {
+                "schema": {
+                  "type": "string",
+                  "description": "Turtle (`text/turtle`), UTF-8."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "kpi.framework.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/kpi/rimo.jsonld": {
+      "get": {
+        "permission": "kpi.framework.v1.read",
+        "audit": true,
+        "summary": "Read the indicators and KPI sets as RDF (JSON-LD)",
+        "description": "The indicators and KPI sets as RDF (JSON-LD) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /public/kpi/rimo.ttl` and `/public/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "responses": {
+          "200": {
+            "description": "The model as JSON-LD.",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "@context": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "The prefixes of the document."
+                    },
+                    "@graph": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "description": "The nodes, in a fixed order."
+                    }
+                  },
+                  "required": [
+                    "@context",
+                    "@graph"
+                  ],
+                  "description": "JSON-LD (`application/ld+json`), UTF-8: a flat `@graph` and the `@context` of its prefixes."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "kpi.framework.v1.read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/openapi.json": {
       "get": {
         "public": true,
