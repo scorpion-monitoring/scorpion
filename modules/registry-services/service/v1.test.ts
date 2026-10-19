@@ -5,7 +5,7 @@ import { Forbidden, Invalid, NotFound, Unauthorized } from '@scorpion/contracts'
 import { makeOrganisation, makeService } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { useServices } from '../test/harness.ts';
-import { anonymous, uniq } from '../test/world.ts';
+import { anonymous, rejection, uniq } from '../test/world.ts';
 
 const h = useServices();
 const PAGE = { page: 0, pageSize: 100 };
@@ -56,6 +56,16 @@ async function world() {
 }
 
 describe('listV1', () => {
+  it('has a `category` of null and no `category` filter when no module adds one (a profile without KPI sets)', async () => {
+    const { services, user, zero } = await world();
+    const { services: rows } = await services.listV1(user, {}, PAGE);
+    expect(rows.every((row) => row.category === null)).toBe(true);
+    const error = await rejection(services.listV1(user, { category: ['Any set'] }, PAGE));
+    expect(error).toBeInstanceOf(Invalid);
+    expect(error.errors?.[0]).toMatchObject({ in: 'query', path: 'category' });
+    expect((await services.getV1(user, zero.id)).category).toBeNull();
+  });
+
   it('answers a list of zero, then one row per service with zero, one and two consortia, by slug without case and then id', async () => {
     const empty = await h.start();
     const reader = await empty.actor('user');
@@ -106,6 +116,7 @@ describe('listV1', () => {
       expect(Object.keys(row).sort()).toEqual(
         [
           'abbreviation',
+          'category',
           'consortia',
           'consortiaIds',
           'id',
@@ -221,6 +232,7 @@ describe('getV1', () => {
     expect(Object.keys(record).sort()).toEqual(
       [
         'abbreviation',
+        'category',
         'consortia',
         'consortiaIds',
         'description',
@@ -235,7 +247,7 @@ describe('getV1', () => {
         'url',
       ].sort(),
     );
-    expect(JSON.stringify(record)).not.toMatch(/secret@|support|iconUrl|values|category/);
+    expect(JSON.stringify(record)).not.toMatch(/secret@|support|iconUrl|values|\["x"\]/);
   });
 
   it('is NotFound for an unknown id, Invalid for one that is no UUID, and denied without the permission', async () => {

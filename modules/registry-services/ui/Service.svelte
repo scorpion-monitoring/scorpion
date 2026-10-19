@@ -15,6 +15,7 @@
     failureOf,
     getShell,
     JsonLd,
+    serviceSections,
   } from '@scorpion/ui-kit';
   import { tick } from 'svelte';
   import type { ServiceData } from './loaders.ts';
@@ -22,6 +23,9 @@
 
   let { data }: { data: ServiceData } = $props();
   const { t, api, href, goto, refresh, toaster } = getShell();
+
+  // The sections other modules contribute (a module's `ui` entry, forwarded by the shell): each loads its own data.
+  const sections = serviceSections();
 
   const service = $derived(data.service);
   const fields = $derived(data.schema.steps.flatMap((step) => step.fields));
@@ -268,6 +272,9 @@
         </dd>
       {/if}
     </dl>
+    {#each sections as [name, Section] (name)}
+      <Section service={{ id: service.id, slug: service.slug, name: service.name }} />
+    {/each}
   {/if}
 </div>
 

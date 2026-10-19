@@ -6,7 +6,7 @@
 import { checkJsonSchema, type SchemaIssue } from '@scorpion/ui-kit/json-schema';
 import { failureMessage, type FormFailure } from '@scorpion/ui-kit/forms';
 import { errorsByPointer, sameJson } from '@scorpion/ui-kit/schema-form';
-import type { WizardField, WizardSchema, WizardStep } from './wizard-types.ts';
+import type { WizardField, WizardSchema, WizardShowIf, WizardStep } from './wizard-types.ts';
 
 type Tree = Record<string, unknown>;
 
@@ -181,13 +181,43 @@ export function firstStepWithError(
   return steps.find((step) => wanted.has(step.id))?.id;
 }
 
-/** The steps shown for this form state: a step is hidden only when its `applies` says so. */
+/** Whether a condition of the server (`showIf`) holds for the form; no condition always holds. The server asks the same. */
+export function showIfHolds(condition: WizardShowIf | undefined, form: Tree): boolean {
+  if (!condition) return true;
+  const value = getAt(form, condition.path);
+  return condition.oneOf !== undefined
+    ? condition.oneOf.some((option) => sameJson(option, value))
+    : sameJson(condition.equals, value);
+}
+
+/** The steps shown for this form state: hidden when `applies` says so or when the step's own `showIf` fails. */
 export function visibleSteps(
   steps: readonly WizardStep[],
   form: Tree,
   applies: Readonly<Record<string, ((form: Tree) => boolean) | undefined>>,
 ): WizardStep[] {
-  return steps.filter((step) => applies[step.id]?.(form) !== false);
+  return steps.filter(
+    (step) => applies[step.id]?.(form) !== false && showIfHolds(step.showIf, form),
+  );
+}
+
+/** Whether a field of a shown step is itself shown. */
+export const fieldShown = (field: WizardField, form: Tree): boolean =>
+  showIfHolds(field.showIf, form);
+
+/**
+ * The body without the fields the form hides (a hidden field, or a field of a hidden step): they are not sent and
+ * not checked, as the server drops them. `hidden` lists the pointers.
+ */
+export function withoutHidden(body: Tree, schema: Pick<WizardSchema, 'steps'>, form: Tree): Tree {
+  const out = structuredClone<Tree>(body);
+  for (const step of schema.steps) {
+    const stepHidden = !showIfHolds(step.showIf, form);
+    for (const field of step.fields)
+      if (stepHidden || !fieldShown(field, form)) setAt(out, field.path, undefined);
+  }
+  pruneEmpty(out);
+  return out;
 }
 
 // ----- the errors on the fields -----------------------------------------------------------------------------

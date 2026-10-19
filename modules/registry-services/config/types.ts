@@ -3,7 +3,12 @@
 // (`validate.ts`) checks them again at start, so a file that bypasses the types (a cast, a generated file)
 // still cannot start the server with a broken wizard.
 import { z } from '@scorpion/contracts';
-import { fieldConfigSchema, messageKey, type FieldConfig } from '../service/registries.ts';
+import {
+  fieldConfigSchema,
+  messageKey,
+  showIfSchema,
+  type FieldConfig,
+} from '../service/registries.ts';
 
 export type { FieldConfig };
 export { fieldConfigSchema };
@@ -23,6 +28,8 @@ export const stepConfigSchema = z.strictObject({
   fields: z.array(z.string().min(1).max(64)).max(50).optional(),
   /** The name of a UI component for a step that is not a list of fields. */
   component: z.string().min(1).max(64).optional(),
+  /** Shown only when the condition holds (ADR-0040 addendum); the fields of a hidden step are not required. */
+  showIf: showIfSchema.optional(),
 });
 export type StepConfig = z.output<typeof stepConfigSchema>;
 

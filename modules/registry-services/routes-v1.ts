@@ -53,6 +53,12 @@ export const serviceV1Schema = z.object({
   consortiaIds: z
     .array(z.string())
     .describe('The ids of the consortia, in the order of `consortia`.'),
+  category: z
+    .string()
+    .nullable()
+    .describe(
+      'The name of the KPI set of the service (the legacy `category`); `null` for a service without one.',
+    ),
 });
 
 export const serviceRecordV1Schema = serviceV1Schema.extend({
@@ -72,6 +78,7 @@ const EXAMPLE_SERVICE = {
   providerId: '0198f3a2-7c1e-7b52-9d3a-4e1f6a2b8c10',
   consortia: ['EXAMPLE-CONS-A', 'EXAMPLE-CONS-B'],
   consortiaIds: ['0198f3a3-02b9-7a14-8c6d-5b7e1f9a3d20', '0198f3a3-5e87-7c90-b2f4-6a1d8e0c4b31'],
+  category: 'Data resources',
 };
 
 const idParam = z.object({ id: z.uuid().describe('The id of the service.') });
@@ -83,13 +90,14 @@ export const listServicesV1Route = createRoute({
   audit: true,
   summary: 'List the services',
   description:
-    'The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, and a stage or licence that names nothing, is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.',
+    'The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.',
   request: {
     query: paginationQuery({ defaultPageSize: 100 }).extend({
       service: list('Abbreviations of services, comma-separated.'),
       provider: list('Abbreviations of providers, comma-separated: the services they provide.'),
       stage: list('Keys of the `stage` vocabulary, comma-separated.'),
       license: list('SPDX licence ids, comma-separated.'),
+      category: list('Names of KPI sets, comma-separated: the services that use one of them.'),
     }),
   },
   responses: {
@@ -178,6 +186,7 @@ const serviceOut = (s: ServiceV1) => ({
   providerId: s.providerId,
   consortia: s.consortia,
   consortiaIds: s.consortiaIds,
+  category: s.category,
 });
 
 const recordOut = (s: ServiceRecordV1) => ({
@@ -189,10 +198,18 @@ const recordOut = (s: ServiceRecordV1) => ({
 
 export function registerV1Routes(r: RouteRegistrar, service: ServicesService) {
   r.public('v1', listServicesV1Route, (async (c) => {
-    const { page, pageSize, service: services, provider, stage, license } = c.req.valid('query');
+    const {
+      page,
+      pageSize,
+      service: services,
+      provider,
+      stage,
+      license,
+      category,
+    } = c.req.valid('query');
     const result = await service.listV1(
       c.get('actor'),
-      { services, providers: provider, stage, license },
+      { services, providers: provider, stage, license, category },
       { page, pageSize },
     );
     return c.json(paginate({ page, pageSize }, result.total, result.services.map(serviceOut)), 200);

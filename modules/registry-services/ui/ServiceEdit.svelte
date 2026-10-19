@@ -57,7 +57,10 @@
   const service = data.service;
   // svelte-ignore state_referenced_locally
   const schema = data.schema;
-  const allFields: WizardField[] = schema.steps.flatMap((step) => step.fields);
+  // A field another module changes through its own route (`external`) is not the edit form's: not drawn, not fixed.
+  const allFields: WizardField[] = schema.steps
+    .flatMap((step) => step.fields)
+    .filter((field) => !field.external);
   const drawn = editFields(allFields, service.editableFields);
   const fixed = readOnlyFields(allFields, service.editableFields);
   const stepOf = (field: WizardField): WizardStep =>

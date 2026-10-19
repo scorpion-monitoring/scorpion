@@ -333,6 +333,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         roles,
         contributors: profileContributors,
         facets,
+        memberPolicy: policy,
         devConsole: options.devConsole ?? devConsoleAllowed(process.env.NODE_ENV),
         publicationMail: createPublicationMail(ctx, {
           identity: ctx.deps['core.identity'],

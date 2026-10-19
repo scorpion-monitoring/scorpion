@@ -57,6 +57,7 @@ import {
   PERMISSION_V1_READ,
   RESOURCE_TYPE,
 } from './permissions.ts';
+import type { MemberPolicy } from './policy.ts';
 import {
   CATALOGUE_SORT_KEYS,
   FACET_EMPTY,
@@ -216,6 +217,11 @@ export interface ServiceV1 {
   /** Abbreviations of the organisations with the role `consortium`, by name then id (`consortiaIds` in the same order). */
   consortia: string[];
   consortiaIds: string[];
+  /**
+   * The name of the service's KPI set: added to the row by the facet that declares `v1.field: 'category'`
+   * (kpi.framework); `null` for a service without one and in a profile without such a module.
+   */
+  category: string | null;
 }
 
 export interface ServiceRecordV1 extends ServiceV1 {
@@ -230,6 +236,8 @@ export interface ListV1Filter {
   providers?: readonly string[] | undefined;
   stage?: readonly string[] | undefined;
   license?: readonly string[] | undefined;
+  /** Names of KPI sets (the `category` of the row), compared as the facet's `v1.keysOf` says. */
+  category?: readonly string[] | undefined;
 }
 
 export const SORT_KEYS = CATALOGUE_SORT_KEYS;
@@ -323,6 +331,12 @@ export interface ServicesService {
   ) => Promise<(ServiceRecord & { redirectedFrom?: string }) | undefined>;
   listByOrganisationAsSystem: (organisationId: string, role?: string) => Promise<ServiceRecord[]>;
   existsAsSystem: (id: string) => Promise<boolean>;
+  /**
+   * Whether the user is an approved **manager** of the service's provider: the group that holds `service.edit-identity` in the policy
+   * `service.member` (ADR-0036). A module whose own permission is scoped to a service uses it in its own `authz.resourcePolicy`
+   * entry, so the rule is written once. `false` for an unknown service.
+   */
+  isProviderManagerAsSystem: (userId: string, serviceId: string) => Promise<boolean>;
 }
 
 const CONSTRAINT_ERRORS = new Set(['svc_service_slug_idx', 'svc_slug_history_slug_idx']);
@@ -361,6 +375,8 @@ export interface ServicesDeps {
   facets?: readonly FacetEntry[];
   /** Whether the schema tells the wizard to offer the JSON console (never in production). Default: no. */
   devConsole?: boolean;
+  /** The policy `service.member`; without it `isProviderManagerAsSystem` answers no. */
+  memberPolicy?: Pick<MemberPolicy, 'allows'>;
 }
 
 export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): ServicesService {
@@ -386,6 +402,8 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
 
   const columnFields = deps.config.fields.filter((f) => f.field.storage.kind === 'column');
   const valueFields = deps.config.fields.filter((f) => f.field.storage.kind === 'value');
+  // Fields whose type stores the value itself, in the create transaction (ADR-0040 addendum).
+  const moduleFields = deps.config.fields.filter((f) => f.field.storage.kind === 'module');
   const roleFields = deps.config.fields.filter((f) => f.field.storage.kind === 'organisations');
 
   /** An id that is no UUID is a bad request (422), never a database error (500). */
@@ -400,7 +418,11 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
   /** What the registry calls the owning role, for a message ("provider"): the code does not spell it. */
   const ownerLabel = (roles.get(OWNER_ROLE)?.labels.en ?? 'owner').toLowerCase();
   const settingsNow = async () => settingsSchema.parse(await ctx.settings.get());
-  const fieldKeys = deps.config.fields.map((resolved) => resolved.field.key);
+  // `editableFields` names what a patch may change: a field of the storage `module` is changed through its module's
+  // own route, so the edit form does not draw it (and the patch refuses it).
+  const fieldKeys = deps.config.fields
+    .filter((resolved) => resolved.field.storage.kind !== 'module')
+    .map((resolved) => resolved.field.key);
 
   /**
    * The contact point is shown to Admin and the provider's members always (the scoped `…service.read-contact`),
@@ -880,6 +902,7 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
   function v1Of(
     row: Pick<Row, 'id' | 'slug' | 'name' | 'stage' | 'license' | 'public'>,
     links: readonly ServiceOrganisation[],
+    category: string | null,
   ): ServiceV1 {
     const owner = links.find((link) => link.role === OWNER_ROLE);
     const consortia = links.filter((link) => link.role === BRAND_ROLE);
@@ -894,8 +917,14 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
       providerId: owner?.id ?? null,
       consortia: consortia.map((link) => link.abbreviation),
       consortiaIds: consortia.map((link) => link.id),
+      category,
     };
   }
+
+  /** The facet that adds `category` to the v1 rows, when a module contributes one. */
+  const categoryFacet = (deps.facets ?? []).find((facet) => facet.v1?.field === 'category');
+  const categoriesOf = async (ids: readonly string[]): Promise<Map<string, string | null>> =>
+    categoryFacet?.v1 ? categoryFacet.v1.valuesOf(ids, db) : new Map();
 
   /** The profile of any service for a reader who passed their own permission check: never the contact point. */
   async function schemaOrgOf(id: string): Promise<ServiceProfile> {
@@ -963,8 +992,25 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
           }
         }
       }
+      const categoryKeys: string[] = [];
+      if (filter.category) {
+        const keys = categoryFacet?.v1
+          ? await categoryFacet.v1.keysOf(filter.category, db)
+          : undefined;
+        for (const name of filter.category) {
+          const key = keys?.get(name);
+          if (key !== undefined) categoryKeys.push(key);
+          else
+            problems.push({
+              in: 'query',
+              path: 'category',
+              message: `"${name.slice(0, 64)}" is not the name of a KPI set.`,
+            });
+        }
+      }
       if (problems.length > 0) throw new Invalid('The request is not valid.', problems);
       const filters: Record<string, readonly string[]> = {
+        ...(categoryFacet && filter.category && { [categoryFacet.id]: categoryKeys }),
         ...(filter.providers && { provider: providerIds }),
         ...(filter.stage && { stage: filter.stage }),
         ...(filter.license && { license: filter.license }),
@@ -974,9 +1020,14 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         page,
         'en',
       );
+      const categories = await categoriesOf(rows.map((row) => row.id));
       return {
         services: rows.map((row) =>
-          v1Of(row, row.provider ? [row.provider, ...row.consortia] : row.consortia),
+          v1Of(
+            row,
+            row.provider ? [row.provider, ...row.consortia] : row.consortia,
+            categories.get(row.id) ?? null,
+          ),
         ),
         total,
       };
@@ -987,8 +1038,9 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
       requireId(id);
       const row = await load(db, id);
       const links = (await organisationsOf([id])).get(id) ?? [];
+      const category = (await categoriesOf([id])).get(id) ?? null;
       return {
-        ...v1Of(row, links),
+        ...v1Of(row, links, category),
         description: row.description,
         url: row.url,
         sameAs: row.sameAs,
@@ -1076,6 +1128,17 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
             ];
           });
           if (stored.length > 0) await tx.insert(fieldValue).values(stored);
+          // A module's own storage: written here so the service and the value commit or roll back together.
+          for (const resolved of moduleFields) {
+            const value = values.get(resolved.field.key);
+            if (value === undefined) continue;
+            await resolved.type.store?.(tx, {
+              serviceId: id,
+              value,
+              config: resolved.config,
+              actorId: by,
+            });
+          }
           await ctx.events.emit('registry.service.created@1', {
             serviceId: id,
             by: admin ? 'admin' : 'member',
@@ -1484,6 +1547,15 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         )
         .orderBy(asc(service.id));
       return records(rows.map((r) => r.row));
+    },
+
+    async isProviderManagerAsSystem(userId, serviceId) {
+      if (!deps.memberPolicy || !z.uuid().safeParse(serviceId).success) return false;
+      return deps.memberPolicy.allows({
+        actor: { kind: 'user', userId, username: '', roles: [], via: 'session' },
+        permission: PERMISSION_EDIT_IDENTITY,
+        resource: { type: RESOURCE_TYPE, id: serviceId },
+      });
     },
 
     async existsAsSystem(id) {
