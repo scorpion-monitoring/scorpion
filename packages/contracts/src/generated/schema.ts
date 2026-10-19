@@ -12417,6 +12417,229 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/kpi/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The values of one month of a service
+         * @description Each indicator of the effective KPI set of the service (the rows of its KPI set, then its extras, by name without case) with the value stored for `period` (`YYYY-MM` or `YYYY-MM-DD`, any day of the month), or `measurement: null`. 404 for a service that does not exist, 422 for a bad `period`. Pages count from 0, `pageSize` is at most 500 (default 200); `totalCount` is the number of indicators.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 500. */
+                    pageSize?: string;
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The month: `YYYY-MM` or `YYYY-MM-DD`. */
+                    period: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of indicators with the value of the month. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                indicatorId: string;
+                                name: string;
+                                /** @description A key of the registry `kpi.valueType`. */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                /** @description A term of the vocabulary `necessity`; `optional` for an extra. */
+                                necessity: string;
+                                min: number | null;
+                                max: number | null;
+                                /** @description The value stored for the month, or `null` while the month has none. */
+                                measurement: {
+                                    id: string;
+                                    /** @description The canonical text of the stored value (a duration as `HH-MM-SS`). */
+                                    value: string;
+                                    valueNumber: number | null;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/measurements/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The months of a service that have values
+         * @description The last `months` months (default 12, at most 36; the current month is the last), oldest first, with how many of the effective indicators and of the mandatory ones have a value. The mandatory ones are those of the KPI set as it is now. 404 for a service that does not exist. One page holds every month.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description How many months, 1 to 36; default 12. */
+                    months?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The months. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** @description The last day of the month, `YYYY-MM-DD`. */
+                                period: string;
+                                /** @description How many indicators of the effective KPI set have a value for the month. */
+                                reported: number;
+                                /** @description How many indicators of the effective KPI set are mandatory (the set as it is now). */
+                                mandatory: number;
+                                /** @description How many of the mandatory indicators have a value. */
+                                mandatoryReported: number;
+                                /** @description No mandatory value is missing (also true while nothing is mandatory). */
+                                complete: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

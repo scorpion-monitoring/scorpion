@@ -74,6 +74,14 @@ Two changes in one month leave the later one. `rows` is the effective list of th
 that used it; backlog), and an extra whose indicator was deleted since is named in the history and dropped from `rows`. An impossible period
 (`2026-02-30`, `2026-13`) is 422 naming `period`.
 
+**Two trusted reads for `kpi.ingestion`** (M10 sprint 2, additive; on the service and so on `public.ts`; no permission check, the caller checks its own, descriptive
+fields only). `effectiveIndicatorsAsSystem(serviceId)` returns the effective KPI set of a service with the value type, unit, necessity, source and
+**bounds** of each indicator (`[]` for a service without KPIs or one that does not exist); it reads the set through `effectiveSet`, so it is the list
+`serviceKpis.get` answers with. `indicatorsByIdAsSystem(ids)` returns the name, IRI, value type and unit of indicators by id (at most 5 000; an id that is
+no indicator is left out), because the reads of measurements show a value of an indicator the service has since dropped. A module that writes values calls
+them **after** its own scoped check, so a token needs the scopes of that module and none of this one's reads (ADR-0041, "Amended in sprint 2"). Tests:
+`service/trusted.test.ts`.
+
 **The in-use hook.** `kpi.framework` declares the registry `kpi.indicatorUsage`; an entry is `{ module, what, count(indicatorId) }` (a module id, a
 plural noun, and a function that counts that module's rows about the indicator). `indicators.delete` asks every entry after its own checks, and an
 indicator that something uses is **409 naming each module and the count** (`kpi.ingestion (12 measurements)`), the sets first and then each

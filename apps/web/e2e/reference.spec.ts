@@ -81,7 +81,14 @@ test.describe('the API reference', () => {
     );
 
     // 3. The routes of the document are drawn, and the page speaks of this instance's address.
-    for (const route of ['Get one provider', 'List the providers', 'List the services']) {
+    for (const route of [
+      'Get one provider',
+      'List the providers',
+      'List the services',
+      // M10: the first write of the public API, with the token schemes of every other route
+      'List the measurements of a service',
+      'Record the measurements of a service',
+    ]) {
       await expect(page.getByRole('link', { name: route })).toBeVisible();
     }
     await expect(page.locator('body')).toContainText(`${new URL(baseURL!).origin}${at('/api/v1')}`);

@@ -349,7 +349,7 @@ describe('GET /measurements', () => {
   });
 
   it('is refused with a token that names the write scope but not the read scope (403), and with a made-up one (401)', async () => {
-    expect((await get(`?service=${world.read.slug}`, tokens.write!)).status).toBe(403);
+    expect((await get(`?service=${world.read.slug}`, tokens.write)).status).toBe(403);
     expect((await get(`?service=${world.read.slug}`, 'scp_abcd1234_nonsense')).status).toBe(401);
   });
 
@@ -488,12 +488,12 @@ describe('POST /measurements', () => {
     }
     expect(await countRows(world.write.id)).toBe(before);
     // the member and Admin are let through
-    expect((await post(world.write.slug, body, tokens.write!)).status).toBe(200);
-    expect((await post(world.write.slug, body, tokens.adminWrite!)).status).toBe(200);
+    expect((await post(world.write.slug, body, tokens.write)).status).toBe(200);
+    expect((await post(world.write.slug, body, tokens.adminWrite)).status).toBe(200);
     // and bob writes to the service of his own provider (the body is refused for what it asks, not for the right: that service has the KPI)
-    expect((await post(world.elsewhere.slug, body, tokens.bobWrite!)).status).toBe(200);
+    expect((await post(world.elsewhere.slug, body, tokens.bobWrite)).status).toBe(200);
     // alice is refused there
-    expect((await post(world.elsewhere.slug, body, tokens.write!)).status).toBe(403);
+    expect((await post(world.elsewhere.slug, body, tokens.write)).status).toBe(403);
   });
 
   it('is 422 naming `service` for an unknown service, or none, and naming [i].kpi for a KPI the service does not have', async () => {

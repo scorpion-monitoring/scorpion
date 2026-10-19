@@ -50,7 +50,7 @@ const read = (
   query: Record<string, unknown>,
   who: Actor = w.people.plain,
   page = FIRST_PAGE,
-) => w.ingestion.reads.list(who, { service: w.svc.id, ...query } as never, page);
+) => w.ingestion.reads.list(who, { service: w.svc.id, ...query }, page);
 
 describe('reads.list: who may read [ASVS-8.2.1] [ASVS-8.3.1]', () => {
   it('refuses an anonymous caller (401) and a person without the read permission (403), and lets any holder read every service', async () => {
