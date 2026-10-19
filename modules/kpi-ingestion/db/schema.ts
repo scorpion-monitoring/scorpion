@@ -1,9 +1,9 @@
-// The tables of kpi.ingestion. Names start with `kpii_` (the manifest's `tablePrefix`; `kpif_` is kpi.framework's).
+// The tables of kpi.ingestion. Names start with `kpii_` (the manifest's `tablePrefix`; kpi.framework has its own prefix).
 // Create a migration after a change: `pnpm db:generate --filter @scorpion/kpi-ingestion`.
 //
 // No pg enum. `service_id` is a plain column, not a foreign key: this module holds no reference into
 // registry.services' tables (the service layer asks `registry.services/public` whether a service exists, the pattern of
-// `kpif_service_set`). `indicator_id` points to kpi.framework's `kpif_indicator`, a declared dependency, with `restrict`:
+// kpi.framework's link of a service to its KPI set). `indicator_id` points to kpi.framework's indicator table, a declared dependency, with `restrict`:
 // an indicator with measurements is not deleted (the service answers 409 first through `kpi.indicatorUsage`).
 import { sql } from 'drizzle-orm';
 import {
