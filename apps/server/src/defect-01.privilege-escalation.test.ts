@@ -1221,3 +1221,136 @@ describe('defect 1: log reads', () => {
     }
   });
 });
+
+// M10 sprint 2: the routes of kpi.ingestion. The matrix above runs a profile without kpi.framework and kpi.ingestion, so these four routes
+// have their own decision table and their own walker: a measurement route added later without a row fails here. The write is the first
+// v1 route that changes data, so what a plain User may do with it is the point: the role `user` holds the plain scope of the route and
+// reads every service, and is refused on the write because only an Admin and the approved members of the service's provider may submit
+// (`kpi.ingestion.measurement.submit`, checked in the service).
+describe('defect 1: the measurement routes', () => {
+  interface Row {
+    v1: boolean;
+    sample: (service: string) => Sample;
+    /** A plain User (the role `user`, no membership) may call it. */
+    plainMay: boolean;
+  }
+  const item = { kpi: 'Anything', value: 1, date: '2026-01' };
+  const MEASUREMENT_SAMPLES: Record<string, Row> = {
+    'GET /measurements': {
+      v1: true,
+      plainMay: true,
+      sample: (service) => ({ method: 'GET', path: `/measurements?service=${service}` }),
+    },
+    'POST /measurements': {
+      v1: true,
+      plainMay: false,
+      sample: (service) => ({
+        method: 'POST',
+        path: `/measurements?service=${service}`,
+        body: [item],
+      }),
+    },
+    'GET /kpi/measurements': {
+      v1: false,
+      plainMay: true,
+      sample: (service) => ({
+        method: 'GET',
+        path: `/kpi/measurements?service=${service}&period=2026-01`,
+      }),
+    },
+    'GET /kpi/measurements/coverage': {
+      v1: false,
+      plainMay: true,
+      sample: (service) => ({
+        method: 'GET',
+        path: `/kpi/measurements/coverage?service=${service}`,
+      }),
+    },
+  };
+  const startIngestion = () => app.start({ tokenCacheTtlMs: 0, kpi: true, ingestion: true });
+  const callRow = (
+    s: Awaited<ReturnType<typeof startIngestion>>,
+    row: Row,
+    service: string,
+    auth: { cookie?: string; csrf?: string; headers?: Record<string, string> } = {},
+  ) => {
+    const sample = row.sample(service);
+    return s.call(sample.method, sample.path, { ...auth, body: sample.body, v1: row.v1 });
+  };
+
+  it('has a decision for every route of kpi.ingestion, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
+    const { kernel } = await startIngestion();
+    const live = kernel.routes
+      .filter((entry) => entry.route.path.includes('measurements'))
+      .map((entry) => {
+        expect(entry.route.public, `${entry.route.path} is not public`).toBeFalsy();
+        expect(entry.route.permission, `${entry.route.path} names a permission`).toBeTruthy();
+        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+      })
+      .sort();
+    expect(live).toEqual(Object.keys(MEASUREMENT_SAMPLES).sort());
+  });
+
+  it('answers 401 to an anonymous caller and 403 to a user without roles, with ids that exist nowhere [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await startIngestion();
+    const roleless = await s.signedIn('norole-meas', { roles: [] });
+    for (const [key, row] of Object.entries(MEASUREMENT_SAMPLES)) {
+      const anonymous = await callRow(s, row, FOREIGN);
+      expect(anonymous.status, `${key}: anonymous`).toBe(401);
+      expect(problem(anonymous), key).toContain('application/problem+json');
+      const nobody = await callRow(s, row, FOREIGN, session(roleless));
+      expect(nobody.status, `${key}: a user without roles`).toBe(403);
+      expect(problem(nobody), key).toContain('application/problem+json');
+    }
+  });
+
+  it('lets a plain User read every service and answers 403 to their write, leaving no row and no event [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await startIngestion();
+    const plain = await s.signedIn('plain-meas');
+    const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const service = await makeService(s.kernel.pool, { provider: provider.id });
+    for (const [key, row] of Object.entries(MEASUREMENT_SAMPLES)) {
+      const reply = await callRow(s, row, service.id, session(plain));
+      if (row.plainMay) expect(reply.status, `${key}: a plain User reads`).toBe(200);
+      else {
+        expect(reply.status, `${key}: a plain User does not write`).toBe(403);
+        expect(problem(reply), key).toContain('application/problem+json');
+      }
+    }
+    expect((await s.kernel.pool.query('select 1 from kpii_measurement')).rows).toEqual([]);
+    expect(
+      (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'measurement.%'"))
+        .rows,
+    ).toEqual([]);
+  });
+
+  it('answers 403 to a token that names every scope of the write when its owner is a plain User [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await startIngestion();
+    const plain = await s.signedIn('plain-meas-token');
+    const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const service = await makeService(s.kernel.pool, { provider: provider.id });
+    const created = await s.post('/tokens', {
+      ...session(plain),
+      body: {
+        name: 'broad',
+        scopes: [
+          'kpi.ingestion.v1.write',
+          'kpi.ingestion.measurement.submit',
+          'kpi.ingestion.v1.read',
+        ],
+      },
+    });
+    const { token } = created.body as { token: string };
+    const row = MEASUREMENT_SAMPLES['POST /measurements']!;
+    expect((await callRow(s, row, service.id, { headers: bearer(token) })).status).toBe(403);
+    // the same token reads: its owner may read
+    expect(
+      (
+        await callRow(s, MEASUREMENT_SAMPLES['GET /measurements']!, service.id, {
+          headers: bearer(token),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await s.kernel.pool.query('select 1 from kpii_measurement')).rows).toEqual([]);
+  });
+});
