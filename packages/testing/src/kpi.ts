@@ -164,3 +164,37 @@ export async function makeServiceKpis(db: Queryable, input: MakeServiceKpis): Pr
       [input.serviceId, indicatorId],
     );
 }
+
+export interface MakeServiceKpiHistory {
+  serviceId: string;
+  setId?: string | null;
+  extras?: readonly string[];
+  /** When this state began; an ISO text or a Date. */
+  validFrom: string | Date;
+  /** When it ended (exclusive); none while it is the current state. */
+  validTo?: string | Date | null;
+  changedBy?: string | null;
+}
+
+/**
+ * One row of `kpif_service_kpi_history`, inserted directly with the times the test chooses (the service layer writes
+ * them from the database clock). The table's own rules still apply: one open row per service, `valid_to` after
+ * `valid_from`. It does not close an earlier open row; a test that builds a series gives every row but the last a `validTo`.
+ */
+export async function makeServiceKpiHistory(
+  db: Queryable,
+  input: MakeServiceKpiHistory,
+): Promise<void> {
+  await db.query(
+    `insert into kpif_service_kpi_history (service_id, set_id, extras, valid_from, valid_to, changed_by)
+     values ($1, $2, $3::uuid[], $4, $5, $6)`,
+    [
+      input.serviceId,
+      input.setId ?? null,
+      [...(input.extras ?? [])].sort(),
+      input.validFrom,
+      input.validTo ?? null,
+      input.changedBy ?? null,
+    ],
+  );
+}

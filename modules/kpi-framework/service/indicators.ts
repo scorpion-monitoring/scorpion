@@ -26,6 +26,7 @@ import {
   type IndicatorFilter,
   type UpdateIndicatorInput,
 } from './input.ts';
+import { type IndicatorUsageEntry } from './indicator-usage.ts';
 import { iriFor } from './iri.ts';
 import { PERMISSION_INDICATOR_MANAGE, PERMISSION_INDICATOR_READ } from './permissions.ts';
 import { actorId, iriBaseOf, uniqueViolation } from './shared.ts';
@@ -86,6 +87,8 @@ export interface IndicatorsDeps {
   authz: Pick<AuthzService, 'require'>;
   settings: Pick<SettingsService, 'validateTerm'>;
   valueTypes: () => readonly ValueTypeEntry[];
+  /** The contributions to `kpi.indicatorUsage`: who else keeps rows about an indicator. */
+  usage?: () => readonly IndicatorUsageEntry[];
 }
 
 const CONSTRAINT_FIELDS: Record<string, 'name' | 'slug'> = {
@@ -460,41 +463,53 @@ export function createIndicatorsService(
     async delete(actor, id) {
       await deps.authz.require(actor, PERMISSION_INDICATOR_MANAGE);
       requireId(id);
-      await db.tx(async (tx) => {
-        await load(tx, id, true);
-        // The database would refuse (`restrict`) with a 500; the answer names the module and the count.
-        const [rows, evaluations, extras] = await Promise.all([
-          tx
-            .select({ n: sql<number>`count(*)::int` })
-            .from(kpiSetIndicator)
-            .where(eq(kpiSetIndicator.indicatorId, id)),
-          tx
-            .select({ n: sql<number>`count(*)::int` })
-            .from(evaluation)
-            .where(eq(evaluation.indicatorId, id)),
-          tx
-            .select({ n: sql<number>`count(*)::int` })
-            .from(serviceExtraIndicator)
-            .where(eq(serviceExtraIndicator.indicatorId, id)),
-        ]);
-        const uses: Use[] = [];
-        if ((rows[0]?.n ?? 0) > 0)
-          uses.push({ module: 'kpi.framework', what: 'sets', count: rows[0]!.n });
-        if ((evaluations[0]?.n ?? 0) > 0)
-          uses.push({ module: 'kpi.framework', what: 'evaluations', count: evaluations[0]!.n });
-        // A service that opted into the indicator as an extra (the set rows above cover the sets' services).
-        if ((extras[0]?.n ?? 0) > 0)
-          uses.push({ module: 'kpi.framework', what: 'services', count: extras[0]!.n });
-        if (uses.length > 0) throw new InUse('indicator', uses);
-        // By id and nothing else; the links go with it (cascade).
-        await tx.delete(indicator).where(eq(indicator.id, id));
-        await ctx.events.emit('kpi.indicator.changed@1', {
-          indicatorId: id,
-          change: 'deleted',
-          fields: [],
-          actorId: actorId(actor),
+      try {
+        await db.tx(async (tx) => {
+          await load(tx, id, true);
+          // The database would refuse (`restrict`) with a 500; the answer names the module and the count.
+          const [rows, evaluations, extras] = await Promise.all([
+            tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(kpiSetIndicator)
+              .where(eq(kpiSetIndicator.indicatorId, id)),
+            tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(evaluation)
+              .where(eq(evaluation.indicatorId, id)),
+            tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(serviceExtraIndicator)
+              .where(eq(serviceExtraIndicator.indicatorId, id)),
+          ]);
+          const uses: Use[] = [];
+          if ((rows[0]?.n ?? 0) > 0)
+            uses.push({ module: 'kpi.framework', what: 'sets', count: rows[0]!.n });
+          if ((evaluations[0]?.n ?? 0) > 0)
+            uses.push({ module: 'kpi.framework', what: 'evaluations', count: evaluations[0]!.n });
+          // A service that opted into the indicator as an extra (the set rows above cover the sets' services).
+          if ((extras[0]?.n ?? 0) > 0)
+            uses.push({ module: 'kpi.framework', what: 'services', count: extras[0]!.n });
+          // The modules that keep rows about an indicator (their own tables, so they are asked, never read here).
+          for (const entry of deps.usage?.() ?? []) {
+            const count = await entry.count(id);
+            if (count > 0) uses.push({ module: entry.module, what: entry.what, count });
+          }
+          if (uses.length > 0) throw new InUse('indicator', uses);
+          // By id and nothing else; the links go with it (cascade).
+          await tx.delete(indicator).where(eq(indicator.id, id));
+          await ctx.events.emit('kpi.indicator.changed@1', {
+            indicatorId: id,
+            change: 'deleted',
+            fields: [],
+            actorId: actorId(actor),
+          });
         });
-      });
+      } catch (error) {
+        // A row that appeared after the question (a measurement written meanwhile): the key refuses, nothing is deleted.
+        if ((error as { cause?: { code?: string } }).cause?.code === '23503')
+          throw new Conflict('The indicator is in use by another module; nothing was deleted.');
+        throw error;
+      }
     },
   };
 }

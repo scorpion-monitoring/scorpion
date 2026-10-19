@@ -44,6 +44,7 @@ export type ServicesPublic = Pick<
   | 'listByOrganisationAsSystem'
   | 'existsAsSystem'
   | 'isProviderManagerAsSystem'
+  | 'isProviderMemberAsSystem'
 >;
 
 declare module '@scorpion/kernel' {

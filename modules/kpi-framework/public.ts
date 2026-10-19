@@ -45,6 +45,14 @@ export {
   PUBLIC_RDF_CACHE_CONTROL,
 } from './routes-rdf.ts';
 export { EXTRA_NECESSITY, mergeEffective } from './service/merge.ts';
+export {
+  INDICATOR_USAGE_REGISTRY,
+  indicatorUsageEntrySchema,
+  type IndicatorUsageEntry,
+} from './service/indicator-usage.ts';
+export { monthEndBoundary, type KpisInPeriod } from './service/history.ts';
+export type { EffectiveIndicator } from './service/effective.ts';
+export type { EffectiveRow } from './service/merge.ts';
 
 import type { KpiFrameworkService } from './module.ts';
 

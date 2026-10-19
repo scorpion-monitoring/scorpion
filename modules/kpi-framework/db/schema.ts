@@ -236,3 +236,43 @@ export const serviceExtraIndicator = pgTable(
     index('kpif_service_extra_indicator_indicator_idx').on(table.indicatorId),
   ],
 );
+
+/**
+ * Which KPI set and which extras a service had, and when (M10 sprint 1, ADR-0041 Decision 3). `kpi.ingestion`,
+ * `kpi.analytics` and `kpi.impact` ask "which KPIs did this service have in this month"; the effective set now
+ * cannot answer it once a set or the extras changed. A row is the state **from** `valid_from` (inclusive) **to**
+ * `valid_to` (exclusive; null while it is the current one). The writer of the KPIs of a service appends one in the
+ * same transaction as every change and closes the row before it: that closing (null to a time) is the only update
+ * the table accepts, and a delete is refused (a trigger in the migration), so the history cannot be rewritten by
+ * mistake. `extras` are the stored extras without the ones the set contains, sorted; there is no key to an
+ * indicator (an indicator that was an extra may be deleted later and stays named here). The rows of a set are not
+ * versioned: the history says which set, and the set's rows are read as they are now (backlog).
+ */
+export const serviceKpiHistory = pgTable(
+  'kpif_service_kpi_history',
+  {
+    serviceId: uuid('service_id').notNull(),
+    /** The set the service had, or none. A set that a service used is never deleted (`restrict` on `kpif_service_set`). */
+    setId: uuid('set_id'),
+    extras: uuid()
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    validFrom: timestamptz('valid_from').notNull(),
+    validTo: timestamptz('valid_to'),
+    /** The user who made the change, kept as written; null for the backfill and for a job. */
+    changedBy: uuid('changed_by'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serviceId, table.validFrom] }),
+    // At most one open row per service: the current state.
+    uniqueIndex('kpif_service_kpi_history_open_idx')
+      .on(table.serviceId)
+      .where(sql`${table.validTo} is null`),
+    check(
+      'kpif_service_kpi_history_range_check',
+      sql`${table.validTo} is null or ${table.validTo} > ${table.validFrom}`,
+    ),
+    check('kpif_service_kpi_history_extras_check', sql`cardinality(${table.extras}) <= 200`),
+  ],
+);

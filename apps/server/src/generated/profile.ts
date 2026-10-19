@@ -21,12 +21,14 @@ import module8 from '@scorpion/registry-services/module';
 import package8 from '@scorpion/registry-services/package.json' with { type: 'json' };
 import module9 from '@scorpion/kpi-framework/module';
 import package9 from '@scorpion/kpi-framework/package.json' with { type: 'json' };
-import module10 from '@scorpion/public-api/module';
-import package10 from '@scorpion/public-api/package.json' with { type: 'json' };
+import module10 from '@scorpion/kpi-ingestion/module';
+import package10 from '@scorpion/kpi-ingestion/package.json' with { type: 'json' };
+import module11 from '@scorpion/public-api/module';
+import package11 from '@scorpion/public-api/package.json' with { type: 'json' };
 
 export const profileName = "full";
 
-export const moduleIds = ["core.authz","core.settings","core.blob","core.notifications","core.identity","core.audit","core.ui-shell","registry.organisations","registry.services","kpi.framework","public-api"] as const;
+export const moduleIds = ["core.authz","core.settings","core.blob","core.notifications","core.identity","core.audit","core.ui-shell","registry.organisations","registry.services","kpi.framework","kpi.ingestion","public-api"] as const;
 
 export const sources: ModuleSource[] = [
   { manifest: module0, packageJson: package0 },
@@ -40,4 +42,5 @@ export const sources: ModuleSource[] = [
   { manifest: module8, packageJson: package8 },
   { manifest: module9, packageJson: package9 },
   { manifest: module10, packageJson: package10 },
+  { manifest: module11, packageJson: package11 },
 ];

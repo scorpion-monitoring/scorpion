@@ -7,7 +7,7 @@
 // answers with (the wizard shows it before the service exists). `effectiveSet` is the one query function that
 // reads the two tables and applies it.
 import type { Db } from '@scorpion/kernel';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import {
   compareIndicators,
   mergeEffective,
@@ -64,29 +64,35 @@ const columns = {
   qualitative: indicator.qualitative,
 };
 
-/** The effective KPI set of one service: two reads, then `mergeEffective`. Any caller (route, job, export) uses this. */
-export async function effectiveSet(
+/**
+ * The effective list of a given state: a KPI set (or none) and the stored extras. The one place that reads the rows of
+ * a set and applies `mergeEffective`, for the state a service has now (`effectiveSet`) and for one it had in a past
+ * month (`kpisInPeriod`). An id that no longer exists (a set or an extra that was deleted) contributes nothing.
+ */
+export async function effectiveOf(
   db: Pick<Db, 'select'>,
-  serviceId: string,
+  state: { setId: string | null; extraIds: readonly string[] },
 ): Promise<EffectiveSet> {
   const [[assigned], extras] = await Promise.all([
-    db
-      .select({
-        id: kpiSet.id,
-        slug: kpiSet.slug,
-        name: kpiSet.name,
-        description: kpiSet.description,
-        rimoCategory: kpiSet.rimoCategory,
-      })
-      .from(serviceSet)
-      .innerJoin(kpiSet, eq(kpiSet.id, serviceSet.setId))
-      .where(eq(serviceSet.serviceId, serviceId)),
-    db
-      .select(columns)
-      .from(serviceExtraIndicator)
-      .innerJoin(indicator, eq(indicator.id, serviceExtraIndicator.indicatorId))
-      .where(eq(serviceExtraIndicator.serviceId, serviceId))
-      .orderBy(sql`lower(${indicator.name})`, indicator.name, indicator.id),
+    state.setId === null
+      ? Promise.resolve([] as EffectiveSet['set'][])
+      : db
+          .select({
+            id: kpiSet.id,
+            slug: kpiSet.slug,
+            name: kpiSet.name,
+            description: kpiSet.description,
+            rimoCategory: kpiSet.rimoCategory,
+          })
+          .from(kpiSet)
+          .where(eq(kpiSet.id, state.setId)),
+    state.extraIds.length === 0
+      ? Promise.resolve([])
+      : db
+          .select(columns)
+          .from(indicator)
+          .where(inArray(indicator.id, [...state.extraIds]))
+          .orderBy(sql`lower(${indicator.name})`, indicator.name, indicator.id),
   ]);
   const setRows = assigned
     ? await db
@@ -100,4 +106,25 @@ export async function effectiveSet(
     extras: [...extras].sort(compareIndicators),
     rows: mergeEffective(setRows, extras),
   };
+}
+
+/** The effective KPI set of one service: its two links, then `effectiveOf`. Any caller (route, job, export) uses this. */
+export async function effectiveSet(
+  db: Pick<Db, 'select'>,
+  serviceId: string,
+): Promise<EffectiveSet> {
+  const [[assigned], extras] = await Promise.all([
+    db
+      .select({ setId: serviceSet.setId })
+      .from(serviceSet)
+      .where(eq(serviceSet.serviceId, serviceId)),
+    db
+      .select({ id: serviceExtraIndicator.indicatorId })
+      .from(serviceExtraIndicator)
+      .where(eq(serviceExtraIndicator.serviceId, serviceId)),
+  ]);
+  return effectiveOf(db, {
+    setId: assigned?.setId ?? null,
+    extraIds: extras.map((row) => row.id),
+  });
 }

@@ -12,17 +12,17 @@ and the RDF reads of the indicators as Turtle and JSON-LD, token-bearing and pub
 
 ## Manifest
 
-| Part         | Value                                                                                                                                                                                                                                                                                                     |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id           | `kpi.framework` (package `@scorpion/kpi-framework`)                                                                                                                                                                                                                                                       |
-| table prefix | `kpif_` (set in the manifest; ADR-0004): `kpif_indicator`, `kpif_indicator_means`, `kpif_indicator_tool`, `kpif_kpi_set`, `kpif_kpi_set_indicator`, `kpif_evaluation`, `kpif_service_set`, `kpif_service_extra_indicator`. `kpi.ingestion` will use `kpii_`                                               |
-| dependencies | `core.authz`, `core.settings` (vocabularies, settings) and `registry.services` (it contributes to its registries and asks it whether a service exists and who may change it). `registry.services` does **not** depend on this module. No foreign key points to another module's table, a service included |
-| routes       | the internal routes below, the two public reads `GET /public/kpi/rimo.ttl` and `.jsonld`, and four v1 routes (`GET /api/v1/categories`, `/indicators`, `/kpi/rimo.ttl` and `/kpi/rimo.jsonld`, see "Routes")                                                                                              |
-| ui           | `./ui`: six pages through the registry `ui.routes` (see "Pages"), two `ui.nav` entries in the administration section, and the fourth export `wizardExtensions` (the widget of the `kpi-set` field and the section of the service page)                                                                    |
-| events       | emits `kpi.indicator.changed@1`, `kpi.set.changed@1` and `kpi.serviceSet.changed@1` (see "Events")                                                                                                                                                                                                        |
-| registries   | declares `kpi.valueType` and contributes its five entries; contributes the vocabularies below to `vocabulary` (core.settings), and to `registry.services` the field type, the wizard step and the facet below, and to `core.authz` a resource policy                                                      |
-| settings     | `iriBase` (see "Settings"), shown by the generic settings form                                                                                                                                                                                                                                            |
-| permissions  | `kpi.framework.indicator.read` and `.manage`, `kpi.framework.set.read` and `.manage`, the service-scoped `kpi.framework.service.kpis.edit` and `kpi.framework.v1.read` (see "Permissions")                                                                                                                |
+| Part         | Value                                                                                                                                                                                                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id           | `kpi.framework` (package `@scorpion/kpi-framework`)                                                                                                                                                                                                                                                                         |
+| table prefix | `kpif_` (set in the manifest; ADR-0004): `kpif_indicator`, `kpif_indicator_means`, `kpif_indicator_tool`, `kpif_kpi_set`, `kpif_kpi_set_indicator`, `kpif_evaluation`, `kpif_service_set`, `kpif_service_extra_indicator`, `kpif_service_kpi_history`. `kpi.ingestion` uses `kpii_`                                         |
+| dependencies | `core.authz`, `core.settings` (vocabularies, settings) and `registry.services` (it contributes to its registries and asks it whether a service exists and who may change it). `registry.services` does **not** depend on this module. No foreign key points to another module's table, a service included                   |
+| routes       | the internal routes below, the two public reads `GET /public/kpi/rimo.ttl` and `.jsonld`, and four v1 routes (`GET /api/v1/categories`, `/indicators`, `/kpi/rimo.ttl` and `/kpi/rimo.jsonld`, see "Routes")                                                                                                                |
+| ui           | `./ui`: six pages through the registry `ui.routes` (see "Pages"), two `ui.nav` entries in the administration section, and the fourth export `wizardExtensions` (the widget of the `kpi-set` field and the section of the service page)                                                                                      |
+| events       | emits `kpi.indicator.changed@1`, `kpi.set.changed@1` and `kpi.serviceSet.changed@1` (see "Events")                                                                                                                                                                                                                          |
+| registries   | declares `kpi.valueType` and contributes its five entries; declares `kpi.indicatorUsage` (see "The history and the in-use hook"); contributes the vocabularies below to `vocabulary` (core.settings), and to `registry.services` the field type, the wizard step and the facet below, and to `core.authz` a resource policy |
+| settings     | `iriBase` (see "Settings"), shown by the generic settings form                                                                                                                                                                                                                                                              |
+| permissions  | `kpi.framework.indicator.read` and `.manage`, `kpi.framework.set.read` and `.manage`, the service-scoped `kpi.framework.service.kpis.edit` and `kpi.framework.v1.read` (see "Permissions")                                                                                                                                  |
 
 ## The model
 
@@ -46,16 +46,44 @@ know, because it is registry data (is the type numeric, may it have bounds), the
 
 | `kpif_service_set` | `service_id` (primary key, a **plain column**: no foreign key to `svc_service`), `set_id` (restrict), `updated_at`, `updated_by`. One KPI set per service |
 | `kpif_service_extra_indicator` | `(service_id, indicator_id restrict)`, primary key on the pair: an indicator a service chose beyond its set |
+| `kpif_service_kpi_history` | `(service_id, valid_from)` primary key, `set_id`, `extras` (`uuid[]`, at most 200), `valid_to` (null while current), `changed_by`: which set and extras a service had, and when (see "The history and the in-use hook") |
 
 The migration of the service tables is `migrations/0001_service_link.sql`. The service layer checks that a service exists through
 `registry.services/public` (`existsAsSystem`); a service is never deleted today, so nothing is left behind (the delete will need a
 `service.usage` check, see the backlog). A KPI set that a service uses is not deleted (409, `restrict` as the last guard), and neither is
 an indicator that a service chose as an extra.
 
+### The history and the in-use hook
+
+**History** (M10 sprint 1, [ADR-0041](../../docs/adr/0041-measurement-model.md) Decision 3). `kpif_service_kpi_history` records which KPI set and
+which extras a service had, so that `kpi.ingestion`, `kpi.analytics` and `kpi.impact` can ask which KPIs a service had in a month; the
+effective set _now_ cannot answer that once a set or the extras changed. A row is a state from `valid_from` (inclusive) to `valid_to`
+(exclusive; null while it is the current one). The one writer of a service's KPIs (`KpisWriter.write`, used by `serviceKpis.set` and by the wizard's
+`store`) appends a row **in the same transaction** and closes the row before it, whenever the set or the extras changed; a change that
+changes nothing writes nothing, and a rolled-back change leaves no row (tests for both transactions). The new row begins at the database
+clock, at least a microsecond after the one it closes, under the per-service advisory lock of the writer. The table is **append-only**
+(migration `0002`, a trigger like `core.audit`'s): a delete is refused, and so is every update except closing the open row, once. A later
+deletion of services needs a migration that drops the trigger, with an ADR.
+
+`kpisInPeriod(serviceId, period)` (on the service and so on `public.ts`; a trusted read, no permission check, the caller checks its own)
+answers with the state **in force at the end of the month** `period` names (`YYYY-MM` or `YYYY-MM-DD`, any day): `{ setId, extras, validFrom,
+rows }`, or `null` when the history holds none for that month (before the first row: history starts at the migration for what changed
+before it; the backfill takes `valid_from` from the `updated_at` of the service's set row, and a service with extras only starts at the migration).
+Two changes in one month leave the later one. `rows` is the effective list of that state through the same function as today's
+(`effectiveOf`), so there is one rule. **Limits:** the rows of a _set_ are not versioned (a set edited later shows its new rows in every month
+that used it; backlog), and an extra whose indicator was deleted since is named in the history and dropped from `rows`. An impossible period
+(`2026-02-30`, `2026-13`) is 422 naming `period`.
+
+**The in-use hook.** `kpi.framework` declares the registry `kpi.indicatorUsage`; an entry is `{ module, what, count(indicatorId) }` (a module id, a
+plural noun, and a function that counts that module's rows about the indicator). `indicators.delete` asks every entry after its own checks, and an
+indicator that something uses is **409 naming each module and the count** (`kpi.ingestion (12 measurements)`), the sets first and then each
+contributor. The `restrict` key of the contributor's table stays as the last guard, and a refusal by any key is 409, not 500. `kpi.ingestion`
+contributes the count of its measurements. A module that stores rows about an indicator contributes one entry; nothing here names a module.
+
 ### The effective KPI set of a service
 
 One rule, written once in [service/merge.ts](service/merge.ts) (pure: the browser draws the same list the server answers with) and one
-query function over it, `effectiveSet` in [service/effective.ts](service/effective.ts): the rows of the service's KPI set with their
+query functions over it in [service/effective.ts](service/effective.ts), `effectiveSet` (the service's links, then `effectiveOf`) and `effectiveOf` (a given set and extras, also for a past state): the rows of the service's KPI set with their
 necessity, plus the extras that the set does **not** contain, each with the necessity `optional`. An indicator in the set cannot be an
 extra (it is dropped on write and ignored on read), the set's rows are never removed or changed by an extra, an indicator appears once,
 and the order is stable: set rows first, then extras, each by name without case, then name, then id, whatever the order of the input.

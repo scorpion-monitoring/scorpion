@@ -28,13 +28,16 @@ export { makeService, type MakeService, type ServiceRow } from './services.ts';
 export {
   makeIndicator,
   makeKpiSet,
+  makeServiceKpiHistory,
   makeServiceKpis,
   type IndicatorRow,
   type KpiSetRow,
   type MakeIndicator,
   type MakeKpiSet,
+  type MakeServiceKpiHistory,
   type MakeServiceKpis,
 } from './kpi.ts';
+export { makeMeasurement, type MakeMeasurement, type MeasurementRow } from './measurements.ts';
 export {
   makePreference,
   makeSecret,

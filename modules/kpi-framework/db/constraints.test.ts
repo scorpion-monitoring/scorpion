@@ -1,6 +1,7 @@
 // What the database itself refuses, whatever the service does: the rules that must hold for every writer
 // (the migration tool of M13 included). Real Postgres; rows come from the factories where a row is valid.
-import { makeIndicator, makeKpiSet } from '@scorpion/testing';
+import { makeIndicator, makeKpiSet, makeServiceKpiHistory } from '@scorpion/testing';
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { useKpi } from '../test/harness.ts';
 
@@ -218,5 +219,95 @@ describe('the constraints of the evaluation', () => {
         ]),
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('the constraints of the history of a service’s KPIs', () => {
+  const T0 = '2026-01-10T12:00:00Z';
+  const T1 = '2026-02-10T12:00:00Z';
+
+  it('refuses a row that ends before it begins, and one that ends when it begins', async () => {
+    const s = await h.start();
+    const serviceId = randomUUID();
+    for (const validTo of [T0, '2026-01-01T00:00:00Z'])
+      expect(
+        await constraintOf(makeServiceKpiHistory(s.pool, { serviceId, validFrom: T0, validTo })),
+      ).toBe('kpif_service_kpi_history_range_check');
+  });
+
+  it('allows one open row per service, and a second service has its own', async () => {
+    const s = await h.start();
+    const serviceId = randomUUID();
+    await makeServiceKpiHistory(s.pool, { serviceId, validFrom: T0 });
+    expect(await constraintOf(makeServiceKpiHistory(s.pool, { serviceId, validFrom: T1 }))).toBe(
+      'kpif_service_kpi_history_open_idx',
+    );
+    expect(
+      await constraintOf(makeServiceKpiHistory(s.pool, { serviceId: randomUUID(), validFrom: T0 })),
+    ).toBeUndefined();
+  });
+
+  it('refuses two rows of one service that begin at the same instant', async () => {
+    const s = await h.start();
+    const serviceId = randomUUID();
+    await makeServiceKpiHistory(s.pool, { serviceId, validFrom: T0, validTo: T1 });
+    expect(
+      await constraintOf(
+        makeServiceKpiHistory(s.pool, {
+          serviceId,
+          validFrom: T0,
+          validTo: '2026-03-01T00:00:00Z',
+        }),
+      ),
+    ).toBe('kpif_service_kpi_history_service_id_valid_from_pk');
+  });
+
+  it('refuses more extras than the service layer allows', async () => {
+    const s = await h.start();
+    const extras = Array.from({ length: 201 }, () => randomUUID());
+    expect(
+      await constraintOf(
+        makeServiceKpiHistory(s.pool, { serviceId: randomUUID(), validFrom: T0, extras }),
+      ),
+    ).toBe('kpif_service_kpi_history_extras_check');
+  });
+
+  it('is append-only: a delete is refused, and so is every update but closing the open row once', async () => {
+    const s = await h.start();
+    const serviceId = randomUUID();
+    await makeServiceKpiHistory(s.pool, { serviceId, validFrom: T0 });
+    const run = (sql: string) => constraintOf(s.pool.query(sql, [serviceId]));
+    const append = /append-only/;
+    expect(await run('delete from kpif_service_kpi_history where service_id = $1')).toMatch(append);
+    for (const change of [
+      "set_id = '018f3b7e-0000-7000-8000-000000000001'",
+      "extras = '{018f3b7e-0000-7000-8000-000000000001}'",
+      "valid_from = '2026-01-11T00:00:00Z'",
+      "service_id = '018f3b7e-0000-7000-8000-000000000001'",
+      "changed_by = '018f3b7e-0000-7000-8000-000000000001'",
+      // "closing" that also changes something else is an edit
+      `valid_to = '${T1}', set_id = '018f3b7e-0000-7000-8000-000000000001'`,
+      // reopening and clearing are not closings
+      'valid_to = null',
+    ])
+      expect(
+        await run(`update kpif_service_kpi_history set ${change} where service_id = $1`),
+        change,
+      ).toMatch(append);
+    // Closing the open row, once, is the one update that works.
+    expect(
+      await run(`update kpif_service_kpi_history set valid_to = '${T1}' where service_id = $1`),
+    ).toBeUndefined();
+    expect(
+      await run(
+        `update kpif_service_kpi_history set valid_to = '2026-03-01T00:00:00Z' where service_id = $1`,
+      ),
+    ).toMatch(append);
+    expect(await run('delete from kpif_service_kpi_history where service_id = $1')).toMatch(append);
+    const left = await s.pool.query(
+      'select valid_to from kpif_service_kpi_history where service_id = $1',
+      [serviceId],
+    );
+    expect(left.rows).toHaveLength(1);
   });
 });
