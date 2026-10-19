@@ -19,7 +19,7 @@
     "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@scorpion/core-blob": "workspace:*",
