@@ -227,7 +227,7 @@ describe('defineProfile', () => {
   });
 
   it('checks module ids against the workspace (no module exists yet, so any id is an error)', () => {
-    // @ts-expect-error 'kpi.ingestion' is not a module in the workspace
-    defineProfile({ name: 'x', modules: ['kpi.ingestion'] });
+    // @ts-expect-error 'kpi.analytics' is not a module in the workspace
+    defineProfile({ name: 'x', modules: ['kpi.analytics'] });
   });
 });

@@ -229,7 +229,7 @@ interface Services {
 describe('what the create wizard records', () => {
   it('appends the first row with the service, in the same transaction', async () => {
     const { s, admin, setA, b } = await setup();
-    const services = s.kernel.services.get('registry.services') as unknown as Services;
+    const services = s.kernel.services.get('registry.services') as Services;
     const provider = await makeOrganisation(s.pool, { type: 'provider' });
     const created = await services.create(admin, {
       slug: uniq('wz'),
@@ -249,7 +249,7 @@ describe('what the create wizard records', () => {
 
   it('writes nothing for a service created without a set', async () => {
     const { s, admin } = await setup();
-    const services = s.kernel.services.get('registry.services') as unknown as Services;
+    const services = s.kernel.services.get('registry.services') as Services;
     const provider = await makeOrganisation(s.pool, { type: 'provider' });
     const before = await count(s.pool, 'kpif_service_kpi_history');
     const created = await services.create(admin, {
@@ -263,7 +263,7 @@ describe('what the create wizard records', () => {
 
   it('leaves no service and no history row when the event cannot be stored', async () => {
     const { s, admin, setA, b } = await setup();
-    const services = s.kernel.services.get('registry.services') as unknown as Services;
+    const services = s.kernel.services.get('registry.services') as Services;
     const provider = await makeOrganisation(s.pool, { type: 'provider' });
     const before = {
       history: await count(s.pool, 'kpif_service_kpi_history'),

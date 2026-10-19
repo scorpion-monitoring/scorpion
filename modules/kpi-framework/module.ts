@@ -112,7 +112,7 @@ export function createKpiFrameworkModule() {
   >({
     id: 'kpi.framework',
     version: '0.1.0',
-    // `kpif_indicator`, not `kpi_framework_indicator`; `kpi.ingestion` will use `kpii_` (ADR 0004, ADR-0040).
+    // `kpif_indicator`, not `kpi_framework_indicator`; `kpi.ingestion` uses `kpii_` (ADR 0004, ADR-0040).
     tablePrefix: 'kpif_',
 
     permissions: {
