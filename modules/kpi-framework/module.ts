@@ -11,6 +11,12 @@ import {
 import { registerKpiRoutes } from './routes.ts';
 import { registerRdfRoutes } from './routes-rdf.ts';
 import { registerV1Routes } from './routes-v1.ts';
+import {
+  INDICATOR_USAGE_REGISTRY,
+  indicatorUsageEntrySchema,
+  type IndicatorUsageEntry,
+} from './service/indicator-usage.ts';
+import { kpisInPeriod, type KpisInPeriod } from './service/history.ts';
 import { createEvaluationService, type EvaluationService } from './service/evaluation.ts';
 import { createIndicatorsService, type IndicatorsService } from './service/indicators.ts';
 import {
@@ -68,6 +74,12 @@ export interface KpiFrameworkService {
   /** The registered value types (this module's five and any a module contributed), by id. */
   listValueTypes(): readonly ValueTypeEntry[];
   findValueType(id: string): ValueTypeEntry | undefined;
+  /**
+   * The KPIs a service had in a month (`YYYY-MM` or `YYYY-MM-DD`), as the history records them: the state at the **end** of that
+   * month, or `null` when the history holds none for it (ADR-0041 Decision 3). A trusted read for other modules (M11, M12): it
+   * checks no permission and names no caller; the caller checks its own.
+   */
+  kpisInPeriod(serviceId: string, period: string): Promise<KpisInPeriod | null>;
 }
 
 // The service types of the dependencies shape `ctx.deps`.
@@ -162,6 +174,8 @@ export function createKpiFrameworkModule() {
     // Other modules contribute a value type (a rating, a currency) without a change here.
     registries: {
       [VALUE_TYPE_REGISTRY]: valueTypeEntrySchema,
+      // A module that keeps rows about an indicator says how many, so the delete of an indicator can refuse (409).
+      [INDICATOR_USAGE_REGISTRY]: indicatorUsageEntrySchema,
     },
 
     // The pages (Svelte) are loaded by the web app only; the manifest names the part a server can read (the routes and texts, ui/pages.ts).
@@ -211,8 +225,14 @@ export function createKpiFrameworkModule() {
       const authz = ctx.deps['core.authz'];
       const settings = ctx.deps['core.settings'];
       const valueTypes = () => all;
+      const usageEntries = ctx.registry(INDICATOR_USAGE_REGISTRY) as IndicatorUsageEntry[];
       return {
-        indicators: createIndicatorsService(ctx, { authz, settings, valueTypes }),
+        indicators: createIndicatorsService(ctx, {
+          authz,
+          settings,
+          valueTypes,
+          usage: () => usageEntries,
+        }),
         sets: createSetsService(ctx, { authz, settings }),
         evaluation: createEvaluationService(ctx, { authz, settings, valueTypes }),
         v1: createV1Service(ctx, { authz, services: ctx.deps['registry.services'] }),
@@ -224,6 +244,7 @@ export function createKpiFrameworkModule() {
         ),
         listValueTypes: valueTypes,
         findValueType: (id) => byId.get(id),
+        kpisInPeriod: (serviceId, period) => kpisInPeriod(ctx.db, serviceId, period),
       };
     },
 
