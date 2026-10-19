@@ -43,3 +43,14 @@ export function normalisePeriod(input: unknown, now: Date): ParseResult<string> 
     return bad('is in the future: use the current month or an earlier one');
   return { ok: true, value: `${pad(year, 4)}-${pad(month, 2)}-${pad(length, 2)}` };
 }
+
+/** The latest instant `normalisePeriodBound` measures against: no month of the calendar is "in the future" for a filter. */
+const NO_FUTURE = new Date(Date.UTC(9999, 11, 31));
+
+/**
+ * The same as {@link normalisePeriod} for the `start` and `stop` of a read: a month after the current one is fine (a filter
+ * that reaches into the future finds nothing there), everything else is refused in the same words.
+ */
+export function normalisePeriodBound(input: unknown): ParseResult<string> {
+  return normalisePeriod(input, NO_FUTURE);
+}

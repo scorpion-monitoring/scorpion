@@ -5,10 +5,27 @@ import { INDICATOR_USAGE_REGISTRY, type KpiFrameworkPublic } from '@scorpion/kpi
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { count, eq } from 'drizzle-orm';
 import { measurement } from './db/schema.ts';
+import { registerRoutes } from './routes.ts';
+import { registerV1Routes } from './routes-v1.ts';
 import { createMeasurementsService, type MeasurementsService } from './service/measurements.ts';
-import { PERMISSION_SUBMIT, RESOURCE_SERVICE } from './service/permissions.ts';
+import {
+  PERMISSION_MEASUREMENT_READ,
+  PERMISSION_SUBMIT,
+  PERMISSION_V1_READ,
+  PERMISSION_V1_WRITE,
+  RESOURCE_SERVICE,
+} from './service/permissions.ts';
+import { createReadsService, type ReadsService } from './service/reads.ts';
 import { submitPolicy } from './service/policy.ts';
 
+export type {
+  CoverageMonth,
+  GridRow,
+  MeasurementRead,
+  MonthGrid,
+  ReadsService,
+  SeriesQuery,
+} from './service/reads.ts';
 export type {
   MeasurementInput,
   MeasurementsService,
@@ -22,6 +39,8 @@ export type {
 export interface KpiIngestionService {
   /** The measurements of a service: the one write path, `upsertBatch`. */
   measurements: MeasurementsService;
+  /** The reads: the time series of v1, the grid of a month and the coverage. */
+  reads: ReadsService;
 }
 
 // The service types of the dependencies shape `ctx.deps`.
@@ -68,6 +87,18 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
         description:
           'Submit measurements for one service (Admin, and the approved members of the service provider through the policy of this module)',
       },
+      [PERMISSION_V1_READ]: {
+        description:
+          'Read the measurements of a service (`GET /api/v1/measurements`) through the public API, with a token that holds this scope',
+      },
+      [PERMISSION_V1_WRITE]: {
+        description:
+          'Record measurements (`POST /api/v1/measurements`) through the public API, with a token that holds this scope; its owner must also be allowed to submit for the service (`kpi.ingestion.measurement.submit`)',
+      },
+      [PERMISSION_MEASUREMENT_READ]: {
+        description:
+          'Read the values of one month and the coverage of a service on the signed-in pages (the Data Submission page)',
+      },
     },
 
     schema: () => import('./db/schema.ts'),
@@ -78,6 +109,14 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     },
 
     contributes: {
+      // Every signed-in person reads every service's measurements, as services and KPI definitions are readable (decision 4 of the plan)
+      // and holds the plain scope of the write; the scoped `submit` decides who may write for a service. Admin holds all declared ones.
+      'authz.defaultRole': [
+        {
+          role: 'user',
+          permissions: [PERMISSION_V1_READ, PERMISSION_V1_WRITE, PERMISSION_MEASUREMENT_READ],
+        },
+      ],
       // Approved members of the service's provider may submit for it; the question is asked of registry.services at every call.
       'authz.resourcePolicy': [
         submitPolicy({
@@ -103,14 +142,22 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     services: (ctx) => {
       database = ctx.db;
       isProviderMember = ctx.deps['registry.services'].isProviderMemberAsSystem;
-      return {
-        measurements: createMeasurementsService(ctx, {
-          authz: ctx.deps['core.authz'],
-          services: ctx.deps['registry.services'],
-          kpi: ctx.deps['kpi.framework'],
-          clock: options.clock ?? (() => new Date()),
-        }),
+      const common = {
+        authz: ctx.deps['core.authz'],
+        services: ctx.deps['registry.services'],
+        kpi: ctx.deps['kpi.framework'],
+        clock: options.clock ?? (() => new Date()),
       };
+      return {
+        measurements: createMeasurementsService(ctx, common),
+        reads: createReadsService(ctx, common),
+      };
+    },
+
+    routes: (r) => {
+      const service = r.service<KpiIngestionService>();
+      registerV1Routes(r, service.reads, service.measurements);
+      registerRoutes(r, service.reads);
     },
   });
 }

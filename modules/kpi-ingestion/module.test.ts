@@ -28,7 +28,7 @@ const filesUnder = (folder: string, keep: (name: string) => boolean): string[] =
   });
 
 describe('the manifest', () => {
-  it('has the id, the table prefix kpii_ and the one scoped permission', () => {
+  it('has the id, the table prefix kpii_, the one scoped permission and the three plain ones', () => {
     expect(manifest.id).toBe('kpi.ingestion');
     expect(manifest.tablePrefix).toBe('kpii_');
     expect(manifest.permissions).toEqual({
@@ -36,19 +36,26 @@ describe('the manifest', () => {
         scope: 'service',
         description: expect.any(String) as string,
       },
+      'kpi.ingestion.v1.read': { description: expect.any(String) as string },
+      'kpi.ingestion.v1.write': { description: expect.any(String) as string },
+      'kpi.ingestion.measurement.read': { description: expect.any(String) as string },
     });
   });
 
-  it('declares the event measurement.recorded@1, no registry, no route and no page yet', () => {
+  it('declares the event measurement.recorded@1 and its routes, no registry and no page yet', () => {
     expect(Object.keys(manifest.events?.emits ?? {})).toEqual(['measurement.recorded@1']);
     expect(manifest.registries).toBeUndefined();
-    expect(manifest.routes).toBeUndefined();
+    expect(manifest.routes).toBeTypeOf('function');
     expect(manifest.ui).toBeUndefined();
   });
 
   it('contributes the policy of its scoped permission and the count of its measurements to kpi.framework', () => {
     const contributes = manifest.contributes ?? {};
-    expect(Object.keys(contributes).sort()).toEqual(['authz.resourcePolicy', 'kpi.indicatorUsage']);
+    expect(Object.keys(contributes).sort()).toEqual([
+      'authz.defaultRole',
+      'authz.resourcePolicy',
+      'kpi.indicatorUsage',
+    ]);
     expect(
       (contributes['authz.resourcePolicy'] as { resourceType: string }[]).map(
         (entry) => entry.resourceType,
@@ -62,7 +69,7 @@ describe('the manifest', () => {
     ).toEqual([['kpi.ingestion', 'measurements']]);
   });
 
-  it('depends on exactly what it imports, and the permission is not a role’s: no default role holds it', () => {
+  it('depends on exactly what it imports, and the scoped permission is not a role’s: only the three plain ones are held by the role user', () => {
     expect(
       Object.keys(packageJson.dependencies)
         .filter((name) => name.startsWith('@scorpion/'))
@@ -74,7 +81,17 @@ describe('the manifest', () => {
       '@scorpion/kpi-framework',
       '@scorpion/registry-services',
     ]);
-    expect(manifest.contributes?.['authz.defaultRole']).toBeUndefined();
+    // `submit` is in no role: the service decides who may write for a service. The plain ones are what a token's scopes name.
+    expect(manifest.contributes?.['authz.defaultRole']).toEqual([
+      {
+        role: 'user',
+        permissions: [
+          'kpi.ingestion.v1.read',
+          'kpi.ingestion.v1.write',
+          'kpi.ingestion.measurement.read',
+        ],
+      },
+    ]);
   });
 });
 

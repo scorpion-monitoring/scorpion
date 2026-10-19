@@ -1,6 +1,12 @@
 // normalisePeriod and daysInMonth: pure, table-driven. "Now" is a parameter, so nothing here depends on the date it runs.
 import { describe, expect, it } from 'vitest';
-import { daysInMonth, MIN_YEAR, normalisePeriod, PERIOD_FORMS } from './period.ts';
+import {
+  daysInMonth,
+  MIN_YEAR,
+  normalisePeriod,
+  normalisePeriodBound,
+  PERIOD_FORMS,
+} from './period.ts';
 
 const NOW = new Date('2026-06-15T12:00:00Z');
 
@@ -173,4 +179,27 @@ describe('normalisePeriod and the clock', () => {
     expect(result.ok).toBe(allowed);
     if (!result.ok) expect(result.problem).toContain('future');
   });
+});
+
+describe('normalisePeriodBound: the start and stop of a read', () => {
+  it.each([
+    ['2026-03', '2026-03-31'],
+    ['2026-03-15', '2026-03-31'],
+    ['2024-02', '2024-02-29'],
+    // a month in the future is fine for a filter (it finds nothing there), unlike a value
+    ['2999-12', '2999-12-31'],
+    [' 2026-01 ', '2026-01-31'],
+  ])('%s is the month ending %s', (input, expected) => {
+    expect(normalisePeriodBound(input)).toEqual({ ok: true, value: expected });
+    expect(normalisePeriod('2999-12', NOW).ok).toBe(false);
+  });
+
+  it.each(['', '2026', '2026-13', '2026-02-30', '26-01', '2026-01-01T00:00', '1899-12', 7, null])(
+    'refuses %s in the words of normalisePeriod',
+    (input) => {
+      const bound = normalisePeriodBound(input);
+      expect(bound.ok).toBe(false);
+      expect(bound).toEqual(normalisePeriod(input, new Date('9999-12-31')));
+    },
+  );
 });

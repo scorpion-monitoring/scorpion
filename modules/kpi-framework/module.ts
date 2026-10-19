@@ -17,6 +17,13 @@ import {
   type IndicatorUsageEntry,
 } from './service/indicator-usage.ts';
 import { kpisInPeriod, type KpisInPeriod } from './service/history.ts';
+import {
+  effectiveIndicatorsAsSystem,
+  indicatorsByIdAsSystem,
+  type EffectiveIndicatorRow,
+  type IndicatorRowAsSystem,
+} from './service/trusted.ts';
+import { iriBaseOf } from './service/shared.ts';
 import { createEvaluationService, type EvaluationService } from './service/evaluation.ts';
 import { createIndicatorsService, type IndicatorsService } from './service/indicators.ts';
 import {
@@ -80,6 +87,17 @@ export interface KpiFrameworkService {
    * checks no permission and names no caller; the caller checks its own.
    */
   kpisInPeriod(serviceId: string, period: string): Promise<KpisInPeriod | null>;
+  /**
+   * The effective KPI set of a service with the value type, unit and bounds of each indicator (M10 sprint 2, ADR-0041). A trusted
+   * read: it checks no permission and names no caller, so a writer of values (`kpi.ingestion`) calls it after its own scoped
+   * check and a token needs no scope of the reads of this module. `[]` for a service without KPIs or one that does not exist.
+   */
+  effectiveIndicatorsAsSystem(serviceId: string): Promise<EffectiveIndicatorRow[]>;
+  /**
+   * Indicators by id with their name, IRI, value type and unit, for the reads of measurements, which show a value of an indicator
+   * the service has since dropped (M10 sprint 2, ADR-0041 "Amended in sprint 2"). A trusted read like the one above.
+   */
+  indicatorsByIdAsSystem(ids: readonly string[]): Promise<IndicatorRowAsSystem[]>;
 }
 
 // The service types of the dependencies shape `ctx.deps`.
@@ -245,6 +263,8 @@ export function createKpiFrameworkModule() {
         listValueTypes: valueTypes,
         findValueType: (id) => byId.get(id),
         kpisInPeriod: (serviceId, period) => kpisInPeriod(ctx.db, serviceId, period),
+        effectiveIndicatorsAsSystem: (serviceId) => effectiveIndicatorsAsSystem(ctx.db, serviceId),
+        indicatorsByIdAsSystem: (ids) => indicatorsByIdAsSystem(ctx.db, iriBaseOf(ctx), ids),
       };
     },
 
