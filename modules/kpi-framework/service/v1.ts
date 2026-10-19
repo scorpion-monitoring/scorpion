@@ -7,12 +7,11 @@ import type { AuthzService } from '@scorpion/core-authz/public';
 import type { Db, ModuleContext } from '@scorpion/kernel';
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { eq, inArray, sql, type SQL } from 'drizzle-orm';
-import seed from '../config/rimo-seed.json' with { type: 'json' };
-import { unitMetadata } from '../config/units.ts';
 import { indicator, indicatorMeans, indicatorTool, kpiSet, kpiSetIndicator } from '../db/schema.ts';
 import { effectiveSet } from './effective.ts';
 import { iriFor } from './iri.ts';
 import { PERMISSION_V1_READ } from './permissions.ts';
+import { rimoCategoryIri, unitRefOf } from './rimo.ts';
 import { iriBaseOf } from './shared.ts';
 
 export interface CategoryV1 {
@@ -80,8 +79,6 @@ export interface V1Deps {
 export const legacyType = (valueType: string): string =>
   valueType === 'integer' ? 'number' : valueType;
 
-const RIMO_IRI = new Map(seed.categories.map((category) => [category.key, category.iri]));
-
 export function createV1Service(ctx: ModuleContext, deps: V1Deps): V1Service {
   const db: Db = ctx.db;
   const iriBase = iriBaseOf(ctx);
@@ -119,7 +116,7 @@ export function createV1Service(ctx: ModuleContext, deps: V1Deps): V1Service {
           name: row.name,
           iri: iriFor('set', row.slug, base),
           description: row.description,
-          rimoCategory: row.rimoCategory ? (RIMO_IRI.get(row.rimoCategory) ?? null) : null,
+          rimoCategory: row.rimoCategory ? rimoCategoryIri(row.rimoCategory) : null,
           indicators: counted.get(row.id) ?? 0,
         })),
         total: count?.total ?? 0,
@@ -205,7 +202,7 @@ export function createV1Service(ctx: ModuleContext, deps: V1Deps): V1Service {
 
       return {
         indicators: rows.map(({ row, necessity }) => {
-          const meta = row.unit ? unitMetadata(row.unit) : undefined;
+          const unit = row.unit ? unitRefOf(row.unit, base) : null;
           return {
             id: row.id,
             iri: iriFor('indicator', row.slug, base),
@@ -216,13 +213,7 @@ export function createV1Service(ctx: ModuleContext, deps: V1Deps): V1Service {
             valueType: row.valueType,
             qualitative: row.qualitative,
             thematicCategory: row.thematic,
-            unit: row.unit
-              ? {
-                  key: row.unit,
-                  symbol: meta?.symbol ?? null,
-                  iri: meta?.iri ?? iriFor('unit', row.unit, base),
-                }
-              : null,
+            unit: unit && { key: unit.key, symbol: unit.symbol, iri: unit.uoIri ?? unit.mintedIri },
             min: number(row.minValue),
             max: number(row.maxValue),
             measuredBy: termsOf(means, row.id),

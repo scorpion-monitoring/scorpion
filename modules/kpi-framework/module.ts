@@ -9,6 +9,7 @@ import {
   WIZARD_STEP_REGISTRY,
 } from '@scorpion/registry-services/public';
 import { registerKpiRoutes } from './routes.ts';
+import { registerRdfRoutes } from './routes-rdf.ts';
 import { registerV1Routes } from './routes-v1.ts';
 import { createEvaluationService, type EvaluationService } from './service/evaluation.ts';
 import { createIndicatorsService, type IndicatorsService } from './service/indicators.ts';
@@ -21,6 +22,7 @@ import {
   PERMISSION_V1_READ,
   RESOURCE_SERVICE,
 } from './service/permissions.ts';
+import { createRdfService, type RdfService } from './service/rdf-model.ts';
 import { createV1Service, type V1Service } from './service/v1.ts';
 import { createSetsService, type SetsService } from './service/sets.ts';
 import { kpiPolicy, kpiSetFacet, kpiSetFieldType, kpiSetStep } from './service/contributions.ts';
@@ -61,6 +63,8 @@ export interface KpiFrameworkService {
   serviceKpis: ServiceKpisService;
   /** The reads of the public API. */
   v1: V1Service;
+  /** The indicators and KPI sets as RIMO-shaped Turtle and JSON-LD. */
+  rdf: RdfService;
   /** The registered value types (this module's five and any a module contributed), by id. */
   listValueTypes(): readonly ValueTypeEntry[];
   findValueType(id: string): ValueTypeEntry | undefined;
@@ -120,7 +124,7 @@ export function createKpiFrameworkModule() {
       },
       [PERMISSION_V1_READ]: {
         description:
-          'Read the KPI sets (`GET /api/v1/categories`) and the indicators (`GET /api/v1/indicators`) through the public API, with a token that holds this scope',
+          'Read the KPI sets (`GET /api/v1/categories`), the indicators (`GET /api/v1/indicators`) and the RDF of both (`GET /api/v1/kpi/rimo.ttl` and `.jsonld`) through the public API, with a token that holds this scope',
       },
     },
 
@@ -212,6 +216,7 @@ export function createKpiFrameworkModule() {
         sets: createSetsService(ctx, { authz, settings }),
         evaluation: createEvaluationService(ctx, { authz, settings, valueTypes }),
         v1: createV1Service(ctx, { authz, services: ctx.deps['registry.services'] }),
+        rdf: createRdfService(ctx, { authz }),
         serviceKpis: createServiceKpisService(
           ctx,
           { authz, services: ctx.deps['registry.services'] },
@@ -225,6 +230,7 @@ export function createKpiFrameworkModule() {
     routes: (r) => {
       registerKpiRoutes(r, r.service<KpiFrameworkService>());
       registerV1Routes(r, r.service<KpiFrameworkService>().v1);
+      registerRdfRoutes(r, r.service<KpiFrameworkService>().rdf);
     },
   });
 }

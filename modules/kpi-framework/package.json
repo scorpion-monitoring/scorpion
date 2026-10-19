@@ -31,7 +31,11 @@
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/testing": "workspace:*",
     "@scorpion/ui-kit": "workspace:*",
+    "@types/jsonld": "^1.5.15",
+    "@types/n3": "^1.26.4",
     "@types/pg": "^8.23.1",
+    "jsonld": "9.0.0",
+    "n3": "2.13.12",
     "pg": "^8.23.1"
   },
   "peerDependencies": {
