@@ -143,6 +143,8 @@ the same file answers 401 and 403 on every non-public route.
 | `DELETE /kpi/sets/{id}`                         | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
 | `GET /api/v1/categories`                        | kpi.framework          | `kpi.framework.v1.read`                      | default    | yes            |
 | `GET /api/v1/indicators`                        | kpi.framework          | `kpi.framework.v1.read`                      | default    | yes            |
+| `GET /api/v1/kpi/rimo.jsonld`                   | kpi.framework          | `kpi.framework.v1.read`                      | default    | yes            |
+| `GET /api/v1/kpi/rimo.ttl`                      | kpi.framework          | `kpi.framework.v1.read`                      | default    | yes            |
 | `GET /kpi/indicators`                           | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
 | `GET /kpi/indicators/{id}`                      | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
 | `GET /kpi/services/{id}/kpis`                   | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
@@ -150,6 +152,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /kpi/sets/{id}`                            | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
 | `GET /kpi/sets/{id}/evaluation`                 | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
 | `GET /kpi/value-types`                          | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
+| `GET /public/kpi/rimo.jsonld`                   | kpi.framework          | **public**                                   | default    | no             |
+| `GET /public/kpi/rimo.ttl`                      | kpi.framework          | **public**                                   | default    | no             |
 | `POST /kpi/indicators`                          | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
 | `POST /kpi/sets`                                | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
 | `PUT /kpi/indicators/{id}`                      | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
@@ -620,6 +624,32 @@ route's permission and whose owner holds it (the role `user` does by default); t
 
 `GET /api/v1/services/{id}/schema-org` is the profile of the internal route (the same builder and `serializeJsonLd`): a `Service` has no contact point and the
 profile never maps the stage; the `logo` is the one the public profile shows anyone.
+
+### The RDF reads of the KPIs (token and anonymous)
+
+`kpi.framework` (M9 sprint 4) writes its indicators and KPI sets as RIMO-shaped Turtle and JSON-LD, in two pairs of routes over **one model**
+(`service/rdf-model.ts`). The model holds definitions only: indicators (name, description, example, qualitative, value type, bounds, thematic
+category), their units, means of measurement and automation tools, and the KPI sets as categories. It has **no field** for a service, a person, a
+token, a contact point or a measurement, so neither pair can say one; `kpi-rdf-routes.test.ts` fills a database with all of them and fails when a
+marker of any appears in a body or a header of the four answers.
+
+| Route                                                                   | Who reads it                                                         | Notes                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld`            | `kpi.framework.v1.read` (a token whose scopes name it, or a session) | The family's one permission, held by the role `user`, checked in the pipeline and again in the service. Audited like the other v1 reads. `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`, no ETag. A query string is 422.                                                        |
+| `GET /public/kpi/rimo.ttl` and `GET /public/kpi/rimo.jsonld` (internal) | anyone, with no token and no session                                 | **public**, with the reason in the route: the definitions are the shared vocabulary of the instance, meant for systems and people without an account. `Cache-Control: public, max-age=300` and a strong ETag; `If-None-Match` gets 304. A query string is 422, so junk cannot fragment a shared cache. |
+
+**Why a token on the v1 pair.** The v1 pair is a read of the public API like `/categories` and `/indicators`: a program that holds a token reads the whole
+family with one scope, and the call is in the audit trail with the token's id. **Why a public pair as well.** Decision 9 of the M9 plan: an IRI of an
+indicator should lead somewhere a stranger can read what it means. The IRIs themselves still identify and do not dereference (the pair is a fixed address,
+not the address of each IRI), and the public pair says only what the token-bearing pair says to every holder of the role `user`. What the instance
+chooses to publish is therefore the **catalogue of indicators**, not anything about who runs which service; an operator who does not want it public
+removes `kpi.framework` from the profile (there is no setting that switches the public pair off, see the backlog).
+
+What the output is made of. No free text becomes an IRI: every IRI is built from a slug or a vocabulary key that a check constraint or the term key rule
+restricts to `[A-Za-z0-9._-]`, joined to a validated base, and the writer refuses anything that is not a plain `http(s)` IRI before it writes it. Free text
+(names, descriptions, examples, the name of a set) is written only as a literal, through one escaping function for Turtle and `JSON.stringify` for
+JSON-LD (with `<`, `>`, `&` and the line separators escaped); both formats are rendered from one graph and the tests load each with a real parser
+(`n3`, `jsonld`; dev dependencies, never in the server) to prove that a hostile name stays one literal and adds no statement.
 
 ### Membership
 

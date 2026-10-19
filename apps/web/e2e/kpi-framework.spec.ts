@@ -4,6 +4,7 @@ import { adminApi, unique } from './support/admin.ts';
 import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
 import { makeOrg, memberOf, pageAs, uniqueAbbreviation } from './support/members.ts';
 import { newPerson } from './support/admin.ts';
+import { callFromReference, openReference } from './support/reference.ts';
 
 // M9 sprint 2: an Admin looks after the indicators and the KPI sets in the browser. The journey creates an
 // indicator with a unit and bounds and a qualitative one, builds a KPI set with them (the paginated picker, a
@@ -492,6 +493,7 @@ test.describe('the calls the KPI parts add', () => {
     await expect(page.getByTestId('service-kpis').getByText(w.first.name)).toBeVisible();
     const onPage = kpiCalls();
     test.info().annotations.push({ type: 'service page', description: onPage.join(' | ') });
+    console.log(`[kpi-calls] service page: ${onPage.join(' | ')}`);
     expect(onPage.filter((call) => call.includes('/kpi/services/'))).toHaveLength(1);
     expect(onPage.filter((call) => call.includes('/vocabularies/')).length).toBeLessThanOrEqual(2);
     expect(onPage.filter((call) => !/\/kpi\/services\/|\/vocabularies\//.test(call))).toEqual([]);
@@ -507,6 +509,7 @@ test.describe('the calls the KPI parts add', () => {
       type: 'service page, second visit',
       description: kpiCalls().join(' | '),
     });
+    console.log(`[kpi-calls] service page, second visit: ${kpiCalls().join(' | ')}`);
     expect(kpiCalls().filter((call) => call.includes('/vocabularies/'))).toEqual([]);
     expect(kpiCalls().filter((call) => call.includes('/kpi/services/'))).toHaveLength(1);
 
@@ -526,6 +529,7 @@ test.describe('the calls the KPI parts add', () => {
       type: 'wizard step, on arrival',
       description: onStep.join(' | ') || 'none',
     });
+    console.log(`[kpi-calls] wizard step, on arrival: ${onStep.join(' | ') || 'none'}`);
     // On arrival nothing of the KPI parts is asked for: the sets came with the schema.
     expect(onStep).toEqual([]);
     seen.length = 0;
@@ -538,6 +542,7 @@ test.describe('the calls the KPI parts add', () => {
     test
       .info()
       .annotations.push({ type: 'wizard step, a set chosen', description: onChoice.join(' | ') });
+    console.log(`[kpi-calls] wizard step, a set chosen: ${onChoice.join(' | ')}`);
     // The set's rows, and the words of the necessity and the unit (once per session).
     expect(onChoice.filter((call) => call.includes('/kpi/sets/'))).toHaveLength(1);
     expect(onChoice.filter((call) => call.includes('/vocabularies/')).length).toBeLessThanOrEqual(
@@ -555,8 +560,193 @@ test.describe('the calls the KPI parts add', () => {
     test
       .info()
       .annotations.push({ type: 'wizard step, a search', description: kpiCalls().join(' | ') });
+    console.log(`[kpi-calls] wizard step, a search: ${kpiCalls().join(' | ')}`);
     expect(kpiCalls()).toHaveLength(1);
     await opened.close();
     await api.dispose();
+  });
+});
+
+// M9 sprint 4: the whole road of an indicator, from the form to the API. An administrator creates an indicator with a unit,
+// builds a KPI set mapped to a RIMO category, creates a service with that set in the wizard, changes the set on the service
+// page, then reads the indicators and the RDF through the reference page with a token, and without one where the reads are
+// public. Under both base paths.
+
+/** Makes a token on the profile page, as a person does, and returns its secret. */
+async function makeToken(page: Page, name: string, scope: string): Promise<string> {
+  const tokens = page.getByRole('region', { name: 'Access tokens' });
+  await tokens.getByLabel('Name', { exact: true }).fill(name);
+  await tokens.getByRole('checkbox', { name: scope }).check();
+  await tokens.getByRole('button', { name: 'Create the token' }).click();
+  const secret = (await page.getByTestId('token-secret').textContent())!;
+  await page.getByRole('button', { name: 'I have copied it' }).click();
+  await tokens.getByRole('checkbox', { name: scope }).uncheck();
+  return secret;
+}
+
+test.describe('journey: from the indicator form to the RDF read', () => {
+  test('an indicator with a unit reaches a service through a set, and the API and the RDF say so', async ({
+    page,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const api = await adminApi(playwright, baseURL, at);
+    const tag = unique('kr');
+    const views = `Views ${tag}`;
+    const setName = `Set ${tag}`;
+    const otherSet = await api.send('POST', '/kpi/sets', { name: `Other set ${tag}` });
+    expect(otherSet.status, JSON.stringify(otherSet.body)).toBe(201);
+    const provider = await makeOrg(api, uniqueAbbreviation('KRA'));
+    await signInThroughPage(page, at, admin);
+
+    // The indicator, with a unit and a bound.
+    await page.goto(at('/kpi/indicators/new'));
+    await page.getByLabel(/^Name/).fill(views);
+    await page.getByLabel(/^Thematic category/).selectOption({ label: 'Usage' });
+    await page.getByLabel(/^Value type/).selectOption({ label: 'Whole number' });
+    await page.getByLabel('Unit').selectOption({ label: 'Count' });
+    await page.getByLabel('Smallest value').fill('0');
+    await page.getByRole('button', { name: 'Create the indicator' }).click();
+    await expect(toast(page).getByText(`${views} was created.`)).toBeVisible();
+
+    // The set, mapped to a RIMO category, with the indicator as mandatory.
+    await page.goto(at('/kpi/sets/new'));
+    await page.getByLabel(/^Name/).fill(setName);
+    await page.getByLabel('RIMO category').selectOption({ label: 'Web application' });
+    await page.getByRole('button', { name: 'Create the KPI set' }).click();
+    await expect(toast(page).getByText(`${setName} was created.`)).toBeVisible();
+    await page.getByLabel('Search indicators').fill(tag);
+    await page.getByRole('button', { name: 'Search', exact: true }).last().click();
+    await page.getByRole('button', { name: `Add ${views}` }).click();
+    await page.getByLabel(`Necessity of ${views}`).selectOption({ label: 'Mandatory' });
+    await page.getByRole('button', { name: 'Save the indicators' }).click();
+    await expect(toast(page).getByText('The indicators were saved.')).toBeVisible();
+
+    // A service with that set, made in the wizard.
+    await page.goto(at('/services/new'));
+    await page.getByLabel(/^Short name/).fill(`${tag}-svc`);
+    await page.getByLabel(/^Name/).fill(`${tag} service`);
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByLabel(/^Operated by/).selectOption(provider.id);
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByLabel('KPI set', { exact: true }).selectOption({ label: setName });
+    await expect(page.getByRole('row').filter({ hasText: views })).toContainText('Mandatory');
+    await page.getByRole('button', { name: 'Create service' }).click();
+    await expect(page.getByRole('heading', { name: 'Service created' })).toBeVisible();
+
+    // The set is changed on the service page.
+    await page.goto(at(`/services/${tag}-svc`));
+    const section = page.getByTestId('service-kpis');
+    await expect(section.getByText(setName)).toBeVisible();
+    await section.getByRole('button', { name: 'Change KPIs' }).click();
+    await section
+      .getByLabel('KPI set', { exact: true })
+      .selectOption({ label: `Other set ${tag}` });
+    await section.getByRole('button', { name: 'Save KPIs' }).click();
+    await expect(section.getByText('The KPIs were saved.')).toBeVisible();
+    const service = await api.get<{ id: string }>(`/services/by-slug/${tag}-svc`);
+    const kpis = await api.get<{ set: { id: string } }>(`/kpi/services/${service.id}/kpis`);
+    expect(kpis.set.id).toBe((otherSet.body as { id: string }).id);
+
+    // A token with the scope of the KPI reads; the reference page makes the calls.
+    await page.goto(at('/profile'));
+    const good = await makeToken(page, `kr${tag}`, 'kpi.framework.v1.read');
+    await openReference(page, at);
+    const indicators = await callFromReference(page, 'List the indicators', good);
+    expect(indicators.status).toMatch(/^200\b/);
+    const turtle = await callFromReference(
+      page,
+      'Read the indicators and KPI sets as RDF (Turtle)',
+      good,
+    );
+    expect(turtle.status).toMatch(/^200\b/);
+    // Scalar does not draw a Turtle answer, so the text is checked by the plain request below; the status is the server's.
+    const jsonLd = await callFromReference(
+      page,
+      'Read the indicators and KPI sets as RDF (JSON-LD)',
+      good,
+    );
+    expect(jsonLd.status).toMatch(/^200\b/);
+
+    // The same through plain requests: the indicator with its unit, the RDF with the mapped category and no service.
+    const program = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: { authorization: `Bearer ${good}` },
+    });
+    const list = await program.get(
+      at(`/api/v1/indicators?category=${encodeURIComponent(setName)}`),
+    );
+    expect(list.status()).toBe(200);
+    const { result, metadata } = (await list.json()) as {
+      metadata: { totalCount: number };
+      result: { name: string; unit: { key: string; symbol: string | null }; necessity: string }[];
+    };
+    expect(metadata.totalCount).toBe(1);
+    expect(result[0]).toMatchObject({
+      name: views,
+      unit: { key: 'count' },
+      necessity: 'mandatory',
+    });
+    const ttl = await program.get(at('/api/v1/kpi/rimo.ttl'));
+    expect(ttl.status()).toBe(200);
+    expect(ttl.headers()['content-type']).toBe('text/turtle; charset=utf-8');
+    expect(ttl.headers()['cache-control']).toBe('private, no-cache');
+    const body = await ttl.text();
+    expect(body).toContain(`rimo:KPIName "${views}"`);
+    expect(body).toContain('rimo:mandatoryFor rimo:Web_application');
+    expect(body).toContain('rimo:hasUnit uo:0000189');
+    expect(body).not.toContain(`${tag}-svc`);
+    expect(body).not.toContain(`${tag} service`);
+    expect((await program.get(at('/api/v1/kpi/rimo.jsonld'))).status()).toBe(200);
+    const anonymous = await playwright.request.newContext({ baseURL });
+    expect((await anonymous.get(at('/api/v1/kpi/rimo.ttl'))).status()).toBe(401);
+
+    // Without a token: the public definitions are the same document, with an ETag that gets 304.
+    const open = await anonymous.get(at('/api/internal/public/kpi/rimo.ttl'));
+    expect(open.status()).toBe(200);
+    expect(await open.text()).toBe(body);
+    expect(open.headers()['cache-control']).toBe('public, max-age=300');
+    const etag = open.headers().etag!;
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    const again = await anonymous.get(at('/api/internal/public/kpi/rimo.ttl'), {
+      headers: { 'if-none-match': etag },
+    });
+    expect(again.status()).toBe(304);
+    const openJson = await anonymous.get(at('/api/internal/public/kpi/rimo.jsonld'));
+    expect(openJson.status()).toBe(200);
+    expect(openJson.headers()['content-type']).toBe('application/ld+json; charset=utf-8');
+
+    // Clean up what this run made that others could trip over: the service stays (nothing deletes a service), the set goes.
+    await program.dispose();
+    await anonymous.dispose();
+    await api.dispose();
+  });
+});
+
+// The reads and the landing page speak to a person who is not signed in: the page lists the routes and the reference shows them.
+test.describe('the landing page and the reference list the RDF reads', () => {
+  test('the routes are on /docs with their scope, and the reference has them with the token scheme', async ({
+    page,
+    at,
+  }) => {
+    await signInThroughPage(page, at, admin);
+    await page.goto(at('/docs'));
+    for (const path of ['/kpi/rimo.ttl', '/kpi/rimo.jsonld']) {
+      const row = page
+        .getByRole('row')
+        .filter({ has: page.getByRole('cell', { name: path, exact: true }) });
+      await expect(row).toContainText('kpi.framework.v1.read');
+    }
+    await openReference(page, at);
+    await expect(
+      page.getByRole('link', { name: 'Read the indicators and KPI sets as RDF (Turtle)' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Read the indicators and KPI sets as RDF (JSON-LD)' }),
+    ).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Token' }).first()).toBeVisible();
   });
 });

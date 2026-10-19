@@ -1,0 +1,86 @@
+@prefix rimo: <http://w3id.org/RIMO#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix uo: <http://purl.obolibrary.org/obo/UO_> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix scorpion: <https://kpi.example.org/kpi/ns#> .
+
+<https://kpi.example.org/kpi/catalogue/rimo> dct:conformsTo <http://w3id.org/RIMO> ;
+    dct:hasVersion "0.2.0" .
+
+rimo:Web_application a rimo:ServiceCategory .
+
+<https://kpi.example.org/kpi/set/own-set> a rimo:ServiceCategory ;
+    skos:prefLabel "Our own \"set\"" ;
+    dct:description "For\nthe own services." .
+
+<https://kpi.example.org/kpi/unit/count> a scorpion:Unit ;
+    skos:notation "count" ;
+    skos:closeMatch uo:0000189 .
+
+<https://kpi.example.org/kpi/unit/my-own-unit> a scorpion:Unit ;
+    skos:notation "my-own-unit" .
+
+<https://kpi.example.org/kpi/unit/percent> a scorpion:Unit ;
+    skos:notation "percent" ;
+    scorpion:symbol "%" ;
+    skos:closeMatch uo:0000187 .
+
+<https://kpi.example.org/kpi/means/web-analytics> a rimo:MeasurementMeans ;
+    skos:notation "web-analytics" .
+
+<https://kpi.example.org/kpi/tool/matomo> a rimo:AutomationTool ;
+    skos:notation "matomo" .
+
+<https://kpi.example.org/kpi/indicator/custom> a rimo:KPI ;
+    rimo:KPIName "Custom" ;
+    rimo:isQualitativeIndicator false ;
+    scorpion:thematicCategory "Usage" ;
+    rimo:hasValue <https://kpi.example.org/kpi/indicator/custom#value> .
+
+<https://kpi.example.org/kpi/indicator/custom#value> a rimo:KPIValue ;
+    rimo:hasUnit <https://kpi.example.org/kpi/unit/my-own-unit> ;
+    scorpion:unit <https://kpi.example.org/kpi/unit/my-own-unit> ;
+    scorpion:valueType "integer" ;
+    scorpion:maxValue "12.5"^^xsd:decimal .
+
+<https://kpi.example.org/kpi/indicator/page-views> a rimo:KPI ;
+    rimo:KPIName "Page views" ;
+    rimo:KPIDescription "How often pages were opened." ;
+    rimo:KPIExample "12 450 page views in March" ;
+    rimo:isQualitativeIndicator false ;
+    scorpion:thematicCategory "Usage" ;
+    rimo:hasValue <https://kpi.example.org/kpi/indicator/page-views#value> ;
+    rimo:measuredBy <https://kpi.example.org/kpi/means/web-analytics> ;
+    rimo:canBeAutomatedBy <https://kpi.example.org/kpi/tool/matomo> ;
+    rimo:mandatoryFor rimo:Web_application ;
+    rimo:appliedTo <https://kpi.example.org/kpi/set/own-set> .
+
+<https://kpi.example.org/kpi/indicator/page-views#value> a rimo:KPIValue ;
+    rimo:hasUnit uo:0000189 ;
+    scorpion:unit <https://kpi.example.org/kpi/unit/count> ;
+    scorpion:valueType "integer" ;
+    scorpion:minValue "0"^^xsd:decimal .
+
+<https://kpi.example.org/kpi/indicator/satisfaction> a rimo:KPI ;
+    rimo:KPIName "Satisfaction" ;
+    rimo:isQualitativeIndicator true ;
+    scorpion:thematicCategory "Satisfaction" ;
+    rimo:hasValue <https://kpi.example.org/kpi/indicator/satisfaction#value> .
+
+<https://kpi.example.org/kpi/indicator/satisfaction#value> a rimo:KPIValue ;
+    scorpion:valueType "text" .
+
+<https://kpi.example.org/kpi/indicator/uptime> a rimo:KPI ;
+    rimo:KPIName "Uptime" ;
+    rimo:isQualitativeIndicator false ;
+    scorpion:thematicCategory "Technical" ;
+    rimo:hasValue <https://kpi.example.org/kpi/indicator/uptime#value> ;
+    rimo:recommendedFor rimo:Web_application .
+
+<https://kpi.example.org/kpi/indicator/uptime#value> a rimo:KPIValue ;
+    rimo:hasUnit uo:0000187 ;
+    scorpion:unit <https://kpi.example.org/kpi/unit/percent> ;
+    scorpion:valueType "percentage" ;
+    scorpion:minValue "0"^^xsd:decimal ;
+    scorpion:maxValue "100"^^xsd:decimal .

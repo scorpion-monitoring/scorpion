@@ -1,8 +1,8 @@
-// The IRI of an indicator, a KPI set, a unit, a means of measurement and an automation tool (ADR-0040):
+// The IRI of an indicator, a KPI set, a unit, a means of measurement, an automation tool and the catalogue node of the RDF reads (ADR-0040):
 // `<base>/kpi/<kind>/<slug>`. Pure. No free text becomes an IRI: the slug alphabet is fixed and the base is
 // checked, so the one function that joins them refuses anything that is not a plain `http(s)` IRI.
 
-export const IRI_KINDS = ['indicator', 'set', 'unit', 'means', 'tool'] as const;
+export const IRI_KINDS = ['indicator', 'set', 'unit', 'means', 'tool', 'catalogue'] as const;
 export type IriKind = (typeof IRI_KINDS)[number];
 
 /** The slug of an indicator or a set, and the key of a vocabulary term: letters, digits, `.`, `_` and `-`. */

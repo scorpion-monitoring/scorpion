@@ -1,7 +1,13 @@
-// The contract test of the two v1 KPI routes (M9 sprint 3): the harness of packages/testing for each route, and the cases
+// The contract test of the v1 KPI routes (M9 sprint 3: categories and indicators; sprint 4: the two RDF reads): the harness of packages/testing for each route, and the cases
 // it cannot know: the legacy names and the added fields, the filters and the `totalCount` that follows them (defect 15),
 // an unknown category or service, the scope of the family, a token without it.
-import { listCategoriesV1Route, listIndicatorsV1Route } from '@scorpion/kpi-framework/public';
+import {
+  getRimoJsonLdV1Route,
+  getRimoTurtleV1Route,
+  listCategoriesV1Route,
+  listIndicatorsV1Route,
+} from '@scorpion/kpi-framework/public';
+import type { KpiFrameworkPublic } from '@scorpion/kpi-framework/public';
 import {
   makeIndicator,
   makeKpiSet,
@@ -82,7 +88,13 @@ beforeAll(async () => {
 
 const call: V1ContractContext['call'] = async ({ method, path, headers }) => {
   const reply = await started.call(method, path, { v1: true, headers });
-  return { status: reply.status, headers: reply.res.headers, body: reply.body };
+  // A Turtle answer is not JSON: the harness checks it against the string schema the route declares.
+  const type = reply.res.headers.get('content-type') ?? '';
+  return {
+    status: reply.status,
+    headers: reply.res.headers,
+    body: type.startsWith('text/') ? reply.bytes.toString('utf8') : reply.body,
+  };
 };
 const get = (path: string, who = token) =>
   started.getV1(path, { headers: { authorization: `Bearer ${who}` } });
@@ -233,9 +245,71 @@ describe('GET /indicators', () => {
   });
 });
 
+// 'GET /kpi/rimo.ttl' and 'GET /kpi/rimo.jsonld' are the names the walker looks for (v1RoutesWithoutContractTest).
+describe('GET /kpi/rimo.ttl', () => {
+  v1ContractTests(getRimoTurtleV1Route, contextOf({}));
+
+  it('answers Turtle, UTF-8, not cacheable by a shared cache, with nosniff, and it is the document of the service', async () => {
+    const reply = await get('/kpi/rimo.ttl');
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('content-type')).toBe('text/turtle; charset=utf-8');
+    expect(reply.res.headers.get('cache-control')).toBe('private, no-cache');
+    expect(reply.res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(reply.res.headers.get('etag')).toBeNull();
+    const text = reply.bytes.toString('utf8');
+    const service = started.kernel.services.get('kpi.framework') as KpiFrameworkPublic;
+    expect(text).toBe((await service.rdf.publicTurtleAsSystem()).body);
+    expect(text).toContain('@prefix rimo: <http://w3id.org/RIMO#> .');
+    expect(text).toContain('Contract indicator a');
+    expect(text).toContain('rimo:mandatoryFor rimo:Web_application');
+  });
+
+  it('is 401 without a token and 403 for a token of another scope, as problem+json', async () => {
+    const none = await started.getV1('/kpi/rimo.ttl');
+    expect(none.status).toBe(401);
+    expect(none.res.headers.get('content-type')).toContain('application/problem+json');
+    const wrong = await get('/kpi/rimo.ttl', servicesOnlyToken);
+    expect(wrong.status).toBe(403);
+    expect(wrong.res.headers.get('content-type')).toContain('application/problem+json');
+  });
+
+  it('is 422 for a parameter it does not take, never 500', async () => {
+    expect((await get('/kpi/rimo.ttl?pageSize=1')).status).toBe(422);
+  });
+});
+
+describe('GET /kpi/rimo.jsonld', () => {
+  v1ContractTests(getRimoJsonLdV1Route, contextOf({}));
+
+  it('answers JSON-LD, UTF-8, not cacheable by a shared cache, with nosniff, and it is the document of the service', async () => {
+    const reply = await get('/kpi/rimo.jsonld');
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('content-type')).toBe('application/ld+json; charset=utf-8');
+    expect(reply.res.headers.get('cache-control')).toBe('private, no-cache');
+    expect(reply.res.headers.get('x-content-type-options')).toBe('nosniff');
+    const service = started.kernel.services.get('kpi.framework') as KpiFrameworkPublic;
+    expect(reply.bytes.toString('utf8')).toBe((await service.rdf.publicJsonLdAsSystem()).body);
+    const document = reply.body as {
+      '@context': Record<string, string>;
+      '@graph': { '@id': string }[];
+    };
+    expect(document['@context'].rimo).toBe('http://w3id.org/RIMO#');
+    expect(
+      document['@graph'].some((node) => node['@id'].endsWith('/kpi/set/' + world.sets[1]!.slug)),
+    ).toBe(true);
+  });
+
+  it('is 401 without a token and 403 for a token of another scope, as problem+json', async () => {
+    expect((await started.getV1('/kpi/rimo.jsonld')).status).toBe(401);
+    const wrong = await get('/kpi/rimo.jsonld', servicesOnlyToken);
+    expect(wrong.status).toBe(403);
+    expect(wrong.res.headers.get('content-type')).toContain('application/problem+json');
+  });
+});
+
 describe('the scope of the KPI family', () => {
-  it('is needed on both routes: a token that names only the services scope is 403 [ASVS-8.3.1]', async () => {
-    for (const path of ['/categories', '/indicators']) {
+  it('is needed on every route: a token that names only the services scope is 403 [ASVS-8.3.1]', async () => {
+    for (const path of ['/categories', '/indicators', '/kpi/rimo.ttl', '/kpi/rimo.jsonld']) {
       expect((await get(path, servicesOnlyToken)).status, path).toBe(403);
     }
   });

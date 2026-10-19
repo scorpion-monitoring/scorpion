@@ -5,10 +5,10 @@ services. Its indicators follow the **Research Infrastructure Metrics Ontology (
 [m9-sprint-plan.md](../../docs/m9-sprint-plan.md)). It is the first module of the KPI phase; `kpi.ingestion` (M10) and `kpi.analytics`
 (M11) build on its tables, its value types and its vocabularies.
 
-Status: M9 sprint 3: the model, the vocabularies and the RIMO seed (sprint 1), the indicators and KPI sets with their service layer,
-internal routes, administration pages and evaluation (sprint 2), and the link of a service to its KPI set and extra indicators, the
-`kpi-set` wizard step, the section of the service page, the catalogue facet and the v1 reads `categories` and `indicators` (sprint 3).
-The RDF reads are sprint 4. The module is in the `full` profile only.
+Status: M9 sprint 4: the model, the vocabularies and the RIMO seed (sprint 1), the indicators and KPI sets with their service layer,
+internal routes, administration pages and evaluation (sprint 2), the link of a service to its KPI set and extra indicators, the
+`kpi-set` wizard step, the section of the service page, the catalogue facet and the v1 reads `categories` and `indicators` (sprint 3),
+and the RDF reads of the indicators as Turtle and JSON-LD, token-bearing and public (sprint 4). The module is in the `full` profile only.
 
 ## Manifest
 
@@ -17,7 +17,7 @@ The RDF reads are sprint 4. The module is in the `full` profile only.
 | id           | `kpi.framework` (package `@scorpion/kpi-framework`)                                                                                                                                                                                                                                                       |
 | table prefix | `kpif_` (set in the manifest; ADR-0004): `kpif_indicator`, `kpif_indicator_means`, `kpif_indicator_tool`, `kpif_kpi_set`, `kpif_kpi_set_indicator`, `kpif_evaluation`, `kpif_service_set`, `kpif_service_extra_indicator`. `kpi.ingestion` will use `kpii_`                                               |
 | dependencies | `core.authz`, `core.settings` (vocabularies, settings) and `registry.services` (it contributes to its registries and asks it whether a service exists and who may change it). `registry.services` does **not** depend on this module. No foreign key points to another module's table, a service included |
-| routes       | the internal routes below, and two v1 routes (`GET /api/v1/categories` and `/indicators`, see "Routes")                                                                                                                                                                                                   |
+| routes       | the internal routes below, the two public reads `GET /public/kpi/rimo.ttl` and `.jsonld`, and four v1 routes (`GET /api/v1/categories`, `/indicators`, `/kpi/rimo.ttl` and `/kpi/rimo.jsonld`, see "Routes")                                                                                              |
 | ui           | `./ui`: six pages through the registry `ui.routes` (see "Pages"), two `ui.nav` entries in the administration section, and the fourth export `wizardExtensions` (the widget of the `kpi-set` field and the section of the service page)                                                                    |
 | events       | emits `kpi.indicator.changed@1`, `kpi.set.changed@1` and `kpi.serviceSet.changed@1` (see "Events")                                                                                                                                                                                                        |
 | registries   | declares `kpi.valueType` and contributes its five entries; contributes the vocabularies below to `vocabulary` (core.settings), and to `registry.services` the field type, the wizard step and the facet below, and to `core.authz` a resource policy                                                      |
@@ -230,7 +230,60 @@ without case) marks the indicators of its effective set as `selected` and, witho
 remove the others. `totalCount` is the size of the filtered set (**defect 15**: the legacy count ignored the filters). A `category` or
 `service` that names nothing is 422 naming the parameter. The service row of `GET /api/v1/services` gains `category` (the name of the
 service's KPI set, `null` without one) and a `category` filter, contributed through the `service.facet` entry (see below). The unit is the
-Units Ontology IRI for a seeded unit, an IRI minted here for an administrator's own.
+Units Ontology IRI for a seeded unit, an IRI minted here for an administrator's own. The same definitions as RDF are `GET /api/v1/kpi/rimo.ttl`
+and `.jsonld` (next section).
+
+### The RDF reads (Turtle and JSON-LD)
+
+The indicators and KPI sets as RDF that follows RIMO 0.2.0 ([ADR-0040](../../docs/adr/0040-indicators-follow-rimo.md), the mapping table of
+[the plan](../../docs/m9-sprint-plan.md) §3), in two pairs of routes over **one model**:
+
+| Route                                                                                                              | Who                                                            | Cache and format                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld`                                                       | `kpi.framework.v1.read` (a token with the scope, or a session) | `text/turtle` or `application/ld+json`, UTF-8, `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`; audited like the other v1 reads |
+| `GET /public/kpi/rimo.ttl` and `GET /public/kpi/rimo.jsonld` (the internal surface, like `/public/services/{ref}`) | anyone, no token, no cookie                                    | the same bytes, `Cache-Control: public, max-age=300` and a strong ETag (the hash of the bytes); `If-None-Match` gets 304                              |
+
+Neither takes a query parameter (422), and a profile without this module has neither. The public pair gives **definitions only**: the model
+(`buildRdfModel`, one tested query function in [service/rdf-model.ts](service/rdf-model.ts)) has no field for a service, a person, a
+measurement or a token, so no route can say one; today the two pairs serve the same model and differ in who may ask and how the answer is cached.
+When M10 adds values, the model keeps them out and the public pair stays definitions. There is no setting that switches the public pair off
+(backlog).
+
+What the document says, in Turtle (the JSON-LD has the same triples; both are rendered from one graph in [service/rdf.ts](service/rdf.ts),
+pure and without a dependency):
+
+- A **catalogue node** `<base>/kpi/catalogue/rimo` with `dct:conformsTo <http://w3id.org/RIMO>` and `dct:hasVersion "0.2.0"`: the version the
+  export follows.
+- Each indicator is a `rimo:KPI` with `rimo:KPIName`, `rimo:KPIDescription` and `rimo:KPIExample` (when present), `rimo:isQualitativeIndicator`,
+  `scorpion:thematicCategory` (the thematic category as a literal, since RIMO has no term; the namespace `scorpion:` is `<base>/kpi/ns#`),
+  `rimo:measuredBy` and `rimo:canBeAutomatedBy` (minted IRIs typed `rimo:MeasurementMeans` and `rimo:AutomationTool`, with the vocabulary key as
+  `skos:notation`), and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` **from the indicator to the category**.
+- One `rimo:hasValue` node `<indicator IRI>#value`, a `rimo:KPIValue` that carries `rimo:hasUnit` (the Units Ontology IRI of a seeded unit,
+  else the IRI minted here), `scorpion:unit` (always the minted unit, which keeps `request` apart from `user` although both are a UO
+  `count unit`), `scorpion:valueType`, and `scorpion:minValue` and `scorpion:maxValue` as `xsd:decimal`. M10's real values will reuse this node.
+- Each used unit is a `scorpion:Unit` (`skos:notation`, `scorpion:symbol`, `skos:closeMatch` to the UO term).
+- A KPI set that **maps to a RIMO category is that category** (`http://w3id.org/RIMO#Web_application`, typed `rimo:ServiceCategory`; RIMO defines
+  its words, so none are repeated); one that does not is a `rimo:ServiceCategory` minted as `<base>/kpi/set/<slug>` with `skos:prefLabel` and
+  `dct:description`. Two sets that map to the same RIMO category are one category, and an indicator keeps the **strongest** relation any of them
+  gives it (mandatory over recommended over the rest); the name of a mapped set is therefore not in the export (the v1 `categories` read has it).
+  A necessity that is neither `mandatory` nor `recommended` (an administrator's own term) is `rimo:appliedTo`, like `optional`.
+- Only the units, means and tools an indicator uses appear. Nothing is seeded: a fresh instance writes the catalogue node alone.
+
+The order is fixed (the catalogue, the categories, the units, the means, the tools, then each indicator with its value node, each list sorted
+by IRI), so the same data gives the same bytes whatever the order the rows were written in; the ETag follows from that.
+
+**Safety.** No free text becomes an IRI: every IRI is `iriFor` (a slug that a check constraint restricts to `[A-Za-z0-9._-]`, joined to a
+validated base) or comes from code and the seed, and `assertIri` refuses anything but a plain `http(s)` IRI (no space, control character,
+`<>"{}|^`` ` ``\`, non-ASCII, or empty host) before it is written. Free text is written only as a literal: `turtleString` escapes `\`, `"`, the
+line breaks and every control character (C0, DEL, C1), the line and paragraph separators, and replaces a lone surrogate with U+FFFD;
+JSON-LD goes through `JSON.stringify` with `<`, `>`, `&` and the line separators escaped. A decimal bound is checked against a pattern
+before it becomes a typed literal. The tests load both formats with `n3` and `jsonld` (**dev dependencies of the tests only**, ADR-0040
+addendum) and compare the triples, with names that hold quotes, line breaks, backslashes, angle brackets, NUL, a lone surrogate, Turtle
+syntax, an injected statement and 90 000 characters.
+
+**The IRIs identify; they do not dereference.** The IRI of a deleted indicator is not reserved: a later indicator with the same name gets the
+same IRI (ADR-0040 addendum, decision 7), so rename an indicator instead of deleting and re-creating it. Nothing serves a page at `<base>/kpi/indicator/<slug>`. The two public routes are fixed
+addresses that serve the whole catalogue. Set `iriBase` before you share an identifier (see "Settings").
 
 ### Rules the service enforces
 
@@ -290,8 +343,17 @@ ids are OR, `:none` is the services without one) filters by it; the catalogue pa
 the service page one `GET /kpi/services/{id}/kpis` and, the first time in a session and only when the service has rows, two reads of the
 vocabularies `necessity` and `kpi.unit` for the words (kept in memory, so a second visit asks nobody); editing adds one `GET /kpi/sets`.
 The wizard step none on arrival (the sets are in the schema's `choices`); when a set is chosen one `GET /kpi/sets/{id}` (and the two
-vocabulary reads the first time); each search for extras one `GET /kpi/indicators`. `apps/web/e2e/kpi-framework.spec.ts` counts them and
-writes the calls into the report of the run; sprint 4 reports the numbers.
+vocabulary reads the first time); each search for extras one `GET /kpi/indicators`. `apps/web/e2e/kpi-framework.spec.ts` counts them, writes the
+calls into the report of the run as annotations and prints them as `[kpi-calls]` lines. **Measured in sprint 4** (the same on both base
+paths): service page, first visit, `GET /kpi/services/{id}/kpis` and the two vocabulary reads; second visit in the same session, the one
+`GET /kpi/services/{id}/kpis`; wizard step on arrival, none; a set chosen, `GET /kpi/sets/{id}` and the two vocabulary reads (the first time);
+a search for extras, one `GET /kpi/indicators`. The target "none on a page that already makes four" is met for the wizard on arrival
+and not met for the service page (one call on every visit, two more the first time): see the backlog.
+
+**Measured in sprint 4, on a development machine** (Postgres in a container, one process; 200 indicators with a unit, text and a few means,
+tools and 10 sets of 20 to 60 rows, 4 of them unmapped): `GET /api/v1/kpi/rimo.ttl` 180 kB (7.4 kB gzip), `.jsonld` 254 kB (8.2 kB gzip),
+median 16 ms and 13 ms (the model alone 5.5 ms, the Turtle writer 5.3 ms, the JSON-LD writer 1.9 ms); a fresh instance (no indicator is seeded) writes
+405 bytes of Turtle. `GET /api/v1/indicators?pageSize=100` median 8 ms for page 0 and 10 ms for page 1, `?category=` 6 ms.
 
 ## Migration from the old application (for M13)
 
@@ -320,4 +382,8 @@ the facet and the v1 `category` with both modules on real Postgres ([service/wiz
 ([service/v1.test.ts](service/v1.test.ts)), `apps/server/src/kpi.contract.test.ts` (the contract test of the two v1 routes),
 `apps/server/src/defect-14.service-kpis.test.ts` and `defect-15.v1-kpi-totalcount.test.ts`, `apps/web/src/kpi-service-parts.test.ts`, and the
 journey (a service with a set and an extra, then the set changed and the extra removed, under both base paths) and axe in both themes for
-the wizard step and the service section. Factories: `makeIndicator`, `makeKpiSet` and `makeServiceKpis` in `packages/testing`.
+the wizard step and the service section. Sprint 4 adds the writer ([service/rdf.test.ts](service/rdf.test.ts): the escaping functions table-driven, both formats loaded with `n3` and
+`jsonld`, hostile names, two committed snapshots in `service/__snapshots__/`), the model query and the service
+([service/rdf-model.test.ts](service/rdf-model.test.ts)), the contract tests of the two v1 reads (`apps/server/src/kpi.contract.test.ts`), the public pair, the
+no-leak test and the denied cases (`apps/server/src/kpi-rdf-routes.test.ts`), and the journey from the indicator form to the RDF read and the
+navigation entries (`apps/web/e2e/kpi-framework.spec.ts`, `shell.spec.ts`). Factories: `makeIndicator`, `makeKpiSet` and `makeServiceKpis` in `packages/testing`.

@@ -195,6 +195,18 @@ Tests (sprint 4): the RDF tests of item 1; contract tests of the two reads; the 
 
 Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e`, `pnpm security:asvs` green on `dev` after the merge; the release tagged and its images in ghcr; `main` merged back; the backlog says what is true.
 
+**Amended in sprint 4 (what was decided while building it; the reasons are in the addendum of [ADR-0040](adr/0040-indicators-follow-rimo.md)):**
+
+- **Two dev dependencies for the tests**, `n3` and `jsonld` (with their `@types`), replace the plan's "throwaway script" and the ADR's "not even for tests": the round-trip tests of item 1 load both formats with a real parser. No runtime dependency changed.
+- **One graph, two renderers** (`graphOf`): Turtle and JSON-LD carry the same triples by construction. `toTurtle(model)` and `toJsonLd(model)` take no `options`: the IRI base is part of the model.
+- **The public pair is on the internal surface** (`/public/kpi/rimo.ttl` and `.jsonld`, like `/public/services/{ref}`), so it is not in the v1 document and **not on the landing page `/docs`**, which draws that document (item 3 said the landing page lists the new routes: it lists the two v1 reads; the description of those names the public pair; the README and `docs/security/authorization.md` list all four). Every route takes no query parameter (422).
+- **`max-age=300`** for the public pair; a strong ETag; 304 for every form of `If-None-Match`.
+- **A mapped set is the RIMO category**; two sets with one category merge, the strongest relation wins, and the name of a mapped set is not in the RDF.
+- **The value node carries the minted unit** (`scorpion:unit`) next to `rimo:hasUnit`, and the value type and bounds.
+- **No setting switches the public pair off**; the IRI of a deleted indicator is not reserved (both backlog).
+- **Axe in both themes** already covered the indicator list, the set page, the wizard step and the service section (sprints 2 and 3); sprint 4 added the journey, the landing page and reference check, and the navigation test in `shell.spec.ts`, and no new axe page.
+- **The measurements of item 6** are in the backlog, "KPI framework follow-ups (M9 sprint 4)".
+
 ## 9. Acceptance (from implementation.md) mapped to tests
 
 | Acceptance criterion                                                                                                                     | Where it is proved                                                                                            |

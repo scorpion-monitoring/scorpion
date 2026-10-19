@@ -615,6 +615,32 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **No history of a service's KPIs.** The event `kpi.serviceSet.changed@1` says that the set or the extras changed and who did it, never which indicators; the audit trail answers "when and by whom" but not "what was it before". Measurements (M10) will need the KPIs a service had in a period; decide there whether the table gets a validity range.
 - **The extras of a service are not checked against the set's necessity.** An extra is `optional` by definition; promoting one to `recommended` for one service is not possible, and not asked for.
 
+## KPI framework follow-ups (M9 sprint 4)
+
+Measurements (a development machine, Postgres in a container; the method is in the README of `kpi.framework`):
+
+| What                                                   | Result                                                                                                                                                            |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RDF of the **seeded** indicators                       | none are seeded: a fresh instance writes the catalogue node, 405 bytes of Turtle, 442 of JSON-LD                                                                  |
+| RDF of 200 indicators and 10 sets                      | Turtle 179,567 bytes (7,398 gzip); JSON-LD 254,124 bytes (8,162 gzip)                                                                                             |
+| `GET /api/v1/kpi/rimo.ttl` / `.jsonld`, 200 indicators | median 15.7 ms / 13.3 ms (first call 22.8 / 18.7 ms); the model alone 5.5 ms                                                                                      |
+| `GET /api/v1/indicators?pageSize=100`, 200 indicators  | median 7.9 ms (page 0), 9.8 ms (page 1); `?category=` 6.1 ms; `/categories` 4.2 ms                                                                                |
+| Calls added to the service page (browser)              | first visit 3 (`/kpi/services/{id}/kpis` and two vocabulary reads); later visits 1                                                                                |
+| Calls added to the wizard                              | on arrival 0; a set chosen 1 (+2 vocabulary reads the first time); each extras search 1                                                                           |
+| Image `full`, against `0.10.0-full`                    | 622,953,493 → 624,442,464 bytes, +1.49 MB (+0.24 %), the whole of M9 (sprints 1 to 4) with no new runtime dependency; core-only 619,971,511, registry 623,088,125 |
+
+- **The service page misses the target of "no call added".** One call on every visit and two vocabulary reads the first time. The page loader of `registry.services` could carry the read if a contributed section could name data for the loader; a vocabulary read could be one call for both. Decide when a second module contributes a section.
+- **The RDF is written on every request.** At 200 indicators the model is 5 ms and the writer 2 to 5 ms, so nothing caches it; the public pair relies on the ETag and `max-age` for a client and a shared cache. A cache in the process (keyed by the settings version and the latest `updated_at`) is worth adding at a few thousand indicators, or if the public pair gets traffic from crawlers.
+- **The public pair cannot be switched off.** `service.allowPublic` switches the public service reads off; the KPI definitions have no such setting (ADR-0040 addendum, decision 6). Add `kpi.framework` setting `publicRdf` if an instance asks.
+- **The public pair is not in the v1 document and not on `/docs`.** It is on the internal surface (`/api/internal/public/kpi/rimo.ttl` behind a proxy that mounts it) like `/public/services/{ref}`; the landing page draws the v1 document only. A "public reads" list on the landing page needs the shell to know the public routes (a registry or a second document).
+- **The IRI of a deleted indicator is reused** by a later indicator of the same name (ADR-0040 addendum, decision 7). A tombstone of every published slug is the fix, if a consumer stores the IRIs.
+- **Means, tools and units have no label in the RDF.** They carry `skos:notation` (the vocabulary key) only; the labels of the vocabulary (`en`, `de`) would need the settings service and a choice of language. The metadata of a vocabulary term (IRI, symbol, description) is the open item above; with it an own unit could name its nearest UO term (`skos:closeMatch`) and the sprint 1 item "The `rimo:hasUnit` of an own unit" closes.
+- **A mapped set loses its name in the RDF** (it is the RIMO category), and two sets that map to one category merge. A consumer that wants the sets uses `GET /api/v1/categories`. If the sets must appear in the RDF, mint a `rimo:ServiceCategory` per set and link it to the RIMO one with `skos:broadMatch`.
+- **`rimo:requestedBy` is not written** (ADR-0040 section 3).
+- **Scalar does not draw a Turtle answer.** The reference page shows the status of the call but not its body, so the e2e journey checks the text with a plain request.
+- **No negotiation.** `Accept: text/turtle` on the indicator routes and a page per IRI are out of scope (plan §11).
+- **For M10:** the measurements per period, and the KPIs a service had in a period (see "No history of a service's KPIs" above). The `rimo:KPIValue` node `<indicator IRI>#value` is the one real values attach to; keep them out of `buildRdfModel`, so the public pair stays definitions only.
+
 ## Later
 
 - Move to TypeScript 7 once typescript-eslint and svelte-check support it.

@@ -13,6 +13,7 @@ describe('iriFor', () => {
     ['unit', 'second', 'http://localhost:3000', 'http://localhost:3000/kpi/unit/second'],
     ['means', 'log_analysis', 'https://x.org', 'https://x.org/kpi/means/log_analysis'],
     ['tool', 'Matomo', 'https://x.org', 'https://x.org/kpi/tool/Matomo'],
+    ['catalogue', 'rimo', 'https://x.org', 'https://x.org/kpi/catalogue/rimo'],
     ['indicator', 'a.b-c_d', 'https://x.org', 'https://x.org/kpi/indicator/a.b-c_d'],
     // a base with a trailing slash, with several, and with a base path
     ['indicator', 'a', 'https://x.org/', 'https://x.org/kpi/indicator/a'],

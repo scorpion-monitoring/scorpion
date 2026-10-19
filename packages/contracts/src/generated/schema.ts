@@ -12280,6 +12280,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/kpi/rimo.ttl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the KPI definitions as RDF (Turtle), public
+         * @description The definitions of the indicators and KPI sets as RDF (Turtle), without a token. Definitions only: no value, no service, no person. `Cache-Control: public, max-age=300` and an ETag: a client that sends `If-None-Match` with the tag gets 304. The identifiers in the answer identify; they do not dereference.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The definitions as Turtle. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/turtle": string;
+                    };
+                };
+                /** @description The caller has this document (`If-None-Match` matches the ETag). */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/kpi/rimo.jsonld": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the KPI definitions as RDF (JSON-LD), public
+         * @description The definitions of the indicators and KPI sets as RDF (JSON-LD), without a token. Definitions only: no value, no service, no person. `Cache-Control: public, max-age=300` and an ETag: a client that sends `If-None-Match` with the tag gets 304. The identifiers in the answer identify; they do not dereference.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The definitions as JSON-LD. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/ld+json": {
+                            /** @description The prefixes of the document. */
+                            "@context": {
+                                [key: string]: string;
+                            };
+                            /** @description The nodes, in a fixed order. */
+                            "@graph": {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+                /** @description The caller has this document (`If-None-Match` matches the ETag). */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

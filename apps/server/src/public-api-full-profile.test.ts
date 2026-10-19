@@ -16,6 +16,8 @@ process.env.SECRETS_KEY = makeSecretsKey();
 const EXPECTED_V1_PATHS = [
   '/categories',
   '/indicators',
+  '/kpi/rimo.jsonld',
+  '/kpi/rimo.ttl',
   '/openapi.json',
   '/providers',
   '/providers/{id}',
