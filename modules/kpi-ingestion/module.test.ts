@@ -43,20 +43,22 @@ describe('the manifest', () => {
     });
   });
 
-  it('declares the event measurement.recorded@1, the registry ingestion.adapter and its routes, and no page yet', () => {
+  it('declares the event measurement.recorded@1, the registry ingestion.adapter, its routes and its page (sprint 4)', () => {
     expect(Object.keys(manifest.events?.emits ?? {})).toEqual(['measurement.recorded@1']);
     expect(Object.keys(manifest.registries ?? {})).toEqual(['ingestion.adapter']);
     expect(manifest.routes).toBeTypeOf('function');
-    expect(manifest.ui).toBeUndefined();
+    expect(manifest.ui).toBeTypeOf('function');
   });
 
-  it('contributes the policy of its scoped permission, the count of its measurements to kpi.framework and its three adapters', () => {
+  it('contributes the policy of its scoped permission, the count of its measurements to kpi.framework, its three adapters and the entries of its page', () => {
     const contributes = manifest.contributes ?? {};
     expect(Object.keys(contributes).sort()).toEqual([
       'authz.defaultRole',
       'authz.resourcePolicy',
       'ingestion.adapter',
       'kpi.indicatorUsage',
+      'ui.nav',
+      'ui.routes',
     ]);
     expect((contributes['ingestion.adapter'] as { id: string }[]).map((entry) => entry.id)).toEqual(
       ['form', 'csv', 'xlsx'],
@@ -86,6 +88,11 @@ describe('the manifest', () => {
       '@scorpion/kpi-framework',
       '@scorpion/registry-services',
     ]);
+    // The shell is an optional peer: the page's entries are contributed to registries of core.ui-shell, which a profile without it does not have.
+    expect(packageJson.peerDependencies).toEqual({ '@scorpion/core-ui-shell': 'workspace:*' });
+    expect(packageJson.peerDependenciesMeta).toEqual({
+      '@scorpion/core-ui-shell': { optional: true },
+    });
     // `submit` is in no role: the service decides who may write for a service. The plain ones are what a token's scopes name.
     expect(manifest.contributes?.['authz.defaultRole']).toEqual([
       {
@@ -130,6 +137,9 @@ describe('the schema', () => {
   it('imports no other module except through its public.ts and the packages it declares', () => {
     const allowed = new Set([
       '@scorpion/contracts',
+      // the page (ui/): the typed client, and the types of the entries it registers with the shell
+      '@scorpion/contracts/client',
+      '@scorpion/core-ui-shell/public',
       '@scorpion/core-authz/public',
       '@scorpion/kernel',
       '@scorpion/kpi-framework/public',
