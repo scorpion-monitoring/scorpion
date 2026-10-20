@@ -19,7 +19,7 @@ Status: M3 sprint 4 (complete): settings, preferences, secrets, [vocabularies](#
 | CLI            | `set-secret <name>`, `rotate-secrets [--batch-size <n>]` ([below](#cli))                                                                                                                                                                                                                                                                                                 |
 | events         | emits `settings.changed@1`, `settings.secret.changed@1`, `settings.preference.changed@1`, `settings.vocabulary.changed@1` ([below](#events))                                                                                                                                                                                                                             |
 | registries     | declares `settings.userPreference` and `vocabulary`; contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                                                                                                                                                              |
-| public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `getUserPreference(userId, key)` ([below](#user-preferences)), `seedSettings(moduleId, values)` ([below](#seeding-settings-from-code)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
+| public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `getUserPreference(userId, key)` and `setUserPreference(actor, key, value)` ([below](#user-preferences)), `seedSettings(moduleId, values)` ([below](#seeding-settings-from-code)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
 
 ### Permissions
 
@@ -201,11 +201,14 @@ contributes: {
 
 ### Reading and seeding from code
 
-Two more methods are for trusted code with no human caller (no permission check, no route; ADR-0015):
+Three more methods are for code of another module (no route; ADR-0015). Two check no permission and are for trusted code with no human caller; `setUserPreference` acts as the caller and checks theirs:
 
 - `getUserPreference(userId, key)` returns the stored value of one preference of another user, validated by the key's
   registered schema, or `undefined` (nothing stored, key not registered, malformed id, or a stored value that no longer
   fits). `core.notifications` uses it to mail a person in their language (`notifications.locale`).
+- `setUserPreference(actor, key, value)` stores one preference **of the caller**, as `PUT /preferences/{key}` does (the permission
+  `core.settings.preference.write`, the key's schema, the 8 KiB cap, the event); it takes no user id. `core.ui-shell` stores the
+  dashboard document with it (M11 sprint 1), so it never touches `settings_user_preference` itself.
 - `seedSettings(moduleId, values)` stores `values` as a module's settings **only when nothing is stored for it**
   (`'seeded'`, else `'kept'`); it never overwrites what an administrator saved. The values are checked by the module's
   schema (`Invalid`), and a write emits `settings.changed@1` like any other. `scorpion seed-dev-mail` of
