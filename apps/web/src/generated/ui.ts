@@ -8,6 +8,7 @@ import * as ui3 from '@scorpion/core-ui-shell/ui';
 import * as ui4 from '@scorpion/registry-organisations/ui';
 import * as ui5 from '@scorpion/registry-services/ui';
 import * as ui6 from '@scorpion/kpi-framework/ui';
+import * as ui7 from '@scorpion/kpi-ingestion/ui';
 
 export const profileName = "full";
 
@@ -22,4 +23,5 @@ export const uiModules: UiModule[] = [
   { package: "@scorpion/registry-organisations", routes: ui4.default, messages: ui4.messages, widgets: ui4.widgets, wizardExtensions: wizardExtensionsOf(ui4) },
   { package: "@scorpion/registry-services", routes: ui5.default, messages: ui5.messages, widgets: ui5.widgets, wizardExtensions: wizardExtensionsOf(ui5) },
   { package: "@scorpion/kpi-framework", routes: ui6.default, messages: ui6.messages, widgets: ui6.widgets, wizardExtensions: wizardExtensionsOf(ui6) },
+  { package: "@scorpion/kpi-ingestion", routes: ui7.default, messages: ui7.messages, widgets: ui7.widgets, wizardExtensions: wizardExtensionsOf(ui7) },
 ];

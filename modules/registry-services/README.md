@@ -113,7 +113,9 @@ other signed-in person while `exposeContactPoint` is on; never in a list row, an
 
 **Trusted reads** for M8, M9 and M13 on `public.ts`, with the `AsSystem` suffix and no permission check: `findByIdsAsSystem`,
 `findBySlugAsSystem`, `listByOrganisationAsSystem`, `existsAsSystem`. They return the descriptive fields and the organisation ids,
-never the contact point or the audit columns.
+never the contact point or the audit columns. `isProviderManagerAsSystem` and `isProviderMemberAsSystem` answer a yes or no for a user and a service
+(for a module's scoped permission), and `listForPickerAsSystem({ q?, memberOf?, limit })` (M10 sprint 4) lists `{ id, slug, name }` of the services of a search by name or
+abbreviation, or, with `memberOf`, of the providers that user is an approved member of: a module's picker uses it and then asks its **own** scoped permission for each row it keeps.
 
 ## The Schema.org profile and the public reads (sprint 3)
 
