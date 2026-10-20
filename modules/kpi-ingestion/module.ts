@@ -29,6 +29,7 @@ import {
 } from './service/permissions.ts';
 import { createReadsService, type ReadsService } from './service/reads.ts';
 import { submitPolicy } from './service/policy.ts';
+import { INGESTION_NAV, INGESTION_ROUTES } from './ui/routes.ts';
 
 export type {
   CoverageMonth,
@@ -129,6 +130,9 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       emits: { 'measurement.recorded@1': measurementRecordedSchema },
     },
 
+    // The page (Svelte) is loaded by the web app only; the manifest names the part a server can read (the routes and texts, ui/pages.ts).
+    ui: () => import('./ui/pages.ts'),
+
     contributes: {
       // Every signed-in person reads every service's measurements, as services and KPI definitions are readable (decision 4 of the plan)
       // and holds the plain scope of the write; the scoped `submit` decides who may write for a service. Admin holds all declared ones.
@@ -149,6 +153,9 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
           isProviderMember: () => (userId, serviceId) => need(isProviderMember)(userId, serviceId),
         }),
       ],
+      // The Data Submission page and its link; entries for registries of core.ui-shell, an optional peer.
+      'ui.routes': INGESTION_ROUTES,
+      'ui.nav': INGESTION_NAV,
       // The three ways to give values.
       [ADAPTER_REGISTRY]: [formAdapter, csvAdapter, xlsxAdapter],
       // An indicator with measurements is not deleted: kpi.framework asks, and answers 409 naming this module and the count.

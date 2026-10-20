@@ -15,13 +15,13 @@ import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { and, asc, count, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { measurement } from '../db/schema.ts';
 import { resolveIndicatorRef, type IndicatorChoice } from './names.ts';
+import { MANDATORY_NECESSITY } from './necessity.ts';
 import { daysInMonth, normalisePeriodBound } from './period.ts';
 import { PERMISSION_MEASUREMENT_READ, PERMISSION_V1_READ } from './permissions.ts';
 import { resolveServiceRef, type ServiceLookup } from './service-ref.ts';
 import { fromColumns } from './values.ts';
 
-/** The necessity term of the indicators a month needs a value for. The key is the legacy one and RIMO's `mandatoryFor`. */
-export const MANDATORY_NECESSITY = 'mandatory';
+export { MANDATORY_NECESSITY };
 /** The most indicators a comma list of `indicators` names. */
 export const MAX_INDICATOR_FILTER = 50;
 /** The most months the coverage reads. */

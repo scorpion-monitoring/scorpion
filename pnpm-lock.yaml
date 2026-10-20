@@ -178,6 +178,9 @@ importers:
       '@scorpion/kpi-framework':
         specifier: workspace:*
         version: link:../../modules/kpi-framework
+      '@scorpion/kpi-ingestion':
+        specifier: workspace:*
+        version: link:../../modules/kpi-ingestion
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../../modules/registry-organisations
@@ -226,6 +229,9 @@ importers:
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(jsdom@30.1.3)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      write-excel-file:
+        specifier: 4.1.1
+        version: 4.1.1
 
   modules/core-audit:
     dependencies:
@@ -592,12 +598,18 @@ importers:
       '@scorpion/core-settings':
         specifier: workspace:*
         version: link:../core-settings
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1

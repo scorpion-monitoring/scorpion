@@ -2,9 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "dist"
+    "outDir": "dist",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
-  "include": ["*.ts", "package.json", "db", "service", "test"],
+  "include": ["*.ts", "package.json", "db", "service", "test", "ui"],
   "references": [
     { "path": "../../packages/kernel" },
     { "path": "../../packages/contracts" },
@@ -16,6 +17,8 @@
     { "path": "../core-settings" },
     { "path": "../registry-organisations" },
     { "path": "../registry-services" },
-    { "path": "../kpi-framework" }
+    { "path": "../kpi-framework" },
+    { "path": "../core-ui-shell" },
+    { "path": "../../packages/ui-kit" }
   ]
 }

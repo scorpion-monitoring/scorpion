@@ -205,6 +205,17 @@ Tests (sprint 4): page tests with Vitest (the pure helpers: mapping proposal, th
 
 Definition of done: as sprint 3, plus `CI=true pnpm test:e2e:parallel` in full under both base paths.
 
+**Amended in sprint 4 (what was decided while building it; the reasons and the measured calls are in [ADR-0041](adr/0041-measurement-model.md), "Amended in sprint 4"):**
+
+- **The picker needed one additive route and one additive trusted read.** There was no read of "the services I may submit for" (the catalogue does not carry it): `GET /kpi/ingestion/services?q=` (plain `measurement.read`, at most 50, every row checked with the scoped `submit`) over `registry.services`' new `listForPickerAsSystem`. A plain user gets an empty list; the walker, `authorization.md` and V8 name it.
+- **The value types gained an optional `input` descriptor** (`{ kind, step?, pattern?, hint? }`) so that the typed inputs come from registry data and not from a chain on the type's id; additive on `GET /kpi/value-types`; a type without one is a number input when numeric, text otherwise.
+- **The months are the coverage read's 36**, whose last is the current month by the server's clock; the browser's date is never used. A later month or no month opens the current one.
+- **The loader reads everything (9 reads for a service, 1 without); the browser sends nothing on arrival** (the shell's `GET /inbox/stream` apart). A month or a service is a page load. Search, Open, Show month and Check the file are buttons, so the arrow keys in a select send nothing. A save is 1 call, a file 2 (preview, then the dry run), a mapping change 0, a check 1, a commit 1, a template 1.
+- **Problems are sentences in en and de per code**, with a test that fails for a missing one; a refused commit is read from the recorded run (`GET /kpi/ingestion/runs/{id}`).
+- **Multipart works through the typed client** with a `bodySerializer` that returns the `FormData`; no workaround.
+- **Small additive changes:** the `upload` icon, `MANDATORY_NECESSITY` in `service/necessity.ts`, `core.ui-shell` an optional peer and `ui-kit` a development dependency of `kpi.ingestion`, `write-excel-file` a development dependency of `apps/web` (no runtime dependency).
+- **ASVS:** `docs/security/authorization.md` changed (the new route), so V8 has a note and evidence; V6, V7 and V10 are `asvs-no-impact`.
+
 ## 9. Sprint 5: reminders, the backlog and the release
 
 **Branch:** `feature/m10-reminders-release`. **Goal:** providers are reminded of missing mandatory values; the ASVS and gate documents, the backlog and `0.12.0` are done.

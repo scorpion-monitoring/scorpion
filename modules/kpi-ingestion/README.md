@@ -6,10 +6,10 @@ a 500 or half a batch). The decisions are in [ADR-0041](../../docs/adr/0041-meas
 [m10-sprint-plan.md](../../docs/m10-sprint-plan.md). It builds on `kpi.framework` (the indicators, the value types, the KPIs of a service) and
 on `registry.services` (a service exists, who belongs to its provider).
 
-Status: M10 sprint 3: the tables, the pure period, value and name functions, `upsertBatch` and `upsertByName`, the scoped permission and its policy, the
+Status: M10 sprint 4: the tables, the pure period, value and name functions, `upsertBatch` and `upsertByName`, the scoped permission and its policy, the
 event, the in-use contribution, the two v1 routes and the two internal reads (sprints 1 and 2), and now the registry `ingestion.adapter` with the form, CSV/TSV and
-XLSX adapters, preview, dry run and commit, the run history and the import templates (sprint 3). There is **no page yet** (sprint 4 adds the Data Submission page,
-sprint 5 the reminder). The module is in the `full` profile only.
+XLSX adapters, preview, dry run and commit, the run history and the import templates (sprint 3), and the Data Submission page `/submit` with its picker read (sprint 4).
+Sprint 5 adds the reminder. The module is in the `full` profile only.
 
 ## Manifest
 
@@ -18,8 +18,8 @@ sprint 5 the reminder). The module is in the `full` profile only.
 | id           | `kpi.ingestion` (package `@scorpion/kpi-ingestion`)                                                                                                                                                                                                                                                                                          |
 | table prefix | `kpii_` (set in the manifest; ADR-0004): `kpii_measurement`, `kpii_ingestion_run`. `kpi.framework` uses `kpif_`                                                                                                                                                                                                                              |
 | dependencies | `core.authz`, `kpi.framework` (the effective KPI set and the indicators through trusted reads, the value types, the usage registry) and `registry.services` (a service exists; who is a member of its provider). Nothing depends on it before M11. Only what the code imports is declared; the others arrive with the sprint that needs them |
-| routes       | `GET` and `POST /api/v1/measurements` (the public API); internal: `GET /kpi/measurements`, `GET /kpi/measurements/coverage`, `POST /kpi/ingestion/preview`, `POST` and `GET /kpi/ingestion/runs`, `GET /kpi/ingestion/runs/{id}`, `GET /kpi/ingestion/adapters`, `GET /kpi/ingestion/template`; see "Routes"                                 |
-| ui           | none yet                                                                                                                                                                                                                                                                                                                                     |
+| routes       | `GET` and `POST /api/v1/measurements` (the public API); internal: `GET /kpi/measurements`, `GET /kpi/measurements/coverage`, `POST /kpi/ingestion/preview`, `POST` and `GET /kpi/ingestion/runs`, `GET /kpi/ingestion/runs/{id}`, `GET /kpi/ingestion/adapters`, `GET /kpi/ingestion/services`, `GET /kpi/ingestion/template`; see "Routes"  |
+| ui           | `./ui`: the page `/submit` (the Data Submission page) through the registry `ui.routes`, one `ui.nav` entry "Data Submission" in the Main section; `core.ui-shell` is an optional peer (see "The Data Submission page")                                                                                                                       |
 | events       | emits `measurement.recorded@1` (see "Events")                                                                                                                                                                                                                                                                                                |
 | registries   | declares `ingestion.adapter` (see "Adapters") and contributes its three entries; contributes an `authz.resourcePolicy` entry for the resource type `service` and an entry to `kpi.framework`'s registry `kpi.indicatorUsage`                                                                                                                 |
 | settings     | none yet (the reminder's two settings arrive in sprint 5)                                                                                                                                                                                                                                                                                    |
@@ -107,6 +107,7 @@ the service. It needs no scope of `kpi.framework`: the KPIs and their bounds are
 | `POST /kpi/ingestion/runs`                                         | `kpi.ingestion.measurement.ingest` | The same body plus `dryRun`: the verdicts of a dry run (200), a committed run (200) or the whole file refused (422 naming each `rows[r].columns[c]` and the recorded run)                                                                                                                                                                                    |
 | `GET /kpi/ingestion/runs?service=`, `GET /kpi/ingestion/runs/{id}` | `kpi.ingestion.measurement.read`   | The history of a service (the last 50) and one run; `submit` on the service                                                                                                                                                                                                                                                                                  |
 | `GET /kpi/ingestion/adapters`                                      | `kpi.ingestion.measurement.read`   | The entries of the registry: what the page offers and accepts                                                                                                                                                                                                                                                                                                |
+| `GET /kpi/ingestion/services?q=`                                   | `kpi.ingestion.measurement.read`   | The picker of the page (sprint 4): the services of the search (name or abbreviation) that the caller may submit for, by name then id, at most 50. Admin gets every service of the search, an approved member the services of their provider; each row is asked again with the scoped `submit`, so the list is never longer than the rule allows              |
 | `GET /kpi/ingestion/template?service=&format=`                     | `kpi.ingestion.measurement.read`   | The import template as an attachment (`nosniff`, `no-store`); `submit` on the service                                                                                                                                                                                                                                                                        |
 | `GET /kpi/measurements/coverage?service=`                          | `kpi.ingestion.measurement.read`   | The last `months` (default 12, at most 36) months, oldest first: how many effective indicators and how many mandatory ones have a value, and whether nothing mandatory is missing. The mandatory ones are those of the KPI set as it is now (the necessity term `mandatory`)                                                                                 |
 
@@ -206,6 +207,39 @@ It is **escaped against formula injection**: every cell that starts with `=`, `+
 that `'` off a header again, so the template re-uploads unchanged. The CSV is UTF-8 **with a BOM** so that a spreadsheet opens umlauts. The file name comes from the service's abbreviation
 (`<abbreviation>-import-template.csv`), never from free text. A service with no KPI set is 422.
 
+## The Data Submission page
+
+`/submit` is one page registered through `ui.routes` (never a SvelteKit file route), with one `ui.nav` entry (`nav.submit`, "Data Submission" / "Datenmeldung") in the
+Main section. Both name `kpi.ingestion.measurement.read`, which every signed-in person holds, so nobody sees a dead link; **who may report for which service is
+the picker's answer**, and a person with none sees a page that says so (with a link to their organisations), no picker and no tabs. The address is the state:
+`?service=<id>` opens the page on a service, `&period=YYYY-MM` on a month, `&q=` keeps a search. **The reminder of sprint 5 links to
+`/submit?service=<id>&period=<YYYY-MM>`**; a month later than the server's current one, or no month at all, opens the current month, and a month older than the
+36 offered is still opened for a correction.
+
+| Part                                           | What it does                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/loaders.ts`                                | Runs on the server after the permission check and **throws** (defect 12): the picker's list, and for a chosen service the service, the months with their coverage (36), the grid of the month, the last runs, the adapters, the terms of `necessity` and `kpi.unit` and the value types. A service the person may not submit for is the shell's 403 page |
+| `ServicePicker.svelte`                         | A search box and a select of the services the person may report for, each with a button (Search, Open): nothing is sent when the arrow keys move through the select                                                                                                                                                                                      |
+| `ReportForm.svelte`, `form.ts`                 | The month (the server's months, a button to show it), the indicators grouped by necessity (the words of the vocabulary), the input the value type asks for, the unit, the bounds, the stored value filled in, the error under its field, a save that stays disabled until every mandatory indicator has a value; the form is not reset by a save         |
+| `ReportFile.svelte`, `mapping.ts`, `upload.ts` | A drop zone and a button that does the same, the templates, the preview with a row of selects (what each column holds), the verdict of each value, the problems in words, a commit that is disabled while anything is rejected                                                                                                                           |
+| `History.svelte`                               | The last runs and the coverage of the last 12 months, read by the loader                                                                                                                                                                                                                                                                                 |
+| `problems.ts`, `messages.ts`                   | The server's problem **codes** have a sentence of their own in en and de (`submit.problem.<code>`); a test fails when a code of the closed list in `service/table.ts` has none in a language                                                                                                                                                             |
+
+**Typed inputs come from data.** `kpi.framework`'s value types carry an optional `input` descriptor (`{ kind: 'number' | 'text', step?, pattern?, hint? }`, the seeds: integer
+`step 1`, float and percentage `step any`, duration a text input with the pattern and the hint `HH-MM-SS`, text); `GET /kpi/value-types` answers it, and the page draws
+the input from it with no branch on a type's id. A type with no descriptor is a number input when it is numeric, text otherwise. The bounds are the indicator's inside
+the type's range. Every value is judged again by the server.
+
+**Calls.** The loader reads everything on the server, so the browser sends nothing on arrival, and a month or a service is a page load (`__data.json`), not a call to
+the API. A save is one `POST /kpi/ingestion/runs`; a file is one `POST /kpi/ingestion/preview` and one dry run (`POST /kpi/ingestion/runs`, at once when the mapping is
+complete); a change of the mapping sends nothing, "Check the file" is one dry run, the commit is one `POST`, a template is one `GET`. The e2e spec counts them and
+prints `[kpi-calls]` lines (see ADR-0041, "Amended in sprint 4"). The page keeps the `File` in memory only and sends the same bytes each time; it never sends parsed
+rows, stores nothing and shows nothing beyond what the server returns (a cell is cut at 64 characters by the server).
+
+**Accessibility.** Status messages are `role="status"`, an error is `role="alert"`, an error is under its field and in text (an invalid cell says "Invalid: …" as well as
+being tinted), the mapping row is a row of selects, the drop zone has a button, and a button's accessible name is its visible text. axe runs in both themes on the empty
+page, the form, the file preview with errors, the run result and the history. No text names a role or the instance.
+
 ## Which indicator a name means (`resolveIndicatorRef`)
 
 [`resolveIndicatorRef(choices, reference)`](service/names.ts) is the one function that turns what a person or a program calls an indicator into the id of
@@ -252,6 +286,11 @@ check on a cookie tagged `[ASVS-7.2.1]`, the preflight, the body limit, a batch 
 rows as the API), `measurements-routes.test.ts` (the internal reads), `defect-06.v1-measurements.test.ts` (never weaken or delete it) and the rows of
 `defect-01.privilege-escalation.test.ts`.
 
+The page (sprint 4): the pure helpers are table-driven (`ui/form.test.ts`, `mapping.test.ts`, `problems.test.ts`, `months.test.ts`, `query.test.ts`, `adapters.test.ts`,
+`upload.test.ts`), `ui/ui.test.ts` checks the two halves, the catalogues in both languages, the sentence of every problem code and that no text names a role. The picker's read
+is tested against real Postgres (`service/access.test.ts`, `registry.services`' `provider-reads.test.ts`) and in `defect-01.privilege-escalation.test.ts`. The journeys are
+`apps/web/e2e/data-submission.spec.ts` under both base paths.
+
 ## Not in this module yet
 
-The Data Submission page (sprint 4) and the reporting reminder (sprint 5). Deleting or correcting a measurement other than by an upsert is out of scope for M10.
+The reporting reminder (sprint 5). Deleting or correcting a measurement other than by an upsert is out of scope for M10.

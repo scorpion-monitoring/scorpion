@@ -23,5 +23,6 @@ export const iconShapes: Record<string, string> = {
   inbox: 'M3 13h5l1 3h6l1-3h5M3 13l3-8h12l3 8v6H3z',
   mail: 'M3 6h18v12H3zM3 7l9 7 9-7',
   settings: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4',
+  upload: 'M12 16V4M7.5 8.5 12 4l4.5 4.5M4 15v5h16v-5',
   dot: 'M12 12h.01',
 };

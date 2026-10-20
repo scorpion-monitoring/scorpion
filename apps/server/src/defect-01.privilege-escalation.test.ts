@@ -1393,6 +1393,11 @@ describe('defect 1: the ingestion routes', () => {
       refused: 404,
       sample: () => ({ method: 'GET', path: `/kpi/ingestion/runs/${FOREIGN}` }),
     },
+    // The picker: every signed-in person may ask, and a person with no membership gets an empty list (checked below).
+    'GET /kpi/ingestion/services': {
+      plainMay: true,
+      sample: () => ({ method: 'GET', path: '/kpi/ingestion/services' }),
+    },
     'GET /kpi/ingestion/adapters': {
       plainMay: true,
       sample: () => ({ method: 'GET', path: '/kpi/ingestion/adapters' }),
@@ -1453,5 +1458,18 @@ describe('defect 1: the ingestion routes', () => {
     }
     expect((await s.kernel.pool.query('select 1 from kpii_measurement')).rows).toEqual([]);
     expect((await s.kernel.pool.query('select 1 from kpii_ingestion_run')).rows).toEqual([]);
+  });
+
+  it('lists no service for a plain User, only the provider’s for a member, and answers 403 on a direct call for the other provider’s service [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain-picker');
+    const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const service = await makeService(s.kernel.pool, { provider: provider.id });
+    const empty = await s.call('GET', '/kpi/ingestion/services', session(plain));
+    expect(empty.status).toBe(200);
+    expect((empty.body as { result: unknown[] }).result).toEqual([]);
+    // a direct call for a service the person may not submit for is 403, however the picker looks
+    const direct = await s.call('GET', `/kpi/ingestion/runs?service=${service.id}`, session(plain));
+    expect(direct.status).toBe(403);
   });
 });

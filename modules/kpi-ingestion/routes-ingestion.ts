@@ -20,12 +20,14 @@ import {
   describeProblems,
   MAX_FILE_BYTES,
   MAX_FORM_VALUES,
+  PICKER_LIMIT,
   type AdapterInfo,
   type IngestInput,
   type IngestionService,
   type PreviewResult,
   type RunRecord,
   type RunResult,
+  type SubmittableService,
   type TemplateFile,
 } from './service/ingestion.ts';
 import { PROBLEM_MESSAGES } from './service/table.ts';
@@ -241,6 +243,28 @@ export const getRunRoute = createRoute({
   },
 });
 
+export const submittableServicesSchema = z.object({
+  id: z.uuid(),
+  slug: z.string().describe('The abbreviation of the service.'),
+  name: z.string(),
+});
+
+export const listSubmittableServicesRoute = createRoute({
+  method: 'get',
+  path: '/kpi/ingestion/services',
+  permission: PERMISSION_MEASUREMENT_READ,
+  summary: 'The services the caller may submit values for',
+  description:
+    'For the picker of the Data Submission page: the services of the search (`q`: name or abbreviation) that the caller may submit for, by name then id, at most 50 in one page. An administrator gets every service of the search, an approved member of a provider the services of that provider; each one is checked with the scoped `kpi.ingestion.measurement.submit`. A caller who may submit for none gets an empty list.',
+  request: { query: z.strictObject({ q: z.string().max(100).optional() }) },
+  responses: {
+    200: {
+      description: 'The services.',
+      content: { 'application/json': { schema: listEnvelope(submittableServicesSchema) } },
+    },
+  },
+});
+
 export const listAdaptersRoute = createRoute({
   method: 'get',
   path: '/kpi/ingestion/adapters',
@@ -319,6 +343,11 @@ const resultOut = (result: RunResult) => ({
   rejected: result.rejected,
   rows: result.rows,
   problems: result.problems,
+});
+const submittableOut = (row: SubmittableService) => ({
+  id: row.id,
+  slug: row.slug,
+  name: row.name,
 });
 const adapterOut = (adapter: AdapterInfo) => ({
   id: adapter.id,
@@ -419,6 +448,15 @@ export function registerIngestionRoutes(r: RouteRegistrar, ingestion: IngestionS
     const { id } = c.req.valid('param');
     return c.json(runOut(await ingestion.getRun(c.get('actor'), id)), 200);
   }) satisfies RouteHandler<typeof getRunRoute, AppEnv>);
+
+  r.internal(listSubmittableServicesRoute, (async (c) => {
+    const { q } = c.req.valid('query');
+    const rows = await ingestion.submittableServices(c.get('actor'), { q });
+    return c.json(
+      paginate({ page: 0, pageSize: PICKER_LIMIT }, rows.length, rows.map(submittableOut)),
+      200,
+    );
+  }) satisfies RouteHandler<typeof listSubmittableServicesRoute, AppEnv>);
 
   r.internal(listAdaptersRoute, ((c) => {
     const adapters = ingestion.adapters();

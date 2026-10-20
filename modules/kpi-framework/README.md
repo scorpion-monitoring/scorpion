@@ -99,7 +99,7 @@ Property tests over generated data prove it ([service/merge.test.ts](service/mer
 
 ## Value types (registry `kpi.valueType`)
 
-An entry is `{ id, labels, numeric, range?, aggregates, parse, format, schema(config) }`, validated by the loader
+An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, schema(config) }`, validated by the loader
 (`valueTypeEntrySchema`). Nothing in the module branches on a type's id.
 
 | Id           | Canonical value          | Accepts                                                               | `numeric`              | Aggregates                 |
@@ -114,6 +114,12 @@ An entry is `{ id, labels, numeric, range?, aggregates, parse, format, schema(co
 indicator's `min` and `max`; `format(value)` writes the canonical value (a duration as `HH-MM-SS`); `aggregates` are keys of the
 `aggregate` vocabulary that make sense for the type. A **qualitative** indicator must have the value type `text`; a `text` indicator may
 or may not be qualitative; only a `numeric` type may have `min` and `max` (`boundsProblem(type, { min, max })`).
+
+**How a form asks for a value (`input`, M10 sprint 4).** An optional descriptor `{ kind: 'number' | 'text', step?: number | 'any', pattern?: string, hint?: string }`
+that the Data Submission page draws its input from (`GET /kpi/value-types` answers it), so no page names a type: `integer` is a number input with `step` 1, `float` and
+`percentage` have `step` `any`, `duration` is a text input with the pattern of `HH-MM-SS` and the hint `HH-MM-SS`, `text` is plain text. A type without a descriptor is drawn as a number
+input when it is `numeric` and as text otherwise. It never replaces `parse`: the server judges every value, and a test checks that the duration's pattern accepts and refuses what
+`parseDuration` does.
 
 ### How to add a value type
 

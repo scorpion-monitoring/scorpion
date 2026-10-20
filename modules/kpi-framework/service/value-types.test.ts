@@ -42,6 +42,25 @@ describe('the registry entries', () => {
     ]);
   });
 
+  it('describe how a form asks for a value, and the duration pattern matches what parseDuration accepts', () => {
+    const duration = type('duration');
+    const pattern = new RegExp(duration.input!.pattern!);
+    for (const text of ['00-00-00', '1-05-09', '9999-59-59', '12-30-00'])
+      expect([text, pattern.test(text), parseDuration(text).ok]).toEqual([text, true, true]);
+    for (const text of ['10000-00-00', '1-60-00', '1-5-09', '1:05:09', 'abc', ''])
+      expect([text, pattern.test(text), parseDuration(text).ok]).toEqual([text, false, false]);
+    expect(
+      valueTypeEntrySchema.safeParse({ ...type('integer'), input: { kind: 'range' } }).success,
+    ).toBe(false);
+    expect(
+      valueTypeEntrySchema.safeParse({ ...type('integer'), input: { kind: 'number', step: 0 } })
+        .success,
+    ).toBe(false);
+    expect(valueTypeEntrySchema.safeParse({ ...type('integer'), input: undefined }).success).toBe(
+      true,
+    );
+  });
+
   it('refuse an entry with an unknown field, a bad id or a missing function', () => {
     const entry = type('integer');
     expect(valueTypeEntrySchema.safeParse({ ...entry, extra: 1 }).success).toBe(false);

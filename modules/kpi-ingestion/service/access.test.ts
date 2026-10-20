@@ -285,3 +285,54 @@ describe('a member of the provider is not thereby anything else', () => {
     );
   });
 });
+
+describe('the services a person may submit for (the picker of the Data Submission page)', () => {
+  it('lists the provider’s services for a member and a manager, every service of the search for Admin, and none for anybody else [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const w = await world();
+    const ids = async (who: Actor, q?: string) =>
+      (await w.ingestion.ingestion.submittableServices(who, { q })).map((row) => row.id);
+    for (const who of ['member', 'manager'] as const) {
+      expect(await ids(w.people[who]), who).toContain(w.svc.id);
+      expect(await ids(w.people[who]), who).not.toContain(w.elsewhereSvc.id);
+    }
+    // the member of the other provider sees theirs and not this one
+    expect(await ids(w.people.elsewhere)).toContain(w.elsewhereSvc.id);
+    expect(await ids(w.people.elsewhere)).not.toContain(w.svc.id);
+    const everything = await ids(w.people.admin);
+    expect(everything).toEqual(expect.arrayContaining([w.svc.id, w.elsewhereSvc.id]));
+    for (const who of ['plain', 'requested', 'rejected', 'left'] as const)
+      expect(await ids(w.people[who]), who).toEqual([]);
+    // a Reviewer holds no role `user` here, so the plain permission of the page is missing: 403, not an empty list
+    await expect(ids(w.people.reviewer)).rejects.toBeInstanceOf(Forbidden);
+  });
+
+  it('is turned away for an anonymous caller (401), and a search narrows the list without ever widening it [ASVS-8.2.1]', async () => {
+    const w = await world();
+    await expect(w.ingestion.ingestion.submittableServices(anonymous, {})).rejects.toBeInstanceOf(
+      Unauthorized,
+    );
+    const all = await w.ingestion.ingestion.submittableServices(w.people.admin, {});
+    const one = all[0]!;
+    const hit = await w.ingestion.ingestion.submittableServices(w.people.admin, { q: one.slug });
+    expect(hit.map((row) => row.id)).toContain(one.id);
+    // a member who searches for the other provider's service by its exact abbreviation still gets nothing
+    expect(
+      await w.ingestion.ingestion
+        .submittableServices(w.people.member, {
+          q: (all.find((row) => row.id === w.elsewhereSvc.id) ?? one).slug,
+        })
+        .then((rows) => rows.map((row) => row.id)),
+    ).not.toContain(w.elsewhereSvc.id);
+  });
+
+  it('reads the membership at every call: a member who leaves no longer sees the service at once [ASVS-8.2.1]', async () => {
+    const w = await world();
+    const before = await w.ingestion.ingestion.submittableServices(w.people.member, {});
+    expect(before.map((row) => row.id)).toContain(w.svc.id);
+    await w.pool.query(
+      "update org_membership set state = 'left' where organisation_id = $1 and user_id = $2",
+      [w.provider.id, w.people.member.userId],
+    );
+    expect(await w.ingestion.ingestion.submittableServices(w.people.member, {})).toEqual([]);
+  });
+});

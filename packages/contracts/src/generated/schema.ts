@@ -10886,6 +10886,14 @@ export interface paths {
                                     min?: number;
                                     max?: number;
                                 };
+                                /** @description How a form asks for a value: a number input (with its `step`) or a text input (with a `pattern` and a `hint`). Absent: a number input for a numeric type, text otherwise. The server still judges every value. */
+                                input?: {
+                                    /** @enum {string} */
+                                    kind: "number" | "text";
+                                    step?: number | "any";
+                                    pattern?: string;
+                                    hint?: string;
+                                };
                                 /** @description The terms of `aggregate` that make sense for the type. */
                                 aggregates: string[];
                             }[];
@@ -13173,6 +13181,97 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The services the caller may submit values for
+         * @description For the picker of the Data Submission page: the services of the search (`q`: name or abbreviation) that the caller may submit for, by name then id, at most 50 in one page. An administrator gets every service of the search, an approved member of a provider the services of that provider; each one is checked with the scoped `kpi.ingestion.measurement.submit`. A caller who may submit for none gets an empty list.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The services. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @description The abbreviation of the service. */
+                                slug: string;
+                                name: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
                 };
                 /** @description The input is not valid. */
                 422: {
