@@ -162,8 +162,9 @@ const multipartBody = z.object({
   dryRun: z.enum(['true', 'false']).optional(),
 });
 
+// `required` stays false on purpose: with it, `@hono/zod-openapi` runs the JSON validator on a multipart request too and refuses it. Without it the
+// validator that fits the request's content type runs, and a request with no body is refused by `readInput` below.
 const requestBody = (what: string) => ({
-  required: true as const,
   description: what,
   content: {
     'multipart/form-data': { schema: multipartBody },

@@ -28,7 +28,7 @@ const filesUnder = (folder: string, keep: (name: string) => boolean): string[] =
   });
 
 describe('the manifest', () => {
-  it('has the id, the table prefix kpii_, the one scoped permission and the three plain ones', () => {
+  it('has the id, the table prefix kpii_, the one scoped permission and the four plain ones', () => {
     expect(manifest.id).toBe('kpi.ingestion');
     expect(manifest.tablePrefix).toBe('kpii_');
     expect(manifest.permissions).toEqual({
@@ -39,23 +39,28 @@ describe('the manifest', () => {
       'kpi.ingestion.v1.read': { description: expect.any(String) as string },
       'kpi.ingestion.v1.write': { description: expect.any(String) as string },
       'kpi.ingestion.measurement.read': { description: expect.any(String) as string },
+      'kpi.ingestion.measurement.ingest': { description: expect.any(String) as string },
     });
   });
 
-  it('declares the event measurement.recorded@1 and its routes, no registry and no page yet', () => {
+  it('declares the event measurement.recorded@1, the registry ingestion.adapter and its routes, and no page yet', () => {
     expect(Object.keys(manifest.events?.emits ?? {})).toEqual(['measurement.recorded@1']);
-    expect(manifest.registries).toBeUndefined();
+    expect(Object.keys(manifest.registries ?? {})).toEqual(['ingestion.adapter']);
     expect(manifest.routes).toBeTypeOf('function');
     expect(manifest.ui).toBeUndefined();
   });
 
-  it('contributes the policy of its scoped permission and the count of its measurements to kpi.framework', () => {
+  it('contributes the policy of its scoped permission, the count of its measurements to kpi.framework and its three adapters', () => {
     const contributes = manifest.contributes ?? {};
     expect(Object.keys(contributes).sort()).toEqual([
       'authz.defaultRole',
       'authz.resourcePolicy',
+      'ingestion.adapter',
       'kpi.indicatorUsage',
     ]);
+    expect(
+      (contributes['ingestion.adapter'] as { id: string }[]).map((entry) => entry.id),
+    ).toEqual(['form', 'csv', 'xlsx']);
     expect(
       (contributes['authz.resourcePolicy'] as { resourceType: string }[]).map(
         (entry) => entry.resourceType,
@@ -69,7 +74,7 @@ describe('the manifest', () => {
     ).toEqual([['kpi.ingestion', 'measurements']]);
   });
 
-  it('depends on exactly what it imports, and the scoped permission is not a role’s: only the three plain ones are held by the role user', () => {
+  it('depends on exactly what it imports, and the scoped permission is not a role’s: only the four plain ones are held by the role user', () => {
     expect(
       Object.keys(packageJson.dependencies)
         .filter((name) => name.startsWith('@scorpion/'))
@@ -89,6 +94,7 @@ describe('the manifest', () => {
           'kpi.ingestion.v1.read',
           'kpi.ingestion.v1.write',
           'kpi.ingestion.measurement.read',
+          'kpi.ingestion.measurement.ingest',
         ],
       },
     ]);

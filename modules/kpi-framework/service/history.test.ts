@@ -1,9 +1,10 @@
 // The history of a service's KPIs (M10 sprint 1, ADR-0041 Decision 3): the writer appends a row in the transaction of
 // every change (the service method, and the create wizard's `store`), a rolled-back change leaves none, the backfill of the
 // migration starts the history for what existed, and `kpisInPeriod` answers "which KPIs did this service have in this month"
-// (the state at the end of the month). Real Postgres. The property tests use a seeded generator and an independent oracle,
-// not a library (the dependency for property tests arrives with the CSV parser, sprint 3).
+// (the state at the end of the month). Real Postgres. The property test generates histories with `fast-check` and compares the
+// answer with an independent oracle.
 import { randomUUID } from 'node:crypto';
+import fc from 'fast-check';
 import { readFileSync } from 'node:fs';
 import type { Actor } from '@scorpion/contracts';
 import {
@@ -451,14 +452,6 @@ describe('kpisInPeriod', () => {
   });
 
   describe('property: the SQL answers like an independent oracle, for generated histories and months', () => {
-    // A small deterministic generator (mulberry32): the same seeds every run, so a failure is reproducible.
-    const prng = (seed: number) => () => {
-      seed = (seed + 0x6d2b79f5) | 0;
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-
     interface State {
       from: Date;
       to: Date | null;
@@ -474,49 +467,56 @@ describe('kpisInPeriod', () => {
       return found;
     };
 
+    /** One change of a history: a month of 2025 to 2027, on its first instant (an edge) or inside it, and which set it moves to. */
+    const change = fc.record({
+      month: fc.integer({ min: 0, max: 35 }),
+      edge: fc.boolean(),
+      day: fc.integer({ min: 1, max: 27 }),
+      seconds: fc.integer({ min: 0, max: 86_399 }),
+      set: fc.integer({ min: 0, max: 2 }),
+    });
+    const timeOf = (c: { month: number; edge: boolean; day: number; seconds: number }) =>
+      c.edge ? Date.UTC(2025, c.month, 1) : Date.UTC(2025, c.month, c.day, 0, 0, c.seconds);
+
     it('holds for 40 generated histories of up to 8 states, probed at every month of the range and beyond', async () => {
       const { s, setA, setB } = await setup();
       const sets = [null, setA.id, setB.id];
       const provider = await makeOrganisation(s.pool, { type: 'provider' });
-      for (let seed = 1; seed <= 40; seed++) {
-        const random = prng(seed);
-        const serviceId = (await makeService(s.pool, { provider: provider.id })).id;
-        // Strictly increasing change times between 2025-01 and 2027-12, some of them on a month edge or in the same month.
-        const n = 1 + Math.floor(random() * 8);
-        const times = new Set<number>();
-        while (times.size < n) {
-          const month = Math.floor(random() * 36);
-          const edge = random() < 0.3;
-          const day = edge ? 1 : 1 + Math.floor(random() * 27);
-          const seconds = edge ? 0 : Math.floor(random() * 86400);
-          times.add(Date.UTC(2025, month, day, 0, 0, seconds));
-        }
-        const ordered = [...times].sort((x, y) => x - y);
-        const states: State[] = ordered.map((time, i) => ({
-          from: new Date(time),
-          to: ordered[i + 1] === undefined ? null : new Date(ordered[i + 1]!),
-          setId: sets[Math.floor(random() * sets.length)]!,
-        }));
-        for (const state of states)
-          await makeServiceKpiHistory(s.pool, {
-            serviceId,
-            setId: state.setId,
-            validFrom: state.from,
-            validTo: state.to,
-          });
-        for (let index = -2; index < 40; index++) {
-          const year = 2024 + Math.floor((index + 12) / 12);
-          const month = (((index % 12) + 12) % 12) + 1;
-          const period = `${year}-${String(month).padStart(2, '0')}`;
-          const expected = oracle(states, year, month);
-          const answer = await s.kpi.kpisInPeriod(serviceId, period);
-          if (expected === null) expect(answer, `seed ${seed} ${period}`).toBeNull();
-          else {
-            expect(answer?.validFrom, `seed ${seed} ${period}`).toEqual(expected.from);
-            expect(answer?.setId, `seed ${seed} ${period}`).toBe(expected.setId);
-          }
-        }
-      }
+      await fc.assert(
+        fc.asyncProperty(
+          // strictly increasing change times: no two changes at one instant
+          fc.uniqueArray(change, { minLength: 1, maxLength: 8, selector: timeOf }),
+          async (changes) => {
+            const serviceId = (await makeService(s.pool, { provider: provider.id })).id;
+            const ordered = [...changes].sort((x, y) => timeOf(x) - timeOf(y));
+            const states: State[] = ordered.map((c, i) => ({
+              from: new Date(timeOf(c)),
+              to: ordered[i + 1] === undefined ? null : new Date(timeOf(ordered[i + 1]!)),
+              setId: sets[c.set]!,
+            }));
+            for (const state of states)
+              await makeServiceKpiHistory(s.pool, {
+                serviceId,
+                setId: state.setId,
+                validFrom: state.from,
+                validTo: state.to,
+              });
+            for (let index = -2; index < 40; index++) {
+              const year = 2024 + Math.floor((index + 12) / 12);
+              const month = (((index % 12) + 12) % 12) + 1;
+              const period = `${year}-${String(month).padStart(2, '0')}`;
+              const expected = oracle(states, year, month);
+              const answer = await s.kpi.kpisInPeriod(serviceId, period);
+              if (expected === null) expect(answer, period).toBeNull();
+              else {
+                expect(answer?.validFrom, period).toEqual(expected.from);
+                expect(answer?.setId, period).toBe(expected.setId);
+              }
+            }
+          },
+        ),
+        { numRuns: 40 },
+      );
     }, 300_000);
   });
 });
