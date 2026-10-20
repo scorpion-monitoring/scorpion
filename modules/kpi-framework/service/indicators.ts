@@ -32,7 +32,12 @@ import { PERMISSION_INDICATOR_MANAGE, PERMISSION_INDICATOR_READ } from './permis
 import { actorId, iriBaseOf, uniqueViolation } from './shared.ts';
 import { checkTerms, indicatorTermChecks } from './terms.ts';
 import { escapeLike, slugCandidate, slugFromName } from './text.ts';
-import { boundsProblem, QUALITATIVE_VALUE_TYPE, type ValueTypeEntry } from './value-types.ts';
+import {
+  boundsProblem,
+  QUALITATIVE_VALUE_TYPE,
+  type ValueTypeEntry,
+  type ValueTypeInput,
+} from './value-types.ts';
 
 type Row = typeof indicator.$inferSelect;
 
@@ -65,6 +70,8 @@ export interface ValueTypeView {
   labels: { en: string; de?: string | undefined };
   numeric: boolean;
   range: { min?: number | undefined; max?: number | undefined } | undefined;
+  /** How a form asks for a value (data, not a branch on the id); absent for a type that says nothing. */
+  input: ValueTypeInput | undefined;
   aggregates: string[];
 }
 
@@ -253,6 +260,7 @@ export function createIndicatorsService(
           labels: entry.labels,
           numeric: entry.numeric,
           range: entry.range,
+          input: entry.input,
           aggregates: [...entry.aggregates],
         }));
     },

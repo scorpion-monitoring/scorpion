@@ -165,6 +165,7 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /kpi/ingestion/adapters`                   | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |
 | `GET /kpi/ingestion/runs`                       | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |
 | `GET /kpi/ingestion/runs/{id}`                  | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |
+| `GET /kpi/ingestion/services`                   | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |
 | `GET /kpi/ingestion/template`                   | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |
 | `GET /kpi/measurements`                         | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |
 | `GET /kpi/measurements/coverage`                | kpi.ingestion          | `kpi.ingestion.measurement.read`             | default    | no             |

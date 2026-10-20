@@ -28,6 +28,7 @@ import { settingsSchema } from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import {
   createCatalogue,
+  searchCondition,
   slugCondition,
   type CatalogueFacet,
   type CatalogueQuery,
@@ -344,6 +345,17 @@ export interface ServicesService {
    * so a removed member is refused at the next call. `false` for an unknown service and for a requested, rejected or left row.
    */
   isProviderMemberAsSystem: (userId: string, serviceId: string) => Promise<boolean>;
+  /**
+   * The services a picker offers (M10 sprint 4): by name or abbreviation (`q`, without case), name then id, at most `limit`. With `memberOf`
+   * only those whose **provider** has the user as an approved member (a manager included), the rule of `isProviderMemberAsSystem` read
+   * from the other side; without it every service (the caller decides who may ask: an administrator). It says who may do **what** to none
+   * of them: a module that offers an action checks its own scoped permission for each row it keeps.
+   */
+  listForPickerAsSystem: (options: {
+    q?: string | undefined;
+    memberOf?: string | undefined;
+    limit: number;
+  }) => Promise<{ id: string; slug: string; name: string }[]>;
 }
 
 const CONSTRAINT_ERRORS = new Set(['svc_service_slug_idx', 'svc_slug_history_slug_idx']);
@@ -1572,6 +1584,29 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         permission: PERMISSION_EDIT,
         resource: { type: RESOURCE_TYPE, id: serviceId },
       });
+    },
+
+    async listForPickerAsSystem({ q, memberOf, limit }) {
+      let providers: string[] | undefined;
+      if (memberOf !== undefined) {
+        if (!z.uuid().safeParse(memberOf).success) return [];
+        providers = await deps.organisations.listApprovedOrganisationIdsAsSystem(memberOf);
+        if (providers.length === 0) return [];
+      }
+      const rows = await db
+        .select({ id: service.id, slug: service.slug, name: service.name })
+        .from(service)
+        .where(
+          and(
+            searchCondition(q),
+            providers === undefined
+              ? undefined
+              : sql`exists (select 1 from ${serviceOrganisation} where ${serviceOrganisation.serviceId} = ${service.id} and ${serviceOrganisation.role} = ${OWNER_ROLE} and ${inArray(serviceOrganisation.organisationId, providers)})`,
+          ),
+        )
+        .orderBy(asc(sql`lower(${service.name})`), asc(service.id))
+        .limit(Math.max(1, Math.min(limit, 200)));
+      return rows;
     },
 
     async existsAsSystem(id) {

@@ -83,3 +83,50 @@ describe('isProviderManagerAsSystem (the sibling that exists)', () => {
       expect(await services.isProviderManagerAsSystem(people[who].userId, svc.id), who).toBe(false);
   });
 });
+
+describe('listForPickerAsSystem', () => {
+  it('lists the services of the providers the user is an approved member of, and none for any other kind of person', async () => {
+    const { services, people, pool, other, svc } = await world(h);
+    const elsewhere = await makeService(pool, { provider: other.id });
+    const ids = async (userId: string) =>
+      (await services.listForPickerAsSystem({ memberOf: userId, limit: 50 })).map((row) => row.id);
+    expect(await ids(people.member.userId)).toContain(svc.id);
+    expect(await ids(people.member.userId)).not.toContain(elsewhere.id);
+    expect(await ids(people.manager.userId)).toContain(svc.id);
+    expect(await ids(people.managerElsewhere.userId)).toContain(elsewhere.id);
+    expect(await ids(people.managerElsewhere.userId)).not.toContain(svc.id);
+    for (const who of ['requested', 'rejected', 'left', 'plain'] as const)
+      expect(await ids(people[who].userId), who).toEqual([]);
+    expect(await ids('not-a-uuid')).toEqual([]);
+  });
+
+  it('is not given by a consortium, only by the provider', async () => {
+    const { services, actor, consortium, svc, join } = await world(h);
+    const net = await actor('user');
+    await join(net, consortium.id, 'approved');
+    expect(await services.listForPickerAsSystem({ memberOf: net.userId, limit: 50 })).toEqual([]);
+    expect(svc.id).toBeTruthy();
+  });
+
+  it('without memberOf lists every service; q matches name or abbreviation without case and takes % and _ literally; the order is name, then id, and limit caps it', async () => {
+    const { services, pool, provider } = await world(h);
+    const a = await makeService(pool, {
+      provider: provider.id,
+      name: 'Zeta 100% picker',
+      slug: 'zeta-picker',
+    });
+    const b = await makeService(pool, {
+      provider: provider.id,
+      name: 'alpha picker',
+      slug: 'alpha-picker',
+    });
+    const hits = await services.listForPickerAsSystem({ q: 'PICKER', limit: 50 });
+    expect(hits.map((row) => row.id)).toEqual([b.id, a.id]);
+    expect(hits[0]).toEqual({ id: b.id, slug: 'alpha-picker', name: 'alpha picker' });
+    expect(
+      (await services.listForPickerAsSystem({ q: '100%', limit: 50 })).map((r) => r.id),
+    ).toEqual([a.id]);
+    expect(await services.listForPickerAsSystem({ q: '%', limit: 50 })).toHaveLength(1);
+    expect(await services.listForPickerAsSystem({ q: 'picker', limit: 1 })).toHaveLength(1);
+  });
+});

@@ -24,7 +24,7 @@ import {
 } from './adapters.ts';
 import { escapeCell } from './escape.ts';
 import type { MeasurementsService, Verdict } from './measurements.ts';
-import { PERMISSION_SUBMIT, RESOURCE_SERVICE } from './permissions.ts';
+import { PERMISSION_MEASUREMENT_READ, PERMISSION_SUBMIT, RESOURCE_SERVICE } from './permissions.ts';
 import { MANDATORY_NECESSITY } from './reads.ts';
 import {
   PROBLEM_MESSAGES,
@@ -42,6 +42,8 @@ export const MAX_FORM_VALUES = 500;
 export const MAX_FILE_NAME = 120;
 /** How many runs the history lists. */
 export const RUN_LIST_LIMIT = 50;
+/** How many services the picker lists at most (the person narrows it with a search). */
+export const PICKER_LIMIT = 50;
 /** The most problems a run keeps and an answer lists. */
 export const MAX_RUN_PROBLEMS = 100;
 
@@ -129,7 +131,24 @@ export interface AdapterInfo {
   template: string | null;
 }
 
+/** A service the person may submit for, as the picker shows it. */
+export interface SubmittableService {
+  id: string;
+  /** The abbreviation (the current slug). */
+  slug: string;
+  name: string;
+}
+
 export interface IngestionService {
+  /**
+   * The services the person may submit for, by name or abbreviation, at most `PICKER_LIMIT` (name, then id). An administrator
+   * gets every service of the search, an approved member of a provider the services of that provider; every row is checked with the
+   * scoped `kpi.ingestion.measurement.submit`, so the list can only be shorter than the rule allows, never longer.
+   */
+  submittableServices(
+    actor: Actor,
+    query: { q?: string | undefined },
+  ): Promise<SubmittableService[]>;
   /** The adapters of the registry (no permission needed: they say nothing about any service). */
   adapters(): AdapterInfo[];
   /** The header, the first rows, the mapping (given or proposed) and the problems. Writes nothing. */
@@ -148,8 +167,8 @@ export interface IngestionService {
 }
 
 export interface IngestionDeps {
-  authz: Pick<AuthzService, 'require'>;
-  services: Pick<ServicesPublic, 'existsAsSystem' | 'findByIdsAsSystem'>;
+  authz: Pick<AuthzService, 'require' | 'can'>;
+  services: Pick<ServicesPublic, 'existsAsSystem' | 'findByIdsAsSystem' | 'listForPickerAsSystem'>;
   kpi: Pick<KpiFrameworkPublic, 'effectiveIndicatorsAsSystem'>;
   measurements: Pick<MeasurementsService, 'upsertBatch'>;
   adapters: ReadonlyMap<string, AdapterEntry>;
@@ -495,6 +514,25 @@ export function createIngestionService(ctx: ModuleContext, deps: IngestionDeps):
           })),
         };
       });
+    },
+
+    async submittableServices(actor, query) {
+      await deps.authz.require(actor, PERMISSION_MEASUREMENT_READ);
+      if (actor.kind !== 'user') return [];
+      // Whoever holds the scoped permission without naming a service holds it everywhere (the role Admin); everybody else only through
+      // the provider they belong to. Either way each row is asked again below, so a candidate never becomes an entry by itself.
+      const everywhere = await deps.authz.can(actor, PERMISSION_SUBMIT);
+      const candidates = await deps.services.listForPickerAsSystem({
+        q: query.q,
+        ...(everywhere ? {} : { memberOf: actor.userId }),
+        limit: PICKER_LIMIT,
+      });
+      const allowed = await Promise.all(
+        candidates.map((row) =>
+          deps.authz.can(actor, PERMISSION_SUBMIT, { type: RESOURCE_SERVICE, id: row.id }),
+        ),
+      );
+      return candidates.filter((_, index) => allowed[index]);
     },
 
     async listRuns(actor, serviceId) {
