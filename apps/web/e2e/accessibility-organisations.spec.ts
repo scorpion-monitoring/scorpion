@@ -129,7 +129,9 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(plain.page.getByRole('rowheader', { name: org.abbreviation })).toBeVisible();
       await expect(plain.page.getByText('Member', { exact: true }).first()).toBeVisible();
       await clean(plain.page, 'the profile page of a plain User');
-      await plain.page.getByRole('button', { name: `Leave ${org.abbreviation}` }).click();
+      await plain.page
+        .getByRole('button', { name: `Leave the organisation ${org.abbreviation}` })
+        .click();
       await expect(plain.page.getByRole('dialog')).toBeVisible();
       await clean(plain.page, 'the leave dialog');
       await plain.close();
@@ -221,7 +223,7 @@ test.describe('the membership screens by keyboard', () => {
     await expect(said).toBeVisible();
     await expect(said).toBeFocused();
 
-    const promote = section.getByRole('button', { name: `Make ${plain.username} a manager` });
+    const promote = section.getByRole('button', { name: `Make manager: ${plain.username}` });
     await tabTo(page, promote);
     await page.keyboard.press('Enter');
     await expect(section.getByText(`${plain.username} is now a manager.`).first()).toBeFocused();
@@ -263,7 +265,9 @@ test.describe('the membership screens by keyboard', () => {
     // The member who became a manager leaves with the keyboard; Escape on the dialog returns the focus.
     const leaver = await pageAs(browser, baseURL, at, plain);
     await leaver.page.goto(at('/account/organisations'));
-    const leave = leaver.page.getByRole('button', { name: `Leave ${org.abbreviation}` });
+    const leave = leaver.page.getByRole('button', {
+      name: `Leave the organisation ${org.abbreviation}`,
+    });
     await tabTo(leaver.page, leave);
     await leaver.page.keyboard.press('Enter');
     const confirm = leaver.page.getByRole('dialog', { name: `Leave ${org.name}?` });

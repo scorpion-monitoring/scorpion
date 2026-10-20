@@ -50,7 +50,7 @@
       aria-haspopup="true"
       aria-expanded={open}
       aria-controls="account-menu"
-      aria-label={t('app.account.menu')}
+      aria-label={`${t('app.account.menu')}: ${who.user.username}`}
       onclick={() => (open = !open)}
     >
       <Icon name="user" size={18} />

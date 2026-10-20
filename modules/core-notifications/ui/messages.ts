@@ -20,7 +20,7 @@ export const messages: UiMessages = {
     'inbox.unread.other': '{count} unread items',
     'inbox.markAll': 'Mark all read',
     'inbox.markRead': 'Mark read',
-    'inbox.markReadNamed': 'Mark "{title}" read',
+    'inbox.markReadNamed': 'Mark read: "{title}"',
     'inbox.delete': 'Delete',
     'inbox.deleteNamed': 'Delete "{title}"',
     'inbox.open': 'Open',
