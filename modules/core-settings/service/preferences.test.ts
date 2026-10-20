@@ -214,3 +214,30 @@ describe('getForUser (trusted code, no human caller)', () => {
     expect(await service.getForUser(alice.userId, 'fix.widgets.theme')).toBeUndefined();
   });
 });
+
+describe('setUserPreference (the public service, for the module that stores a document for the caller)', () => {
+  it('stores the preference of the caller as PUT /preferences/{key} does, and takes no user id', async () => {
+    const { settings, service, alice, bob } = await setup();
+    await settings.setUserPreference(alice, 'fix.widgets.theme', 'dark');
+    expect(await service.list(alice)).toMatchObject([{ key: 'fix.widgets.theme', value: 'dark' }]);
+    expect(await settings.getUserPreference(alice.userId, 'fix.widgets.theme')).toBe('dark');
+    expect(await service.list(bob)).toEqual([]);
+  });
+
+  it('keeps every check of the service: permission, schema and the registered key', async () => {
+    const { settings, nobody, alice, kernel } = await setup();
+    await expect(settings.setUserPreference(nobody, 'fix.widgets.theme', 'dark')).rejects.toThrow(
+      Forbidden,
+    );
+    await expect(
+      settings.setUserPreference(ANONYMOUS, 'fix.widgets.theme', 'dark'),
+    ).rejects.toThrow(Unauthorized);
+    await expect(settings.setUserPreference(alice, 'fix.widgets.theme', 'purple')).rejects.toThrow(
+      Invalid,
+    );
+    await expect(settings.setUserPreference(alice, 'no.such.key', 'x')).rejects.toThrow(NotFound);
+    expect((await kernel.pool.query('select 1 from settings_user_preference')).rows).toHaveLength(
+      0,
+    );
+  });
+});

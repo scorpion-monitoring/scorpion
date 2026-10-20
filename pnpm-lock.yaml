@@ -485,6 +485,9 @@ importers:
       '@scorpion/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
 
   modules/kpi-framework:
     dependencies:

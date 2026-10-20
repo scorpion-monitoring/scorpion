@@ -5,6 +5,9 @@
 // of a page (`UiRoute`) is typed in `@scorpion/contracts`.
 export { REGISTRIES } from './registries.ts';
 export type { NavEntry, RouteEntry, ThemeEntry, WidgetEntry } from './registries.ts';
+export type { DashboardService, DashboardView } from './service/dashboard/service.ts';
+export type { ShellService } from './service/shell.ts';
+export type { DashboardItem } from './service/dashboard/document.ts';
 export type {
   Navigation,
   NavigationItem,
@@ -38,6 +41,6 @@ export const PUBLIC_PAGES: readonly string[] = [
 
 declare module '@scorpion/kernel' {
   interface ModuleServices {
-    'core.ui-shell': import('./service/navigation.ts').NavigationService;
+    'core.ui-shell': import('./service/shell.ts').ShellService;
   }
 }

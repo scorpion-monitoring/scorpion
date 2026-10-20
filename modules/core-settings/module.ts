@@ -170,6 +170,9 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
         getSecret: (name) => secrets.getSecret(name),
         getBranding: (options) => branding.get(options),
         getUserPreference: (userId, key) => preferences.getForUser(userId, key),
+        setUserPreference: async (actor, key, value) => {
+          await preferences.set(actor, key, value);
+        },
         seedSettings: (moduleId, values) => settings.seed(moduleId, values),
         listTerms: (vocabularyId, options) => vocabularies.terms(vocabularyId, options),
         validateTerm: (vocabularyId, key, options) =>

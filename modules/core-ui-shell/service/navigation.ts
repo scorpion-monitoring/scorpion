@@ -18,6 +18,14 @@ export interface WidgetItem {
   slot: string;
   component: string;
   order: number;
+  /** Where and how big the widget is on the dashboard grid (see `widgetGridSchema`); absent for a card without one. */
+  grid?: NonNullable<WidgetEntry['grid']>;
+  /** A key of the module's message catalogue. */
+  label?: string;
+  /** A key of the module's message catalogue. */
+  description?: string;
+  /** A name of the icon table. */
+  icon?: string;
 }
 
 export interface Navigation {
@@ -125,9 +133,19 @@ export function createNavigationService(
             order,
           })),
         routes: [...openPaths].sort(),
+        // The new fields appear only on an entry that has them, so an old entry's answer is what it was.
         widgets: visibleWidgets
           .sort(byOrder)
-          .map(({ id, slot, component, order }) => ({ id, slot, component, order })),
+          .map(({ id, slot, component, order, grid, label, description, icon }) => ({
+            id,
+            slot,
+            component,
+            order,
+            ...(grid === undefined ? {} : { grid }),
+            ...(label === undefined ? {} : { label }),
+            ...(description === undefined ? {} : { description }),
+            ...(icon === undefined ? {} : { icon }),
+          })),
         themes: [...themes],
       };
     },
