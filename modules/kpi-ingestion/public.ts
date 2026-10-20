@@ -9,6 +9,7 @@ export {
   PERIOD_FORMS,
 } from './service/period.ts';
 export {
+  PERMISSION_INGEST,
   PERMISSION_MEASUREMENT_READ,
   PERMISSION_SUBMIT,
   PERMISSION_V1_READ,
@@ -40,6 +41,47 @@ export {
   writeMeasurementsV1Route,
 } from './routes-v1.ts';
 export { getCoverageRoute, getGridRoute } from './routes.ts';
+export {
+  getRunRoute,
+  listAdaptersRoute,
+  listRunsRoute,
+  MAX_UPLOAD_BODY_BYTES,
+  previewRoute,
+  runRoute,
+  templateRoute,
+} from './routes-ingestion.ts';
+// The registry of ways to give values, for a module that contributes one (the form, CSV and XLSX adapters are entries of it).
+export {
+  ADAPTER_REGISTRY,
+  adapterEntrySchema,
+  type AdapterContext,
+  type AdapterEntry,
+  type AdapterInput,
+  type AdapterOutput,
+} from './service/adapters.ts';
+export { escapeCell, unescapeCell } from './service/escape.ts';
+export { parseCsv, writeCsv, type CsvResult } from './service/csv.ts';
+export { guardXlsx, MAX_INFLATED_BYTES, type GuardResult } from './service/xlsx-guard.ts';
+export {
+  MAX_FILE_BYTES,
+  MAX_FORM_VALUES,
+  RUN_LIST_LIMIT,
+  sanitiseFileName,
+  type AdapterInfo,
+  type CellVerdict,
+  type IngestInput,
+  type IngestionService,
+  type PreviewResult,
+  type RunRecord,
+  type RunResult,
+  type TemplateFile,
+} from './service/ingestion.ts';
+export {
+  PROBLEM_MESSAGES,
+  type ColumnMapping,
+  type ProblemCode,
+  type TableProblem,
+} from './service/table.ts';
 export {
   MAX_BATCH_MONTHS,
   MAX_BATCH_ROWS,

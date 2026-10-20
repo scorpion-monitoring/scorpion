@@ -101,7 +101,7 @@ bytes that passed:
 2. a declared size can lie, so inflate with `fflate`'s streaming `Unzip` in slices of **4 KiB of input** (one slice inflates to at most about
    4 MB) and count the real output; stop and refuse as soon as the count passes the cap.
 
-Sprint 3 writes it as `service/xlsx-guard.ts` with the bomb, the lying bomb, a truncated file, an encrypted one and the other cases as tests.
+Sprint 3 writes it as `service/xlsx-guard.ts` with the bomb, the lying bomb, a truncated file, an encrypted one and the other cases as tests (done: "Amended in sprint 3").
 `fflate` is then a direct dependency of `kpi.ingestion` (it is already a dependency of both libraries; it is named in the pull request).
 
 Things sprint 3 must know, found by the prototype:
@@ -281,3 +281,68 @@ What building the API changed or added. The plan carries the same list under "Am
    `date` (an ISO date or a time stamp) and whether `value` was text or a number are not in FEATURES §3.16 and the repository holds no legacy source. `date` is
    `YYYY-MM-DD` (the month end) and `value` the canonical text, with `valueNumber` added, which keeps a client that read `value` as text working and lets a new one
    read a number. A client of the legacy API that read `data` or relied on a `pageSize` of 1 000 has to change; the changeset says so.
+
+## Amended in sprint 3
+
+What building the adapters changed or added. The plan carries the same list under "Amended in sprint 3". Where the plan and the source disagreed, the source won
+and it is said here.
+
+**Checked against the source before starting** (the plan said they exist, and they do): `upsertBatch` with `dryRun`, `normalisePeriod`, `resolveIndicatorRef`,
+`kpi.framework.effectiveIndicatorsAsSystem` and the v1 routes. Three places where the plan and the source differ:
+
+1. **The "entry in the server's `BodyLimitOverride` list" is the route's `maxBodyBytes`.** `apps/server/src/app.ts` builds the list from the routes that name
+   `maxBodyBytes` (the mechanism sprint 2 used for the 3 MiB of the v1 write), so the two upload routes set `maxBodyBytes: 2 MiB + 64 KiB` and nothing under
+   `apps/server/src/pipeline/**` changed. The 64 KiB is the multipart envelope; a file over 2 MiB inside it is a 422 from the service, a body over the limit is a 413 before it is read.
+2. **The effective-KPI row has no IRI slug.** `effectiveIndicatorsAsSystem` returns the indicator's id, name, value type, unit, necessity and bounds, so a column is matched
+   by id or by name, as `resolveIndicatorRef` does, and not by the slug of the IRI as the plan says. The template's own decoration (` (unit)` and ` *`) is taken off
+   before a second try with the same function; there is no second resolver.
+3. **`MAX_BATCH_ROWS` was 5 000 and is now 25 000.** The plan's limit is 5 000 data rows of a file, but `upsertBatch` counts **values**: 5 000 rows of 20 indicator columns are 100 000
+   values, and a file that covers 10 years of a service with 50 KPIs (6 000 values) would have been refused. The binding limit is the 120 months a batch covers (decision 1), so the cap is
+   120 months of 200 indicators. A file with more is a 422 from `upsertBatch` and is not recorded as a run.
+
+**Decisions of the sprint**
+
+4. **The guard came first and works** (`service/xlsx-guard.ts`; the plan's decision 1 did not need its fallback). Measured on this machine: a 61 kB bomb that inflates to 60 MB is refused from the
+   central directory in **0.2 ms**; the same bomb with headers that say 1 000 bytes is refused after **223 ms** (the count passes 20 MiB inside one 4 KiB slice); a 5 000-row, 21-column workbook
+   (615 kB, 3.3 MB inflated) passes in **84 ms**. It also refuses an OLE2 file (what Office writes for a password-protected workbook), more than 1 000 entries, an encrypted entry, Zip64 and a damaged
+   directory, and never throws. The reader is only called with bytes that passed. `fflate` is a direct dependency, exact `0.8.3`.
+5. **The reader entry is `read-excel-file/node`.** Measured with the 5 000 × 21 workbook (615 kB): `node` read it in 185 to 242 ms, `universal` in 243 to 310 ms; the event loop stalled for 5 ms with
+   `node` and 6 ms with `universal` (the parse yields in both); `universal` refuses a `Buffer` (`INPUT_TYPE_NOT_SUPPORTED`) and needs a `Blob`, so the upload would be copied. The `node` entry's worker
+   thread works inside the production image (`read-excel-file` and `write-excel-file` load and round-trip in 22 ms in a container of the `full` profile).
+6. **Dependencies.** Runtime, exact versions: `read-excel-file` 9.3.12, `write-excel-file` 4.1.1 and `fflate` 0.8.3 (direct). Development: `fast-check` 4.10.2 (in `kpi.ingestion`, and in `kpi.framework`
+   for the history property tests). New in the lockfile, nine packages: `read-excel-file`, `write-excel-file`, `fflate`, `saxen` 11.2.0, `worker-f` 0.1.20, `unzipper-esm` 0.13.3, `node-int64` 0.4.0
+   (all MIT), and, development only, `fast-check` and `pure-rand` 8.4.2; `graceful-fs` 4.2.11 was already there. `pnpm audit:check` passes. **Image size, `0.11.0` against this branch, profile `full`:**
+   624 448 911 bytes to 633 461 699 bytes (**+9.0 MB, +1.4%**; the compressed content size went from about 129 MB to 130 MB); the packages themselves are about 8.8 MB on disk
+   (`read-excel-file` 3.5 MB, `write-excel-file` 2.9 MB, `fflate` 0.9 MB, `worker-f` 0.8 MB, `unzipper-esm` 0.5 MB, `saxen` 0.2 MB). `fast-check` is not in an image. The image still holds exactly the
+   modules of its profile (`scripts/check-image-modules.ts`).
+7. **Scorecard and `fast-check`.** Scorecard's Fuzzing check counts a JavaScript or TypeScript property-test library when a `.js` or `.ts` file has a line `from 'fast-check'` (or `@fast-check/ava|jest|vitest`) or
+   `require('fast-check')`, per line, and only when the language is prominent in the repository. The tests import it as `import fc from 'fast-check'` on one line, so they are detected; nothing in a workflow was changed.
+8. **The CSV parser** (`service/csv.ts`) has the limits of the plan (5 000 data rows, 200 columns, 4 000 characters a field), reads a record's start line for its problems, never throws, and keeps
+   what it could read next to the problems. A quote is special only at the start of a field; a quote inside an unquoted field and text after a closing quote are problems. Properties (`fast-check`, 400 to 1 000 runs each):
+   any table written with `writeCsv` reads back as itself for each of the three delimiters (a first field that starts with a BOM is preceded by one, because the reader strips exactly one), no input throws, and a stray or
+   unterminated quote is a problem and not an exception. 5 000 rows of 21 columns (591 kB) parse and map in about **30 ms**; the same as XLSX (672 kB) in about **350 ms**.
+9. **The registry `ingestion.adapter`** is declared with a Zod schema (`input: 'file' | 'values'`, `accepts`, an optional `sniff`, `parse`, an optional `template`); a bad entry stops the start naming its module and two entries with one
+   id stop it too. The service never names an adapter: it asks `accepts`, `sniff` and `template`. **The content decides:** a file goes to the adapter that recognises its bytes (the named one first), so a workbook saved as `.csv`
+   is read as a workbook and text named `.xlsx` as text; a file that neither recognises is a `format` problem, never a 500. A text file must be UTF-8 (a legacy encoding is the problem `encoding`).
+10. **The mapping** is keyed by the 0-based column index (`{ "0": "period", "2": "<indicator id>" }`), because two columns may have the same header. Required: the period and every mandatory indicator (`MANDATORY_NECESSITY`,
+    the key of sprint 2). A row with no value in any mapped column is skipped (the empty rows of an export and the template's example row); a blank mandatory cell in a row that has a value, and a row with
+    a value and no period, are problems. Cells are text: a number is its shortest text, a date `YYYY-MM-DD`, a boolean is the problem `cell-type`; validity is `upsertBatch`'s verdict, so there is one rule and the
+    form, CSV and XLSX give identical rows (a test writes the same data through the three and compares the rows in the database).
+11. **Preview, dry run and commit parse the same bytes again.** A dry run is 200 with the verdict of each value and nothing is written or stored (row counts and events before and after are compared). A commit that finds
+    anything wrong **refuses the whole file**, records a `rejected` run (counts and at most 100 problems of `{ row, column, code }`, nothing else) and answers **422** naming each `rows[r].columns[c]` and the
+    run in its message. A commit that is right writes the run, the values and the event in one transaction (`upsertBatch` runs inside it as a savepoint), so a failing event leaves none of them (a test breaks the outbox).
+    A request wrong as a whole (neither or both of a file and a form, an unknown adapter, an empty or oversized file, nothing to record, a service with no KPI set) is a 422 and is not recorded.
+12. **A permission of its own for the write routes: `kpi.ingestion.measurement.ingest`** (the role `user`). The plan names `measurement.read` for the internal routes, but a token that may only read the grid
+    could then write through preview and run (the owner still has to be allowed, ADR-0015, but the scope would mean nothing). The routes name `ingest` for the two POSTs and `read` for the history, the adapters
+    and the template; the service checks the scoped `submit` for all but the list of adapters. It is the one addition to the permission list.
+13. **`GET /kpi/ingestion/adapters`** was added (not in the plan's route list): the page of sprint 4 must not hard-code which files it accepts, and the registry is the only place that knows. It names `measurement.read` and
+    says nothing about any service.
+14. **The body is `multipart/form-data` or JSON on one route.** `@hono/zod-openapi` runs every declared validator when the body is `required: true`, and then refuses a multipart request against the JSON schema, so the body is
+    declared `required: false` and the handler refuses a request with no body itself (422). A file is a multipart field, the mapping is JSON text in a field, and a form is JSON.
+15. **The import template** is written by the adapter that has one (`write`), from rows the service has already **escaped**: every cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'`, in
+    the CSV and in the XLSX (where a string cell is not evaluated anyway; the plan asks for both). The reader takes the `'` off a header again, so a template re-uploads unchanged. The CSV is UTF-8 with a BOM; the XLSX writes
+    text cells with the format `@` so that Excel does not turn `2026-05` into a date. The header is `Name (unit)` plus ` *` for a mandatory indicator (the unit's term key: its label is a vocabulary of `core.settings`, which this module
+    does not depend on yet). The example row holds the previous month and no values. The file name comes from the abbreviation.
+16. **No table and no migration:** `kpii_ingestion_run` has existed since sprint 1 and holds everything the run needs. The run's times come from the injected clock.
+17. **Tests added beyond the plan:** the three-way equivalence, the guard's cases, `fast-check` properties for the CSV, the walker `defect 1: the ingestion routes` in `defect-01.privilege-escalation.test.ts`, and the
+    history property test of `kpi.framework` on `fast-check` (the oracle is the same; 40 generated histories).

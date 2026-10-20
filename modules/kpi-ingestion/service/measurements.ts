@@ -17,8 +17,12 @@ import { PERMISSION_SUBMIT, PERMISSION_V1_WRITE, RESOURCE_SERVICE } from './perm
 import { resolveServiceRef, type ServiceLookup } from './service-ref.ts';
 import { sameColumns, toColumns, type ValueColumns } from './values.ts';
 
-/** The most rows one batch holds (the size of an upload: the plan's limit of 5 000 data rows). */
-export const MAX_BATCH_ROWS = 5000;
+/**
+ * The most rows (values) one batch holds: 120 months of 200 indicators. An upload of 5 000 data rows (the plan's limit) with 20
+ * indicator columns is 100 000 values, but a batch also covers at most 120 distinct months, so the real ceiling is months times
+ * indicators; sprint 3 raised this from 5 000 so that a normal file (a year or ten of a service with 50 KPIs) is not refused.
+ */
+export const MAX_BATCH_ROWS = 25_000;
 /** The most distinct months one batch covers: the event names them, and its schema holds 120. */
 export const MAX_BATCH_MONTHS = 120;
 /** The most problems one 422 lists. */
