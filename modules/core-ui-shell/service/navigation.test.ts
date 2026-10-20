@@ -2,6 +2,7 @@ import type { Actor } from '@scorpion/contracts';
 import { ANONYMOUS } from '@scorpion/contracts';
 import { KernelStartupError } from '@scorpion/kernel';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { REGISTRIES } from '../registries.ts';
 import { createNavigationService } from './navigation.ts';
 
@@ -144,6 +145,56 @@ describe('navigation(actor)', () => {
       { id: 'scorpionlight', label: 'theme.light', colorScheme: 'light' },
     ]);
     expect(result.widgets.map((widget) => widget.id)).toEqual(['open']);
+  });
+
+  describe('the grid fields of a widget (M11)', () => {
+    const old = { id: 'old', slot: 'dashboard', component: 'Old', order: 10, public: true };
+    const placed = {
+      id: 'placed',
+      slot: 'dashboard',
+      component: 'Placed',
+      order: 20,
+      permission: 'm.profile.read',
+      grid: { w: 6, h: 4, minW: 3, default: { x: 0, y: 0, w: 6, h: 4 } },
+      label: 'widget.placed',
+      description: 'widget.placed.about',
+      icon: 'list',
+      configSchema: z.object({ range: z.string().default('1y') }),
+    };
+    const shell = service({ 'ui.widget': [old, placed] }, declared, holders('m.profile.read'));
+
+    it('answers an entry that has none exactly as before', async () => {
+      const result = await shell.navigation(user);
+      expect(result.widgets[0]).toStrictEqual({
+        id: 'old',
+        slot: 'dashboard',
+        component: 'Old',
+        order: 10,
+      });
+    });
+
+    it('lists them for a widget the caller may see, and not the configSchema', async () => {
+      const result = await shell.navigation(user);
+      expect(result.widgets[1]).toStrictEqual({
+        id: 'placed',
+        slot: 'dashboard',
+        component: 'Placed',
+        order: 20,
+        grid: { w: 6, h: 4, minW: 3, default: { x: 0, y: 0, w: 6, h: 4 } },
+        label: 'widget.placed',
+        description: 'widget.placed.about',
+        icon: 'list',
+      });
+      expect(JSON.stringify(result)).not.toContain('configSchema');
+    });
+
+    it('says nothing about a widget the caller may not see', async () => {
+      const result = await service({ 'ui.widget': [old, placed] }, declared, holders()).navigation(
+        user,
+      );
+      expect(result.widgets.map((widget) => widget.id)).toEqual(['old']);
+      expect(JSON.stringify(result)).not.toContain('widget.placed');
+    });
   });
 });
 
