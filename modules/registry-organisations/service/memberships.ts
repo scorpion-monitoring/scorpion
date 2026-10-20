@@ -184,6 +184,12 @@ export interface MembershipsService {
   /** The user ids of the approved managers of an organisation, by id; read at the moment of the call. */
   listApprovedManagerIdsAsSystem: (organisationId: string) => Promise<string[]>;
   /**
+   * The user ids of the approved members of an organisation, managers included (a manager is a member too), by id; read at the
+   * moment of the call. A requested, rejected or left row is not a member. The sibling of `listApprovedManagerIdsAsSystem`, for the
+   * reporting reminder of `kpi.ingestion`. It names nobody and says nothing of the person's account: the caller checks that.
+   */
+  listApprovedMemberIdsAsSystem: (organisationId: string) => Promise<string[]>;
+  /**
    * Deletes every membership of a purged person, managers' too, in one transaction (idempotent).
    * Called by the subscriber of `identity.user.purged@1`; no route calls it.
    */
@@ -892,6 +898,16 @@ export function createMembershipsService(
             eq(membership.role, 'manager'),
           ),
         )
+        .orderBy(asc(membership.userId));
+      return rows.map((row) => row.id);
+    },
+
+    async listApprovedMemberIdsAsSystem(organisationId) {
+      if (!isUuid(organisationId)) return [];
+      const rows = await db
+        .select({ id: membership.userId })
+        .from(membership)
+        .where(and(eq(membership.organisationId, organisationId), eq(membership.state, 'approved')))
         .orderBy(asc(membership.userId));
       return rows.map((row) => row.id);
     },

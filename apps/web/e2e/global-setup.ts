@@ -21,12 +21,13 @@ export default async function globalSetup() {
   if (process.env.E2E_COMPONENTS_ONLY) return () => harness?.stop() ?? Promise.resolve();
   const { stacks, stop } = await startAll(only);
   process.env.SCORPION_E2E_STACKS = JSON.stringify(
-    stacks.map(({ name, basePath, origin, apiPort, databaseUrl }) => ({
+    stacks.map(({ name, basePath, origin, apiPort, databaseUrl, secretsKey }) => ({
       name,
       basePath,
       origin,
       apiPort,
       databaseUrl,
+      secretsKey,
     })),
   );
   return async () => {

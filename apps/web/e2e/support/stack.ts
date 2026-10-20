@@ -35,6 +35,8 @@ export interface Stack extends StackSpec {
   origin: string;
   /** The connection string of the stack's own database, for a test that reads a mail or ages a session. */
   databaseUrl: string;
+  /** The stack's `SECRETS_KEY`, for a second node that runs one piece of the product against the same database (`runReminder`). */
+  secretsKey: string;
   /** Everything the two processes wrote, for a failing test. */
   logs: () => string;
   stop: () => Promise<void>;
@@ -176,6 +178,7 @@ export async function startStack(spec: StackSpec, database: StartedPostgres): Pr
     ...spec,
     origin,
     databaseUrl: url,
+    secretsKey: env.SECRETS_KEY!,
     logs,
     stop: async () => {
       await Promise.all(

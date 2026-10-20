@@ -407,3 +407,88 @@ load and no call. A save is **1** call (`POST /kpi/ingestion/runs`) and one page
 the coverage, the runs, the adapters, two vocabularies, the value types, the grid) and 1 for a page with none. They share the bucket of the caller (the default one, a burst of 120 and 120 a minute) with the shell's own
 reads, so a person who changes the month about nine times in a minute meets a 429; none was seen in the tests. Five of the nine are reference data that does not change within a visit (the adapters, the two vocabularies, the value
 types, and in practice the picker's list): see the backlog.
+
+## Amended in sprint 5
+
+What building the reporting reminder and closing the backlog changed or added. The plan carries the same list under "Amended in sprint 5". Where the plan and the source disagreed, the source won and it is
+said here.
+
+**Checked against the source before starting.** Sprint 4 (PR #115) was merged into `dev`. What the plan names exists as described: the template `kpi.reporting-reminder` in `core.notifications` (`templates/kpi.ts`,
+category `reminders`, data `{ provider, month, missing[], reportUrl }`), `registry.organisations/public`'s `listApprovedManagerIdsAsSystem`, `registry.services`' `listByOrganisationAsSystem` and
+`isProviderMemberAsSystem`, `kpi.framework`'s `effectiveIndicatorsAsSystem`, and the page `/submit?service=<id>&period=YYYY-MM` (`SUBMIT_PATH`, with the month list of sprint 4). Five places where the plan and the source differ:
+
+1. **Nothing lists the providers.** The job has to walk every provider, and no public read answers "which organisations provide a service". **One more additive trusted read**, `listProviderIdsAsSystem()` on
+   `registry.services` (the distinct organisation ids in the role `provider`, by id; it names no service and no person), and the export `PROVIDER_ROLE` (the role id the policy already uses) for
+   `listByOrganisationAsSystem(id, PROVIDER_ROLE)`. It goes beyond the two reads the plan's §13 names (`isProviderMemberAsSystem` and `listApprovedMemberIdsAsSystem`); it is recorded so it can be refused.
+   The alternative, `listForPickerAsSystem`, is bounded to 200 rows and cannot enumerate.
+2. **There is no "run now" on the job page.** Plan items 1 and 4 say the admin's "run now" (M4) is the manual trigger. The page of M4 (`/admin/system`, `GET /system/job-runs`) **lists** the runs and their
+   counts and requeues dead _event_ deliveries; no route or button queues a job. Nothing was built for it (item 4 says not to build a "send now"), and the plan's statement is corrected here and in the README;
+   a platform "run now" is a backlog item. The consequence for an operator: a reminder the job missed (see decision 3) is not sent until the next day the setting names.
+3. **`core.identity` is a dependency.** `enqueueTemplate` takes the address the caller supplies; the module that knows people is `core.identity`, which `registry.organisations` uses for the same reason (an
+   account that is not active gets nothing, an account with no address cannot be mailed). The plan's §2 names `core.settings`, `core.notifications` and `registry.organisations` but not `core.identity`. All four are declared in `package.json`
+   (they were development dependencies of the harness).
+4. **`kpii_reminder_sent` did not exist.** The plan's §3 names the table in the model, but sprint 1 did not create it. Migration `0001_reminder_sent.sql` (additive) adds it: `(provider_id, period)` primary key, `sent_at`,
+   `recipients` (at least 1) and `services` (at least 1); `period` is the last day of the **reported** month with the same check as `kpii_measurement`; `provider_id` is a plain column.
+5. **"A service of two providers" is a state of the data, not of the rules.** The seed role `provider` has `min: 1, max: 1`, but `svc_service_organisation` is unique on `(service, organisation, role)` only, the
+   policy `service.member` loops over every provider row, and another module may contribute a role with a larger `max`. Decision: the reminder follows the data. Such a service is named once to **each** of its providers'
+   members (each may submit for it) and counts in each provider's row; a consortium is never asked. A pure test covers it (`selectMissing`, "a service of two providers").
+
+**Decisions of the sprint**
+
+6. **The job.** `kpi.ingestion.reporting-reminder`, cron `0 6 * * *`, retry 3 times 10 minutes apart, timeout 15 minutes. The handler returns at once unless `reminders.enabled` is on **and** `clock().getUTCDate()` is
+   `reminders.dayOfMonth`. The cron and the day check are UTC; the setting's help text and the README say so. A run on a day that is not the day, or with the switch off, writes nothing and reports `skipped`.
+   **A day the job did not run (the node was down at 06:00 UTC on the 6th) sends no reminder that month**: the day check is exact, as the plan says. Running on every day from the setting's day on would make it robust, and the
+   sent table makes that safe, but it would also remind a provider on the 20th of something that became missing later; that is a behaviour change for the maintainer (backlog).
+7. **What is missing** is one pure function (`service/reminder-select.ts`): per service its providers, the **mandatory** indicators of its effective KPI set _now_ (`effectiveIndicatorsAsSystem`, necessity `MANDATORY_NECESSITY`) and the
+   indicators that have a value for the month; a service with no KPI set has nothing mandatory; a dropped KPI is not asked for and its stored values stay (plan §11); a value of another indicator does not count. The measurements are read
+   from this module's own table (the reminder never reads another module's table and never writes `kpii_measurement`; the walker of `module.test.ts` still finds one writer). `previousMonth` is pure: January asks for December of the year before.
+8. **Recipients.** Approved members of the provider (`listApprovedMemberIdsAsSystem`, a new additive read: approved only, a manager included) who are **active** (`core.identity`), have an address, and for whom the module's own
+   policy (`isProviderMemberAsSystem`, the rule behind `kpi.ingestion.measurement.submit`) says yes, asked at the moment of the send for each service the mail names. For the seed role the policy and the membership list agree, so the check
+   cannot remove anyone today; it is there so that the mail follows the rule if the rule changes, and it costs one query per person and service (measured below). A person who turned the `reminders` category off is not mailed; `core.notifications`
+   decides (`enqueueTemplate` honours the preference), and this module reads the person's language only (`notifications.locale`). An administrator who is not a member is not mailed.
+9. **Once per provider and month, in one transaction.** For each provider the job inserts the `kpii_reminder_sent` row with `on conflict do nothing` and, only when the row is new, queues the mails with `enqueueTemplate`, all inside
+   `ctx.db.tx()`. A second run, a retry, and a second node (a test starts four runs at once) send one mail per person; a mail the queue refuses rolls the row back, so the retry sends; a crash between the two cannot leave a row
+   without its mails or mails without the row. **A provider with something missing and nobody to remind** (no member who is active, has an address and may submit) is not an error and **gets no row**, so a member who joins before
+   the next run is still asked; the job counts it (`withoutRecipients`) and logs the month only. **A provider whose members all switched the category off gets its row** (it was addressed; nobody wants the mail), so it is not asked again.
+   A provider with nothing missing sends nothing and writes nothing.
+10. **No event.** The reminder emits no event: the job-run history of the admin page carries its counts (`providers`, `reminded`, `people`, `alreadySent`, `withoutRecipients`, `month`, or `skipped`), and nothing subscribes to a reminder.
+11. **Settings.** `reminders.enabled` (default on) and `reminders.dayOfMonth` (default 6) in the module's strict settings schema, so they appear on the generic settings page. The day is an integer from 1 to 28 (every month has it); a value
+    outside the range, a fraction, a text or an unknown key is **refused** by the settings service (422) and the stored values stay (tested), never clamped.
+12. **The template moved, with the same key.** `kpi.reporting-reminder` is contributed by `kpi.ingestion` to `notify.template` (the pattern of `registry.membership-*` in M6) and removed from `core.notifications`, whose
+    shipped-template test lost its sample and keeps the other two; the generic checks (both languages, the rules of every template, a snapshot per language, the strict schema) moved with it, and the snapshot is new because the text changed.
+    The data gained `services` (the names of the services missing values, **at most 20**, required), `moreServices` (how many more, default 0), `moreMissing` (default 0) next to `missing` (the distinct mandatory indicators of the
+    listed services, at most 20 shown); the old fields keep their meaning and the schema stays strict. The mail says "and 3 more." beyond a bound. It has no instance name, sender, URL or role name in the text (a test), the same
+    placeholders in both languages (a test), and **never a value, a person or another provider's service** (a test walks the data schema and the rendered mail of a world that holds a distinctive value).
+13. **The link** is `<ORIGIN><BASE_PATH>/submit?service=<id>&period=<YYYY-MM>`, built with `url()` (any number of base segments; tested under `/a/b/c`), and opens the page on that service and month (e2e, both base paths). **With several
+    services it opens the first by name and the mail says so** ("The button opens X. Choose the other services on the page."). One link per service would be a long mail or several, the link with no service would lose the month for
+    the most common case (one service), and the page's picker is one click away.
+14. **Without `kpi.ingestion`** (`core-only`, `registry`) the key `kpi.reporting-reminder` **is not registered** and the category `reminders` is not listed on the preferences page; nothing in those profiles sends the mail (an unknown key is a
+    `NotificationError` for any caller, a bug), and the profile starts. Tested: `notification-routes.test.ts` starts a profile without the module and asserts the key and the category are absent, and with the module and asserts both; the
+    `core-only` image was built and started (ready after 4 s) and passes the module-set check.
+15. **The e2e journey runs the job's body as a second node.** The real job fires at 06:00 UTC on the setting's day, which a journey cannot wait for, and the clock is the one input the module lets a caller inject.
+    `apps/server/src/testing/run-reminder.ts` starts a kernel over the stack's database from the generated profile with `createKpiIngestionModule({ clock })` and runs `reminder.run()` once; the spec sets the clock to the 6th of the real
+    current month so that the month the mail names is the real previous one, which the page offers whatever day the test runs on. It adds `run-reminder.ts` to the manifest importers of the lint rule (as `identity-app.ts` is), and the stack's `SECRETS_KEY`
+    to the stack info. It is not a command of the image, nothing imports it, and it is **not** a "send now" for operators.
+
+**Measurements (sprint 5, this machine).** A virtual AMD EPYC with 14 vCPUs and 31 GB of memory, Linux 7.0, Node 24.21, PostgreSQL 16 (the `postgres:16-alpine` image through Testcontainers, default settings, the same machine running the test), the
+module over real Postgres without HTTP unless said; times are medians of 5 runs (3 for 24 000 rows). One service with 200 indicators (20 mandatory) and all values integers. The throwaway scripts were not committed.
+
+| What                                                                           | Result                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `upsertBatch`, 1 row                                                           | insert 14.7 ms, unchanged 12.5 ms, update 14.3 ms, dry run 11.3 ms                                                                                                                                                                                     |
+| `upsertBatch`, 500 rows (the API's cap)                                        | insert 73.8 ms, unchanged 75.2 ms, update 83.8 ms, dry run 22.0 ms                                                                                                                                                                                     |
+| `upsertBatch`, 5 000 rows                                                      | insert 659 ms, unchanged 578 ms, update 660 ms, dry run 78 ms                                                                                                                                                                                          |
+| `upsertBatch`, 24 000 rows (120 months of 200 indicators: the ceiling)         | insert 3.29 s, unchanged 2.71 s, update 3.30 s, dry run 372 ms                                                                                                                                                                                         |
+| a 5 000-row file, 21 columns                                                   | CSV 523 543 bytes, XLSX 388 873 bytes                                                                                                                                                                                                                  |
+| preview of that file (the service call: parse, map, first 20 rows)             | CSV 21.7 ms, XLSX 221.9 ms (the guard and the reader in a worker thread)                                                                                                                                                                               |
+| dry run of that file                                                           | refused: 422 `rows`: "must hold at most 25000 measurements" (5 000 rows of 20 columns are 100 000 values), CSV 40 ms, XLSX 253 ms; the page shows its general sentence "The request was not accepted. Check the file and try again." (see the backlog) |
+| a file the batch accepts                                                       | 72 rows of 20 columns (1 440 values, 5 131 bytes) dry run 30.9 ms; 120 rows of 20 columns (2 400 values) 51.0 ms                                                                                                                                       |
+| `GET /api/v1/measurements`, 49 980 rows of one service, through the pipeline   | first page (100 rows) 56 ms, middle page 86 ms, **last page 111 ms**, 10 rows 53 ms; one indicator's 1 190 rows 40 ms; a 12-month window 42 ms; 5 indicators over 2 years 39 ms (medians of 7, token auth with no cache, audit on)                     |
+| table `kpii_measurement`                                                       | **288 KiB per 1 000 rows** (heap 123 KiB, indexes 165 KiB: the primary key, the unique series key and three more); 14.1 MiB at 49 980 rows                                                                                                             |
+| image `full` against `0.11.0-full`                                             | 624 440 719 bytes (rebuilt from the tag `v0.11.0`; sprint 3 recorded 624 448 911) to 634 120 939: **+9 680 220 bytes (+1.55%)**; sprint 3's +9.0 MB plus 0.7 MB for the page, the reminder and the template                                            |
+| the reminder, one run                                                          | 1 provider, 50 services, 5 members: 0.59 s; 1 provider, 200 services, 20 members: 5.1 s (4 000 policy checks); 20 providers of 10 services and 5 members: 2.2 s                                                                                        |
+| a member changing the month under the default limits (burst 120, 120 a minute) | **7 changes in a row, then the page fails** (the month select is gone): a page load makes the 9 loader reads of the server plus the shell's own, about 13 requests of the caller's bucket; the sustained rate is about 9 loads a minute                |
+
+What the numbers say: the write is about 0.13 ms per row (a 500-row API call is 74 ms, a 5 000-row file 0.66 s), and the unchanged case costs nearly as much as an insert, so the time is in building and running the statement,
+not in the writes (not profiled); no limit needs to change. The read at 50 000 rows is fast enough for a series, and a deep page costs about twice the first. A thousand measurements are under 0.3 MB with their indexes. The call counts
+of the page are in sprint 4's addendum and were measured again (see the backlog).

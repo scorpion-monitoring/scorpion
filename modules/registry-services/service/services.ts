@@ -333,6 +333,12 @@ export interface ServicesService {
   listByOrganisationAsSystem: (organisationId: string, role?: string) => Promise<ServiceRecord[]>;
   existsAsSystem: (id: string) => Promise<boolean>;
   /**
+   * The ids of the organisations that are the **provider** of at least one service (role `provider`), by id, once each. For a job
+   * that walks the providers (the reporting reminder of `kpi.ingestion`, M10 sprint 5); the services of one are then read with
+   * `listByOrganisationAsSystem(id, PROVIDER_ROLE)`. It names no service and no person.
+   */
+  listProviderIdsAsSystem: () => Promise<string[]>;
+  /**
    * Whether the user is an approved **manager** of the service's provider: the group that holds `service.edit-identity` in the policy
    * `service.member` (ADR-0036). A module whose own permission is scoped to a service uses it in its own `authz.resourcePolicy`
    * entry, so the rule is written once. `false` for an unknown service.
@@ -1607,6 +1613,15 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         .orderBy(asc(sql`lower(${service.name})`), asc(service.id))
         .limit(Math.max(1, Math.min(limit, 200)));
       return rows;
+    },
+
+    async listProviderIdsAsSystem() {
+      const rows = await db
+        .selectDistinct({ id: serviceOrganisation.organisationId })
+        .from(serviceOrganisation)
+        .where(eq(serviceOrganisation.role, OWNER_ROLE))
+        .orderBy(asc(serviceOrganisation.organisationId));
+      return rows.map((row) => row.id);
     },
 
     async existsAsSystem(id) {

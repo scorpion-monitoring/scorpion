@@ -585,4 +585,17 @@ describe('the trusted reads', () => {
     expect(ids(await services.listByOrganisationAsSystem(consortium.id, 'provider'))).toEqual([]);
     expect(await services.listByOrganisationAsSystem('x')).toEqual([]);
   });
+
+  it('list the providers of services, once each, and never a consortium', async () => {
+    const { services, pool, provider, consortium } = await setup();
+    const other = await makeOrganisation(pool, { type: 'provider' });
+    await makeService(pool, { provider: provider.id, consortia: [consortium.id] });
+    await makeService(pool, { provider: provider.id });
+    await makeService(pool, { provider: other.id });
+    const listed = await services.listProviderIdsAsSystem();
+    expect(listed).toEqual(expect.arrayContaining([provider.id, other.id]));
+    expect(new Set(listed).size).toBe(listed.length);
+    expect(listed).not.toContain(consortium.id);
+    expect(listed).toEqual([...listed].sort());
+  });
 });

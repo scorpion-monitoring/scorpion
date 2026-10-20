@@ -1,7 +1,11 @@
 import { z } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import { defineModule, type Db } from '@scorpion/kernel';
+import type { IdentityService } from '@scorpion/core-identity/public';
+import type { NotificationsService } from '@scorpion/core-notifications/public';
+import type { SettingsService } from '@scorpion/core-settings/public';
+import { defineModule, type Db, type JobResult } from '@scorpion/kernel';
 import { INDICATOR_USAGE_REGISTRY, type KpiFrameworkPublic } from '@scorpion/kpi-framework/public';
+import type { OrganisationsPublic } from '@scorpion/registry-organisations/public';
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { count, eq } from 'drizzle-orm';
 import { measurement } from './db/schema.ts';
@@ -28,9 +32,13 @@ import {
   RESOURCE_SERVICE,
 } from './service/permissions.ts';
 import { createReadsService, type ReadsService } from './service/reads.ts';
+import { createReminderService, REMINDER_JOB, type ReminderService } from './service/reminder.ts';
+import { settingsSchema } from './settings-schema.ts';
+import { TEMPLATES } from './templates/reporting-reminder.ts';
 import { submitPolicy } from './service/policy.ts';
 import { INGESTION_NAV, INGESTION_ROUTES } from './ui/routes.ts';
 
+export { settingsSchema, type IngestionSettings } from './settings-schema.ts';
 export type {
   CoverageMonth,
   GridRow,
@@ -56,10 +64,20 @@ export interface KpiIngestionService {
   ingestion: IngestionService;
   /** The reads: the time series of v1, the grid of a month and the coverage. */
   reads: ReadsService;
+  /** The reporting reminder: the body of the daily job (sprint 5). */
+  reminder: ReminderService;
 }
 
 // The service types of the dependencies shape `ctx.deps`.
-export type KpiIngestionDependencies = [AuthzService, KpiFrameworkPublic, ServicesPublic];
+export type KpiIngestionDependencies = [
+  AuthzService,
+  SettingsService,
+  NotificationsService,
+  IdentityService,
+  OrganisationsPublic,
+  KpiFrameworkPublic,
+  ServicesPublic,
+];
 
 export interface KpiIngestionOptions {
   /** "Now", for the current month a period may not pass. Tests inject a fixed one. */
@@ -85,12 +103,22 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
   // registry.services and the database through these closures (the pattern of kpi.framework).
   let database: Db | undefined;
   let isProviderMember: ServicesPublic['isProviderMemberAsSystem'] | undefined;
+  let reminder: ReminderService | undefined;
   const need = <T>(value: T | undefined): T => {
     if (value === undefined) throw new Error('kpi.ingestion: asked before start');
     return value;
   };
 
-  return defineModule<KpiIngestionService, 'core.authz' | 'kpi.framework' | 'registry.services'>({
+  return defineModule<
+    KpiIngestionService,
+    | 'core.authz'
+    | 'core.settings'
+    | 'core.notifications'
+    | 'core.identity'
+    | 'registry.organisations'
+    | 'kpi.framework'
+    | 'registry.services'
+  >({
     id: 'kpi.ingestion',
     version: '0.1.0',
     // `kpii_measurement`, not `kpi_ingestion_measurement` (ADR 0004, ADR-0040; `kpi.framework` has `kpif_`).
@@ -120,6 +148,8 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       },
     },
 
+    settings: settingsSchema,
+
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
 
@@ -129,6 +159,24 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     events: {
       emits: { 'measurement.recorded@1': measurementRecordedSchema },
     },
+
+    jobs: [
+      {
+        // Daily at 06:00 UTC; the handler returns at once unless today is the setting's day (default the 6th). The job page's "run now"
+        // is the manual trigger, and `kpii_reminder_sent` makes it safe: a provider and month are mailed once.
+        name: REMINDER_JOB,
+        schedule: '0 6 * * *',
+        retry: { limit: 3, delaySeconds: 600 },
+        timeoutSeconds: 900,
+        handler: async (job): Promise<JobResult> => {
+          const report = await need(reminder).run({ signal: job.signal });
+          // Counts only, for the job-run history.
+          return Object.fromEntries(
+            Object.entries(report).filter(([, value]) => value !== undefined),
+          ) as JobResult;
+        },
+      },
+    ],
 
     // The page (Svelte) is loaded by the web app only; the manifest names the part a server can read (the routes and texts, ui/pages.ts).
     ui: () => import('./ui/pages.ts'),
@@ -156,6 +204,8 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       // The Data Submission page and its link; entries for registries of core.ui-shell, an optional peer.
       'ui.routes': INGESTION_ROUTES,
       'ui.nav': INGESTION_NAV,
+      // The reporting reminder moved here from core.notifications with the same key (as the membership mails went to registry.organisations).
+      'notify.template': TEMPLATES,
       // The three ways to give values.
       [ADAPTER_REGISTRY]: [formAdapter, csvAdapter, xlsxAdapter],
       // An indicator with measurements is not deleted: kpi.framework asks, and answers 409 naming this module and the count.
@@ -186,10 +236,20 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       const measurements = createMeasurementsService(ctx, common);
       // Two entries with one id stop the start, here and not at the first upload.
       const adapters = indexAdapters(ctx.registry(ADAPTER_REGISTRY) as AdapterEntry[]);
+      reminder = createReminderService(ctx, {
+        organisations: ctx.deps['registry.organisations'],
+        services: ctx.deps['registry.services'],
+        kpi: ctx.deps['kpi.framework'],
+        identity: ctx.deps['core.identity'],
+        notifications: ctx.deps['core.notifications'],
+        settings: ctx.deps['core.settings'],
+        clock: common.clock,
+      });
       return {
         measurements,
         reads: createReadsService(ctx, common),
         ingestion: createIngestionService(ctx, { ...common, measurements, adapters }),
+        reminder,
       };
     },
 

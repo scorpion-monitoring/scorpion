@@ -26,19 +26,12 @@ describe('the test mail', () => {
   });
 });
 
-const URL = 'https://example.org/somewhere';
 const HOSTILE = 'Ada\r\n\u202Egnp.exe\u0000 <script>';
 /** Data for each template; `text` goes into every free-text field. */
 const samples: Record<string, (text: string) => unknown> = {
   'notifications.test': () => ({}),
   'onboarding.application-submitted': (text) => ({ service: text }),
   'onboarding.application-decided': (text) => ({ service: text, decision: 'rejected', note: text }),
-  'kpi.reporting-reminder': (text) => ({
-    provider: text,
-    month: '2026-09',
-    missing: [text],
-    reportUrl: URL,
-  }),
 };
 
 describe.each([...SHIPPED_TEMPLATES, ...SYSTEM_TEMPLATES].map((t) => [t.key, t] as const))(
