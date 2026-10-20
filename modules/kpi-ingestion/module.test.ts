@@ -8,7 +8,7 @@ import { getTableName, is } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import * as schema from './db/schema.ts';
-import manifest, { measurementRecordedSchema } from './module.ts';
+import manifest, { measurementRecordedSchema, settingsSchema } from './module.ts';
 import packageJson from './package.json' with { type: 'json' };
 import { useKpi } from './test/harness.ts';
 
@@ -57,6 +57,7 @@ describe('the manifest', () => {
       'authz.resourcePolicy',
       'ingestion.adapter',
       'kpi.indicatorUsage',
+      'notify.template',
       'ui.nav',
       'ui.routes',
     ]);
@@ -84,8 +85,12 @@ describe('the manifest', () => {
     ).toEqual([
       '@scorpion/contracts',
       '@scorpion/core-authz',
+      '@scorpion/core-identity',
+      '@scorpion/core-notifications',
+      '@scorpion/core-settings',
       '@scorpion/kernel',
       '@scorpion/kpi-framework',
+      '@scorpion/registry-organisations',
       '@scorpion/registry-services',
     ]);
     // The shell is an optional peer: the page's entries are contributed to registries of core.ui-shell, which a profile without it does not have.
@@ -113,10 +118,11 @@ describe('the schema', () => {
     (value): value is PgTable => is(value, PgTable),
   );
 
-  it('has the two tables, each with the prefix of the manifest', () => {
+  it('has the three tables, each with the prefix of the manifest', () => {
     expect(tables.map((table) => getTableName(table)).sort()).toEqual([
       'kpii_ingestion_run',
       'kpii_measurement',
+      'kpii_reminder_sent',
     ]);
     for (const table of tables)
       expect(getTableName(table).startsWith(manifest.tablePrefix!)).toBe(true);
@@ -142,7 +148,11 @@ describe('the schema', () => {
       '@scorpion/core-ui-shell/public',
       '@scorpion/core-authz/public',
       '@scorpion/kernel',
+      '@scorpion/core-identity/public',
+      '@scorpion/core-notifications/public',
+      '@scorpion/core-settings/public',
       '@scorpion/kpi-framework/public',
+      '@scorpion/registry-organisations/public',
       '@scorpion/registry-services/public',
       // the test harness composes the real modules it needs (the eslint rule lists it as a manifest importer)
       '@scorpion/core-authz/module',
@@ -174,18 +184,23 @@ describe('the schema', () => {
 });
 
 describe('in a profile', () => {
-  it('starts: the loader accepts the prefix, the migrations create the two tables, and every foreign key points to a declared table', async () => {
+  it('starts: the loader accepts the prefix, the migrations create the three tables, and every foreign key points to a declared table', async () => {
     const s = await h.start();
     const { rows } = await s.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_name like 'kpii\\_%' order by table_name`,
     );
-    expect(rows.map((row) => row.table_name)).toEqual(['kpii_ingestion_run', 'kpii_measurement']);
+    expect(rows.map((row) => row.table_name)).toEqual([
+      'kpii_ingestion_run',
+      'kpii_measurement',
+      'kpii_reminder_sent',
+    ]);
     const foreign = await s.pool.query<{ from: string; to: string; delete: string }>(
       `select conrelid::regclass::text as "from", confrelid::regclass::text as "to", confdeltype as "delete"
          from pg_constraint where contype = 'f' and conrelid::regclass::text like 'kpii\\_%' order by 1, 2`,
     );
     // to this module's own run table (set null) and to kpi.framework's indicator (restrict): nothing else, no service table
+    // (`kpii_reminder_sent` has none: the provider is a plain column, as the service is in the other two.)
     expect(foreign.rows).toEqual([
       { from: 'kpii_measurement', to: 'kpif_indicator', delete: 'r' },
       { from: 'kpii_measurement', to: 'kpii_ingestion_run', delete: 'n' },
@@ -207,6 +222,19 @@ describe('in a profile', () => {
       const text = readFileSync(join(profiles, file), 'utf8');
       expect(text.includes("'kpi.ingestion'"), file).toBe(file === 'full.ts');
     }
+  });
+
+  it('declares the daily reminder job and the two settings, and has a service for it', async () => {
+    expect(manifest.jobs?.map((job) => [job.name, job.schedule])).toEqual([
+      ['kpi.ingestion.reporting-reminder', '0 6 * * *'],
+    ]);
+    expect(manifest.jobs?.[0]).toMatchObject({
+      retry: { limit: expect.any(Number) as number, delaySeconds: expect.any(Number) as number },
+      timeoutSeconds: expect.any(Number) as number,
+    });
+    expect(manifest.settings).toBe(settingsSchema);
+    const s = await h.start();
+    expect(typeof s.ingestion.reminder.run).toBe('function');
   });
 
   it('names kpi.framework as the only module it needs beyond authz and registry.services', async () => {

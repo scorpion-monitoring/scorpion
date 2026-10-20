@@ -14,6 +14,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -116,5 +117,35 @@ export const measurement = pgTable(
       sql`${table.valueText} is null or char_length(${table.valueText}) between 1 and 4000`,
     ),
     check('kpii_measurement_source_check', sql`char_length(${table.source}) between 1 and 64`),
+  ],
+);
+
+/**
+ * The reminder that was queued for one provider and one month (the reporting reminder, M10 sprint 5). The row is written in the
+ * transaction that queues the mails, so a retry of the job, a second node and a second run on the same day find it and send nothing
+ * again. `provider_id` is a plain column (this module holds no reference into registry.organisations' tables); `period` is the
+ * last day of the **reported** month, as in `kpii_measurement`. Counts only: no person, no service name, no value.
+ */
+export const reminderSent = pgTable(
+  'kpii_reminder_sent',
+  {
+    providerId: uuid('provider_id').notNull(),
+    period: date({ mode: 'string' }).notNull(),
+    sentAt: timestamptz('sent_at').notNull().defaultNow(),
+    /** How many people the mails were queued for. At least one: a provider nobody can be reached for has no row. */
+    recipients: integer().notNull(),
+    /** How many services were missing values when the reminder was queued. */
+    services: integer().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'kpii_reminder_sent_pk', columns: [table.providerId, table.period] }),
+    check(
+      'kpii_reminder_sent_period_check',
+      sql`${table.period} = (date_trunc('month', ${table.period}::timestamp) + interval '1 month' - interval '1 day')::date`,
+    ),
+    check(
+      'kpii_reminder_sent_counts_check',
+      sql`${table.recipients} >= 1 and ${table.services} >= 1`,
+    ),
   ],
 );

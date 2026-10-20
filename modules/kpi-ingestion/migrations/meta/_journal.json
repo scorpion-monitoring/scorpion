@@ -8,6 +8,13 @@
       "when": 1792410965522,
       "tag": "0000_measurement_core",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792490509715,
+      "tag": "0001_reminder_sent",
+      "breakpoints": true
     }
   ]
 }

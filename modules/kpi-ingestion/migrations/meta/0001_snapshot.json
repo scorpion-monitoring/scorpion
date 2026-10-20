@@ -1,0 +1,421 @@
+{
+  "id": "2325deb3-dd99-4f3c-9728-8a2f1237a738",
+  "prevId": "52d6658f-2d62-4309-8ec0-fef12e9f52b6",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.kpii_ingestion_run": {
+      "name": "kpii_ingestion_run",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "adapter": {
+          "name": "adapter",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inserted": {
+          "name": "inserted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated": {
+          "name": "updated",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "unchanged": {
+          "name": "unchanged",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "rejected": {
+          "name": "rejected",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "problems": {
+          "name": "problems",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpii_ingestion_run_service_idx": {
+          "name": "kpii_ingestion_run_service_idx",
+          "columns": [
+            {
+              "expression": "service_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpii_ingestion_run_adapter_check": {
+          "name": "kpii_ingestion_run_adapter_check",
+          "value": "char_length(\"kpii_ingestion_run\".\"adapter\") between 1 and 64"
+        },
+        "kpii_ingestion_run_file_name_check": {
+          "name": "kpii_ingestion_run_file_name_check",
+          "value": "\"kpii_ingestion_run\".\"file_name\" is null or char_length(\"kpii_ingestion_run\".\"file_name\") between 1 and 120"
+        },
+        "kpii_ingestion_run_status_check": {
+          "name": "kpii_ingestion_run_status_check",
+          "value": "\"kpii_ingestion_run\".\"status\" in ('committed', 'rejected')"
+        },
+        "kpii_ingestion_run_counts_check": {
+          "name": "kpii_ingestion_run_counts_check",
+          "value": "\"kpii_ingestion_run\".\"inserted\" >= 0 and \"kpii_ingestion_run\".\"updated\" >= 0 and \"kpii_ingestion_run\".\"unchanged\" >= 0 and \"kpii_ingestion_run\".\"rejected\" >= 0"
+        },
+        "kpii_ingestion_run_problems_check": {
+          "name": "kpii_ingestion_run_problems_check",
+          "value": "jsonb_typeof(\"kpii_ingestion_run\".\"problems\") = 'array' and jsonb_array_length(\"kpii_ingestion_run\".\"problems\") <= 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpii_measurement": {
+      "name": "kpii_measurement",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "indicator_id": {
+          "name": "indicator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period": {
+          "name": "period",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_numeric": {
+          "name": "value_numeric",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_text": {
+          "name": "value_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpii_measurement_series_idx": {
+          "name": "kpii_measurement_series_idx",
+          "columns": [
+            {
+              "expression": "service_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "indicator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpii_measurement_service_period_idx": {
+          "name": "kpii_measurement_service_period_idx",
+          "columns": [
+            {
+              "expression": "service_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpii_measurement_indicator_idx": {
+          "name": "kpii_measurement_indicator_idx",
+          "columns": [
+            {
+              "expression": "indicator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpii_measurement_run_idx": {
+          "name": "kpii_measurement_run_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpii_measurement_run_id_kpii_ingestion_run_id_fk": {
+          "name": "kpii_measurement_run_id_kpii_ingestion_run_id_fk",
+          "tableFrom": "kpii_measurement",
+          "tableTo": "kpii_ingestion_run",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpii_measurement_period_check": {
+          "name": "kpii_measurement_period_check",
+          "value": "\"kpii_measurement\".\"period\" = (date_trunc('month', \"kpii_measurement\".\"period\"::timestamp) + interval '1 month' - interval '1 day')::date"
+        },
+        "kpii_measurement_one_value_check": {
+          "name": "kpii_measurement_one_value_check",
+          "value": "(\"kpii_measurement\".\"value_numeric\" is null) <> (\"kpii_measurement\".\"value_text\" is null)"
+        },
+        "kpii_measurement_numeric_check": {
+          "name": "kpii_measurement_numeric_check",
+          "value": "\"kpii_measurement\".\"value_numeric\" is null or (\"kpii_measurement\".\"value_numeric\" <> 'NaN'::numeric and \"kpii_measurement\".\"value_numeric\" <> 'Infinity'::numeric and \"kpii_measurement\".\"value_numeric\" <> '-Infinity'::numeric)"
+        },
+        "kpii_measurement_text_check": {
+          "name": "kpii_measurement_text_check",
+          "value": "\"kpii_measurement\".\"value_text\" is null or char_length(\"kpii_measurement\".\"value_text\") between 1 and 4000"
+        },
+        "kpii_measurement_source_check": {
+          "name": "kpii_measurement_source_check",
+          "value": "char_length(\"kpii_measurement\".\"source\") between 1 and 64"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpii_reminder_sent": {
+      "name": "kpii_reminder_sent",
+      "schema": "",
+      "columns": {
+        "provider_id": {
+          "name": "provider_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period": {
+          "name": "period",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "recipients": {
+          "name": "recipients",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "services": {
+          "name": "services",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "kpii_reminder_sent_pk": {
+          "name": "kpii_reminder_sent_pk",
+          "columns": [
+            "provider_id",
+            "period"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpii_reminder_sent_period_check": {
+          "name": "kpii_reminder_sent_period_check",
+          "value": "\"kpii_reminder_sent\".\"period\" = (date_trunc('month', \"kpii_reminder_sent\".\"period\"::timestamp) + interval '1 month' - interval '1 day')::date"
+        },
+        "kpii_reminder_sent_counts_check": {
+          "name": "kpii_reminder_sent_counts_check",
+          "value": "\"kpii_reminder_sent\".\"recipients\" >= 1 and \"kpii_reminder_sent\".\"services\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

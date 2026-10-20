@@ -51,6 +51,9 @@ export interface KpiStartOptions {
   extra?: FixtureModule[];
   /** Collects every log line the kernel writes (trace level). */
   logLines?: string[];
+  /** The instance's `BASE_PATH` and `ORIGIN`, for what builds a link (the reminder). Default: the root of `http://localhost:3000`. */
+  basePath?: string;
+  origin?: string;
 }
 
 export interface KpiStarted {
@@ -153,6 +156,8 @@ export function useKpi(): KpiHarness {
       config: loadConfig({
         DATABASE_URL: await server.createDatabase(),
         PROFILE: 'kpi-test',
+        ...(options.basePath !== undefined && { BASE_PATH: options.basePath }),
+        ...(options.origin !== undefined && { ORIGIN: options.origin }),
       }),
       log: options.logLines
         ? createLogger({
