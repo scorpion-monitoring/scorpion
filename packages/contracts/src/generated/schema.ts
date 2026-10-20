@@ -6755,6 +6755,28 @@ export interface paths {
                                 slot: string;
                                 component: string;
                                 order: number;
+                                /** @description Where and how big the widget is on the dashboard grid (twelve columns). */
+                                grid?: {
+                                    w: number;
+                                    h: number;
+                                    minW?: number;
+                                    minH?: number;
+                                    maxW?: number;
+                                    maxH?: number;
+                                    default?: {
+                                        x: number;
+                                        y: number;
+                                        w: number;
+                                        h: number;
+                                    };
+                                    singleton?: boolean;
+                                };
+                                /** @description A key of the message catalogue. */
+                                label?: string;
+                                /** @description A key of the message catalogue. */
+                                description?: string;
+                                /** @description A name of the icon table. */
+                                icon?: string;
                             }[];
                             themes: {
                                 id: string;
@@ -6777,6 +6799,201 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The caller’s own dashboard, repaired; the default dashboard when none is stored. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {number} */
+                            version: 1;
+                            /** @description What the page draws: repaired, only widgets the caller may see, by row and column. */
+                            items: {
+                                /** @description The instance id: 4 to 12 lower-case letters and digits, unique on the dashboard. */
+                                id: string;
+                                /** @description The id of a `ui.widget` entry the caller may see. */
+                                widget: string;
+                                x: number;
+                                y: number;
+                                w: number;
+                                h: number;
+                                /** @description The tile’s own settings, shaped by the widget; at most 400 bytes as JSON. */
+                                config: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            /** @description What the repair left out of the stored document. A read changes nothing that is stored. */
+                            dropped: {
+                                /** @description The tile’s instance id, or `#<position>` when it had none. */
+                                id: string;
+                                /** @enum {string} */
+                                reason: "invalid-item" | "duplicate-id" | "unknown-widget" | "not-permitted" | "singleton-repeated" | "document-too-large";
+                            }[];
+                            /** @description The stored document was replaced by the default dashboard. */
+                            reset: boolean;
+                            /** @enum {string} */
+                            resetReason?: "invalid" | "too-many-items" | "newer-version";
+                            /** @description Nothing is stored: `items` is the default dashboard. */
+                            isDefault: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            widget: string;
+                            x: number;
+                            y: number;
+                            w: number;
+                            h: number;
+                            config: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The caller’s own dashboard is stored; this is what a read now gives. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {number} */
+                            version: 1;
+                            /** @description What the page draws: repaired, only widgets the caller may see, by row and column. */
+                            items: {
+                                /** @description The instance id: 4 to 12 lower-case letters and digits, unique on the dashboard. */
+                                id: string;
+                                /** @description The id of a `ui.widget` entry the caller may see. */
+                                widget: string;
+                                x: number;
+                                y: number;
+                                w: number;
+                                h: number;
+                                /** @description The tile’s own settings, shaped by the widget; at most 400 bytes as JSON. */
+                                config: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            /** @description What the repair left out of the stored document. A read changes nothing that is stored. */
+                            dropped: {
+                                /** @description The tile’s instance id, or `#<position>` when it had none. */
+                                id: string;
+                                /** @enum {string} */
+                                reason: "invalid-item" | "duplicate-id" | "unknown-widget" | "not-permitted" | "singleton-repeated" | "document-too-large";
+                            }[];
+                            /** @description The stored document was replaced by the default dashboard. */
+                            reset: boolean;
+                            /** @enum {string} */
+                            resetReason?: "invalid" | "too-many-items" | "newer-version";
+                            /** @description Nothing is stored: `items` is the default dashboard. */
+                            isDefault: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
