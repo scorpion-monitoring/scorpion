@@ -19,9 +19,9 @@
     "@scorpion/core-settings": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "nodemailer": "^10.1.0",
+    "nodemailer": "^10.1.2",
     "pg": "^8.23.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@scorpion/core-ui-shell": "workspace:*",

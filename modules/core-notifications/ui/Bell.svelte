@@ -110,7 +110,14 @@
     }
   }
 
-  const label = $derived(count ? t('inbox.bell.labelCount', { count }) : t('inbox.bell.label'));
+  // The badge reads "99+" above 99, so the name says the same: the visible text has to be part of it.
+  const label = $derived(
+    count
+      ? count > 99
+        ? t('inbox.bell.labelMany')
+        : t('inbox.bell.labelCount', { count })
+      : t('inbox.bell.label'),
+  );
   const origin = () =>
     typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
 </script>

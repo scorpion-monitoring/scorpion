@@ -149,7 +149,7 @@ export const messages: UiMessages = {
     'account.organisations.status': 'Your status',
     'account.organisations.manage': 'My organisations',
     'account.organisations.withdrawLabel': 'Withdraw the request for {name}',
-    'account.organisations.leaveLabel': 'Leave {name}',
+    'account.organisations.leaveLabel': 'Leave the organisation {name}',
     'account.organisations.joinLabel': 'Ask to become a member of {name}',
 
     'organisation.manager.editTitle': 'Edit organisation',
@@ -181,8 +181,8 @@ export const messages: UiMessages = {
     'membership.action.remove': 'Remove',
     'membership.aria.approve': 'Approve the request of {name}',
     'membership.aria.reject': 'Reject the request of {name}',
-    'membership.aria.promote': 'Make {name} a manager',
-    'membership.aria.demote': 'Make {name} a member',
+    'membership.aria.promote': 'Make manager: {name}',
+    'membership.aria.demote': 'Make member: {name}',
     'membership.aria.remove': 'Remove {name} from the organisation',
     'membership.done.approve': '{name} was approved.',
     'membership.done.reject': 'The request of {name} was rejected.',
@@ -372,9 +372,9 @@ export const messages: UiMessages = {
     'account.organisations.find': 'Organisation suchen',
     'account.organisations.status': 'Ihr Status',
     'account.organisations.manage': 'Meine Organisationen',
-    'account.organisations.withdrawLabel': 'Antrag für {name} zurückziehen',
-    'account.organisations.leaveLabel': '{name} verlassen',
-    'account.organisations.joinLabel': 'Mitgliedschaft bei {name} beantragen',
+    'account.organisations.withdrawLabel': 'Antrag zurückziehen: {name}',
+    'account.organisations.leaveLabel': 'Organisation verlassen: {name}',
+    'account.organisations.joinLabel': 'Mitgliedschaft beantragen: {name}',
 
     'organisation.manager.editTitle': 'Organisation bearbeiten',
     'organisation.manager.readOnly':
