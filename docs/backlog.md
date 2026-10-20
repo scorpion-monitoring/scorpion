@@ -752,6 +752,19 @@ name }` triples), it replaces `listProviderIdsAsSystem` and the per-provider `li
   next step if the 24 000-row ceiling (3.3 s) ever matters.
 - **`implementation.md` carries the M10 additions** (closed from sprint 1's list). The release (`0.12.0`) is the maintainer's: see the pull request.
 
+## Dashboard follow-ups (M11 sprint 1)
+
+What the dashboard document and its routes left for later ([ADR-0042](adr/0042-dashboard-document-and-grid.md), [m11-sprint-plan.md](m11-sprint-plan.md)).
+
+- **The `react` and `react-dom` peer warning** that `react-grid-layout` (a dependency of `@snapgridjs/core`) causes under `autoInstallPeers: false`: decide in sprint 2 between accepting it and `peerDependencyRules.ignoreMissing` in `pnpm-workspace.yaml` (recommended). No React is in the client build.
+- **`MAX_CONFIG_BYTES` (400) against the 8 KiB document.** 20 tiles at the maximum do not fit (a 325-byte configuration × 20 is already over); 20 tiles of the plan's example sizes are 4.3 KiB. If "20 tiles, any configuration" must hold, lower the constant to about 300 before a widget stores a configuration of its own.
+- **A stored dashboard that no longer passes the structural schema** (after a change of the schema) is read as "nothing stored" (`isDefault: true`, not `reset: true`): `getUserPreference` answers `undefined` for both. Tell them apart if a schema change ever needs it.
+- **A configuration form for a widget needs a JSON Schema,** not only the Zod `configSchema` the server holds, which `GET /ui/navigation` does not (and cannot) list. Decide in sprint 4 whether the module ships the form description in the browser half or the registry gains a serialisable one.
+- **dnd-kit's live-region announcements are English** ("Draggable item b was dropped."). The move and resize buttons of sprint 2 announce through the message catalogue; the keyboard drag that Snapgrid offers speaks dnd-kit's own words until its announcements are configured.
+- **Saving needs `core.settings.preference.write` as well as `core.ui-shell.dashboard.write`** (the save stores through the preference service as the caller). If an operator should be able to take the preference permission away without stopping the dashboard, `setUserPreference` would need a variant that skips it; kept strict for now.
+- **A keyboard resize** does not exist in Snapgrid 0.12.0; the buttons are the only way. Revisit if a later release adds one (the package documents arrow steps for a keyboard move only).
+- **A "run" of the repair on write.** A read repairs and never writes; a person whose stored document has dropped tiles keeps them stored until the next save. A job or a "clean up" action that rewrites such documents is not planned.
+
 ## Observed by the maintainer (after M9 sprint 4)
 
 - **A `pg` deprecation warning from a node process.** `DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.` Seen once by chance in a local run (pid 58754; which process and command is not known). It means some code issues a second query on one `pg` client before the first has finished (a `Promise.all` over a single client or transaction, a query in an event handler, or a missing `await`). Nothing fails today, but `pg@9` will stop queueing them. To find it: run with `node --trace-deprecation` (`NODE_OPTIONS=--trace-deprecation pnpm test`, or the same for `pnpm dev`) and fix the call site; then make the test setup fail on a deprecation warning (`--throw-deprecation` in the vitest and e2e processes) so it cannot return. Candidates to look at first: code that runs several reads through one `ctx.db.tx()` transaction in parallel (a drizzle transaction is one client), and the test helpers that share one client.
