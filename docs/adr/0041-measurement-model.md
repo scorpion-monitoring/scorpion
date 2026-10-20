@@ -346,3 +346,64 @@ and it is said here.
 16. **No table and no migration:** `kpii_ingestion_run` has existed since sprint 1 and holds everything the run needs. The run's times come from the injected clock.
 17. **Tests added beyond the plan:** the three-way equivalence, the guard's cases, `fast-check` properties for the CSV, the walker `defect 1: the ingestion routes` in `defect-01.privilege-escalation.test.ts`, and the
     history property test of `kpi.framework` on `fast-check` (the oracle is the same; 40 generated histories).
+
+## Amended in sprint 4
+
+What building the Data Submission page changed or added. The plan carries the same list under "Amended in sprint 4". Where the plan and the source disagreed, the source won
+and it is said here.
+
+**Checked against the source before starting.** The routes the page talks to exist as the sprint 3 addendum says: `GET /kpi/ingestion/adapters`, `GET /kpi/ingestion/template`,
+`POST /kpi/ingestion/preview`, `POST` and `GET /kpi/ingestion/runs`, `GET /kpi/ingestion/runs/{id}`, `GET /kpi/measurements` and `GET /kpi/measurements/coverage`, with the
+typed client types already in `packages/contracts/src/generated/schema.ts`. Three places where the plan and the source differ:
+
+1. **There was no "read of the catalogue filtered by the membership".** The catalogue (`GET /services`) lists every service a person may read and says nothing about who may
+   submit for it (`allowedActions` and `editableFields` exist on one service only), so the picker could not be built from it. **One additive route**, `GET /kpi/ingestion/services?q=`
+   (plain `kpi.ingestion.measurement.read`), and **one additive trusted read** of `registry.services`, `listForPickerAsSystem({ q, memberOf?, limit })` (the services of a search by
+   name or abbreviation, or of the providers a user is an approved member of; no permission check, as every `AsSystem` read). The service asks the unscoped `submit` question once
+   (`authz.can`, true for Admin, who holds every declared permission) to decide between "every service of the search" and "the services of my providers", and then asks the
+   **scoped** `submit` for each row it keeps, so the list can only be shorter than the rule allows, never longer. At most 50 rows (`PICKER_LIMIT`). A plain user gets an empty list,
+   a Reviewer (no role `user` in the test world) is 403. It adds no table and no permission. The walker of `defect-01` names it, and `docs/security/authorization.md` and V8 are updated.
+2. **The value types carry no description of their input.** The plan wants "typed inputs from the value type (an integer step 1, a float, a percentage 0 to 100, a duration `HH-MM-SS`,
+   text)" and CLAUDE.md rule 7 forbids a chain on the type's id in the page, but the registry data (`numeric`, `range`) cannot tell an integer from a decimal or a duration from text.
+   **Additive:** an optional `input` descriptor on the entry of `kpi.valueType` (`{ kind: 'number' | 'text', step?: number | 'any', pattern?: string, hint?: string }`), set by the five
+   seeds, answered by `GET /kpi/value-types` (internal, not public v1) and used by the page. A type without it is a number input when it is `numeric` and text otherwise, so another
+   module's type still works. The descriptor never replaces `parse`: the server judges every value. A test checks that the duration's pattern accepts and refuses what `parseDuration` does.
+3. **The coverage read is the list of months.** The plan says the page needs "the periods and the grid of the chosen month". There is no read of periods, and the browser's date is not to be
+   relied on, so the loader asks the coverage read for **36** months (its maximum): the last is the current month by the server's clock, and the select offers exactly those. A month in the
+   address that is later than the current one, or not a month, opens the current month; a month older than the 36 is opened as it is (it cannot be in the future), so an old correction is possible.
+
+**Decisions of the sprint**
+
+4. **The loader reads everything on the server; the browser sends nothing on arrival.** The page's loader (`ui/loaders.ts`) reads the picker's list and, for a service in the address, the
+   service, the coverage, the runs, the adapters, the terms of `necessity` and `kpi.unit`, the value types and the grid. A service the person may not submit for is the API's 403, thrown
+   (defect 12) and shown as the shell's error page. A month or a service is therefore a **page load** (`__data.json`), not a call to the API.
+5. **Buttons, not `change` handlers.** Search, Open (the service), Show month and Check the file are buttons. A person who moves through a select with the arrow keys fires a `change` per
+   key in some browsers, and each change would be a page load of nine reads; a button is one decision. Nothing is sent per keystroke (the e2e spec types in every field and counts).
+6. **A file is a preview and a check, chained.** Choosing a file is one preview (the header, the first rows, the proposed mapping) and, when the mapping misses nothing, one dry run at once
+   (it reports every problem of the file, including a value the type refuses, which the preview cannot judge). With something missing the person maps it and presses "Check the file". A change of
+   the mapping sends nothing. The commit is enabled only while the check is for the current mapping and nothing is rejected.
+7. **A refused commit is shown from the recorded run.** The 422 of a commit carries English text and the run's id in its message; the codes are in the run (`GET /kpi/ingestion/runs/{id}`), so
+   the page reads them there and says them in its own words (an extra call only after a refusal, which the page tries to prevent by its check). A 422 that is about the request as a whole is read
+   by its path (`form`, `file`, `serviceId`, `adapter`, `mapping`) and by "holds no values to record". Every code of `PROBLEM_MESSAGES` has a sentence in en and de (`submit.problem.<code>`);
+   `ui/ui.test.ts` fails when one is missing, and when a sentence exists for a code the server no longer has.
+8. **Multipart through the typed client.** `openapi-fetch` sends a `FormData` untouched and leaves the `Content-Type` (and its boundary) to the browser, so a `bodySerializer` that returns the
+   `FormData` is all that is needed; there is no workaround and no hand-written URL. The template is a `GET` with `parseAs: 'blob'` and a download from an object URL, the file name taken from
+   `Content-Disposition`.
+9. **What the page never does.** It keeps the `File` in memory and sends the same bytes for the preview, the dry run and the commit; it sends no parsed row, stores nothing, shows a cell as the server
+   cut it (64 characters) and uses no `{@html}`. It refuses an empty file and one over 2 MiB before sending (the limit is a copy of the server's constant, and a test compares them).
+10. **The form is not reset by a save**, and the stored value is filled in when a month opens. After a save the page reads its data again (`refresh`, a page load), which updates the history and
+    the coverage; the typed values stay because the form is keyed by service and month and not by the data. A form with unsaved values asks before the person leaves.
+11. **Small changes elsewhere, all additive:** the `upload` icon in the closed icon table of `packages/contracts` (the navigation entry needed one); `MANDATORY_NECESSITY` moved to `service/necessity.ts`
+    (re-exported by `reads.ts`, `public.ts` unchanged) so that the page can import the one term this module names without the service layer; `kpi.ingestion` gained `core.ui-shell` as an optional peer and
+    `@scorpion/ui-kit` as a development dependency, as `kpi.framework` has them; `write-excel-file` 4.1.1 (already in the lockfile) is a development dependency of `apps/web` for the e2e spec. No runtime
+    dependency was added.
+12. **The history shows "You" and "A colleague", not a name.** The run holds the id of the person (sprint 3's backlog item); the page says "You" for the person's own runs, "A colleague" for the rest and "Not recorded" for none.
+13. **Not shown: the bounds of a duration.** An indicator's bounds are stored in seconds, and the page has no formatter for the registry's `HH-MM-SS`; a bound is shown for number inputs only and the server still
+    judges a duration (backlog).
+
+**Calls, measured (the e2e spec, both base paths).** The browser sends **nothing for the page on arrival**: the only call a full load makes is the shell's `GET /inbox/stream` (the bell). Showing another month is one page
+load and no call. A save is **1** call (`POST /kpi/ingestion/runs`) and one page load to refresh; a file chosen is **2** (`POST /kpi/ingestion/preview`, then the dry run `POST /kpi/ingestion/runs`); a mapping change **0**;
+"Check the file" **1**; the commit **1**; a template **1** (`GET /kpi/ingestion/template`); typing in every field **0**. What the loader asks of the API on the server is **9** reads for a page with a service (the picker, the service,
+the coverage, the runs, the adapters, two vocabularies, the value types, the grid) and 1 for a page with none. They share the bucket of the caller (the default one, a burst of 120 and 120 a minute) with the shell's own
+reads, so a person who changes the month about nine times in a minute meets a 429; none was seen in the tests. Five of the nine are reference data that does not change within a visit (the adapters, the two vocabularies, the value
+types, and in practice the picker's list): see the backlog.
