@@ -70,7 +70,7 @@ describe('guardXlsx', () => {
     expect(refused(new Uint8Array(0))).toBe('not-a-zip');
   });
 
-  it('refuses an encrypted entry and a password-protected workbook (an OLE2 file)', async () => {
+  it('refuses an encrypted entry and a password-protected workbook (an OLE2 file)', () => {
     expect(refused(encryptedEntry(rawWorkbook('')))).toBe('encrypted');
     expect(refused(oleFile())).toBe('encrypted');
   });

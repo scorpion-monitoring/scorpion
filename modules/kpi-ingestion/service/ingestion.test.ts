@@ -60,7 +60,7 @@ describe('the registry of adapters', () => {
   });
 
   const fixture = (id: string, entry: unknown): FixtureModule => ({
-    manifest: { id, version: '0.1.0', contributes: { 'ingestion.adapter': [entry] } } as never,
+    manifest: { id, version: '0.1.0', contributes: { 'ingestion.adapter': [entry] } },
     packageJson: {
       name: `@scorpion/${id.replaceAll('.', '-')}`,
       version: '0.0.0',
@@ -802,7 +802,7 @@ describe('the mapping', () => {
       { row: 3, column: 1, code: 'period-missing' },
       { row: 5, column: 1, code: 'duplicate-row' },
     ]);
-    const typed = await workbook([headerOf(w, 'downloads'), ['2026-01', true as never]]);
+    const typed = await workbook([headerOf(w, 'downloads'), ['2026-01', true]]);
     const boolean = await ing.run(w.people.member, {
       serviceId: w.svc.id,
       file: { name: 'b.xlsx', bytes: typed },

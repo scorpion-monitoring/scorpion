@@ -55,7 +55,9 @@ export const csvAdapter: AdapterEntry = {
             rows: parsed.rows
               .slice(1)
               .map((cells) =>
-                cells.length < width ? [...cells, ...Array(width - cells.length).fill('')] : cells,
+                cells.length < width
+                  ? [...cells, ...Array.from({ length: width - cells.length }, () => '')]
+                  : cells,
               ),
             rowNumbers: parsed.lines.slice(1),
           };
@@ -65,8 +67,6 @@ export const csvAdapter: AdapterEntry = {
   template: {
     extension: 'csv',
     contentType: 'text/csv; charset=utf-8',
-    async write(rows) {
-      return new TextEncoder().encode(BOM + writeCsv(rows));
-    },
+    write: (rows) => Promise.resolve(new TextEncoder().encode(BOM + writeCsv(rows))),
   },
 };

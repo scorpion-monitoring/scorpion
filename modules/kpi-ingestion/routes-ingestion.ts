@@ -332,7 +332,7 @@ const adapterOut = (adapter: AdapterInfo) => ({
 });
 
 /** What the request carries, as the service takes it. A mapping that is not JSON, or not an object, is a 422. */
-async function readInput(c: Context<AppEnv>): Promise<IngestInput & { dryRun: boolean }> {
+async function readInput(c: Context<AppEnv>): Promise<{ input: IngestInput; dryRun: boolean }> {
   const type = c.req.header('content-type') ?? '';
   if (type.toLowerCase().startsWith('multipart/form-data')) {
     const body = (
@@ -356,35 +356,48 @@ async function readInput(c: Context<AppEnv>): Promise<IngestInput & { dryRun: bo
       }
     }
     return {
-      serviceId: body.serviceId,
-      ...(body.adapter !== undefined ? { adapter: body.adapter } : {}),
-      ...(body.sheet !== undefined ? { sheet: body.sheet } : {}),
-      ...(mapping ? { mapping } : {}),
-      file: { name: body.file.name, bytes: new Uint8Array(await body.file.arrayBuffer()) },
+      input: {
+        serviceId: body.serviceId,
+        ...(body.adapter !== undefined ? { adapter: body.adapter } : {}),
+        ...(body.sheet !== undefined ? { sheet: body.sheet } : {}),
+        ...(mapping ? { mapping } : {}),
+        file: { name: body.file.name, bytes: new Uint8Array(await body.file.arrayBuffer()) },
+      },
       dryRun: body.dryRun === 'true',
     };
   }
   const body = (c.req as unknown as { valid(target: 'json'): z.infer<typeof jsonBody> }).valid(
     'json',
   );
+  // `valid('json')` is `{}` when the request had no body at all (the body is optional in the schema, see `requestBody`).
+  if ((body.serviceId as string | undefined) === undefined || (body.form as unknown) === undefined)
+    throw new Invalid('The request is not valid.', [
+      {
+        in: 'body',
+        path: '',
+        message: 'must be a file as multipart or the values of a form as JSON',
+      },
+    ]);
   return {
-    serviceId: body.serviceId,
-    ...(body.adapter !== undefined ? { adapter: body.adapter } : {}),
-    ...(body.mapping ? { mapping: body.mapping } : {}),
-    form: body.form,
+    input: {
+      serviceId: body.serviceId,
+      ...(body.adapter !== undefined ? { adapter: body.adapter } : {}),
+      ...(body.mapping ? { mapping: body.mapping } : {}),
+      form: body.form,
+    },
     dryRun: body.dryRun === true,
   };
 }
 
 export function registerIngestionRoutes(r: RouteRegistrar, ingestion: IngestionService) {
   r.internal(previewRoute, (async (c) => {
-    const { dryRun: _dryRun, ...input } = await readInput(c as unknown as Context<AppEnv>);
+    const { input } = await readInput(c);
     return c.json(previewOut(await ingestion.preview(c.get('actor'), input)), 200);
   }) satisfies RouteHandler<typeof previewRoute, AppEnv>);
 
   r.internal(runRoute, (async (c) => {
-    const input = await readInput(c as unknown as Context<AppEnv>);
-    const result = await ingestion.run(c.get('actor'), input);
+    const { input, dryRun } = await readInput(c);
+    const result = await ingestion.run(c.get('actor'), { ...input, dryRun });
     if (result.status === 'rejected')
       throw new Invalid(
         `The file was refused and nothing was recorded (run ${result.runId}).`,
@@ -407,7 +420,7 @@ export function registerIngestionRoutes(r: RouteRegistrar, ingestion: IngestionS
     return c.json(runOut(await ingestion.getRun(c.get('actor'), id)), 200);
   }) satisfies RouteHandler<typeof getRunRoute, AppEnv>);
 
-  r.internal(listAdaptersRoute, (async (c) => {
+  r.internal(listAdaptersRoute, ((c) => {
     const adapters = ingestion.adapters();
     return c.json(
       paginate(

@@ -45,7 +45,7 @@ export const xlsxAdapter: AdapterEntry = {
 
     let data: unknown[][];
     try {
-      data = (await readSheet(Buffer.from(bytes), input.sheet)) as unknown[][];
+      data = await readSheet(Buffer.from(bytes), input.sheet);
     } catch (error) {
       const code = errorName(error) === 'SheetNotFoundError' ? 'sheet-not-found' : 'format';
       return failed([{ row: 0, column: 0, code }]);

@@ -67,7 +67,7 @@ beforeAll(async () => {
 
 const as = (who: Person) => ({ cookie: who.cookie, csrf: who.csrf });
 const sql = async (text: string, values: unknown[] = []) =>
-  (await started.kernel.pool.query(text, values)).rows;
+  (await started.kernel.pool.query(text, values)).rows as Record<string, unknown>[];
 
 /** A multipart request body: the fields and one file. */
 async function multipart(

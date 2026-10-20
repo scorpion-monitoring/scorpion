@@ -217,5 +217,5 @@ export function writeCsv(rows: readonly (readonly string[])[], delimiter: Delimi
   const body = rows
     .map((row) => row.map((value) => cell(value, row.length === 1)).join(delimiter) + '\r\n')
     .join('');
-  return rows[0]?.[0]?.charCodeAt(0) === 0xfeff ? `﻿${body}` : body;
+  return rows[0]?.[0]?.charCodeAt(0) === 0xfeff ? '\uFEFF' + body : body;
 }

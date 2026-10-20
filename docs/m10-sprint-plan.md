@@ -174,6 +174,16 @@ Tests (sprint 3): the CSV parser (table-driven and `fast-check`); the XLSX adapt
 
 Definition of done: as sprint 2, plus the image module-set check **and a look at the image size** (two runtime dependencies are added: the change against `0.11.0-full` goes into the backlog, as M9 did).
 
+**Amended in sprint 3 (what was decided while building it; the reasons and the measurements are in [ADR-0041](adr/0041-measurement-model.md), "Amended in sprint 3"):**
+
+- **The guard came first and works; XLSX stays in M10.** `service/xlsx-guard.ts` refuses the 61 kB bomb in 0.2 ms, the bomb with lying headers in 223 ms, and an OLE2 (password-protected), encrypted, Zip64, damaged, truncated or over-full zip; the reader only sees bytes that passed. `read-excel-file/node` is the entry (about 25% faster than `universal`, takes a Buffer, its worker thread works in the production image).
+- **Dependencies:** `read-excel-file` 9.3.12, `write-excel-file` 4.1.1 and `fflate` 0.8.3 (runtime, exact), `fast-check` 4.10.2 (development); nine new lockfile packages in all (named in the ADR and the pull request). **The image grew by 9.0 MB (+1.4%)** against `0.11.0-full`. Scorecard detects `from 'fast-check'` lines in `.ts` files.
+- **The "entry in the `BodyLimitOverride` list" is the route's `maxBodyBytes`** (`app.ts` builds the list from the routes); no change under `pipeline/**`. The body limit is 2 MiB plus 64 KiB of multipart envelope.
+- **`MAX_BATCH_ROWS` is 25 000 (was 5 000):** the batch counts values, not file rows, and the binding limit is 120 months. **A column is matched by id or name**, not by the IRI slug, which the trusted read does not carry; the template's decoration is stripped before a second try with `resolveIndicatorRef`.
+- **One more permission, `kpi.ingestion.measurement.ingest`** (role `user`), for preview and run, so that a read-only token cannot write; **one more route, `GET /kpi/ingestion/adapters`**, so the page does not hard-code the accepted files. No new table or migration.
+- **A commit that finds anything wrong is a 422** naming each `rows[r].columns[c]` with the recorded run in its message; a dry run is a 200 with the verdicts. The content decides the adapter. The mapping is keyed by the 0-based column index.
+- **Tests beyond the plan:** the three-way equivalence (form, CSV, XLSX give identical rows in the database), the guard cases, the CSV `fast-check` properties, `defect 1: the ingestion routes` (a walker and the denied cases), and `kpi.framework`'s history property tests on `fast-check`.
+
 ## 8. Sprint 4: the Data Submission page
 
 **Branch:** `feature/m10-submission-ui`. **Goal:** a member reports a month in the browser, in the form or from a file, and sees what happened; the page is accessible and makes few calls.

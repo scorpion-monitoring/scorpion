@@ -1354,3 +1354,104 @@ describe('defect 1: the measurement routes', () => {
     expect((await s.kernel.pool.query('select 1 from kpii_measurement')).rows).toEqual([]);
   });
 });
+
+// M10 sprint 3: the routes of the adapters (preview, runs, the history, the adapters and the template). Same idea as above: a decision for
+// every route, a walker that fails for one added later without a row. The role `user` holds the plain permissions of all of them and the
+// service checks the scoped `kpi.ingestion.measurement.submit`, so a plain User with no membership is refused on all but the list of adapters
+// (which says nothing about any service), leaving no run and no value.
+describe('defect 1: the ingestion routes', () => {
+  interface Row {
+    sample: (service: string) => Sample;
+    /** A plain User (the role `user`, no membership) may call it. */
+    plainMay: boolean;
+    /** What a plain User gets otherwise: 403, but an id that is no run is 404 for everyone (the id is not guessable; the run is checked once found). */
+    refused?: number;
+  }
+  const form = (service: string) => ({
+    serviceId: service,
+    form: { period: '2026-01', values: { [FOREIGN]: '1' } },
+  });
+  const INGESTION_SAMPLES: Record<string, Row> = {
+    'POST /kpi/ingestion/preview': {
+      plainMay: false,
+      sample: (service) => ({
+        method: 'POST',
+        path: '/kpi/ingestion/preview',
+        body: form(service),
+      }),
+    },
+    'POST /kpi/ingestion/runs': {
+      plainMay: false,
+      sample: (service) => ({ method: 'POST', path: '/kpi/ingestion/runs', body: form(service) }),
+    },
+    'GET /kpi/ingestion/runs': {
+      plainMay: false,
+      sample: (service) => ({ method: 'GET', path: `/kpi/ingestion/runs?service=${service}` }),
+    },
+    'GET /kpi/ingestion/runs/{id}': {
+      plainMay: false,
+      refused: 404,
+      sample: () => ({ method: 'GET', path: `/kpi/ingestion/runs/${FOREIGN}` }),
+    },
+    'GET /kpi/ingestion/adapters': {
+      plainMay: true,
+      sample: () => ({ method: 'GET', path: '/kpi/ingestion/adapters' }),
+    },
+    'GET /kpi/ingestion/template': {
+      plainMay: false,
+      sample: (service) => ({
+        method: 'GET',
+        path: `/kpi/ingestion/template?service=${service}&format=csv`,
+      }),
+    },
+  };
+  const start = () => app.start({ tokenCacheTtlMs: 0, kpi: true, ingestion: true });
+  const callRow = (
+    s: Awaited<ReturnType<typeof start>>,
+    row: Row,
+    service: string,
+    auth: { cookie?: string; csrf?: string } = {},
+  ) => {
+    const sample = row.sample(service);
+    return s.call(sample.method, sample.path, { ...auth, body: sample.body });
+  };
+
+  it('has a decision for every ingestion route, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
+    const { kernel } = await start();
+    const live = kernel.routes
+      .filter((entry) => entry.route.path.startsWith('/kpi/ingestion'))
+      .map((entry) => {
+        expect(entry.route.public, `${entry.route.path} is not public`).toBeFalsy();
+        expect(entry.route.permission, `${entry.route.path} names a permission`).toBeTruthy();
+        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+      })
+      .sort();
+    expect(live).toEqual(Object.keys(INGESTION_SAMPLES).sort());
+  });
+
+  it('answers 401 to an anonymous caller and 403 to a user without roles [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const roleless = await s.signedIn('norole-ingest', { roles: [] });
+    for (const [key, row] of Object.entries(INGESTION_SAMPLES)) {
+      const anonymous = await callRow(s, row, FOREIGN);
+      expect(anonymous.status, `${key}: anonymous`).toBe(401);
+      expect(problem(anonymous), key).toContain('application/problem+json');
+      const nobody = await callRow(s, row, FOREIGN, session(roleless));
+      expect(nobody.status, `${key}: a user without roles`).toBe(403);
+    }
+  });
+
+  it('answers 403 to a plain User on every route that names a service, leaving no run and no value [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain-ingest');
+    const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const service = await makeService(s.kernel.pool, { provider: provider.id });
+    for (const [key, row] of Object.entries(INGESTION_SAMPLES)) {
+      const reply = await callRow(s, row, service.id, session(plain));
+      if (row.plainMay) expect(reply.status, `${key}: a plain User reads`).toBe(200);
+      else expect(reply.status, `${key}: a plain User is refused`).toBe(row.refused ?? 403);
+    }
+    expect((await s.kernel.pool.query('select 1 from kpii_measurement')).rows).toEqual([]);
+    expect((await s.kernel.pool.query('select 1 from kpii_ingestion_run')).rows).toEqual([]);
+  });
+});

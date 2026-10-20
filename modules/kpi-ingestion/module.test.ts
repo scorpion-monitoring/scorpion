@@ -58,9 +58,9 @@ describe('the manifest', () => {
       'ingestion.adapter',
       'kpi.indicatorUsage',
     ]);
-    expect(
-      (contributes['ingestion.adapter'] as { id: string }[]).map((entry) => entry.id),
-    ).toEqual(['form', 'csv', 'xlsx']);
+    expect((contributes['ingestion.adapter'] as { id: string }[]).map((entry) => entry.id)).toEqual(
+      ['form', 'csv', 'xlsx'],
+    );
     expect(
       (contributes['authz.resourcePolicy'] as { resourceType: string }[]).map(
         (entry) => entry.resourceType,
