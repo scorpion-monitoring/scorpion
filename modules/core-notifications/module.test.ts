@@ -134,7 +134,6 @@ describe('in a kernel', () => {
       'fix.mandatory',
       'fix.partial',
       'fix.secret-link',
-      'kpi.reporting-reminder',
       'notifications.test',
       'onboarding.application-decided',
       'onboarding.application-submitted',

@@ -5,8 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { BRANDING } from '../test/template-fixtures.ts';
 import { SHIPPED_TEMPLATES } from './index.ts';
 
-const URL = 'https://example.org/somewhere';
-
 /** Data for each template; `text` goes into every free-text field. */
 const samples: Record<string, (text: string) => unknown> = {
   'onboarding.application-submitted': (text) => ({ service: text }),
@@ -15,16 +13,10 @@ const samples: Record<string, (text: string) => unknown> = {
     decision: 'rejected',
     note: text,
   }),
-  'kpi.reporting-reminder': (text) => ({
-    provider: text,
-    month: '2026-09',
-    missing: [text, 'Number of users'],
-    reportUrl: URL,
-  }),
 };
 
 describe('the shipped templates', () => {
-  it('are the three of the plan that no module has taken over yet, each with a sample here', () => {
+  it('are the two of the plan that no module has taken over yet, each with a sample here', () => {
     expect(SHIPPED_TEMPLATES.map((entry) => entry.key).sort()).toEqual(Object.keys(samples).sort());
   });
 
@@ -43,17 +35,6 @@ describe('the shipped templates', () => {
     expect(
       entry.render(samples[key]!('Ada Lovelace') as never, locale, BRANDING),
     ).toMatchSnapshot();
-  });
-
-  it('validates its data: a missing field, an unknown field and a bad URL are refused', () => {
-    const entry = SHIPPED_TEMPLATES.find((e) => e.key === 'kpi.reporting-reminder')!;
-    const good = samples['kpi.reporting-reminder']!('x') as Record<string, unknown>;
-    expect(entry.schema.safeParse(good).success).toBe(true);
-    expect(entry.schema.safeParse({ ...good, month: '2026-13' }).success).toBe(false);
-    expect(entry.schema.safeParse({ ...good, reportUrl: 'not a url' }).success).toBe(false);
-    expect(entry.schema.safeParse({ ...good, extra: 1 }).success).toBe(false);
-    expect(entry.schema.safeParse({ ...good, missing: [] }).success).toBe(false);
-    expect(entry.schema.safeParse({ provider: 'x' }).success).toBe(false);
   });
 
   it('are not sensitive and not mandatory (none carries a credential, a user may switch them off)', () => {
