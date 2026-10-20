@@ -525,6 +525,12 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'DELETE', path: '/preferences/nobody.registered.this' }),
   },
+  // M11 sprint 1: the caller's own dashboard. Neither route names a user; the plain permissions are held by every User.
+  'GET /ui/dashboard': { kind: 'self', sample: () => ({ method: 'GET', path: '/ui/dashboard' }) },
+  'PUT /ui/dashboard': {
+    kind: 'self',
+    sample: () => ({ method: 'PUT', path: '/ui/dashboard', body: { items: [] } }),
+  },
 };
 
 const send = (s: Started, sample: Sample, auth: { cookie?: string; csrf?: string } = {}) =>
