@@ -262,18 +262,19 @@ permission first. They return the descriptive fields only (`OrganisationRecord`,
 logo hash; the membership reads answer from ids and name nobody. M7's `service.member` asks `isApprovedMemberAsSystem` and
 `listApprovedOrganisationIdsAsSystem`.
 
-| Method                                             | Returns                                                                   |
-| -------------------------------------------------- | ------------------------------------------------------------------------- |
-| `findByIdsAsSystem(ids)`                           | the records of the known ids (unknown and malformed ids are ignored)      |
-| `findByAbbreviationAsSystem(type, abbreviation)`   | one record or `undefined`; case-insensitive, within the type              |
-| `existsAsSystem(id)`                               | `boolean`                                                                 |
-| `listTypesAsSystem()`                              | the registered types, labels in English                                   |
-| `toSchemaOrgAsSystem(id, { includeContact? })`     | the profile or `undefined`; `includeContact` defaults to `false`          |
-| `isApprovedMemberAsSystem(userId, organisationId)` | `boolean`: an approved membership (a manager is a member)                 |
-| `listApprovedOrganisationIdsAsSystem(userId)`      | the ids of the organisations the person is an approved member of          |
-| `countApprovedMembersAsSystem(organisationIds)`    | `{ [organisationId]: n }`, `0` for an organisation without members        |
-| `isManagerAsSystem(userId, organisationId)`        | `boolean`: an approved manager                                            |
-| `listApprovedManagerIdsAsSystem(organisationId)`   | the user ids of the approved managers, by id (M7: the publication notice) |
+| Method                                             | Returns                                                                                                         |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `findByIdsAsSystem(ids)`                           | the records of the known ids (unknown and malformed ids are ignored)                                            |
+| `findByAbbreviationAsSystem(type, abbreviation)`   | one record or `undefined`; case-insensitive, within the type                                                    |
+| `existsAsSystem(id)`                               | `boolean`                                                                                                       |
+| `listTypesAsSystem()`                              | the registered types, labels in English                                                                         |
+| `toSchemaOrgAsSystem(id, { includeContact? })`     | the profile or `undefined`; `includeContact` defaults to `false`                                                |
+| `isApprovedMemberAsSystem(userId, organisationId)` | `boolean`: an approved membership (a manager is a member)                                                       |
+| `listApprovedOrganisationIdsAsSystem(userId)`      | the ids of the organisations the person is an approved member of                                                |
+| `countApprovedMembersAsSystem(organisationIds)`    | `{ [organisationId]: n }`, `0` for an organisation without members                                              |
+| `isManagerAsSystem(userId, organisationId)`        | `boolean`: an approved manager                                                                                  |
+| `listApprovedManagerIdsAsSystem(organisationId)`   | the user ids of the approved managers, by id (M7: the publication notice)                                       |
+| `listApprovedMemberIdsAsSystem(organisationId)`    | the user ids of the approved members, managers included, by id (M10: the reporting reminder of `kpi.ingestion`) |
 
 **Who writes which field (Decision 14).** `service/field-rules.ts` is the one table, for both editor groups: `type`,
 `abbreviation` and `name` need `admin` access (`…organisation.manage`, an Admin); `description`, `website`, `sameAs`, `rorId`, the

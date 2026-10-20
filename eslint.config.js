@@ -94,15 +94,18 @@ export default defineConfig(
           // Written by `scorpion profile:generate`; the only file that imports module manifests.
           // The test helpers that start a kernel (and the HTTP app) over core.identity do the same
           // composition for a test, with injected settings and the real core.authz it depends on.
+          // `run-reminder.ts` is the browser tests' second node: the generated profile with kpi.ingestion's clock injected.
           manifestImporters: [
             'apps/server/src/generated/profile.ts',
             'apps/web/src/generated/ui.ts',
             'apps/server/src/testing/identity-app.ts',
+            'apps/server/src/testing/run-reminder.ts',
             'modules/core-audit/test/harness.ts',
             'modules/core-blob/test/harness.ts',
             'modules/core-identity/test/harness.ts',
             'modules/core-notifications/test/harness.ts',
             'modules/kpi-framework/test/harness.ts',
+            'modules/kpi-ingestion/test/harness.ts',
             'modules/registry-organisations/test/harness.ts',
             'modules/registry-services/test/harness.ts',
             'modules/core-settings/test/harness.ts',

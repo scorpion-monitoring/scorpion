@@ -1,0 +1,880 @@
+{
+  "id": "314dbc6e-8567-4e3f-9ee4-c937c5ee8d8d",
+  "prevId": "0bf89eff-e4c4-4eb2-b9d3-f58900736c33",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.kpif_evaluation": {
+      "name": "kpif_evaluation",
+      "schema": "",
+      "columns": {
+        "set_id": {
+          "name": "set_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "indicator_id": {
+          "name": "indicator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aggregate": {
+          "name": "aggregate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpif_evaluation_aggregate_idx": {
+          "name": "kpif_evaluation_aggregate_idx",
+          "columns": [
+            {
+              "expression": "aggregate",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpif_evaluation_set_id_kpif_kpi_set_id_fk": {
+          "name": "kpif_evaluation_set_id_kpif_kpi_set_id_fk",
+          "tableFrom": "kpif_evaluation",
+          "tableTo": "kpif_kpi_set",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "kpif_evaluation_set_indicator_fk": {
+          "name": "kpif_evaluation_set_indicator_fk",
+          "tableFrom": "kpif_evaluation",
+          "tableTo": "kpif_kpi_set_indicator",
+          "columnsFrom": [
+            "set_id",
+            "indicator_id"
+          ],
+          "columnsTo": [
+            "set_id",
+            "indicator_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpif_evaluation_aggregate_check": {
+          "name": "kpif_evaluation_aggregate_check",
+          "value": "char_length(\"kpif_evaluation\".\"aggregate\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpif_indicator": {
+      "name": "kpif_indicator",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "example": {
+          "name": "example",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qualitative": {
+          "name": "qualitative",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "value_type": {
+          "name": "value_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_value": {
+          "name": "min_value",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_value": {
+          "name": "max_value",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thematic": {
+          "name": "thematic",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpif_indicator_slug_idx": {
+          "name": "kpif_indicator_slug_idx",
+          "columns": [
+            {
+              "expression": "lower(\"slug\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpif_indicator_name_idx": {
+          "name": "kpif_indicator_name_idx",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpif_indicator_thematic_idx": {
+          "name": "kpif_indicator_thematic_idx",
+          "columns": [
+            {
+              "expression": "thematic",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpif_indicator_unit_idx": {
+          "name": "kpif_indicator_unit_idx",
+          "columns": [
+            {
+              "expression": "unit",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpif_indicator_slug_check": {
+          "name": "kpif_indicator_slug_check",
+          "value": "char_length(\"kpif_indicator\".\"slug\") between 1 and 64 and \"kpif_indicator\".\"slug\" ~ '^[A-Za-z0-9][A-Za-z0-9._-]*$'"
+        },
+        "kpif_indicator_name_check": {
+          "name": "kpif_indicator_name_check",
+          "value": "char_length(\"kpif_indicator\".\"name\") between 1 and 200"
+        },
+        "kpif_indicator_description_check": {
+          "name": "kpif_indicator_description_check",
+          "value": "\"kpif_indicator\".\"description\" is null or char_length(\"kpif_indicator\".\"description\") <= 4000"
+        },
+        "kpif_indicator_example_check": {
+          "name": "kpif_indicator_example_check",
+          "value": "\"kpif_indicator\".\"example\" is null or char_length(\"kpif_indicator\".\"example\") <= 1000"
+        },
+        "kpif_indicator_value_type_check": {
+          "name": "kpif_indicator_value_type_check",
+          "value": "char_length(\"kpif_indicator\".\"value_type\") between 1 and 64"
+        },
+        "kpif_indicator_bounds_check": {
+          "name": "kpif_indicator_bounds_check",
+          "value": "\"kpif_indicator\".\"min_value\" is null or \"kpif_indicator\".\"max_value\" is null or \"kpif_indicator\".\"min_value\" <= \"kpif_indicator\".\"max_value\""
+        },
+        "kpif_indicator_qualitative_check": {
+          "name": "kpif_indicator_qualitative_check",
+          "value": "not \"kpif_indicator\".\"qualitative\" or (\"kpif_indicator\".\"value_type\" = 'text' and \"kpif_indicator\".\"min_value\" is null and \"kpif_indicator\".\"max_value\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpif_indicator_means": {
+      "name": "kpif_indicator_means",
+      "schema": "",
+      "columns": {
+        "indicator_id": {
+          "name": "indicator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "term_key": {
+          "name": "term_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "kpif_indicator_means_term_idx": {
+          "name": "kpif_indicator_means_term_idx",
+          "columns": [
+            {
+              "expression": "term_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpif_indicator_means_indicator_id_kpif_indicator_id_fk": {
+          "name": "kpif_indicator_means_indicator_id_kpif_indicator_id_fk",
+          "tableFrom": "kpif_indicator_means",
+          "tableTo": "kpif_indicator",
+          "columnsFrom": [
+            "indicator_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kpif_indicator_means_indicator_id_term_key_pk": {
+          "name": "kpif_indicator_means_indicator_id_term_key_pk",
+          "columns": [
+            "indicator_id",
+            "term_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kpif_indicator_tool": {
+      "name": "kpif_indicator_tool",
+      "schema": "",
+      "columns": {
+        "indicator_id": {
+          "name": "indicator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "term_key": {
+          "name": "term_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "kpif_indicator_tool_term_idx": {
+          "name": "kpif_indicator_tool_term_idx",
+          "columns": [
+            {
+              "expression": "term_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpif_indicator_tool_indicator_id_kpif_indicator_id_fk": {
+          "name": "kpif_indicator_tool_indicator_id_kpif_indicator_id_fk",
+          "tableFrom": "kpif_indicator_tool",
+          "tableTo": "kpif_indicator",
+          "columnsFrom": [
+            "indicator_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kpif_indicator_tool_indicator_id_term_key_pk": {
+          "name": "kpif_indicator_tool_indicator_id_term_key_pk",
+          "columns": [
+            "indicator_id",
+            "term_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kpif_kpi_set": {
+      "name": "kpif_kpi_set",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rimo_category": {
+          "name": "rimo_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpif_kpi_set_slug_idx": {
+          "name": "kpif_kpi_set_slug_idx",
+          "columns": [
+            {
+              "expression": "lower(\"slug\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpif_kpi_set_name_idx": {
+          "name": "kpif_kpi_set_name_idx",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpif_kpi_set_rimo_category_idx": {
+          "name": "kpif_kpi_set_rimo_category_idx",
+          "columns": [
+            {
+              "expression": "rimo_category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpif_kpi_set_slug_check": {
+          "name": "kpif_kpi_set_slug_check",
+          "value": "char_length(\"kpif_kpi_set\".\"slug\") between 1 and 64 and \"kpif_kpi_set\".\"slug\" ~ '^[A-Za-z0-9][A-Za-z0-9._-]*$'"
+        },
+        "kpif_kpi_set_name_check": {
+          "name": "kpif_kpi_set_name_check",
+          "value": "char_length(\"kpif_kpi_set\".\"name\") between 1 and 200"
+        },
+        "kpif_kpi_set_description_check": {
+          "name": "kpif_kpi_set_description_check",
+          "value": "\"kpif_kpi_set\".\"description\" is null or char_length(\"kpif_kpi_set\".\"description\") <= 4000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpif_kpi_set_indicator": {
+      "name": "kpif_kpi_set_indicator",
+      "schema": "",
+      "columns": {
+        "set_id": {
+          "name": "set_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "indicator_id": {
+          "name": "indicator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "necessity": {
+          "name": "necessity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "kpif_kpi_set_indicator_indicator_idx": {
+          "name": "kpif_kpi_set_indicator_indicator_idx",
+          "columns": [
+            {
+              "expression": "indicator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kpif_kpi_set_indicator_necessity_idx": {
+          "name": "kpif_kpi_set_indicator_necessity_idx",
+          "columns": [
+            {
+              "expression": "necessity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpif_kpi_set_indicator_set_id_kpif_kpi_set_id_fk": {
+          "name": "kpif_kpi_set_indicator_set_id_kpif_kpi_set_id_fk",
+          "tableFrom": "kpif_kpi_set_indicator",
+          "tableTo": "kpif_kpi_set",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "kpif_kpi_set_indicator_indicator_id_kpif_indicator_id_fk": {
+          "name": "kpif_kpi_set_indicator_indicator_id_kpif_indicator_id_fk",
+          "tableFrom": "kpif_kpi_set_indicator",
+          "tableTo": "kpif_indicator",
+          "columnsFrom": [
+            "indicator_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kpif_kpi_set_indicator_set_id_indicator_id_pk": {
+          "name": "kpif_kpi_set_indicator_set_id_indicator_id_pk",
+          "columns": [
+            "set_id",
+            "indicator_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpif_kpi_set_indicator_necessity_check": {
+          "name": "kpif_kpi_set_indicator_necessity_check",
+          "value": "char_length(\"kpif_kpi_set_indicator\".\"necessity\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpif_service_extra_indicator": {
+      "name": "kpif_service_extra_indicator",
+      "schema": "",
+      "columns": {
+        "service_id": {
+          "name": "service_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "indicator_id": {
+          "name": "indicator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "kpif_service_extra_indicator_indicator_idx": {
+          "name": "kpif_service_extra_indicator_indicator_idx",
+          "columns": [
+            {
+              "expression": "indicator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpif_service_extra_indicator_indicator_id_kpif_indicator_id_fk": {
+          "name": "kpif_service_extra_indicator_indicator_id_kpif_indicator_id_fk",
+          "tableFrom": "kpif_service_extra_indicator",
+          "tableTo": "kpif_indicator",
+          "columnsFrom": [
+            "indicator_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kpif_service_extra_indicator_service_id_indicator_id_pk": {
+          "name": "kpif_service_extra_indicator_service_id_indicator_id_pk",
+          "columns": [
+            "service_id",
+            "indicator_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kpif_service_kpi_history": {
+      "name": "kpif_service_kpi_history",
+      "schema": "",
+      "columns": {
+        "service_id": {
+          "name": "service_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "extras": {
+          "name": "extras",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::uuid[]"
+        },
+        "valid_from": {
+          "name": "valid_from",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valid_to": {
+          "name": "valid_to",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "changed_by": {
+          "name": "changed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpif_service_kpi_history_open_idx": {
+          "name": "kpif_service_kpi_history_open_idx",
+          "columns": [
+            {
+              "expression": "service_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"kpif_service_kpi_history\".\"valid_to\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "kpif_service_kpi_history_service_id_valid_from_pk": {
+          "name": "kpif_service_kpi_history_service_id_valid_from_pk",
+          "columns": [
+            "service_id",
+            "valid_from"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kpif_service_kpi_history_range_check": {
+          "name": "kpif_service_kpi_history_range_check",
+          "value": "\"kpif_service_kpi_history\".\"valid_to\" is null or \"kpif_service_kpi_history\".\"valid_to\" > \"kpif_service_kpi_history\".\"valid_from\""
+        },
+        "kpif_service_kpi_history_extras_check": {
+          "name": "kpif_service_kpi_history_extras_check",
+          "value": "cardinality(\"kpif_service_kpi_history\".\"extras\") <= 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kpif_service_set": {
+      "name": "kpif_service_set",
+      "schema": "",
+      "columns": {
+        "service_id": {
+          "name": "service_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_id": {
+          "name": "set_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "kpif_service_set_set_idx": {
+          "name": "kpif_service_set_set_idx",
+          "columns": [
+            {
+              "expression": "set_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kpif_service_set_set_id_kpif_kpi_set_id_fk": {
+          "name": "kpif_service_set_set_id_kpif_kpi_set_id_fk",
+          "tableFrom": "kpif_service_set",
+          "tableTo": "kpif_kpi_set",
+          "columnsFrom": [
+            "set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

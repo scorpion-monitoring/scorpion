@@ -1,6 +1,8 @@
 // What a journey needs of the stack's database: the mail the application queued (the links in it carry
 // the tokens of a reset, a verification or a link), and an old session. No relay answers, so a
 // mail stays queued and its body is in the table, which is how a person would have read it.
+import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { expect } from '@playwright/test';
 import { mailbox, type QueuedMail } from '@scorpion/testing';
 import pg from 'pg';
@@ -8,7 +10,9 @@ import pg from 'pg';
 interface StackInfo {
   name: string;
   basePath: string;
+  origin: string;
   databaseUrl: string;
+  secretsKey: string;
 }
 
 export function stackFor(basePath: string, fresh = false): StackInfo {
@@ -72,4 +76,31 @@ export async function makeSessionsStale(basePath: string, username: string): Pro
     );
     expect(rowCount, 'a session to age').toBeGreaterThan(0);
   });
+}
+
+/**
+ * Runs the reporting reminder once as a second node of the stack, with the module's clock at `now` (the job itself fires at 06:00 UTC
+ * on the setting's day, which a journey cannot wait for). Returns the counts it reports.
+ */
+export function runReminder(basePath: string, now: Date): Record<string, unknown> {
+  const stack = stackFor(basePath);
+  const result = spawnSync('node', ['apps/server/src/testing/run-reminder.ts'], {
+    cwd: resolve(import.meta.dirname, '../../../..'),
+    env: {
+      ...process.env,
+      DATABASE_URL: stack.databaseUrl,
+      PROFILE: 'full',
+      BASE_PATH: stack.basePath,
+      ORIGIN: stack.origin,
+      SECRETS_KEY: stack.secretsKey,
+      LOG_LEVEL: 'warn',
+      REMINDER_NOW: now.toISOString(),
+    },
+    encoding: 'utf8',
+    // A hung second node fails the journey, not the whole run.
+    timeout: 120_000,
+  });
+  if (result.status !== 0)
+    throw new Error(`run-reminder failed:\n${result.stdout}\n${result.stderr}`);
+  return JSON.parse(result.stdout.trim().split('\n').at(-1)!) as Record<string, unknown>;
 }

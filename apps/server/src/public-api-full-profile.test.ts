@@ -18,6 +18,7 @@ const EXPECTED_V1_PATHS = [
   '/indicators',
   '/kpi/rimo.jsonld',
   '/kpi/rimo.ttl',
+  '/measurements',
   '/openapi.json',
   '/providers',
   '/providers/{id}',

@@ -172,6 +172,32 @@ test.describe('the shell', () => {
     await context.close();
   });
 
+  test('the Data Submission entry is in the Main section of a signed-in person, under the base path, and the page says so when there is nobody to report for', async ({
+    page,
+    request,
+    at,
+  }) => {
+    const who = person(`shellsubmit${randomBytes(3).toString('hex')}`);
+    await createUser(request, at, who);
+    await signInThroughPage(page, at, who);
+    await page.goto(at('/'));
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    await expect(nav.getByRole('link', { name: 'Data Submission', exact: true })).toHaveAttribute(
+      'href',
+      at('/submit'),
+    );
+    await nav.getByRole('link', { name: 'Data Submission', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${at('/submit')}$`));
+    await expect(page.getByRole('heading', { name: 'Data Submission', level: 1 })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Data Submission', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // A person who belongs to no organisation has nobody to report for: the page says so instead of showing a picker.
+    await expect(page.getByText('There is no service you can report for')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open', exact: true })).toHaveCount(0);
+  });
+
   test('an unknown path is the error page with 404 and a way home under the base path', async ({
     page,
     request,

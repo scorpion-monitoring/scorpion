@@ -308,7 +308,9 @@ test.describe('journey 2: a person finds an organisation and joins it', () => {
     await page.reload();
     const own = page.getByRole('listitem').filter({ hasText: target.abbreviation });
     await expect(own.getByText('Member', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: `Leave ${target.abbreviation}` }).click();
+    await page
+      .getByRole('button', { name: `Leave the organisation ${target.abbreviation}` })
+      .click();
     const dialog = page.getByRole('dialog', { name: `Leave ${target.name}?` });
     await dialog.getByRole('button', { name: 'Leave the organisation' }).click();
     await expect(toast(page).getByText('You left the organisation.')).toBeVisible();
@@ -380,7 +382,7 @@ test.describe('journey 4: managers decide for their own organisation', () => {
     await boss.page.goto(at(`/admin/memberships?state=approved&organisation=${org.id}`));
     await expect(rowOfTable(boss.page, alice.username)).toBeVisible();
     await rowOfTable(boss.page, alice.username)
-      .getByRole('button', { name: `Make ${alice.username} a manager` })
+      .getByRole('button', { name: `Make manager: ${alice.username}` })
       .click();
     await expect(boss.page.getByText(`${alice.username} is now a manager.`).first()).toBeVisible();
     await boss.close();

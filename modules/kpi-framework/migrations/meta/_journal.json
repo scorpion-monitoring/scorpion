@@ -15,6 +15,13 @@
       "when": 1792389487953,
       "tag": "0001_service_link",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792410297281,
+      "tag": "0002_service_kpi_history",
+      "breakpoints": true
     }
   ]
 }

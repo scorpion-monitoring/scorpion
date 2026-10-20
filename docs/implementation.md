@@ -299,6 +299,15 @@ Additions agreed in [m9-sprint-plan.md](m9-sprint-plan.md) §12 (four sprints, [
 
 **Acceptance:** submitting the same month twice updates the values instead of duplicating them. A form submission and an API call with the same data produce identical rows.
 
+Additions agreed in [m10-sprint-plan.md](m10-sprint-plan.md) §13 (five sprints, [ADR-0041](adr/0041-measurement-model.md) from sprint 1):
+
+- **A history of a service's KPIs** in `kpi.framework` (`kpif_service_kpi_history`, written in the transaction of every change, and `kpisInPeriod`), because M11 and M12 need to know which KPIs a month had and it cannot be rebuilt later.
+- **The registry `kpi.indicatorUsage`**, so that an indicator with measurements cannot be deleted (409 naming the module and the count; the `restrict` key is the last guard).
+- **Additive reads on other modules' `public.ts`**, each the sibling of a read that exists: `isProviderMemberAsSystem` and `listForPickerAsSystem` (`registry.services`), `effectiveIndicatorsAsSystem` and `indicatorsByIdAsSystem` (`kpi.framework`), and, in sprint 5, `listApprovedMemberIdsAsSystem` (`registry.organisations`) and `listProviderIdsAsSystem` (`registry.services`).
+- **Runtime dependencies for XLSX** (`read-excel-file`, `write-excel-file` and `fflate`, exact versions; the image of `full` grows by about 9.7 MB) and **`fast-check`** as a development dependency; the CSV parser is our own.
+- **v1 scopes** `kpi.ingestion.v1.read` and `kpi.ingestion.v1.write`, the internal `kpi.ingestion.measurement.read` and `kpi.ingestion.measurement.ingest`, and the scoped `kpi.ingestion.measurement.submit` (Admin and the approved members of the service's provider).
+- **The reporting reminder** is a daily job with two settings (`reminders.enabled`, `reminders.dayOfMonth`) and the table `kpii_reminder_sent`; its mail template moved from `core.notifications` to this module with the same key.
+
 ### M11: `kpi.analytics` (L)
 
 - A pure calculation library (`packages` or inside the module) with table-driven tests: change %, MAPE, averages, aggregates (sum/avg/min/max), cumulative series, month-end handling.

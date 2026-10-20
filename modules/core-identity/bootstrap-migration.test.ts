@@ -292,10 +292,12 @@ describe('after the migration nothing knows the column, and no module touches an
         }
       }
     }
-    // The one exception to rule 3 of CLAUDE.md (ADR 0014).
+    // The one exception to rule 3 of CLAUDE.md (ADR 0014), and the hand-written foreign key of kpi.ingestion to the table of
+    // a module it declares as a dependency (rule 3 allows the key, not a read or a write; ADR-0041).
     expect(offenders.sort()).toEqual([
       'modules/core-identity/migrations/0006_bootstrap_admin_to_authz.sql names authz_role (core-authz)',
       'modules/core-identity/migrations/0006_bootstrap_admin_to_authz.sql names authz_role_assignment (core-authz)',
+      'modules/kpi-ingestion/migrations/0000_measurement_core.sql names kpif_indicator (kpi-framework)',
     ]);
   });
 });

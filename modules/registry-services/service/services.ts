@@ -28,6 +28,7 @@ import { settingsSchema } from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import {
   createCatalogue,
+  searchCondition,
   slugCondition,
   type CatalogueFacet,
   type CatalogueQuery,
@@ -332,11 +333,35 @@ export interface ServicesService {
   listByOrganisationAsSystem: (organisationId: string, role?: string) => Promise<ServiceRecord[]>;
   existsAsSystem: (id: string) => Promise<boolean>;
   /**
+   * The ids of the organisations that are the **provider** of at least one service (role `provider`), by id, once each. For a job
+   * that walks the providers (the reporting reminder of `kpi.ingestion`, M10 sprint 5); the services of one are then read with
+   * `listByOrganisationAsSystem(id, PROVIDER_ROLE)`. It names no service and no person.
+   */
+  listProviderIdsAsSystem: () => Promise<string[]>;
+  /**
    * Whether the user is an approved **manager** of the service's provider: the group that holds `service.edit-identity` in the policy
    * `service.member` (ADR-0036). A module whose own permission is scoped to a service uses it in its own `authz.resourcePolicy`
    * entry, so the rule is written once. `false` for an unknown service.
    */
   isProviderManagerAsSystem: (userId: string, serviceId: string) => Promise<boolean>;
+  /**
+   * Whether the user is an approved **member** of the service's provider, a manager included (a manager is a member too): the group
+   * that holds `service.edit` in the policy `service.member`. The sibling of `isProviderManagerAsSystem`, for a module whose scoped
+   * permission belongs to every approved member (`kpi.ingestion`: submitting measurements). Asked at every call, nothing is cached,
+   * so a removed member is refused at the next call. `false` for an unknown service and for a requested, rejected or left row.
+   */
+  isProviderMemberAsSystem: (userId: string, serviceId: string) => Promise<boolean>;
+  /**
+   * The services a picker offers (M10 sprint 4): by name or abbreviation (`q`, without case), name then id, at most `limit`. With `memberOf`
+   * only those whose **provider** has the user as an approved member (a manager included), the rule of `isProviderMemberAsSystem` read
+   * from the other side; without it every service (the caller decides who may ask: an administrator). It says who may do **what** to none
+   * of them: a module that offers an action checks its own scoped permission for each row it keeps.
+   */
+  listForPickerAsSystem: (options: {
+    q?: string | undefined;
+    memberOf?: string | undefined;
+    limit: number;
+  }) => Promise<{ id: string; slug: string; name: string }[]>;
 }
 
 const CONSTRAINT_ERRORS = new Set(['svc_service_slug_idx', 'svc_slug_history_slug_idx']);
@@ -1556,6 +1581,47 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         permission: PERMISSION_EDIT_IDENTITY,
         resource: { type: RESOURCE_TYPE, id: serviceId },
       });
+    },
+
+    async isProviderMemberAsSystem(userId, serviceId) {
+      if (!deps.memberPolicy || !z.uuid().safeParse(serviceId).success) return false;
+      return deps.memberPolicy.allows({
+        actor: { kind: 'user', userId, username: '', roles: [], via: 'session' },
+        permission: PERMISSION_EDIT,
+        resource: { type: RESOURCE_TYPE, id: serviceId },
+      });
+    },
+
+    async listForPickerAsSystem({ q, memberOf, limit }) {
+      let providers: string[] | undefined;
+      if (memberOf !== undefined) {
+        if (!z.uuid().safeParse(memberOf).success) return [];
+        providers = await deps.organisations.listApprovedOrganisationIdsAsSystem(memberOf);
+        if (providers.length === 0) return [];
+      }
+      const rows = await db
+        .select({ id: service.id, slug: service.slug, name: service.name })
+        .from(service)
+        .where(
+          and(
+            searchCondition(q),
+            providers === undefined
+              ? undefined
+              : sql`exists (select 1 from ${serviceOrganisation} where ${serviceOrganisation.serviceId} = ${service.id} and ${serviceOrganisation.role} = ${OWNER_ROLE} and ${inArray(serviceOrganisation.organisationId, providers)})`,
+          ),
+        )
+        .orderBy(asc(sql`lower(${service.name})`), asc(service.id))
+        .limit(Math.max(1, Math.min(limit, 200)));
+      return rows;
+    },
+
+    async listProviderIdsAsSystem() {
+      const rows = await db
+        .selectDistinct({ id: serviceOrganisation.organisationId })
+        .from(serviceOrganisation)
+        .where(eq(serviceOrganisation.role, OWNER_ROLE))
+        .orderBy(asc(serviceOrganisation.organisationId));
+      return rows.map((row) => row.id);
     },
 
     async existsAsSystem(id) {

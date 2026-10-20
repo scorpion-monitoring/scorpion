@@ -35,6 +35,7 @@ const TABLES = [
   'kpif_kpi_set',
   'kpif_kpi_set_indicator',
   'kpif_service_extra_indicator',
+  'kpif_service_kpi_history',
   'kpif_service_set',
 ];
 
@@ -72,13 +73,13 @@ describe('the manifest', () => {
     ]);
   });
 
-  it('declares the three events, the value type registry and the contributions', () => {
+  it('declares the three events, the value type and indicator usage registries and the contributions', () => {
     expect(Object.keys(manifest.events?.emits ?? {})).toEqual([
       'kpi.indicator.changed@1',
       'kpi.set.changed@1',
       'kpi.serviceSet.changed@1',
     ]);
-    expect(Object.keys(manifest.registries ?? {})).toEqual(['kpi.valueType']);
+    expect(Object.keys(manifest.registries ?? {})).toEqual(['kpi.valueType', 'kpi.indicatorUsage']);
     const contributes = manifest.contributes ?? {};
     expect((contributes['kpi.valueType'] as { id: string }[]).map((t) => t.id)).toEqual([
       'integer',
@@ -241,7 +242,7 @@ describe('the schema', () => {
     (value): value is PgTable => is(value, PgTable),
   );
 
-  it('has the eight tables, each with the prefix of the manifest', () => {
+  it('has the nine tables, each with the prefix of the manifest', () => {
     expect(tables.map((table) => getTableName(table)).sort()).toEqual(TABLES);
     for (const table of tables)
       expect(getTableName(table).startsWith(manifest.tablePrefix!)).toBe(true);
@@ -278,7 +279,7 @@ describe('the schema', () => {
 });
 
 describe('in a profile', () => {
-  it('starts: the loader accepts the prefix, the migration creates exactly the eight tables, and every foreign key stays inside the module', async () => {
+  it('starts: the loader accepts the prefix, the migration creates exactly the nine tables, and every foreign key stays inside the module', async () => {
     const s = await h.start();
     const { rows } = await s.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables

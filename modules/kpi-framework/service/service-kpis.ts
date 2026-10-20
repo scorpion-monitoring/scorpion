@@ -16,6 +16,7 @@ import {
   serviceSet,
 } from '../db/schema.ts';
 import { effectiveSet, type EffectiveIndicator, type EffectiveRow } from './effective.ts';
+import { appendHistory } from './history.ts';
 import { parseInput, requireId, serviceKpisSchema, type ServiceKpisInput } from './input.ts';
 import { iriFor } from './iri.ts';
 import {
@@ -162,6 +163,9 @@ export function createKpisWriter(ctx: ModuleContext): KpisWriter {
           .values(added.map((indicatorId) => ({ serviceId, indicatorId })));
       if (gone.length > 0 || added.length > 0) fields.push('extras');
 
+      // The history gets its row in this transaction: a rolled-back change leaves none (ADR-0041 Decision 3).
+      if (fields.length > 0)
+        await appendHistory(tx, serviceId, { setId: input.setId, extras: wanted }, by);
       if (fields.length > 0)
         await ctx.events.emit('kpi.serviceSet.changed@1', {
           serviceId,

@@ -22,6 +22,7 @@ export default defineProfile({
     'registry.organisations',
     'registry.services',
     'kpi.framework',
+    'kpi.ingestion',
     'public-api',
   ],
 });

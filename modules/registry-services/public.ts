@@ -31,6 +31,8 @@ export {
 } from './service/registries.ts';
 export { fieldValueFacet } from './service/facets.ts';
 export type { ServiceRecord } from './service/services.ts';
+// The role id of a service's provider (a key of the registry `service.orgRole`), for `listByOrganisationAsSystem(id, PROVIDER_ROLE)`.
+export { OWNER_ROLE as PROVIDER_ROLE } from './service/permissions.ts';
 
 import type { ServicesService } from './service/services.ts';
 
@@ -43,7 +45,10 @@ export type ServicesPublic = Pick<
   | 'findBySlugAsSystem'
   | 'listByOrganisationAsSystem'
   | 'existsAsSystem'
+  | 'listProviderIdsAsSystem'
   | 'isProviderManagerAsSystem'
+  | 'isProviderMemberAsSystem'
+  | 'listForPickerAsSystem'
 >;
 
 declare module '@scorpion/kernel' {

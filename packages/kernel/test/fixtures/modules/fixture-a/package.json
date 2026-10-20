@@ -13,7 +13,7 @@
     "@scorpion/fixture-b": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "@scorpion/fixture-opt": "workspace:*"

@@ -10886,6 +10886,14 @@ export interface paths {
                                     min?: number;
                                     max?: number;
                                 };
+                                /** @description How a form asks for a value: a number input (with its `step`) or a text input (with a `pattern` and a `hint`). Absent: a number input for a numeric type, text otherwise. The server still judges every value. */
+                                input?: {
+                                    /** @enum {string} */
+                                    kind: "number" | "text";
+                                    step?: number | "any";
+                                    pattern?: string;
+                                    hint?: string;
+                                };
                                 /** @description The terms of `aggregate` that make sense for the type. */
                                 aggregates: string[];
                             }[];
@@ -12384,6 +12392,1055 @@ export interface paths {
                 };
                 /** @description The caller has this document (`If-None-Match` matches the ETag). */
                 304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The values of one month of a service
+         * @description Each indicator of the effective KPI set of the service (the rows of its KPI set, then its extras, by name without case) with the value stored for `period` (`YYYY-MM` or `YYYY-MM-DD`, any day of the month), or `measurement: null`. 404 for a service that does not exist, 422 for a bad `period`. Pages count from 0, `pageSize` is at most 500 (default 200); `totalCount` is the number of indicators.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 500. */
+                    pageSize?: string;
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The month: `YYYY-MM` or `YYYY-MM-DD`. */
+                    period: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of indicators with the value of the month. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                indicatorId: string;
+                                name: string;
+                                /** @description A key of the registry `kpi.valueType`. */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                /** @description A term of the vocabulary `necessity`; `optional` for an extra. */
+                                necessity: string;
+                                min: number | null;
+                                max: number | null;
+                                /** @description The value stored for the month, or `null` while the month has none. */
+                                measurement: {
+                                    id: string;
+                                    /** @description The canonical text of the stored value (a duration as `HH-MM-SS`). */
+                                    value: string;
+                                    valueNumber: number | null;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/measurements/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The months of a service that have values
+         * @description The last `months` months (default 12, at most 36; the current month is the last), oldest first, with how many of the effective indicators and of the mandatory ones have a value. The mandatory ones are those of the KPI set as it is now. 404 for a service that does not exist. One page holds every month.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description How many months, 1 to 36; default 12. */
+                    months?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The months. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** @description The last day of the month, `YYYY-MM-DD`. */
+                                period: string;
+                                /** @description How many indicators of the effective KPI set have a value for the month. */
+                                reported: number;
+                                /** @description How many indicators of the effective KPI set are mandatory (the set as it is now). */
+                                mandatory: number;
+                                /** @description How many of the mandatory indicators have a value. */
+                                mandatoryReported: number;
+                                /** @description No mandatory value is missing (also true while nothing is mandatory). */
+                                complete: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a file and propose how its columns map
+         * @description Reads the file (multipart, field `file`) in memory and answers the header, the first 20 rows, the mapping (the one given, or one proposed from the header) and the problems. Nothing is written or stored. Needs the scoped `kpi.ingestion.measurement.submit` on the service.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description A file as multipart, or the values of a form as JSON. */
+            requestBody?: {
+                content: {
+                    "multipart/form-data": {
+                        /**
+                         * Format: uuid
+                         * @description The service the values are for.
+                         */
+                        serviceId: string;
+                        /** @description An adapter id; for a file the content decides when it does not recognise the file. */
+                        adapter?: string;
+                        /** @description The sheet of a workbook, by name; the first by default. */
+                        sheet?: string;
+                        /**
+                         * Format: binary
+                         * @description The file: CSV, TSV or XLSX, at most 2 MiB. It is read in memory and never stored.
+                         */
+                        file?: string;
+                        /** @description The column mapping as JSON text. */
+                        mapping?: string;
+                        /** @enum {string} */
+                        dryRun?: "true" | "false";
+                    };
+                    "application/json": {
+                        /**
+                         * Format: uuid
+                         * @description The service the values are for.
+                         */
+                        serviceId: string;
+                        /** @description An adapter id; for a file the content decides when it does not recognise the file. */
+                        adapter?: string;
+                        /** @description The sheet of a workbook, by name; the first by default. */
+                        sheet?: string;
+                        form: {
+                            /** @description `YYYY-MM` or `YYYY-MM-DD` (any day of the month). */
+                            period: string;
+                            /** @description The value of each indicator by its id; a blank value is no value. */
+                            values: {
+                                [key: string]: string;
+                            };
+                        };
+                        /** @description The target of each mapped column, keyed by the 0-based index of the column: `period` or the id of an indicator of the service. A column that is absent is ignored. */
+                        mapping?: {
+                            [key: string]: string;
+                        };
+                        dryRun?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description What was read. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description The adapter that read the file (the content decides). */
+                            adapter: string;
+                            /** @description The header row, each cell cut at 64 characters. */
+                            header: string[];
+                            /** @description The first 20 data rows, each cell cut at 64 characters. */
+                            rows: string[][];
+                            /** @description The row of the file of each preview row. */
+                            rowNumbers: number[];
+                            totalRows: number;
+                            /** @description The target of each mapped column, keyed by the 0-based index of the column: `period` or the id of an indicator of the service. A column that is absent is ignored. */
+                            mapping: {
+                                [key: string]: string;
+                            };
+                            /** @description True when the mapping was proposed from the header. */
+                            proposed: boolean;
+                            /** @description `period` and the ids of the mandatory indicators that no column maps to. */
+                            missing: string[];
+                            problems: {
+                                /** @description The row (or line) of the file, 1-based; 0 for the file as a whole. */
+                                row: number;
+                                /** @description The column, 1-based; 0 for the row as a whole. */
+                                column: number;
+                                /**
+                                 * @description A fixed code; no cell content is ever part of a problem.
+                                 * @enum {string}
+                                 */
+                                code: "empty-file" | "format" | "encoding" | "not-text" | "not-a-zip" | "encrypted" | "zip64" | "corrupt" | "too-many-entries" | "declared-too-large" | "inflated-too-large" | "sheet-not-found" | "unterminated-quote" | "quote-in-field" | "text-after-quote" | "field-too-long" | "too-many-rows" | "too-many-columns" | "mapping-invalid" | "duplicate-column" | "missing-column" | "period-missing" | "required-value" | "cell-type" | "indicator-invalid" | "period-invalid" | "value-invalid" | "duplicate-row";
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The body is larger than 2 MiB (plus the multipart envelope). */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The last runs of a service
+         * @description The last 50 runs of a service, newest first, in one page. Needs the scoped `kpi.ingestion.measurement.submit` on the service.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the service. */
+                    service: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The runs. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                serviceId: string;
+                                adapter: string;
+                                /**
+                                 * Format: uuid
+                                 * @description The person who ran it.
+                                 */
+                                actorId: string | null;
+                                /** @description The sanitised name of the file; its content is never kept. */
+                                fileName: string | null;
+                                /** @enum {string} */
+                                status: "committed" | "rejected";
+                                inserted: number;
+                                updated: number;
+                                unchanged: number;
+                                rejected: number;
+                                problems: {
+                                    /** @description The row (or line) of the file, 1-based; 0 for the file as a whole. */
+                                    row: number;
+                                    /** @description The column, 1-based; 0 for the row as a whole. */
+                                    column: number;
+                                    /**
+                                     * @description A fixed code; no cell content is ever part of a problem.
+                                     * @enum {string}
+                                     */
+                                    code: "empty-file" | "format" | "encoding" | "not-text" | "not-a-zip" | "encrypted" | "zip64" | "corrupt" | "too-many-entries" | "declared-too-large" | "inflated-too-large" | "sheet-not-found" | "unterminated-quote" | "quote-in-field" | "text-after-quote" | "field-too-long" | "too-many-rows" | "too-many-columns" | "mapping-invalid" | "duplicate-column" | "missing-column" | "period-missing" | "required-value" | "cell-type" | "indicator-invalid" | "period-invalid" | "value-invalid" | "duplicate-row";
+                                }[];
+                                /** Format: date-time */
+                                startedAt: string;
+                                /** Format: date-time */
+                                finishedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Check or record the values of a file or a form
+         * @description Reads the same bytes again and runs the one write path. With `dryRun: true` it answers the verdict of each value (insert, update, unchanged, reject) and writes nothing. Without, it records the values and the run in one transaction (200), or refuses the whole file when anything is rejected (422, the problems name each row and column, and a run with `rejected` status is recorded). Needs the scoped `kpi.ingestion.measurement.submit` on the service.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description A file as multipart, or the values of a form as JSON. */
+            requestBody?: {
+                content: {
+                    "multipart/form-data": {
+                        /**
+                         * Format: uuid
+                         * @description The service the values are for.
+                         */
+                        serviceId: string;
+                        /** @description An adapter id; for a file the content decides when it does not recognise the file. */
+                        adapter?: string;
+                        /** @description The sheet of a workbook, by name; the first by default. */
+                        sheet?: string;
+                        /**
+                         * Format: binary
+                         * @description The file: CSV, TSV or XLSX, at most 2 MiB. It is read in memory and never stored.
+                         */
+                        file?: string;
+                        /** @description The column mapping as JSON text. */
+                        mapping?: string;
+                        /** @enum {string} */
+                        dryRun?: "true" | "false";
+                    };
+                    "application/json": {
+                        /**
+                         * Format: uuid
+                         * @description The service the values are for.
+                         */
+                        serviceId: string;
+                        /** @description An adapter id; for a file the content decides when it does not recognise the file. */
+                        adapter?: string;
+                        /** @description The sheet of a workbook, by name; the first by default. */
+                        sheet?: string;
+                        form: {
+                            /** @description `YYYY-MM` or `YYYY-MM-DD` (any day of the month). */
+                            period: string;
+                            /** @description The value of each indicator by its id; a blank value is no value. */
+                            values: {
+                                [key: string]: string;
+                            };
+                        };
+                        /** @description The target of each mapped column, keyed by the 0-based index of the column: `period` or the id of an indicator of the service. A column that is absent is ignored. */
+                        mapping?: {
+                            [key: string]: string;
+                        };
+                        dryRun?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description The verdicts of a dry run, or the committed run. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "preview" | "committed" | "rejected";
+                            /**
+                             * Format: uuid
+                             * @description The recorded run; null for a dry run.
+                             */
+                            runId: string | null;
+                            adapter: string;
+                            inserted: number;
+                            updated: number;
+                            unchanged: number;
+                            rejected: number;
+                            /** @description What each value of the file does (or did), in file order. */
+                            rows: {
+                                row: number;
+                                column: number;
+                                /** Format: uuid */
+                                indicator: string;
+                                /** @enum {string} */
+                                verdict: "insert" | "update" | "unchanged" | "reject";
+                            }[];
+                            problems: {
+                                /** @description The row (or line) of the file, 1-based; 0 for the file as a whole. */
+                                row: number;
+                                /** @description The column, 1-based; 0 for the row as a whole. */
+                                column: number;
+                                /**
+                                 * @description A fixed code; no cell content is ever part of a problem.
+                                 * @enum {string}
+                                 */
+                                code: "empty-file" | "format" | "encoding" | "not-text" | "not-a-zip" | "encrypted" | "zip64" | "corrupt" | "too-many-entries" | "declared-too-large" | "inflated-too-large" | "sheet-not-found" | "unterminated-quote" | "quote-in-field" | "text-after-quote" | "field-too-long" | "too-many-rows" | "too-many-columns" | "mapping-invalid" | "duplicate-column" | "missing-column" | "period-missing" | "required-value" | "cell-type" | "indicator-invalid" | "period-invalid" | "value-invalid" | "duplicate-row";
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The body is larger than 2 MiB (plus the multipart envelope). */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One run */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            serviceId: string;
+                            adapter: string;
+                            /**
+                             * Format: uuid
+                             * @description The person who ran it.
+                             */
+                            actorId: string | null;
+                            /** @description The sanitised name of the file; its content is never kept. */
+                            fileName: string | null;
+                            /** @enum {string} */
+                            status: "committed" | "rejected";
+                            inserted: number;
+                            updated: number;
+                            unchanged: number;
+                            rejected: number;
+                            problems: {
+                                /** @description The row (or line) of the file, 1-based; 0 for the file as a whole. */
+                                row: number;
+                                /** @description The column, 1-based; 0 for the row as a whole. */
+                                column: number;
+                                /**
+                                 * @description A fixed code; no cell content is ever part of a problem.
+                                 * @enum {string}
+                                 */
+                                code: "empty-file" | "format" | "encoding" | "not-text" | "not-a-zip" | "encrypted" | "zip64" | "corrupt" | "too-many-entries" | "declared-too-large" | "inflated-too-large" | "sheet-not-found" | "unterminated-quote" | "quote-in-field" | "text-after-quote" | "field-too-long" | "too-many-rows" | "too-many-columns" | "mapping-invalid" | "duplicate-column" | "missing-column" | "period-missing" | "required-value" | "cell-type" | "indicator-invalid" | "period-invalid" | "value-invalid" | "duplicate-row";
+                            }[];
+                            /** Format: date-time */
+                            startedAt: string;
+                            /** Format: date-time */
+                            finishedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such run. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The services the caller may submit values for
+         * @description For the picker of the Data Submission page: the services of the search (`q`: name or abbreviation) that the caller may submit for, by name then id, at most 50 in one page. An administrator gets every service of the search, an approved member of a provider the services of that provider; each one is checked with the scoped `kpi.ingestion.measurement.submit`. A caller who may submit for none gets an empty list.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The services. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @description The abbreviation of the service. */
+                                slug: string;
+                                name: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/adapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The ways to give values
+         * @description The entries of the registry `ingestion.adapter`: what the page offers and which files it accepts.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The adapters. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                labels: {
+                                    en: string;
+                                    de?: string;
+                                };
+                                /** @enum {string} */
+                                input: "file" | "values";
+                                extensions: string[];
+                                mediaTypes: string[];
+                                /** @description The extension of the import template, or null. */
+                                template: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/ingestion/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The import template of a service
+         * @description A header row (the period, then each indicator of the effective KPI set with its unit and `*` for a mandatory one) and an example row, as CSV (UTF-8 with a byte order mark) or XLSX. Every cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`. Needs the scoped `kpi.ingestion.measurement.submit`; 422 for a service with no KPI set.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description An adapter with a template: `csv` or `xlsx`. */
+                    format: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The file, as an attachment. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };

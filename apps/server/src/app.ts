@@ -25,7 +25,7 @@ import { authenticate } from './pipeline/authenticate.ts';
 import { withAuthorization } from './pipeline/authorize.ts';
 import { DEFAULT_MAX_BODY_BYTES, limitBodyPerRoute } from './pipeline/body-limit.ts';
 import { createClientIpResolver } from './pipeline/client-ip.ts';
-import { cors } from './pipeline/cors.ts';
+import { preflightCors } from './preflight.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
 import { RATE_LIMITS, rateLimit } from './pipeline/rate-limit.ts';
@@ -116,12 +116,19 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.use('*', requestLogging(log, options.onRequest));
   app.use(
     '*',
-    cors({
-      prefix: `${base}${SURFACE_PREFIX.v1}`,
-      origins: options.corsOrigins ?? (() => Promise.resolve([])),
-      methods: options.routes.filter((r) => r.surface === 'v1').map((r) => r.route.method),
-      log,
-    }),
+    preflightCors(
+      {
+        prefix: `${base}${SURFACE_PREFIX.v1}`,
+        origins: options.corsOrigins ?? (() => Promise.resolve([])),
+        log,
+      },
+      options.routes
+        .filter((r) => r.surface === 'v1')
+        .map((r) => ({
+          method: r.route.method,
+          path: `${base}${SURFACE_PREFIX.v1}${r.route.path}`,
+        })),
+    ),
   );
   app.use(
     '*',

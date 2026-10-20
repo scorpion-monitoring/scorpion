@@ -373,6 +373,14 @@ describe('indicators.valueTypes', () => {
       numeric: true,
       range: { min: 0, max: 100 },
     });
+    // How a form asks for a value is data (M10 sprint 4), so a page names no type.
+    expect(types.map((t) => [t.id, t.input?.kind, t.input?.step, t.input?.hint])).toEqual([
+      ['duration', 'text', undefined, 'HH-MM-SS'],
+      ['float', 'number', 'any', undefined],
+      ['integer', 'number', 1, undefined],
+      ['percentage', 'number', 'any', undefined],
+      ['text', 'text', undefined, undefined],
+    ]);
     await expect(w.kpi.indicators.valueTypes({ kind: 'anonymous' } as never)).rejects.toThrow();
   });
 });

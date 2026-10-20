@@ -20,6 +20,20 @@ const key = z
   .regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, 'must be a lower-case key')
   .max(32);
 const labelSchema = z.string().min(1).max(100);
+/**
+ * How a form asks for a value of the type, as data (M10 sprint 4): a page draws the input from it and names no type. `kind: 'number'` is a
+ * number input with `step` (`1` for whole numbers, `'any'` for decimals); `kind: 'text'` is a text input, with an optional `pattern` (a
+ * regular expression source the whole text must match, for the page's own hint) and a `hint` that is not language (`HH-MM-SS`). It
+ * never replaces `parse`: the server's verdict is the only one that counts.
+ */
+export const valueTypeInputSchema = z.strictObject({
+  kind: z.enum(['number', 'text']),
+  step: z.union([z.number().positive(), z.literal('any')]).optional(),
+  pattern: z.string().max(200).optional(),
+  hint: z.string().max(40).optional(),
+});
+export type ValueTypeInput = z.output<typeof valueTypeInputSchema>;
+
 const fn = <T>() =>
   z.custom<T>((value) => typeof value === 'function', { message: 'expected a function' });
 
@@ -36,6 +50,8 @@ export const valueTypeEntrySchema = z.strictObject({
   numeric: z.boolean(),
   /** The range the type allows by itself (a percentage is 0 to 100); an indicator's bounds lie inside it. */
   range: z.strictObject({ min: z.number().optional(), max: z.number().optional() }).optional(),
+  /** Optional: how a form asks for a value. A page falls back to a number input for a numeric type and to text otherwise. */
+  input: valueTypeInputSchema.optional(),
   aggregates: z.array(z.string().min(1).max(64)).max(20),
   parse: fn<(input: unknown) => ParseResult>(),
   format: fn<(value: unknown) => string>(),
@@ -214,6 +230,7 @@ export const SEED_VALUE_TYPES: ValueTypeEntry[] = [
     id: 'integer',
     labels: { en: 'Whole number', de: 'Ganze Zahl' },
     numeric: true,
+    input: { kind: 'number', step: 1 },
     aggregates: ALL_AGGREGATES,
     parse: parseInteger,
     format: formatNumber,
@@ -223,6 +240,7 @@ export const SEED_VALUE_TYPES: ValueTypeEntry[] = [
     id: 'float',
     labels: { en: 'Decimal number', de: 'Dezimalzahl' },
     numeric: true,
+    input: { kind: 'number', step: 'any' },
     aggregates: ALL_AGGREGATES,
     parse: parseFloatValue,
     format: formatNumber,
@@ -232,6 +250,7 @@ export const SEED_VALUE_TYPES: ValueTypeEntry[] = [
     id: 'text',
     labels: { en: 'Text', de: 'Text' },
     numeric: false,
+    input: { kind: 'text' },
     aggregates: [],
     parse: parseText,
     format: formatText,
@@ -242,6 +261,7 @@ export const SEED_VALUE_TYPES: ValueTypeEntry[] = [
     labels: { en: 'Duration (HH-MM-SS)', de: 'Dauer (HH-MM-SS)' },
     numeric: true,
     range: { min: 0 },
+    input: { kind: 'text', pattern: '^\\d{1,4}-[0-5]\\d-[0-5]\\d$', hint: 'HH-MM-SS' },
     aggregates: ALL_AGGREGATES,
     parse: parseDuration,
     format: formatDuration,
@@ -252,6 +272,7 @@ export const SEED_VALUE_TYPES: ValueTypeEntry[] = [
     labels: { en: 'Percentage', de: 'Prozentwert' },
     numeric: true,
     range: { min: 0, max: 100 },
+    input: { kind: 'number', step: 'any' },
     aggregates: ['avg', 'min', 'max'],
     parse: parsePercentage,
     format: formatNumber,

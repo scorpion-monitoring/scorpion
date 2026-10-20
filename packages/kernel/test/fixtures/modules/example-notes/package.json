@@ -13,6 +13,6 @@
     "@scorpion/contracts": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }

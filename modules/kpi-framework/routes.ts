@@ -119,6 +119,17 @@ const valueTypeSchema = z.object({
     .object({ min: z.number().optional(), max: z.number().optional() })
     .optional()
     .describe('The range the type allows by itself (a percentage is 0 to 100).'),
+  input: z
+    .object({
+      kind: z.enum(['number', 'text']),
+      step: z.union([z.number(), z.literal('any')]).optional(),
+      pattern: z.string().optional(),
+      hint: z.string().optional(),
+    })
+    .optional()
+    .describe(
+      'How a form asks for a value: a number input (with its `step`) or a text input (with a `pattern` and a `hint`). Absent: a number input for a numeric type, text otherwise. The server still judges every value.',
+    ),
   aggregates: z
     .array(z.string())
     .describe('The terms of `aggregate` that make sense for the type.'),
@@ -396,6 +407,7 @@ const valueTypeOut = (v: ValueTypeView) => ({
   labels: v.labels.de === undefined ? { en: v.labels.en } : { en: v.labels.en, de: v.labels.de },
   numeric: v.numeric,
   ...(v.range && { range: v.range }),
+  ...(v.input && { input: v.input }),
   aggregates: v.aggregates,
 });
 

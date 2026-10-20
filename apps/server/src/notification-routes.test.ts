@@ -270,11 +270,11 @@ describe('what a mail leaves in the inbox', () => {
       'membership',
       'onboarding',
       'registry-service', // M7 sprint 3: the publication notice
-      'reminders',
       'security',
       'system',
     ]);
-    expect(body.metadata.totalCount).toBe(8);
+    // `reminders` belongs to kpi.ingestion since M10 sprint 5 (the template moved with its key): this profile has no such module.
+    expect(body.metadata.totalCount).toBe(7);
     expect(byName.security).toMatchObject({ mandatory: true });
     expect(byName.account).toMatchObject({ mandatory: false });
     for (const category of body.result) {
@@ -288,6 +288,32 @@ describe('what a mail leaves in the inbox', () => {
       'identity.password-reset',
       'identity.register-attempt',
     ]);
+  });
+
+  it('lists the category reminders when kpi.ingestion is loaded, with the template that module contributes', async () => {
+    const s = await app.start({ kpi: true, ingestion: true });
+    const alice = await s.signedIn('alice');
+    const reply = await s.get('/notifications/preferences/categories', session(alice));
+    expect(reply.status).toBe(200);
+    const byName = Object.fromEntries(
+      (reply.body as Envelope).result.map((c) => [c.category as string, c]),
+    );
+    expect(byName.reminders).toMatchObject({
+      mandatory: false,
+      templates: ['kpi.reporting-reminder'],
+    });
+    expect((byName.reminders!.description as { en: string; de: string }).de).toBeTruthy();
+  });
+
+  it('starts without kpi.ingestion (core-only): the key kpi.reporting-reminder is not registered, and nothing sends it', async () => {
+    const s = await app.start({ organisations: false, services: false });
+    const keys = s.kernel.composition.registries
+      .get('notify.template')!
+      .entries.map((entry) => (entry.value as { key: string }).key);
+    expect(keys).not.toContain('kpi.reporting-reminder');
+    const alice = await s.signedIn('alice');
+    const reply = await s.get('/notifications/preferences/categories', session(alice));
+    expect((reply.body as Envelope).result.map((c) => c.category)).not.toContain('reminders');
   });
 
   it('stores the preference through core.settings’ own route: a bad shape is 422, a stranger’s category is kept', async () => {

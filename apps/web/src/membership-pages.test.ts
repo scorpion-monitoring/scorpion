@@ -111,7 +111,7 @@ describe('Profile → Organisations', () => {
     expect(html).toContain('>Pending<');
     expect(html).toContain('>Member<');
     expect(html).toContain('>Rejected<');
-    expect(buttons(html)).toEqual(['Withdraw the request for AAA', 'Leave BBB']);
+    expect(buttons(html)).toEqual(['Withdraw the request for AAA', 'Leave the organisation BBB']);
   });
 
   it('puts a badge in words on the rows the person already has and a join button only where it can work', () => {
@@ -197,8 +197,8 @@ describe('Profile → Organisations', () => {
       expect(buttons(html)).toContain('Remove carol from the organisation');
       expect(buttons(html)).not.toContain('Remove bob from the organisation');
       expect(buttons(html)).not.toContain('Remove viewer from the organisation');
-      expect(buttons(html)).toContain('Make carol a manager');
-      expect(buttons(html)).toContain('Make bob a member');
+      expect(buttons(html)).toContain('Make manager: carol');
+      expect(buttons(html)).toContain('Make member: bob');
     });
 
     it('shows no button on the own row and says why, and says why a manager cannot be removed', () => {
@@ -317,9 +317,9 @@ describe('Administration → Membership requests', () => {
       }),
     );
     expect(buttons(html)).toEqual([
-      'Make fay a manager',
+      'Make manager: fay',
       'Remove fay from the organisation',
-      'Make gus a member',
+      'Make member: gus',
       'Remove gus from the organisation',
     ]);
     // An administrator is offered the removal of a manager: no "only an administrator" note.
