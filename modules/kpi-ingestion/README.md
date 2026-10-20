@@ -6,24 +6,26 @@ a 500 or half a batch). The decisions are in [ADR-0041](../../docs/adr/0041-meas
 [m10-sprint-plan.md](../../docs/m10-sprint-plan.md). It builds on `kpi.framework` (the indicators, the value types, the KPIs of a service) and
 on `registry.services` (a service exists, who belongs to its provider).
 
-Status: M10 sprint 4: the tables, the pure period, value and name functions, `upsertBatch` and `upsertByName`, the scoped permission and its policy, the
+Status: M10 sprint 5: the tables, the pure period, value and name functions, `upsertBatch` and `upsertByName`, the scoped permission and its policy, the
 event, the in-use contribution, the two v1 routes and the two internal reads (sprints 1 and 2), and now the registry `ingestion.adapter` with the form, CSV/TSV and
 XLSX adapters, preview, dry run and commit, the run history and the import templates (sprint 3), and the Data Submission page `/submit` with its picker read (sprint 4).
-Sprint 5 adds the reminder. The module is in the `full` profile only.
+Sprint 5 adds the reporting reminder: a daily job, the table that makes it send once, two settings, and the mail template, which moved here from `core.notifications`. The module is in the `full` profile only.
 
 ## Manifest
 
-| Part         | Value                                                                                                                                                                                                                                                                                                                                        |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id           | `kpi.ingestion` (package `@scorpion/kpi-ingestion`)                                                                                                                                                                                                                                                                                          |
-| table prefix | `kpii_` (set in the manifest; ADR-0004): `kpii_measurement`, `kpii_ingestion_run`. `kpi.framework` uses `kpif_`                                                                                                                                                                                                                              |
-| dependencies | `core.authz`, `kpi.framework` (the effective KPI set and the indicators through trusted reads, the value types, the usage registry) and `registry.services` (a service exists; who is a member of its provider). Nothing depends on it before M11. Only what the code imports is declared; the others arrive with the sprint that needs them |
-| routes       | `GET` and `POST /api/v1/measurements` (the public API); internal: `GET /kpi/measurements`, `GET /kpi/measurements/coverage`, `POST /kpi/ingestion/preview`, `POST` and `GET /kpi/ingestion/runs`, `GET /kpi/ingestion/runs/{id}`, `GET /kpi/ingestion/adapters`, `GET /kpi/ingestion/services`, `GET /kpi/ingestion/template`; see "Routes"  |
-| ui           | `./ui`: the page `/submit` (the Data Submission page) through the registry `ui.routes`, one `ui.nav` entry "Data Submission" in the Main section; `core.ui-shell` is an optional peer (see "The Data Submission page")                                                                                                                       |
-| events       | emits `measurement.recorded@1` (see "Events")                                                                                                                                                                                                                                                                                                |
-| registries   | declares `ingestion.adapter` (see "Adapters") and contributes its three entries; contributes an `authz.resourcePolicy` entry for the resource type `service` and an entry to `kpi.framework`'s registry `kpi.indicatorUsage`                                                                                                                 |
-| settings     | none yet (the reminder's two settings arrive in sprint 5)                                                                                                                                                                                                                                                                                    |
-| permissions  | the service-scoped `kpi.ingestion.measurement.submit` and the plain `kpi.ingestion.v1.read`, `kpi.ingestion.v1.write`, `kpi.ingestion.measurement.read` and `kpi.ingestion.measurement.ingest`; the role `user` holds the four plain ones (see "Permissions")                                                                                |
+| Part         | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id           | `kpi.ingestion` (package `@scorpion/kpi-ingestion`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| table prefix | `kpii_` (set in the manifest; ADR-0004): `kpii_measurement`, `kpii_ingestion_run`, `kpii_reminder_sent`. `kpi.framework` uses `kpif_`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| dependencies | `core.authz`, `kpi.framework` (the effective KPI set and the indicators through trusted reads, the value types, the usage registry), `registry.services` (a service exists; who is a member of its provider; the providers and their services), and, since sprint 5, `core.settings` (the reminder's settings and a person's language), `core.notifications` (the queue and the template registry), `core.identity` (whether an account is active and its address) and `registry.organisations` (the approved members of a provider). Nothing depends on it before M11. Only what the code imports is declared |
+| routes       | `GET` and `POST /api/v1/measurements` (the public API); internal: `GET /kpi/measurements`, `GET /kpi/measurements/coverage`, `POST /kpi/ingestion/preview`, `POST` and `GET /kpi/ingestion/runs`, `GET /kpi/ingestion/runs/{id}`, `GET /kpi/ingestion/adapters`, `GET /kpi/ingestion/services`, `GET /kpi/ingestion/template`; see "Routes"                                                                                                                                                                                                                                                                    |
+| ui           | `./ui`: the page `/submit` (the Data Submission page) through the registry `ui.routes`, one `ui.nav` entry "Data Submission" in the Main section; `core.ui-shell` is an optional peer (see "The Data Submission page")                                                                                                                                                                                                                                                                                                                                                                                         |
+| jobs         | `kpi.ingestion.reporting-reminder`, daily at 06:00 UTC (see "The reporting reminder")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| templates    | `kpi.reporting-reminder` (en, de), category `reminders`: moved here from `core.notifications` with the same key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| events       | emits `measurement.recorded@1` (see "Events")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| registries   | declares `ingestion.adapter` (see "Adapters") and contributes its three entries; contributes an `authz.resourcePolicy` entry for the resource type `service` and an entry to `kpi.framework`'s registry `kpi.indicatorUsage`                                                                                                                                                                                                                                                                                                                                                                                   |
+| settings     | `reminders.enabled` and `reminders.dayOfMonth` (see "The reporting reminder")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| permissions  | the service-scoped `kpi.ingestion.measurement.submit` and the plain `kpi.ingestion.v1.read`, `kpi.ingestion.v1.write`, `kpi.ingestion.measurement.read` and `kpi.ingestion.measurement.ingest`; the role `user` holds the four plain ones (see "Permissions")                                                                                                                                                                                                                                                                                                                                                  |
 
 ## The model
 
@@ -31,6 +33,7 @@ Sprint 5 adds the reminder. The module is in the `full` profile only.
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `kpii_measurement`   | `id` (UUIDv7), `service_id` (a **plain column**: no foreign key to `svc_service`), `indicator_id` (`kpif_indicator`, **restrict**), `period` (a date, **the last day of its month**), `value_numeric` (`numeric`, finite) **or** `value_text` (1 to 4 000 characters), `source` (the adapter id; `api` for v1), `run_id` (`kpii_ingestion_run`, `set null`), audit columns. **Unique `(service_id, indicator_id, period)`** |
 | `kpii_ingestion_run` | `id`, `service_id`, `adapter`, `actor_id`, `file_name` (at most 120), `status` (`committed` or `rejected`), the four counts, `problems` (a JSON list of at most 100), `started_at`, `finished_at`. Written by `ingestion.run` (see "Runs"); a dry run is never stored                                                                                                                                                       |
+| `kpii_reminder_sent` | `(provider_id, period)` (the primary key; `provider_id` is a **plain column**, `period` the last day of the **reported** month), `sent_at`, `recipients` (how many people the mails were addressed to, at least 1) and `services` (how many services were missing values, at least 1). Counts only: no person, no service name, no value. Written by the reminder (see "The reporting reminder")                            |
 
 Rules the database enforces for every writer (tested in [db/constraints.test.ts](db/constraints.test.ts)): the period is the last day of a month
 (every month length, 29 February in 1900, 2000 and 2024), exactly one of the two value columns is set, a number is finite, the text and the
@@ -240,6 +243,62 @@ rows, stores nothing and shows nothing beyond what the server returns (a cell is
 being tinted), the mapping row is a row of selects, the drop zone has a button, and a button's accessible name is its visible text. axe runs in both themes on the empty
 page, the form, the file preview with errors, the run result and the history. No text names a role or the instance.
 
+## The reporting reminder
+
+Once a month the approved members of a provider are mailed the services of that provider that still lack a value for a **mandatory** indicator of the
+previous month. Plan [§9](../../docs/m10-sprint-plan.md), items 1 to 3; the decisions are in [ADR-0041](../../docs/adr/0041-measurement-model.md), "Amended in sprint 5".
+
+**The job** `kpi.ingestion.reporting-reminder` runs **daily at 06:00 UTC** (`0 6 * * *`; retry 3 times, 10 minutes apart; timeout 15 minutes) and returns at once
+unless `reminders.enabled` is on **and** today is `reminders.dayOfMonth`. "Today" is the UTC day of the module's injected clock, so the cron and the day check
+are both UTC; a test moves the clock with `s.clock.set(date)` and none depends on the date it runs on. The job runs as the system: it takes no actor, and no
+route reaches it. Its result in the job-run history of the admin page is counts only: `providers`, `reminded`, `people`, `alreadySent`, `withoutRecipients`, `month`,
+or `skipped` (`disabled` or `not-the-day`).
+
+| Setting                | Default | Meaning                                                                                                                                                                              |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reminders.enabled`    | on      | Off: the job does nothing and writes nothing.                                                                                                                                        |
+| `reminders.dayOfMonth` | 6       | 1 to 28, counted in UTC (never past the 28th, so every month has the day). A value outside the range, a fraction or a text is **refused** by the settings page (422), never clamped. |
+
+**What is missing.** The pure function [`selectMissing`](service/reminder-select.ts) takes, per service, its providers, the mandatory indicators of its **effective KPI
+set now** and the indicators that have a value for the month, and answers per provider the services (by name, then id) with the mandatory indicators that have none. A
+service with no KPI set has nothing mandatory, so nothing is missing. **A dropped KPI** is not asked for (the set now decides, plan §11), its measurements stay, and
+a value of an indicator that is not mandatory does not stand in for one that is. `mandatory` is `MANDATORY_NECESSITY` (the one term this module names). The month is the
+one before the clock's, across a year end too (January asks for December of the year before); [`previousMonth`](service/reminder-select.ts) is pure.
+
+**A service of two providers.** The seed role `provider` of `registry.services` has `min: 1, max: 1`, but the table `svc_service_organisation` is unique on `(service, organisation, role)`
+and its policy loops over every provider row, so the data model _allows_ two. The reminder follows the data: such a service is named, once, to **each** of its providers' members
+(each of them may submit for it), and counts in each provider's row. It never names a service to a provider that is not one of its providers (a consortium is not asked).
+
+**Who is mailed.** The providers come from `registry.services` (`listProviderIdsAsSystem`, added in sprint 5, and `listByOrganisationAsSystem(id, PROVIDER_ROLE)`), their members from
+`registry.organisations` (`listApprovedMemberIdsAsSystem`, added in sprint 5: approved only, a manager included; a requested, rejected or left membership and another organisation's
+members are not). A member is mailed only if their account is **active** (a deactivated, rejected or deleted account gets nothing; `core.notifications` does not check this, the
+caller does), has an address, and **may submit now**: the module's own policy is asked (`isProviderMemberAsSystem`, the rule behind `kpi.ingestion.measurement.submit`) for each service, so
+the mail names only the services the person may report for. An administrator who is not a member is not mailed (the reminder goes to the provider's own people). A person who switched the
+`reminders` category off is not mailed: `core.notifications` decides (this module reads no preference; it reads the person's language, `notifications.locale`).
+
+**Once per provider and month.** `kpii_reminder_sent` has the primary key `(provider_id, period)`. In **one transaction per provider** the job inserts the row (`on conflict do nothing`)
+and, only if the row is new, queues the mails with `enqueueTemplate`. So a second run on the same day, a retry after a failed run and a second node send nothing twice, and a crash
+or a refused mail leaves neither the row nor a mail (tested: two runs, four concurrent runs, a refused mail and its retry). A provider with something missing and **nobody to remind**
+(no approved member who is active, has an address and may submit) is **not an error and gets no row**, so a member who joins before the next run is still asked; the job counts it
+in `withoutRecipients` and logs it. A provider with nothing missing sends nothing and writes nothing. A provider whose members all switched the category off **does** get its row
+(it was addressed; nobody wants the mail), so it is not asked again.
+
+**The mail** is the template `kpi.reporting-reminder` in [templates/reporting-reminder.ts](templates/reporting-reminder.ts), contributed to `notify.template`; it moved here from
+`core.notifications` with the same key (as the membership templates moved to `registry.organisations` in M6), so no stored mail changes shape. Its data is `provider` (the
+organisation's name), `month` (`YYYY-MM`), `services` (the names of the services missing values, **at most 20**), `moreServices` (how many more, shown as "and 3 more."), `missing` (the
+mandatory indicators without a value, each name once, at most 20 shown), `moreMissing` and `reportUrl`. English and German, with the same placeholders (a test); no instance name,
+sender address, URL or role name in the text: the layout takes the instance name, contact and imprint from the branding settings, and the link is built with the instance origin and
+the **base path** (`url(BASE_PATH, '/submit')`, any number of segments). The link is `/submit?service=<id>&period=<YYYY-MM>` and opens the page on that service and month
+(`SUBMIT_PATH`, the page of sprint 4). **With several services the link opens the first by name and the mail says so** ("The button opens X. Choose the other services on the
+page."); one link per service would be as many mails or as many buttons, and the page's picker is one click. The mail names services and indicators and **never a value, a
+person or another provider's service** (a test walks the template's data and the rendered mail). The category `reminders` stays: a person switches the mail off on the notification preferences.
+
+**In a profile without `kpi.ingestion`** (`core-only`, `registry`) the key `kpi.reporting-reminder` is **not registered** and the category `reminders` is not listed; nothing sends the
+mail there, and the profile starts (checked by a test and by starting the `core-only` image).
+
+**No "send now".** The sent table makes a manual run safe, but neither this module nor `core.audit`'s admin page has a button for it (the page lists the job runs only). To send the
+reminder of a month the job did not run for, an operator waits for the next day the setting names; see the backlog ("The reminder cannot be run on demand").
+
 ## Which indicator a name means (`resolveIndicatorRef`)
 
 [`resolveIndicatorRef(choices, reference)`](service/names.ts) is the one function that turns what a person or a program calls an indicator into the id of
@@ -270,6 +329,7 @@ schema and fails on a field that could carry a value (`service/event.test.ts`). 
 - **`kpi.indicatorUsage`** (registry of `kpi.framework`): `{ module: 'kpi.ingestion', what: 'measurements', count(indicatorId) }`. The delete of an
   indicator that has measurements is 409 naming `kpi.ingestion (n measurements)`; the `restrict` key is the last guard.
 - **`authz.resourcePolicy`** for the resource type `service`: the policy above.
+- **`notify.template`** (registry of `core.notifications`): `kpi.reporting-reminder`, which came from `core.notifications`.
 
 ## Tests
 
@@ -286,6 +346,13 @@ check on a cookie tagged `[ASVS-7.2.1]`, the preflight, the body limit, a batch 
 rows as the API), `measurements-routes.test.ts` (the internal reads), `defect-06.v1-measurements.test.ts` (never weaken or delete it) and the rows of
 `defect-01.privilege-escalation.test.ts`.
 
+The reminder (sprint 5): `service/reminder-select.test.ts` (table-driven: all present, one missing, no KPI set, a dropped KPI, a service of two providers, a year end, the order),
+`service/reminder.test.ts` against real Postgres (the day, `reminders.enabled`, the settings' validation, who is and is not mailed, what the mail holds and the link under a multi-segment
+base path, one mail per provider and month through two runs, four concurrent runs and a refused mail and its retry, a provider with nobody to remind, the table's constraints),
+`templates/reporting-reminder.test.ts` (both languages, the rules of every template, a snapshot, the bounds, no value), `registry.organisations`' and `registry.services`' tests of the two new
+reads, `apps/server/src/notification-routes.test.ts` (the category with and without this module) and `apps/web/e2e/reporting-reminder.spec.ts` (the link opens the page on that service and month,
+under both base paths; the job's body runs once as a second node with the clock injected, `apps/server/src/testing/run-reminder.ts`, because the real job fires at 06:00 UTC).
+
 The page (sprint 4): the pure helpers are table-driven (`ui/form.test.ts`, `mapping.test.ts`, `problems.test.ts`, `months.test.ts`, `query.test.ts`, `adapters.test.ts`,
 `upload.test.ts`), `ui/ui.test.ts` checks the two halves, the catalogues in both languages, the sentence of every problem code and that no text names a role. The picker's read
 is tested against real Postgres (`service/access.test.ts`, `registry.services`' `provider-reads.test.ts`) and in `defect-01.privilege-escalation.test.ts`. The journeys are
@@ -293,4 +360,4 @@ is tested against real Postgres (`service/access.test.ts`, `registry.services`' 
 
 ## Not in this module yet
 
-The reporting reminder (sprint 5). Deleting or correcting a measurement other than by an upsert is out of scope for M10.
+Deleting or correcting a measurement other than by an upsert is out of scope for M10.

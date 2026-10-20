@@ -122,7 +122,7 @@ describe('the template kpi.reporting-reminder', () => {
       expect(placeholders(de[key]!), key).toEqual(placeholders(en[key]!));
   });
 
-  it('carries no value: the fields of its data are names, counts, a month and a link, and a number put into a name is only text', () => {
+  it('[ASVS-8.2.3] carries no value: the fields of its data are names, counts, a month and a link, and a number put into a name is only text', () => {
     // The data has no field a measurement could travel in; the strict schema refuses any other.
     expect(
       Object.keys((reportingReminder.schema as unknown as { shape: object }).shape).sort(),

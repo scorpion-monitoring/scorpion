@@ -155,7 +155,7 @@ describe('the day and the switch', () => {
 });
 
 describe('who is reminded, and of what', () => {
-  it('mails an approved member and a manager of the provider, and nobody else', async () => {
+  it('mails an approved member and a manager of the provider, and nobody else [ASVS-8.3.1]', async () => {
     const s = await h.start({ now: new Date(SEPTEMBER_6) });
     const w = await world(s);
     const member = await w.member();
@@ -220,7 +220,7 @@ describe('who is reminded, and of what', () => {
     expect(rows.find((r) => r.recipient_user_id === english.id)!.locale).toBe('en');
   });
 
-  it('asks the policy now: a member removed before the run is not mailed', async () => {
+  it('asks the policy now: a member removed before the run is not mailed [ASVS-8.3.1]', async () => {
     const s = await h.start({ now: new Date(SEPTEMBER_6) });
     const w = await world(s);
     const stays = await w.member();
@@ -230,7 +230,7 @@ describe('who is reminded, and of what', () => {
     expect((await mails(s)).map((r) => r.recipient_user_id)).toEqual([stays.id]);
   });
 
-  it('names the services and the mandatory indicators that lack a value, builds the link with the month, and holds no value', async () => {
+  it('names the services and the mandatory indicators that lack a value, builds the link with the month, and holds no value [ASVS-8.2.3]', async () => {
     const s = await h.start({ now: new Date(SEPTEMBER_6), origin: 'https://reports.example.org' });
     const w = await world(s, 'Alpha service');
     await w.member();
@@ -269,7 +269,7 @@ describe('who is reminded, and of what', () => {
     );
   });
 
-  it('never names a service of one provider to the members of another', async () => {
+  it('never names a service of one provider to the members of another [ASVS-8.3.1]', async () => {
     const s = await h.start({ now: new Date(SEPTEMBER_6) });
     const a = await world(s, 'Service of provider A');
     const b = await world(s, 'Service of provider B');
