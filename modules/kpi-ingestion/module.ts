@@ -5,10 +5,22 @@ import { INDICATOR_USAGE_REGISTRY, type KpiFrameworkPublic } from '@scorpion/kpi
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { count, eq } from 'drizzle-orm';
 import { measurement } from './db/schema.ts';
+import { registerIngestionRoutes } from './routes-ingestion.ts';
 import { registerRoutes } from './routes.ts';
 import { registerV1Routes } from './routes-v1.ts';
+import { csvAdapter } from './service/adapter-csv.ts';
+import { formAdapter } from './service/adapter-form.ts';
+import { xlsxAdapter } from './service/adapter-xlsx.ts';
+import {
+  ADAPTER_REGISTRY,
+  adapterEntrySchema,
+  indexAdapters,
+  type AdapterEntry,
+} from './service/adapters.ts';
+import { createIngestionService, type IngestionService } from './service/ingestion.ts';
 import { createMeasurementsService, type MeasurementsService } from './service/measurements.ts';
 import {
+  PERMISSION_INGEST,
   PERMISSION_MEASUREMENT_READ,
   PERMISSION_SUBMIT,
   PERMISSION_V1_READ,
@@ -39,6 +51,8 @@ export type {
 export interface KpiIngestionService {
   /** The measurements of a service: the one write path, `upsertBatch`. */
   measurements: MeasurementsService;
+  /** Preview, dry run and commit of a file or a form, the runs and the import templates (sprint 3). */
+  ingestion: IngestionService;
   /** The reads: the time series of v1, the grid of a month and the coverage. */
   reads: ReadsService;
 }
@@ -95,6 +109,10 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
         description:
           'Record measurements (`POST /api/v1/measurements`) through the public API, with a token that holds this scope; its owner must also be allowed to submit for the service (`kpi.ingestion.measurement.submit`)',
       },
+      [PERMISSION_INGEST]: {
+        description:
+          'Preview and record a file or a form on the signed-in pages (the Data Submission page); the service also checks `kpi.ingestion.measurement.submit` on the service',
+      },
       [PERMISSION_MEASUREMENT_READ]: {
         description:
           'Read the values of one month and the coverage of a service on the signed-in pages (the Data Submission page)',
@@ -103,6 +121,9 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
 
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
+
+    // Another module adds a way to give values (a REST pull, Matomo) by contributing an entry; nothing here branches on an id.
+    registries: { [ADAPTER_REGISTRY]: adapterEntrySchema },
 
     events: {
       emits: { 'measurement.recorded@1': measurementRecordedSchema },
@@ -114,7 +135,12 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       'authz.defaultRole': [
         {
           role: 'user',
-          permissions: [PERMISSION_V1_READ, PERMISSION_V1_WRITE, PERMISSION_MEASUREMENT_READ],
+          permissions: [
+            PERMISSION_V1_READ,
+            PERMISSION_V1_WRITE,
+            PERMISSION_MEASUREMENT_READ,
+            PERMISSION_INGEST,
+          ],
         },
       ],
       // Approved members of the service's provider may submit for it; the question is asked of registry.services at every call.
@@ -123,6 +149,8 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
           isProviderMember: () => (userId, serviceId) => need(isProviderMember)(userId, serviceId),
         }),
       ],
+      // The three ways to give values.
+      [ADAPTER_REGISTRY]: [formAdapter, csvAdapter, xlsxAdapter],
       // An indicator with measurements is not deleted: kpi.framework asks, and answers 409 naming this module and the count.
       [INDICATOR_USAGE_REGISTRY]: [
         {
@@ -148,9 +176,13 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
         kpi: ctx.deps['kpi.framework'],
         clock: options.clock ?? (() => new Date()),
       };
+      const measurements = createMeasurementsService(ctx, common);
+      // Two entries with one id stop the start, here and not at the first upload.
+      const adapters = indexAdapters(ctx.registry(ADAPTER_REGISTRY) as AdapterEntry[]);
       return {
-        measurements: createMeasurementsService(ctx, common),
+        measurements,
         reads: createReadsService(ctx, common),
+        ingestion: createIngestionService(ctx, { ...common, measurements, adapters }),
       };
     },
 
@@ -158,6 +190,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       const service = r.service<KpiIngestionService>();
       registerV1Routes(r, service.reads, service.measurements);
       registerRoutes(r, service.reads);
+      registerIngestionRoutes(r, service.ingestion);
     },
   });
 }

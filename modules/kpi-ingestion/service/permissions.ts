@@ -26,3 +26,9 @@ export const PERMISSION_V1_READ = 'kpi.ingestion.v1.read';
 export const PERMISSION_V1_WRITE = 'kpi.ingestion.v1.write';
 /** Read the grid of a month and the coverage of a service on the signed-in pages (the Data Submission page of sprint 4). */
 export const PERMISSION_MEASUREMENT_READ = 'kpi.ingestion.measurement.read';
+/**
+ * Preview and commit a file or a form (the internal routes of sprint 3). The role `user` holds it and it is **not** enough: the service
+ * checks the scoped `kpi.ingestion.measurement.submit`. It is a permission of its own, apart from the read, so that a token that may
+ * only read the grid cannot be used to write (ADR-0015).
+ */
+export const PERMISSION_INGEST = 'kpi.ingestion.measurement.ingest';
