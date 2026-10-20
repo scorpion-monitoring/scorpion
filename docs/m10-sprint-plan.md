@@ -236,6 +236,23 @@ Tests (sprint 5): the job's selection query as one tested function (a table of p
 
 Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e:parallel`, `pnpm security:asvs` green on `dev` after the merge; the release tagged and its images in ghcr; `main` merged back; the backlog says what is true.
 
+**Amended in sprint 5 (what was decided while building it; the reasons and the measurements are in [ADR-0041](adr/0041-measurement-model.md), "Amended in sprint 5"):**
+
+- **The source differs from the plan in five places.** (1) No read listed the providers: `registry.services` gained `listProviderIdsAsSystem()` (and exports `PROVIDER_ROLE`), a third additive read beyond §13's two. (2) **There is no "run now" on the M4 job page**
+  (it lists runs and requeues dead event deliveries only), so items 1 and 4 are corrected: there is no manual trigger, nothing was built, and a platform "run now" is in the backlog. (3) `core.identity` is a fourth new dependency
+  (an account's status and address), next to `core.settings`, `core.notifications` and `registry.organisations`. (4) `kpii_reminder_sent` was in §3 but not created in sprint 1; migration `0001_reminder_sent.sql` adds it. (5) "A service of two providers" is a state of the
+  data (the seed role allows one provider, the table and the policy allow more): the reminder names such a service to each provider's members.
+- **The job** runs daily at 06:00 UTC and acts only on the UTC day of the injected clock that `reminders.dayOfMonth` names (1 to 28, default 6; a value outside the range is refused, never clamped), for the previous month (December of the year before in January). A day the
+  node missed sends nothing that month (backlog). The selection is one pure function, `selectMissing`; a dropped KPI is not asked for, a service with no set has nothing missing.
+- **Recipients** are approved members (`listApprovedMemberIdsAsSystem`) with an active account and an address for whom the module's own policy says yes at the moment of the send; `core.notifications` honours the category switch. One transaction per provider inserts the
+  `kpii_reminder_sent` row and queues the mails, so two runs, a retry and two nodes send one mail per person, and a refused mail rolls the row back. **A provider with nobody to remind gets no row** (a member who joins later is still asked); one whose members all switched the category off gets its row.
+- **The template moved** to `kpi.ingestion` with the same key (removed from `core.notifications`, its test moved): `services` (at most 20), `moreServices`, `moreMissing` added, the same placeholders in en and de, no value, person or other provider's service. **The link opens the first service by name and the mail
+  says so**; under both base paths it opens the page on that service and month. In a profile without the module the key and the category `reminders` do not exist (tested; the `core-only` image starts).
+- **Measured (this machine, [ADR-0041](adr/0041-measurement-model.md)):** `upsertBatch` 14.7 ms for 1 row, 74 ms for 500, 0.66 s for 5 000 and 3.3 s for 24 000 (about 0.13 ms a row); a 5 000-row CSV is 524 kB and previews in 22 ms, the XLSX 389 kB and 222 ms; `GET /api/v1/measurements` at 49 980 rows
+  is 56 ms for the first page and 111 ms for the last; 288 KiB per 1 000 rows with indexes; the image grew by 9.68 MB (+1.55%) against `0.11.0-full`; a member who changes the month 7 times in a row meets a 429 under the default limits. **The 5 000-row file limit is a parse limit only:** a wide file has one row per month, so the batch accepts at most 120
+  rows, and any longer file is a 422 that the page words generically; the page and the limit were left as they are (the sprint changes the page only for the template's link) and the finding is in the backlog.
+- **Not done and why:** the page is untouched, so the loader's nine reads, the duration bounds, names in the history and the 36-month list stay as sprint 4 left them (measured entries in the backlog); `pipeline/**` is untouched, so no bucket of its own was added. The release (item 7) waits for the maintainer.
+
 ## 10. Acceptance (from implementation.md) mapped to tests
 
 | Acceptance                                                                                   | Test                                                                                                                                          |
