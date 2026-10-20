@@ -349,6 +349,28 @@ describe('the trusted reads (AsSystem)', () => {
     expect(await s.countApprovedMembersAsSystem(['nope'])).toEqual({});
   });
 
+  it('list the approved members of an organisation, managers included, and no requested, rejected or left one, and nobody of another organisation', async () => {
+    const w = await startWorld(h);
+    const manager = await w.manager();
+    const member = await w.member();
+    const asked = (await w.requester()).who;
+    const left = await w.person();
+    await w.join(left, { state: 'left' });
+    const rejected = await w.person();
+    await w.join(rejected, { state: 'rejected' });
+    const elsewhere = await w.person();
+    await w.join(elsewhere, { organisationId: w.other.id });
+    const listed = await w.memberships.listApprovedMemberIdsAsSystem(w.org.id);
+    expect(listed).toEqual([manager.userId, member.userId].sort());
+    for (const out of [asked, left, rejected, elsewhere]) expect(listed).not.toContain(out.userId);
+    expect(await w.memberships.listApprovedMemberIdsAsSystem(w.other.id)).toEqual([
+      elsewhere.userId,
+    ]);
+    // An organisation nobody belongs to, and a bad id, have none.
+    expect(await w.memberships.listApprovedMemberIdsAsSystem(ABSENT)).toEqual([]);
+    expect(await w.memberships.listApprovedMemberIdsAsSystem('nope')).toEqual([]);
+  });
+
   it('give the organisation record its member count too, and a type without members is still a plain record', async () => {
     const funder = fixtureContributor({
       types: [{ id: 'funder', labels: { en: 'Funder' }, membership: false, order: 30 }],

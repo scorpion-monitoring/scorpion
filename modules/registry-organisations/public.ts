@@ -65,6 +65,7 @@ export type OrganisationsPublic = Pick<
     | 'countApprovedMembersAsSystem'
     | 'isManagerAsSystem'
     | 'listApprovedManagerIdsAsSystem'
+    | 'listApprovedMemberIdsAsSystem'
   >;
 
 declare module '@scorpion/kernel' {
