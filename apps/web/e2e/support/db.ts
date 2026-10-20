@@ -97,6 +97,8 @@ export function runReminder(basePath: string, now: Date): Record<string, unknown
       REMINDER_NOW: now.toISOString(),
     },
     encoding: 'utf8',
+    // A hung second node fails the journey, not the whole run.
+    timeout: 120_000,
   });
   if (result.status !== 0)
     throw new Error(`run-reminder failed:\n${result.stdout}\n${result.stderr}`);

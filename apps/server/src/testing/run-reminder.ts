@@ -26,6 +26,14 @@ try {
   await kernel.start();
   const ingestion = kernel.services.get('kpi.ingestion') as KpiIngestionService;
   console.log(JSON.stringify(await ingestion.reminder.run()));
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
 } finally {
-  await kernel.stop();
+  // A second node must never outlive its one run: stop with a bound, then leave whatever the kernel still holds open.
+  await Promise.race([
+    kernel.stop(10_000),
+    new Promise((resolve) => setTimeout(resolve, 15_000)),
+  ]).catch(() => undefined);
+  process.exit(process.exitCode ?? 0);
 }
