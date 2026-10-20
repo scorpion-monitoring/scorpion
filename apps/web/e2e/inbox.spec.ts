@@ -69,7 +69,7 @@ test.describe('the inbox bell', () => {
     await menu
       .getByRole('listitem')
       .filter({ hasText: first.username })
-      .getByRole('button', { name: /^Mark .* read$/ })
+      .getByRole('button', { name: /^Mark read: / })
       .click();
     await expect(bell(page, 2)).toBeVisible();
     await menu.getByRole('button', { name: 'Mark all read' }).click();
@@ -150,7 +150,7 @@ test.describe('the inbox page', () => {
     await expect(row(names[0]!.username)).toContainText('new');
 
     await row(names[0]!.username)
-      .getByRole('button', { name: /^Mark .* read$/ })
+      .getByRole('button', { name: /^Mark read: / })
       .click();
     await expect(page.getByTestId('unread')).toHaveText('3 unread items');
     await expect(row(names[0]!.username)).not.toContainText('new');
