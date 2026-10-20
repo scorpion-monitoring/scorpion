@@ -24,3 +24,8 @@ ignoredBuiltDependencies:
 # Optional peer dependencies (a module's optional module dependencies) are linked only when the
 # profile depends on them itself; nothing installs them on its own.
 autoInstallPeers: false
+
+# drizzle-kit pulls in the deprecated @esbuild-kit loader, which pins esbuild 0.18 (GHSA-67mh-4wv8-2f99,
+# fixed in 0.25.0). Use the esbuild that drizzle-kit itself uses. Remove when drizzle-kit drops the loader.
+overrides:
+  '@esbuild-kit/core-utils>esbuild': 0.25.12

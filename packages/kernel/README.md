@@ -70,7 +70,7 @@ Other modules may import `./public` only, and only if they declare the dependenc
     "@scorpion/contracts": "workspace:*",
     "@scorpion/kernel": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }
 ```
