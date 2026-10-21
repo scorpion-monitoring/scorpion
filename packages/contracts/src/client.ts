@@ -25,6 +25,11 @@ export type Navigation = Json<'/ui/navigation', 'get'>;
 /** What `GET /branding` returns. */
 export type Branding = Json<'/branding', 'get'>;
 export type LegalPage = Json<'/legal/{page}', 'get'>;
+/** What the analytics reads answer (M11): a page of KPIs with their points and, for the summary, their figures. */
+export type AnalyticsSeries = Json<'/kpi/analytics/series', 'get'>;
+export type AnalyticsSummary = Json<'/kpi/analytics/summary', 'get'>;
+/** What `GET /kpi/analytics/defaults` returns: the caller's repaired defaults and the categories a filter offers. */
+export type AnalyticsDefaults = Json<'/kpi/analytics/defaults', 'get'>;
 
 /** A response that was not a success, with the problem+json body when there was one. */
 export class ApiError extends Error {

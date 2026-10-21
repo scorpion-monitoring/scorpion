@@ -8,6 +8,7 @@ import { registerRoutes } from './routes.ts';
 import { createAnalyticsService, type AnalyticsService } from './service/analytics.ts';
 import { DEFAULTS_PREFERENCE, storedDefaultsSchema } from './service/defaults.ts';
 import { PERMISSION_READ } from './service/permissions.ts';
+import { ANALYTICS_WIDGETS } from './ui/routes.ts';
 import {
   AGGREGATE_REGISTRY,
   aggregateEntrySchema,
@@ -78,6 +79,9 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
           schema: storedDefaultsSchema,
         },
       ],
+      // The cards, the trends chart, the averages, the volatility bars and the quick actions: tiles of the dashboard grid of core.ui-shell
+      // (an optional peer: a profile without it skips them).
+      'ui.widget': ANALYTICS_WIDGETS,
       [AGGREGATE_REGISTRY]: BUILTIN_AGGREGATES,
       [SCORE_REGISTRY]: BUILTIN_SCORES,
     },
@@ -104,6 +108,9 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
     routes: (r) => {
       registerRoutes(r, r.service<KpiAnalyticsService>());
     },
+
+    // The widgets themselves (Svelte) are loaded by the web app only; the manifest just names the entry.
+    ui: () => import('./ui/index.ts'),
   });
 }
 

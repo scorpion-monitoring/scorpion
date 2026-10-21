@@ -4,7 +4,9 @@
 import { monthsBack } from './calc/index.ts';
 import { MAX_SERIES_MONTHS } from '@scorpion/kpi-ingestion/public';
 
-export const RANGES = ['3m', '6m', '1y', '2y', 'all'] as const;
+import { RANGES } from './widget-limits.ts';
+
+export { RANGES };
 export type Range = (typeof RANGES)[number];
 export const DEFAULT_RANGE: Range = '1y';
 

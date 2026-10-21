@@ -6777,6 +6777,10 @@ export interface paths {
                                 description?: string;
                                 /** @description A name of the icon table. */
                                 icon?: string;
+                                /** @description The JSON Schema (draft 2020-12, input side) of the widget’s configuration, derived from the module’s Zod schema; the settings form of a tile is drawn from it. Absent for a widget with no settings. */
+                                configSchema?: {
+                                    [key: string]: unknown;
+                                };
                             }[];
                             themes: {
                                 id: string;
@@ -13868,6 +13872,15 @@ export interface paths {
                                 necessity: string | null;
                                 /** @description The service reports the KPI now. `false`: it was dropped and its values stay. */
                                 current: boolean;
+                                /** @description The same points the series read gives, so one read serves a dashboard of several widgets. */
+                                points: {
+                                    /** @description The last day of the month, `YYYY-MM-DD`. */
+                                    period: string;
+                                    /** @description The number, or `null` for a gap and for a text value; never zero for a gap. */
+                                    value: number | null;
+                                    /** @description The text of a text value; `null` for a number and for a gap. */
+                                    text: string | null;
+                                }[];
                                 /** @description The newest month of the window with a value, or `null`. */
                                 latest: {
                                     period: string;
@@ -13908,6 +13921,87 @@ export interface paths {
                 };
                 /** @description The input is not valid. */
                 422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/analytics/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller’s own dashboard defaults
+         * @description The service, range and thematic category a new widget starts with, repaired (a stored value that is no longer valid is replaced), with the default service resolved, and the categories the filters offer. It is about the caller only and takes no user id. `Cache-Control: no-store`. The generic `PUT /preferences/kpi.analytics.defaults` stores the values.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The defaults of the caller. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description The default service: the stored one while it exists, else the first service (by name) of the caller’s own providers, else `null`. Never an arbitrary service. */
+                            service: string | null;
+                            /**
+                             * @description The default range; always one of the five.
+                             * @enum {string}
+                             */
+                            range: "3m" | "6m" | "1y" | "2y" | "all";
+                            /** @description A key of `categories`, or `all`; a stored key that is no longer a term is `all`. */
+                            category: string;
+                            /** @description The thematic categories a filter offers, in order: the one list the reads use. */
+                            categories: {
+                                key: string;
+                                label: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };

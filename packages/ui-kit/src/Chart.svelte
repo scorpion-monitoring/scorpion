@@ -42,7 +42,7 @@
   const problems = $derived(chartProblems(spec));
   const table = $derived(tableOf(spec, t('kit.chart.category'), locale()));
   const height = { sm: 'h-56', md: 'h-80', lg: 'h-96', fill: 'min-h-40 flex-1' } as const;
-  const hintId = $props.id();
+  const hintId = `${tableId}-hint`;
   // Which category the keyboard is on, and what the live region says about it.
   let active = $state<number | null>(null);
   const said = $derived(active === null ? '' : describeCategory(table, active));
@@ -109,6 +109,8 @@
   {#if problems.length > 0}
     <p role="alert" class="text-error">{t('kit.chart.invalid')}</p>
   {:else}
+    <!-- The chart is read by keyboard: the group takes focus and the arrow keys step through the categories (the picture itself cannot). -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
       role="group"
       tabindex="0"

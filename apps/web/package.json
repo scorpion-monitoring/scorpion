@@ -32,6 +32,7 @@
     "@scorpion/core-notifications": "workspace:*",
     "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "@scorpion/kpi-analytics": "workspace:*",
     "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/kpi-ingestion": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",

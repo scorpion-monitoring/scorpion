@@ -5,7 +5,7 @@
     "outDir": "dist",
     "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
-  "include": ["*.ts", "package.json", "service", "test"],
+  "include": ["*.ts", "package.json", "service", "test", "ui"],
   "references": [
     { "path": "../../packages/kernel" },
     { "path": "../../packages/contracts" },
@@ -19,6 +19,7 @@
     { "path": "../registry-services" },
     { "path": "../kpi-framework" },
     { "path": "../kpi-ingestion" },
-    { "path": "../core-ui-shell" }
+    { "path": "../core-ui-shell" },
+    { "path": "../../packages/ui-kit" }
   ]
 }
