@@ -37,6 +37,7 @@ export {
   type Returned,
 } from './reauth.ts';
 export { default as Alert } from './Alert.svelte';
+export { default as Icon } from './Icon.svelte';
 export { default as ImageBlock } from './ImageBlock.svelte';
 export type { ImageBlockTexts } from './image-block.ts';
 export { default as Dialog } from './Dialog.svelte';
@@ -123,3 +124,28 @@ export {
   type WizardFieldContext,
   type WizardFieldInfo,
 } from './wizard-extensions.ts';
+export {
+  describeChange,
+  dragAnnouncements,
+  GRID_COLUMNS,
+  moveTile,
+  newInstanceId,
+  placeNew,
+  removeTile,
+  resizeTile,
+  settle,
+  stackedOrder,
+  visibleLayout,
+  type GridChange,
+  type GridTexts,
+  type GridTile,
+  type MoveDirection,
+  type MoveResult,
+  type ResizeDirection,
+} from './dashboard-grid/layout.ts';
+export {
+  loadDashboardGrid,
+  type DashboardGridComponent,
+  type DashboardGridExports,
+  type DashboardGridProps,
+} from './dashboard-grid/load.ts';

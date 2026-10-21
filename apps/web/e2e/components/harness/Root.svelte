@@ -53,6 +53,7 @@
     takeIntent: () => undefined,
     toaster,
     Widgets: NoWidgets,
+    Widget: NoWidgets as never,
     guardLeave: (isDirty) => {
       guards.add(isDirty);
       return () => void guards.delete(isDirty);

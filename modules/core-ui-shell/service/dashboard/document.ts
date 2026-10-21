@@ -2,6 +2,7 @@
 // stored as the user preference `core.ui-shell.dashboard` and is never trusted: `parseDashboard` turns
 // whatever is stored into a valid dashboard and says what it dropped, and never throws. No clock, no
 // database, no I/O: every function here is a function of its arguments.
+import { pack } from '@scorpion/contracts/dashboard-layout';
 import { z } from 'zod';
 import {
   COLUMNS,
@@ -132,35 +133,8 @@ export function migrate(
   return current;
 }
 
-// ---- the packer ----------------------------------------------------------------------------------------
-
-type Box = Pick<DashboardItem, 'x' | 'y' | 'w' | 'h'>;
-const overlaps = (a: Box, b: Box) =>
-  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-
-/**
- * Moves overlapping tiles down until none overlaps, and returns the tiles by row, then column. A tile
- * stays where it is unless an earlier one (by row, then column, then position) is in its way, so a layout
- * that has no overlap comes back unchanged, and packing a packed layout changes nothing. Gaps are kept:
- * the grid compacts what a person drags, the document does not rewrite a layout they chose.
- */
-export function pack<T extends Box>(items: readonly T[]): T[] {
-  const order = items
-    .map((item, index) => ({ item, index }))
-    .sort((a, b) => a.item.y - b.item.y || a.item.x - b.item.x || a.index - b.index);
-  const placed: T[] = [];
-  for (const { item } of order) {
-    let y = item.y;
-    for (;;) {
-      const here = { ...item, y };
-      const blocking = placed.filter((other) => overlaps(here, other));
-      if (blocking.length === 0) break;
-      y = Math.max(...blocking.map((other) => other.y + other.h));
-    }
-    placed.push(y === item.y ? item : { ...item, y });
-  }
-  return placed.sort((a, b) => a.y - b.y || a.x - b.x);
-}
+// The packer is shared with the browser (`@scorpion/contracts`), so a layout the grid sends is one the repair leaves alone.
+export { pack };
 
 // ---- one tile ------------------------------------------------------------------------------------------
 

@@ -72,6 +72,7 @@
     takeIntent: () => undefined,
     toaster: createToaster({ durationMs: 3000 }),
     Widgets: (() => {}) as never,
+    Widget: (() => {}) as never,
     guardLeave: () => () => {},
   });
 </script>

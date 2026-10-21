@@ -2,6 +2,7 @@
 // no import from the web app: the translator, the typed client, `href()` (the only way to build a link,
 // ADR-0027), who is signed in, and the few things a page has to ask of the application around it.
 import { getContext, setContext, type Component } from 'svelte';
+import type { UiWidgetProps } from '@scorpion/contracts';
 import type { ApiClient, Branding, Navigation, Session } from '@scorpion/contracts/client';
 import type { Translate } from './i18n.ts';
 import type { Intent } from './reauth.ts';
@@ -44,6 +45,12 @@ export interface Shell {
   takeIntent: (id: string) => { payload: unknown } | undefined;
   /** Draws the widgets the caller may see in one slot of the page (`dashboard`): the modules' cards. */
   Widgets: Component<{ slot: string }>;
+  /**
+   * Draws one widget by the `component` name of its `ui.widget` entry (the dashboard grid's tiles). `props` are what
+   * a tile's widget receives; a widget that ignores them works. `onmissing` is called, once, when this build has no
+   * code for the name or loading it fails: the tile then draws nothing, and the page says so.
+   */
+  Widget: Component<{ name: string; props?: UiWidgetProps; onmissing?: () => void }>;
 }
 
 const KEY = Symbol('scorpion.shell');

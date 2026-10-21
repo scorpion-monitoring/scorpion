@@ -48,12 +48,30 @@ export interface UiRoute<Data = any> {
 export type UiMessages = Record<string, Record<string, string>>;
 
 /**
+ * What a widget placed on the dashboard grid receives (M11). A widget that ignores them (the cards that predate
+ * the grid, and the bell in the header, get none) works unchanged.
+ */
+export interface UiWidgetProps {
+  /** The instance id of this tile: unique on the dashboard. */
+  instance: string;
+  /** The tile's own settings, validated and defaulted by the widget's `configSchema` on the server. */
+  config: Record<string, unknown>;
+  /** The dashboard is being edited: a widget may show its settings, and must not start anything the person did not ask for. */
+  editing: boolean;
+  /** Replaces the tile's settings; the dashboard saves them with the layout. */
+  setConfig: (next: Record<string, unknown>) => void;
+  /** The tile's size in grid units, which a chart may use to choose how much to draw. */
+  size: { w: number; h: number };
+}
+
+/**
  * The widgets a module offers, by the `component` name of its `ui.widget` entries (registry of `core.ui-shell`):
- * the bell in the header, a card on the dashboard. A widget takes no props; it reads what it needs through
- * `getShell()` and the typed client, and draws nothing but what its permission allows. Every `ui` entry exports
- * `widgets` (an empty object when it has none), and names must be unique across the modules of a profile.
+ * the bell in the header, a card on the dashboard. A widget on the dashboard receives `UiWidgetProps` and may
+ * ignore them; the others take no props. It reads what it needs through `getShell()` and the typed client, and
+ * draws nothing but what its permission allows. Every `ui` entry exports `widgets` (an empty object when it has
+ * none), and names must be unique across the modules of a profile.
  */
 export type UiWidgets = Record<
   string,
-  () => Promise<{ default: Component<Record<string, never>> }>
+  () => Promise<{ default: Component<Record<string, never>> | Component<UiWidgetProps> }>
 >;
