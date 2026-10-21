@@ -4,7 +4,10 @@ import { BodyHost, type HostNode } from './body-host.ts';
 class Fake implements HostNode<Fake> {
   parentNode: Fake | null = null;
   children: Fake[] = [];
-  constructor(readonly name: string) {}
+  readonly name: string;
+  constructor(name: string) {
+    this.name = name;
+  }
   appendChild(child: Fake) {
     child.parentNode?.children.splice(child.parentNode.children.indexOf(child), 1);
     child.parentNode = this;

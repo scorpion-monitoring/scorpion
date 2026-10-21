@@ -237,10 +237,10 @@ revision protocol, as the plan says. A widget whose component this build does no
 
 | What                                                                                  | Before          | After                        | Change                                                                                      |
 | ------------------------------------------------------------------------------------- | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
-| Client build, JavaScript and CSS (`.svelte-kit/output/client/_app`, 75 → 78 files)    | 5,911,288 B raw | 6,084,874 B raw              | +173,586 B (+2.9 %)                                                                         |
-| the same, gzip of each file                                                           | 1,715,206 B     | 1,772,008 B                  | +56,802 B (+3.3 %)                                                                          |
-| The grid chunk (Snapgrid, dnd-kit, `DashboardGrid` and its parts), loaded on `/` only | not there       | 144,982 B raw, 47,748 B gzip | the prototype's figures were 133.7 kB and 43.9 kB                                           |
-| The rest of the client build                                                          |                 |                              | +28,604 B raw, +9,054 B gzip (the page, its words in two languages, the icons, shared code) |
+| Client build, JavaScript and CSS (`.svelte-kit/output/client/_app`, 75 → 78 files)    | 5,911,288 B raw | 6,085,479 B raw              | +174,191 B (+2.9 %)                                                                         |
+| the same, gzip of each file                                                           | 1,715,206 B     | 1,772,223 B                  | +57,017 B (+3.3 %)                                                                          |
+| The grid chunk (Snapgrid, dnd-kit, `DashboardGrid` and its parts), loaded on `/` only | not there       | 145,587 B raw, 47,907 B gzip | the prototype's figures were 133.7 kB and 43.9 kB                                           |
+| The rest of the client build                                                          |                 |                              | +28,604 B raw, +9,110 B gzip (the page, its words in two languages, the icons, shared code) |
 | Image `full` (`docker image inspect`, uncompressed)                                   | 634,197,977 B   | 652,752,394 B                | +18,554,417 B (+2.9 %)                                                                      |
 
 The image grows more than the build because the run-time install carries every package of the server's closure, **including the client-only packages of `ui-kit`** (it already carried `echarts`): Snapgrid,
