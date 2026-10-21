@@ -218,7 +218,9 @@ describe('in a profile', () => {
 
   it('is in the full profile and in no other', () => {
     const profiles = join(root, 'profiles');
-    for (const file of readdirSync(profiles).filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))) {
+    for (const file of readdirSync(profiles).filter(
+      (name) => name.endsWith('.ts') && !name.endsWith('.test.ts'),
+    )) {
       const text = readFileSync(join(profiles, file), 'utf8');
       expect(text.includes("'kpi.ingestion'"), file).toBe(file === 'full.ts');
     }
