@@ -19,6 +19,7 @@ const WITH_SPECS = [
   'Breadcrumb',
   'Chart',
   'ConfirmDialog',
+  'DashboardDefaults',
   'DashboardGrid',
   'DataTable',
   'Facets',
@@ -26,11 +27,17 @@ const WITH_SPECS = [
   'SchemaForm',
   'Tabs',
   'Toasts',
+  'WidgetSettings',
   'Wizard',
 ];
 
 /** Parts of another component, tested through it. */
-const PARTS_OF: Record<string, string> = { FieldShell: 'SchemaForm', SchemaField: 'SchemaForm' };
+const PARTS_OF: Record<string, string> = {
+  FieldShell: 'SchemaForm',
+  SchemaField: 'SchemaForm',
+  ServiceChoice: 'WidgetSettings',
+  SettingsFields: 'WidgetSettings',
+};
 
 /**
  * Components of sprint 2, covered by the pages that use them: the sign-in, registration, recovery and profile

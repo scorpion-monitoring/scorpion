@@ -86,6 +86,29 @@ test.describe('Chart', () => {
     await expect(figure.getByRole('table')).toBeHidden();
   });
 
+  test('[component:Chart] keyboard: the arrow keys read the values one category at a time, in a status line, and Escape stops', async ({
+    page,
+    scene,
+  }) => {
+    await scene('chart');
+    const chart = page.getByRole('group', { name: 'Services and users per year', exact: true });
+    const said = page.getByRole('status').filter({ hasText: /./ });
+    await chart.focus();
+    await expect(chart).toHaveAccessibleDescription(/left and right arrow keys/);
+    await page.keyboard.press('ArrowRight');
+    await expect(said).toHaveText('2021: Services 4 items, Users 2 items');
+    await page.keyboard.press('ArrowRight');
+    await expect(said).toHaveText('2022: Services 9 items, Users 5 items');
+    await page.keyboard.press('End');
+    await expect(said).toHaveText('2024: Services 21 items, Users 12 items');
+    await page.keyboard.press('ArrowRight');
+    await expect(said).toHaveText('2024: Services 21 items, Users 12 items');
+    await page.keyboard.press('Home');
+    await expect(said).toHaveText('2021: Services 4 items, Users 2 items');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('status').filter({ hasText: '2021' })).toHaveCount(0);
+  });
+
   inBothThemes('[component:Chart] axe: charts and tables', 'chart', async (page) => {
     await expect(
       page.getByRole('img', { name: 'Maturity per principle' }).locator('svg'),

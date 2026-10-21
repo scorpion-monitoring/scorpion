@@ -8,10 +8,13 @@
   import { unwrap } from '@scorpion/contracts/client';
   import {
     Alert,
+    createAnalyticsReads,
     getShell,
     Icon,
     loadDashboardGrid,
     placeNew,
+    setAnalyticsReads,
+    WidgetSettings,
     type DashboardGridComponent,
     type DashboardGridExports,
     type GridTile,
@@ -36,6 +39,10 @@
 
   const { t, api, navigation, Widget } = getShell();
 
+  // The widgets of this page read their numbers through one store, so widgets over the same service, range and category cost one request
+  // together. It lives as long as the page, so data reported in the meantime is read again on the next visit.
+  setAnalyticsReads(createAnalyticsReads(api));
+
   // The grid's code (Snapgrid and dnd-kit, about 134 kB) is fetched here, on the start page, and nowhere else.
   let Grid = $state.raw<DashboardGridComponent>();
   let grid = $state<DashboardGridExports>();
@@ -59,9 +66,13 @@
   let editing = $state(false);
   let open = $state(false);
   const tiles = $derived(toTiles(items, byId));
+  // The name of a tile for people and screen readers: its widget's label, and a number when the dashboard has several tiles of one widget
+  // (two trends charts of two services), in the order of the document, so that "Move Trends" never names two controls.
   const nameOf = (id: string) => {
     const item = items.find((candidate) => candidate.id === id);
-    return nameOfEntry(item ? byId.get(item.widget) : undefined, item?.widget ?? id);
+    const name = nameOfEntry(item ? byId.get(item.widget) : undefined, item?.widget ?? id);
+    const same = item ? items.filter((candidate) => candidate.widget === item.widget) : [];
+    return same.length > 1 ? `${name} (${same.indexOf(item!) + 1})` : name;
   };
 
   // How many tiles draw something, as the grid reports it; nothing is known until it has.
@@ -121,6 +132,15 @@
     items = next;
     saver.schedule($state.snapshot(next));
   }
+
+  // ---- the settings of a tile ----------------------------------------------------------------------------------------
+  // A widget that has a `configSchema` (the server lists its JSON Schema) gets a gear in edit mode; the form is the shared one of the UI kit.
+  const schemaOf = (id: string) => {
+    const item = items.find((candidate) => candidate.id === id);
+    return item ? byId.get(item.widget)?.configSchema : undefined;
+  };
+  const setConfigOf = (id: string, next: Record<string, unknown>) =>
+    changeItems(items.map((item) => (item.id === id ? { ...item, config: next } : item)));
 
   // Leaving the page (a link, a closed tab, a hidden page) sends what is waiting; the component going away does
   // too, which is what a client-side navigation does.
@@ -299,6 +319,7 @@
         label={nameOf}
         {onchange}
         ondrawn={(count) => (drawn = count)}
+        hasSettings={(id) => schemaOf(id) !== undefined}
       >
         {#snippet tile(one: GridTile)}
           {@const item = items.find((candidate) => candidate.id === one.id)}
@@ -309,13 +330,22 @@
                 instance: item.id,
                 config: item.config,
                 editing,
-                setConfig: (next) =>
-                  changeItems(
-                    items.map((it) => (it.id === item.id ? { ...it, config: next } : it)),
-                  ),
+                setConfig: (next) => setConfigOf(item.id, next),
                 size: { w: item.w, h: item.h },
               }}
               onmissing={() => reportMissing(item.widget)}
+            />
+          {/if}
+        {/snippet}
+        {#snippet settings(one: GridTile, close: () => void)}
+          {@const item = items.find((candidate) => candidate.id === one.id)}
+          {@const schema = schemaOf(one.id)}
+          {#if item && schema}
+            <WidgetSettings
+              {schema}
+              config={item.config}
+              onapply={(next: Record<string, unknown>) => setConfigOf(item.id, next)}
+              onclose={close}
             />
           {/if}
         {/snippet}

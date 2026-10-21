@@ -120,7 +120,11 @@ describe('the layers', () => {
     const routes = w.kernel.routes.filter((entry) => entry.route.path.startsWith('/kpi/analytics'));
     expect(
       routes.map((entry) => `${entry.route.method.toUpperCase()} ${entry.route.path}`).sort(),
-    ).toEqual(['GET /kpi/analytics/series', 'GET /kpi/analytics/summary']);
+    ).toEqual([
+      'GET /kpi/analytics/defaults',
+      'GET /kpi/analytics/series',
+      'GET /kpi/analytics/summary',
+    ]);
     for (const entry of routes) {
       expect(entry.route.public).toBeFalsy();
       expect(entry.route.permission).toBe('kpi.analytics.read');

@@ -178,6 +178,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/kpi-analytics':
+        specifier: workspace:*
+        version: link:../../modules/kpi-analytics
       '@scorpion/kpi-framework':
         specifier: workspace:*
         version: link:../../modules/kpi-framework
@@ -537,6 +540,9 @@ importers:
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       fast-check:
         specifier: 4.10.2
         version: 4.10.2

@@ -27,7 +27,7 @@ export {
   type ScoreResult,
 } from './service/registries.ts';
 export * from './service/calc/index.ts';
-export { getSeriesRoute, getSummaryRoute } from './routes.ts';
+export { getDefaultsRoute, getSeriesRoute, getSummaryRoute } from './routes.ts';
 export type {
   AnalyticsQuery,
   AnalyticsService,

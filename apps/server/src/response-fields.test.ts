@@ -748,8 +748,10 @@ const ANALYTICS_INFO = [
 ];
 const ANALYTICS_ANSWERS: Record<string, readonly string[]> = {
   'GET /kpi/analytics/series': [...ANALYTICS_INFO, 'points', 'period', 'value', 'text'],
+  'GET /kpi/analytics/defaults': ['service', 'range', 'category', 'categories', 'key', 'label'],
   'GET /kpi/analytics/summary': [
     ...ANALYTICS_INFO,
+    'points',
     'latest',
     'period',
     'value',

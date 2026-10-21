@@ -480,6 +480,9 @@ test.describe('the calls the KPI parts add', () => {
     expect(made.status, JSON.stringify(made.body)).toBe(201);
     const opened = await pageAs(browser, baseURL, at, member);
     const page = opened.page;
+    // Signing in left the person on the start page, whose widgets may still be reading (the units' vocabulary among them): leave it,
+    // so only this page's calls are counted.
+    await page.goto('about:blank');
     const seen: string[] = [];
     page.on('request', (request) => {
       const path = new URL(request.url()).pathname;

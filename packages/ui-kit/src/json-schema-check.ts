@@ -2,8 +2,9 @@
 // field types' `jsonSchema()` use. It is the browser's half of "validated in the browser and on the server":
 // the person is told about a mistake before the request, and the server still judges every value.
 //
-// Pure, no Svelte and no dependency. A keyword that asserts something this file does not implement (`oneOf`,
-// `$ref`, `not`, ...) is reported as an issue of its own (`unsupported`) instead of being skipped, so a schema
+// Pure, no Svelte and no dependency. `anyOf` is implemented because Zod writes a nullable value as one
+// (`anyOf: [{ type: 'string' }, { type: 'null' }]`): a value fits when one of the branches has no issue. A keyword
+// that asserts something this file does not implement (`oneOf`, `$ref`, `not`, ...) is reported as an issue of its own (`unsupported`) instead of being skipped, so a schema
 // that outgrows the checker fails loudly in a test and in the browser, and never passes silently. Annotation
 // keywords (`title`, `description`, `default`, `format`, `widget`, ...) change nothing, as in Draft 2020-12
 // where `format` is an annotation unless asked to assert: the generated schemas carry a `pattern` for what
@@ -28,6 +29,7 @@ export interface SchemaIssue {
     | 'maxItems'
     | 'uniqueItems'
     | 'dependentRequired'
+    | 'anyOf'
     | 'unsupported';
   /** `maxLength`, `maxItems`, ...: the number the rule names. For `unsupported`, the keyword's name is in `detail`. */
   limit?: number;
@@ -38,7 +40,6 @@ export interface SchemaIssue {
 const ASSERTIONS_NOT_HANDLED = [
   '$ref',
   'allOf',
-  'anyOf',
   'oneOf',
   'not',
   'if',
@@ -91,6 +92,15 @@ function regexOf(pattern: string): RegExp | null {
 function visit(schema: JsonSchema, value: unknown, pointer: string, issues: SchemaIssue[]): void {
   for (const keyword of ASSERTIONS_NOT_HANDLED) {
     if (keyword in schema) issues.push({ pointer, keyword: 'unsupported', detail: keyword });
+  }
+  if (Array.isArray(schema.anyOf)) {
+    const fits = schema.anyOf.some((branch) => {
+      if (!isObject(branch)) return false;
+      const own: SchemaIssue[] = [];
+      visit(branch, value, pointer, own);
+      return own.length === 0;
+    });
+    if (!fits) issues.push({ pointer, keyword: 'anyOf' });
   }
   const type = schema.type;
   if (typeof type === 'string' && !matchesType(type, value)) {

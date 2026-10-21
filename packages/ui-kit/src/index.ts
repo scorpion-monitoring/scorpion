@@ -87,6 +87,8 @@ export {
 export {
   chartProblems,
   createChartController,
+  describeCategory,
+  nextCategory,
   tableOf,
   type ChartAdapter,
   type ChartHandle,
@@ -149,3 +151,27 @@ export {
   type DashboardGridExports,
   type DashboardGridProps,
 } from './dashboard-grid/load.ts';
+export {
+  createAnalyticsReads,
+  createDedupe,
+  getAnalyticsReads,
+  normalise as normaliseRead,
+  readKey,
+  setAnalyticsReads,
+  WIDGET_PAGE_SIZE,
+  type AnalyticsReads,
+  type Dedupe,
+  type ReadKind,
+  type ReadQuery,
+  type ServiceName,
+  type VocabularyTerm,
+} from './read-store.ts';
+export { default as WidgetSettings } from './WidgetSettings.svelte';
+export { default as DashboardDefaults } from './DashboardDefaults.svelte';
+export {
+  fieldsOf,
+  merged as mergedSettings,
+  problemsOf,
+  RANGE_KEYS,
+  type SettingsField,
+} from './widget-settings.ts';

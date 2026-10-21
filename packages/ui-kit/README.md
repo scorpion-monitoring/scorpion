@@ -107,3 +107,18 @@ directory imports Snapgrid or dnd-kit (ESLint `no-restricted-imports` and `dashb
 - **Style and the CSP.** The component has no `<style>` block (SvelteKit adds the CSS of every dynamic import to the page), only utility classes. dnd-kit's injected `<style>` gets the page's nonce.
 - `Icon` is the closed icon table (`@scorpion/contracts/icons`) as a component for shared parts and module pages.
 - **New runtime dependencies** (ADR-0042, Decision 4): `@snapgridjs/svelte` 0.12.0, `@dnd-kit/svelte` and `@dnd-kit/dom` 0.5.1, pinned exactly (19 packages new to the lockfile, all MIT, none with an install script). `fast-check` is a development dependency (the layout properties).
+
+## The widgets of the dashboard (M11 sprint 4, [ADR-0044](../../docs/adr/0044-widgets-settings-and-the-read-store.md))
+
+- **The read store** (`read-store.ts`): `createAnalyticsReads(api)` gives `summary(query)`, `series(query)`, `defaults()`, `service(id)` and `terms(vocabulary)`; each returns **one in-flight promise per distinct
+  key** and keeps it for the visit (the dashboard makes a store when it mounts and provides it with `setAnalyticsReads`; widgets use `getAnalyticsReads()`). A read that fails is forgotten, so "Try again" sends a new one.
+  `readKey(kind, query)` is the canonical key (KPIs trimmed, without duplicates, sorted; a page that is not a whole number is the default) and `createDedupe()` the pure part; both are table-driven and have properties.
+  It calls the API only through the typed client. `WIDGET_PAGE_SIZE` (50) is the one page size of every widget read, so widgets share a request.
+- **`WidgetSettings`** (+ `SettingsFields`, `ServiceChoice`, `widget-settings.ts`): the settings form every widget shares, drawn from the JSON Schema of the widget's configuration: `service` (a search box and a select
+  over the services the person may read, with "Choose a service"), `range` (the schema's values), `category` (the thematic categories the defaults route lists), any boolean (a checkbox) and any other string enum (a
+  select). A field of another shape (the lists a chart keeps for itself) is not drawn and is kept as it was. "Apply" checks the draft with `checkJsonSchema` and gives the new configuration to the widget.
+  `json-schema-check` understands `anyOf` (how Zod writes a nullable value).
+- **`DashboardDefaults`**: the "Dashboard defaults" dialog of FEATURES §3.8. It edits the preference `kpi.analytics.defaults` through `PUT /preferences/{key}` with the same fields and the same lists, and forgets the cached defaults.
+- **`Chart`** gained (additively) `ChartSeries.secondary` (a second y axis on the right, `chartOption` tests), a tooltip drawn **inside the SVG** (`renderMode: 'richText'`; the HTML tooltip needs `style`
+  attributes the page's policy refuses) in the colours of the theme, `size="fill"` (the height of the box it is in), reading by keyboard (the arrow keys, Home, End and Escape step through the categories, the tooltip
+  follows and a live region says the values: `nextCategory`, `describeCategory`) and a focusable table region when the table is wider than its box.

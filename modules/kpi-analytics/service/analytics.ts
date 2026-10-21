@@ -68,6 +68,8 @@ export interface SeriesRow extends IndicatorInfo {
 }
 
 export interface SummaryRow extends IndicatorInfo {
+  /** The points of the window, as the series read gives them, so one read serves the cards, the chart and the lists (ADR-0044). */
+  points: SeriesPointOut[];
   /** The newest month of the window that has a value, with the canonical text of the value; `null` when none has. */
   latest: { period: string; value: number | null; text: string } | null;
   /** The change from the oldest to the newest value of the window, in percent; `null` ("n/a") when it is not defined. */
@@ -88,6 +90,8 @@ export interface Page<T> {
 export interface DefaultsView extends Omit<Defaults, 'service'> {
   /** The default service, or `null` while there is none. */
   service: string | null;
+  /** The thematic categories the filters offer: the one vocabulary read the reads use, in order. */
+  categories: { key: string; label: string }[];
 }
 
 export interface AnalyticsService {
@@ -105,7 +109,7 @@ export interface AnalyticsService {
   ): Promise<Page<SummaryRow>>;
   /** Needs `kpi.analytics.read`. The thematic categories a filter offers (the active terms of the vocabulary), in order. The one list the reads and the defaults use. */
   categories(actor: Actor): Promise<{ key: string; label: string }[]>;
-  /** Needs `kpi.analytics.read`. The caller's own defaults, repaired, with the default service resolved. */
+  /** Needs `kpi.analytics.read`. The caller's own defaults, repaired, with the default service resolved and the categories a filter offers. */
   defaults(actor: Actor): Promise<DefaultsView>;
   /**
    * Trusted: no permission, no caller. The service a new widget of this person starts with: the first service of the person's providers by name,
@@ -260,12 +264,24 @@ export function createAnalyticsService(
     }
     return (row: IndicatorInfo) => {
       const mine = byIndicator.get(row.indicatorId) ?? [];
+      const numbers = alignToMonths(
+        months,
+        mine.map((point) => ({ period: point.period, value: point.valueNumber })),
+      );
+      const byMonth = new Map(mine.map((point) => [point.period, point]));
       return {
-        numbers: alignToMonths(
-          months,
-          mine.map((point) => ({ period: point.period, value: point.valueNumber })),
-        ),
-        byMonth: new Map(mine.map((point) => [point.period, point])),
+        numbers,
+        byMonth,
+        // One point per month of the window; a gap is `null`, a text value has its text and no number.
+        points: months.map((period, index): SeriesPointOut => {
+          const stored = byMonth.get(period);
+          const value = numbers[index] ?? null;
+          return {
+            period,
+            value,
+            text: stored !== undefined && value === null ? stored.value : null,
+          };
+        }),
       };
     };
   }
@@ -289,21 +305,7 @@ export function createAnalyticsService(
         range,
         months,
         total: chosen.length,
-        rows: shown.map((row) => {
-          const { numbers, byMonth } = lay(row);
-          return {
-            ...row,
-            points: months.map((period, index) => {
-              const stored = byMonth.get(period);
-              const value = numbers[index] ?? null;
-              return {
-                period,
-                value,
-                text: stored !== undefined && value === null ? stored.value : null,
-              };
-            }),
-          };
-        }),
+        rows: shown.map((row) => ({ ...row, points: lay(row).points })),
       };
     },
 
@@ -318,7 +320,7 @@ export function createAnalyticsService(
         months,
         total: chosen.length,
         rows: shown.map((row) => {
-          const { numbers, byMonth } = lay(row);
+          const { numbers, byMonth, points } = lay(row);
           let latest: SummaryRow['latest'] = null;
           for (let index = months.length - 1; index >= 0 && latest === null; index--) {
             const stored = byMonth.get(months[index]!);
@@ -327,6 +329,7 @@ export function createAnalyticsService(
           }
           return {
             ...row,
+            points,
             latest,
             change: changePercent(numbers),
             average: average ? average.apply(numbers) : null,
@@ -360,6 +363,7 @@ export function createAnalyticsService(
         range: parsed.range,
         category: parsed.category,
         service: kept ?? (await defaultServiceOfAsSystem(userId)),
+        categories: terms,
       };
     },
 

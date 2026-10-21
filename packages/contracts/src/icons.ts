@@ -10,6 +10,7 @@ export const iconShapes: Record<string, string> = {
   shield: 'M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z',
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5zM12 15v2',
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
+  chart: 'M4 4v16h16M7.5 15l3.5-4 3 3 5-6.5',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   logout: 'M10 4H5v16h5M15 8l4 4-4 4M19 12H9',
   menu: 'M4 7h16M4 12h16M4 17h16',

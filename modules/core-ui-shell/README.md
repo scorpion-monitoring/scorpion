@@ -145,7 +145,7 @@ stays valid; an entry of the `dashboard` slot without `grid` is a card of the ol
 | `label`        | A key of the module's message catalogue: the name in the menu that adds a widget                                                                                                                                                                                                                                                         |
 | `description`  | A key of the catalogue: the line under it                                                                                                                                                                                                                                                                                                |
 | `icon`         | A name of the closed icon table (`@scorpion/contracts/icons`)                                                                                                                                                                                                                                                                            |
-| `configSchema` | A Zod schema that validates and defaults the `config` of each placed instance (at most 400 bytes as JSON). It is not sent to the browser (a Zod schema is not JSON); the browser half edits the `config` it receives                                                                                                                     |
+| `configSchema` | A Zod schema that validates and defaults the `config` of each placed instance (at most 400 bytes as JSON). Its **JSON Schema** (`z.toJSONSchema`, input side) is listed in `GET /ui/navigation` for the widgets the caller may see, and the settings form of the tile is drawn from it (M11 sprint 4)                                    |
 
 ```ts
 contributes: {
@@ -159,9 +159,10 @@ contributes: {
 ```
 
 These are checked **when the server starts** and a mistake stops it, naming the field: `minW` above `maxW` (or `minH` above `maxH`), a `w` or `h` outside its own limits,
-a `default` outside the 12 columns or outside the limits, an icon that is not in the table, a `configSchema` that is not a Zod schema. A `default` is one
-placement, so a singleton cannot have two. `GET /ui/navigation` lists `grid`, `label`, `description` and `icon` for the widgets the caller may see, only on
-entries that have them.
+a `default` outside the 12 columns or outside the limits, an icon that is not in the table, a `configSchema` that is not a Zod schema, **and a `configSchema` that JSON Schema cannot
+express** (a `z.date()`, a `z.bigint()`, a function: the start is stopped naming the widget; a `.transform()` is fine, the input side is what the form edits). A `default` is one
+placement, so a singleton cannot have two. `GET /ui/navigation` lists `grid`, `label`, `description`, `icon` and `configSchema` (a JSON Schema object, without `$schema`) for the widgets the
+caller may see, only on entries that have them.
 
 **What the browser half receives.** A tile's component is rendered with `UiWidgetProps` (`@scorpion/contracts`):
 
@@ -216,6 +217,12 @@ person may see, and a read never writes (opening the page sends no `PUT`).
 - **What a load left out** (`dropped`, `reset`) is shown above the grid ("2 widgets are no longer available and are not shown", "Your saved dashboard could not be read,
   so the default dashboard is shown") until the next successful save has written the repaired document.
 - **Instance ids** of new tiles come from `crypto.getRandomValues` (never `Math.random`), 8 characters of lower-case letters and digits, redrawn on a collision.
+- **Settings of a tile (M11 sprint 4).** A widget whose entry has a `configSchema` gets a gear in edit mode. It opens `WidgetSettings` of `packages/ui-kit` in the grid's dialog: the form is drawn from
+  the JSON Schema `GET /ui/navigation` lists (service picker, range, thematic category, toggles; see the ui-kit README), checks the draft with that schema, and gives the new `config` to the tile,
+  which is saved with the layout. A widget with no schema has no gear.
+- **The read store.** `Dashboard.svelte` makes one `createAnalyticsReads(api)` store when it mounts and provides it with `setAnalyticsReads`: the widgets of the page read through it, so widgets over the same
+  (service, range, category) cost one request together. It lives as long as the page, so data reported in the meantime is read again on the next visit.
+- **Names of tiles.** The name of a tile (its controls and its announcements) is its widget's `label`; when the dashboard has several tiles of one widget they are numbered in document order ("Trends (1)", "Trends (2)").
 - **Calls** (measured by `e2e/dashboard.spec.ts`, printed as `[dashboard-calls]`): on arrival the browser sends only what the cards and the shell read (`/inbox/stream`,
   `/memberships/summary`, `/notifications/status`, `/users/pending?pageSize=1`); adding a widget sends that widget's own read; moving, resizing and dragging send nothing;
   a burst of changes is one `PUT`.

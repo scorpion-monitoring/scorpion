@@ -119,7 +119,8 @@ test.describe('the inbox bell', () => {
     await signInThroughPage(page, at, who);
     await expect(page.getByRole('button', { name: /^Inbox/ })).toBeVisible();
     await page.goto(at('/'));
-    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toHaveCount(0);
+    // A plain person's dashboard holds the analytics widgets (M11 sprint 4) and none of the administration cards.
+    await expect(page.getByRole('heading', { name: 'KPI cards' })).toBeVisible();
     await expect(
       page.getByRole('region', { name: 'Registrations waiting for approval' }),
     ).toHaveCount(0);

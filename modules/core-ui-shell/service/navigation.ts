@@ -1,6 +1,7 @@
 import type { Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import { KernelStartupError, type ModuleContext } from '@scorpion/kernel';
+import { z } from 'zod';
 import type { NavEntry, RouteEntry, ThemeEntry, WidgetEntry } from '../registries.ts';
 
 export interface NavigationItem {
@@ -26,6 +27,8 @@ export interface WidgetItem {
   description?: string;
   /** A name of the icon table. */
   icon?: string;
+  /** The JSON Schema of the widget's configuration (derived from its Zod `configSchema`, input side), for the settings form. */
+  configSchema?: Record<string, unknown>;
 }
 
 export interface Navigation {
@@ -92,6 +95,25 @@ export function createNavigationService(
       seen.add(entry.id);
     }
   }
+  // The settings form of a widget is drawn from the JSON Schema of its configuration. A schema Zod cannot express (a transform, a
+  // function) would leave the person with no form, so it stops the start and names the widget.
+  const configSchemas = new Map<string, Record<string, unknown>>();
+  for (const entry of widgets) {
+    if (entry.configSchema === undefined) continue;
+    try {
+      const schema: Record<string, unknown> = {
+        ...z.toJSONSchema(entry.configSchema, { io: 'input', unrepresentable: 'throw' }),
+      };
+      // The draft is the same for every schema of the answer; naming it on each one is noise.
+      delete schema.$schema;
+      configSchemas.set(entry.id, schema);
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error);
+      problems.push(
+        `widget "${entry.id}" has a configSchema that JSON Schema cannot express: ${why}`,
+      );
+    }
+  }
   if (problems.length > 0)
     throw new KernelStartupError('core.ui-shell: invalid UI entries:', problems);
 
@@ -145,6 +167,7 @@ export function createNavigationService(
             ...(label === undefined ? {} : { label }),
             ...(description === undefined ? {} : { description }),
             ...(icon === undefined ? {} : { icon }),
+            ...(configSchemas.has(id) ? { configSchema: configSchemas.get(id)! } : {}),
           })),
         themes: [...themes],
       };

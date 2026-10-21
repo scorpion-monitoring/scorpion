@@ -4,6 +4,7 @@
 import {
   makeIndicator,
   makeKpiSet,
+  makeMembership,
   makeMeasurement,
   makeOrganisation,
   makeService,
@@ -79,6 +80,7 @@ type Series = Envelope<{
 }>;
 type Summary = Envelope<{
   name: string;
+  points: { period: string; value: number | null; text: string | null }[];
   latest: { period: string; value: number | null; text: string } | null;
   change: number | null;
   average: number | null;
@@ -150,6 +152,14 @@ describe('GET /kpi/analytics/summary', () => {
     expect(reply.status).toBe(200);
     const body = reply.body as Summary;
     const downloads = body.result.find((row) => row.name === 'Analytics downloads')!;
+    // one read serves a dashboard: the points are the series read's
+    expect(downloads.points).toHaveLength(6);
+    expect(downloads.points.slice(-4).map((point) => [point.period, point.value])).toEqual([
+      ['2026-03-31', 100],
+      ['2026-04-30', 150],
+      ['2026-05-31', 120],
+      ['2026-06-30', null],
+    ]);
     expect(downloads.latest).toEqual({ period: '2026-05-31', value: 120, text: '120' });
     expect(downloads.change).toBeCloseTo(20, 9);
     expect(downloads.average).toBeCloseTo(370 / 3, 9);
@@ -164,6 +174,142 @@ describe('GET /kpi/analytics/summary', () => {
       average: null,
       volatility: { value: null, band: null },
     });
+  });
+});
+
+describe('GET /kpi/analytics/defaults', () => {
+  type Defaults = {
+    service: string | null;
+    range: string;
+    category: string;
+    categories: { key: string; label: string }[];
+  };
+  const store = (who: { cookie: string; csrf: string }, value: unknown) =>
+    started.call('PUT', '/preferences/kpi.analytics.defaults', { ...as(who), body: { value } });
+  const read = async (who: { cookie: string; csrf: string }) => {
+    const reply = await started.get('/kpi/analytics/defaults', as(who));
+    expect(reply.status).toBe(200);
+    return { reply, body: reply.body as Defaults };
+  };
+
+  it('is the repaired default of a person with nothing stored, never cached by a shared cache, with the categories the filters offer', async () => {
+    const carol = await started.signedIn('carol-analytics-defaults');
+    const { reply, body } = await read(carol);
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
+    expect(Object.keys(body).sort()).toEqual(['categories', 'category', 'range', 'service']);
+    expect(body).toMatchObject({ service: null, range: '1y', category: 'all' });
+    expect(body.categories.map((term) => term.key)).toEqual(
+      expect.arrayContaining(['Usage', 'Satisfaction', 'Technical']),
+    );
+    // the same list the reads accept: every key is a category the series read takes
+    for (const term of body.categories) {
+      const filtered = await started.get(
+        `/kpi/analytics/series?service=${service.id}&category=${encodeURIComponent(term.key)}`,
+        as(carol),
+      );
+      expect(filtered.status, term.key).toBe(200);
+    }
+  });
+
+  it('is the caller’s own: another person’s stored defaults are not read, and no user id can be named', async () => {
+    const dave = await started.signedIn('dave-analytics-defaults');
+    const erin = await started.signedIn('erin-analytics-defaults');
+    expect(
+      (await store(dave, { range: '2y', category: 'Technical', service: service.id })).status,
+    ).toBe(200);
+    expect((await read(dave)).body).toMatchObject({
+      service: service.id,
+      range: '2y',
+      category: 'Technical',
+    });
+    expect((await read(erin)).body).toMatchObject({ service: null, range: '1y', category: 'all' });
+    const named = await started.get(`/kpi/analytics/defaults?user=${dave.user.id}`, as(erin));
+    expect(named.status).toBe(200);
+    expect((named.body as Defaults).range).toBe('1y');
+  });
+
+  it('repairs what is stored: a category that left the vocabulary is `all`, a service that is gone is the default rule', async () => {
+    const frank = await started.signedIn('frank-analytics-defaults');
+    expect((await store(frank, { category: 'Retired', range: '6m' })).status).toBe(200);
+    expect((await read(frank)).body).toMatchObject({ category: 'all', range: '6m', service: null });
+    // a stored id that names no service is dropped; the rule then gives none
+    expect((await store(frank, { service: ABSENT })).status).toBe(200);
+    expect((await read(frank)).body.service).toBeNull();
+  });
+
+  it('takes, with no service stored, the first service by name of the person’s own providers, never one they have no tie to', async () => {
+    const gina = await started.signedIn('gina-analytics-defaults');
+    const pool = started.kernel.pool;
+    const mine = await makeOrganisation(pool, { type: 'provider' });
+    await makeService(pool, { provider: mine.id, name: 'Zulu analytics defaults' });
+    const first = await makeService(pool, { provider: mine.id, name: 'Alpha analytics defaults' });
+    await makeMembership(pool, {
+      organisationId: mine.id,
+      userId: gina.user.id,
+      state: 'approved',
+    });
+    expect((await read(gina)).body.service).toBe(first.id);
+    // a stored service that exists wins over the rule
+    expect((await store(gina, { service: service.id })).status).toBe(200);
+    expect((await read(gina)).body.service).toBe(service.id);
+  });
+
+  it('is 401 without a session and 403 for a user without the permission [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const nobody = await started.signedIn('nobody-analytics-defaults', { roles: [] });
+    expect((await started.get('/kpi/analytics/defaults')).status).toBe(401);
+    expect((await started.get('/kpi/analytics/defaults', as(nobody))).status).toBe(403);
+  });
+});
+
+describe('GET /ui/navigation: the widgets of kpi.analytics (M11 sprint 4)', () => {
+  type Widget = {
+    id: string;
+    slot: string;
+    component: string;
+    configSchema?: {
+      properties: Record<string, { enum?: string[]; anyOf?: unknown[]; maxItems?: number }>;
+    };
+  };
+  const widgetsOf = async (who: { cookie: string; csrf: string }) =>
+    ((await started.get('/ui/navigation', as(who))).body as { widgets: Widget[] }).widgets;
+
+  it('lists the five widgets for a holder of the permission, with the JSON Schema of their settings, and none for a caller without it', async () => {
+    const mine = (await widgetsOf(alice)).filter((widget) =>
+      widget.id.startsWith('kpi.analytics.'),
+    );
+    expect(mine.map((widget) => widget.id).sort()).toEqual([
+      'kpi.analytics.actions',
+      'kpi.analytics.averages',
+      'kpi.analytics.cards',
+      'kpi.analytics.trends',
+      'kpi.analytics.volatility',
+    ]);
+    const byId = new Map(mine.map((widget) => [widget.id, widget]));
+    const trends = byId.get('kpi.analytics.trends')!.configSchema!;
+    expect(Object.keys(trends.properties).sort()).toEqual([
+      'category',
+      'cumulative',
+      'hidden',
+      'range',
+      'secondary',
+      'service',
+    ]);
+    expect(trends.properties.range!.enum).toEqual(['3m', '6m', '1y', '2y', 'all']);
+    // a nullable service is `anyOf`, and a list of series states is bounded
+    expect(trends.properties.service!.anyOf).toHaveLength(2);
+    expect(trends.properties.hidden!.maxItems).toBe(14);
+    expect(Object.keys(byId.get('kpi.analytics.cards')!.configSchema!.properties).sort()).toEqual([
+      'category',
+      'range',
+      'service',
+    ]);
+    // the quick actions have no settings, so no schema (an entry without one answers as before)
+    expect('configSchema' in byId.get('kpi.analytics.actions')!).toBe(false);
+
+    const nobody = await started.signedIn('nobody-analytics-widgets', { roles: [] });
+    const theirs = (await started.get('/ui/navigation', as(nobody))).body as { widgets: Widget[] };
+    expect(theirs.widgets.filter((widget) => widget.id.startsWith('kpi.analytics.'))).toEqual([]);
+    expect(JSON.stringify(theirs)).not.toContain('cumulative');
   });
 });
 
