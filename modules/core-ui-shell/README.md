@@ -189,6 +189,9 @@ person may see, and a read never writes (opening the page sends no `PUT`).
 
 - **The grid is `DashboardGrid` of `packages/ui-kit`** (Snapgrid's headless API behind one directory; see its README). It is a **dynamic import** (`loadDashboardGrid()`),
   so only this page fetches it. Below `md` there is no grid but a stacked list in reading order with the remove button only.
+- **Nothing to draw, nothing shown.** While every widget has nothing to say (or none has loaded yet) and no edit is in progress, the heading and the grid are not
+  shown, as the start page never showed an empty "What needs your attention" (a plain person usually sees only the hero and the button). The grid stays in place, hidden,
+  so it notices when a widget has something to say; messages (what a load left out, a failed save) are still shown, and edit mode always shows the grid.
 - **View mode and edit mode.** The FAB button at the bottom right ("Customise dashboard", a daisyUI `fab` with a `div role="button" tabindex="0"`, `aria-expanded` and
   `aria-controls`) turns edit mode on and opens the menu. In edit mode each tile has a move grip, buttons for every move (left, right, up, down) and size (wider, narrower,
   taller, shorter), a remove button and a resize handle, so **nothing depends on a pointer** (WCAG 2.2, 2.5.7); every change is announced in a polite live region

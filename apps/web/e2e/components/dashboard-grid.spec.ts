@@ -43,6 +43,19 @@ test.describe('DashboardGrid', () => {
     expect(tuned!.y).toBeLessThan(trends!.y + trends!.height + 40);
   });
 
+  test('tells the page how many tiles draw something, so it can take its heading away when none does', async ({
+    page,
+    scene,
+  }) => {
+    await scene('dashboard-grid', { query: 'edit' });
+    // Four tiles, one of which (the quiet card) has no body.
+    await expect(page.getByTestId('drawn')).toHaveText('3');
+    for (const name of ['Trends', 'Service cards', 'Tuned card']) {
+      await page.getByRole('button', { name: `Remove ${name}` }).click();
+    }
+    await expect(page.getByTestId('drawn')).toHaveText('0');
+  });
+
   test('loads Snapgrid and dnd-kit only for a page that draws the grid', async ({
     page,
     scene,

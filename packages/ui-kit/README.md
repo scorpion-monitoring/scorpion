@@ -88,7 +88,7 @@ directory imports Snapgrid or dnd-kit (ESLint `no-restricted-imports` and `dashb
 - **Loading.** The component is not in the main entry. `loadDashboardGrid()` (typed by `DashboardGridComponent`) imports it, so Snapgrid and dnd-kit are fetched by the page that draws the
   grid and by no other. The pure rules are exported normally (`moveTile`, `resizeTile`, `placeNew`, `stackedOrder`, `visibleLayout`, `newInstanceId`, ... in `src/dashboard-grid/layout.ts`).
 - **Props.** `tiles: GridTile[]` (`{ id, x, y, w, h, minW?, maxW?, minH?, maxH? }`; the page owns them), `editing`, `label(id)` (the name for people and screen readers),
-  `tile` (a snippet that draws a tile's body), `onchange(tiles, { kind: 'move' | 'resize' | 'remove', id })`, and optionally `hasSettings(id)` and `settings` (a snippet: the shell of a
+  `tile` (a snippet that draws a tile's body), `onchange(tiles, { kind: 'move' | 'resize' | 'remove', id })`, and optionally `hasSettings(id)`, `ondrawn(count)` (how many tiles draw something now) and `settings` (a snippet: the shell of a
   widget's settings dialog, with a gear on the tile). The instance exposes `focusTile(id)` and `announce(text)`.
 - **The five wrappers the prototype proved necessary** (each has a test in `e2e/components/dashboard-grid.spec.ts`): the **move grip** is a real `<button aria-label="Move …">` that carries
   `attachHandle` (dnd-kit then puts its role, tab stop and keyboard sensor on the grip and not on the tile, which would be `nested-interactive`; in view mode a hidden handle takes

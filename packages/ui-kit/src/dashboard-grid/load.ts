@@ -15,6 +15,8 @@ export interface DashboardGridProps {
   onchange: (tiles: GridTile[], change: GridChange) => void;
   /** Whether a tile has settings (it then gets a gear that opens `settings` in a dialog). Default: none. */
   hasSettings?: (id: string) => boolean;
+  /** Told how many tiles draw something now (tiles whose body has no element do not count), at first and on every change. */
+  ondrawn?: (count: number) => void;
   settings?: Snippet<[GridTile, () => void]>;
 }
 

@@ -30,6 +30,7 @@
   let grid = $state<DashboardGridExports>();
   onMount(() => void loadDashboardGrid().then((component) => (Grid = component)));
   const changes = $state<string[]>([]);
+  let drawn = $state<number>();
 </script>
 
 <h1 class="mb-4 text-2xl font-bold">Dashboard</h1>
@@ -53,6 +54,7 @@
       changes.push(`${change.kind}:${change.id}`);
     }}
     hasSettings={(id: string) => withSettings && id === 'tuned'}
+    ondrawn={(count) => (drawn = count)}
   >
     {#snippet tile(one: GridTile)}
       {#if one.id === 'trends'}
@@ -100,4 +102,5 @@
 <pre data-testid="layout" class="mt-4 text-xs">{JSON.stringify(
     tiles.map((tile) => [tile.id, tile.x, tile.y, tile.w, tile.h]),
   )}</pre>
+<p data-testid="drawn">{drawn}</p>
 <pre data-testid="changes" class="text-xs">{changes.join(' ')}</pre>

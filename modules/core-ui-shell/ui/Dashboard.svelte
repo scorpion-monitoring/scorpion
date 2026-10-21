@@ -64,6 +64,9 @@
     return nameOfEntry(item ? byId.get(item.widget) : undefined, item?.widget ?? id);
   };
 
+  // How many tiles draw something, as the grid reports it; nothing is known until it has.
+  let drawn = $state(0);
+
   // What the load said it left out, shown until the next successful save has written the repaired document.
   // svelte-ignore state_referenced_locally
   let notice = $state<{ dropped: number; reset: boolean }>({
@@ -213,6 +216,15 @@
     return t('dashboard.addWidget', { name });
   };
 
+  const collapsed = $derived(!editing && tiles.length > 0 && drawn === 0);
+  const hasMessage = $derived(
+    notice.reset ||
+      notice.dropped > 0 ||
+      missing.length > 0 ||
+      loadFailed ||
+      (problem !== undefined && saveState === 'failed'),
+  );
+
   const status = $derived(
     saveState === 'pending'
       ? t('dashboard.pending')
@@ -239,12 +251,14 @@
   onpagehide={() => void saver.flush()}
 />
 
+<!-- With nothing to draw (every widget has nothing to say, or none has loaded yet) and no edit in progress, the heading and
+     the grid are not shown, as the start page never showed an empty "What needs your attention". The grid is still
+     there, hidden, so it knows when a widget has something to say. Messages (what was left out, a failed save) stay. -->
 <section
-  class="mt-8 flex flex-col gap-4 pb-28"
+  class={['flex flex-col gap-4', collapsed ? (hasMessage ? 'mt-8' : 'hidden') : 'mt-8 pb-28']}
   aria-labelledby="dashboard-title"
-  aria-busy={Grid === undefined && !loadFailed}
 >
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
+  <div class={['flex flex-wrap items-baseline justify-between gap-2', collapsed && 'hidden']}>
     <h2 id="dashboard-title" class="text-xl font-semibold">{t('home.dashboard')}</h2>
     <p class="text-base-content/70 text-sm" role="status" aria-live="polite">{status}</p>
   </div>
@@ -276,27 +290,36 @@
     {#if tiles.length === 0}
       <p class="text-base-content/70">{t('dashboard.empty')}</p>
     {/if}
-    <Grid bind:this={grid} {tiles} {editing} label={nameOf} {onchange}>
-      {#snippet tile(one: GridTile)}
-        {@const item = items.find((candidate) => candidate.id === one.id)}
-        {#if item}
-          <Widget
-            name={byId.get(item.widget)?.component ?? ''}
-            props={{
-              instance: item.id,
-              config: item.config,
-              editing,
-              setConfig: (next) =>
-                changeItems(items.map((it) => (it.id === item.id ? { ...it, config: next } : it))),
-              size: { w: item.w, h: item.h },
-            }}
-            onmissing={() => reportMissing(item.widget)}
-          />
-        {/if}
-      {/snippet}
-    </Grid>
-  {:else}
-    <p class="text-base-content/70 text-sm">{t('dashboard.loading')}</p>
+    <div class={[collapsed && 'hidden']}>
+      <Grid
+        bind:this={grid}
+        {tiles}
+        {editing}
+        label={nameOf}
+        {onchange}
+        ondrawn={(count) => (drawn = count)}
+      >
+        {#snippet tile(one: GridTile)}
+          {@const item = items.find((candidate) => candidate.id === one.id)}
+          {#if item}
+            <Widget
+              name={byId.get(item.widget)?.component ?? ''}
+              props={{
+                instance: item.id,
+                config: item.config,
+                editing,
+                setConfig: (next) =>
+                  changeItems(
+                    items.map((it) => (it.id === item.id ? { ...it, config: next } : it)),
+                  ),
+                size: { w: item.w, h: item.h },
+              }}
+              onmissing={() => reportMissing(item.widget)}
+            />
+          {/if}
+        {/snippet}
+      </Grid>
+    </div>
   {/if}
 </section>
 

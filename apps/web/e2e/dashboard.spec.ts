@@ -61,6 +61,17 @@ function watch(page: Page) {
 const tileOf = (page: Page, heading: string) =>
   page.locator('[data-grid-id]').filter({ has: page.getByRole('heading', { name: heading }) });
 
+/**
+ * The membership card draws something only when requests wait for a decision, and an administrator is asked about every
+ * request of the instance, which the specs that ran before this one may have left. The summary is answered as "nothing
+ * waiting", so the layout does not depend on the shared database. (The browser still sends the request; it is counted.)
+ */
+async function quiet(page: Page) {
+  await page.route('**/api/internal/memberships/summary', (route) =>
+    route.fulfill({ json: { pending: 0, manages: false } }),
+  );
+}
+
 const fab = (page: Page) => page.getByRole('button', { name: 'Customise dashboard' });
 
 /** The boxes of the tiles that are drawn, by their heading. */
@@ -98,6 +109,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashadm');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
 
@@ -192,6 +204,7 @@ test.describe('journey: a person customises their dashboard', () => {
     // A second person's dashboard is unaffected.
     const other = await administrator(api, at, 'dashoth');
     const second = await pageAs(browser, baseURL, at, other.credentials);
+    await quiet(second.page);
     await expect(second.page.getByRole('heading', { name: DEAD })).toBeVisible();
     await expect(second.page.getByRole('heading', { name: PENDING })).toBeVisible();
     expect(sameBox((await boxes(second.page, [PENDING]))[PENDING]!, original[PENDING]!)).toBe(true);
@@ -210,6 +223,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashptr');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
     await page.goto(at('/'));
@@ -272,6 +286,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashrst');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
     await page.goto(at('/'));
@@ -312,6 +327,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashgone');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
     await page.goto(at('/'));
@@ -323,12 +339,12 @@ test.describe('journey: a person customises their dashboard', () => {
 
     expect((await api.send('DELETE', `/users/${who.id}/roles/admin`)).status).toBe(204);
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: PENDING })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: DEAD })).toHaveCount(0);
+    // Nothing is left to draw, so there is no heading and no grid; the message says why.
     await expect(
       page.getByText('2 widgets are no longer available and are not shown.'),
     ).toBeVisible();
+    await expect(page.getByRole('heading', { name: PENDING })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: DEAD })).toHaveCount(0);
 
     expect((await api.send('POST', `/users/${who.id}/roles`, { role: 'admin' })).status).toBe(200);
     await page.reload();
@@ -349,6 +365,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashfix');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     await page.goto(at('/'));
     await expect(page.getByRole('heading', { name: DEAD })).toBeVisible();
@@ -386,7 +403,7 @@ test.describe('journey: a person customises their dashboard', () => {
       const page = opened.page;
       const seen = watch(page);
       await page.goto(at('/'));
-      await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
+      await expect(fab(page)).toBeVisible();
       await fab(page).click();
       await page.keyboard.press('Escape');
       // The one widget this person has (the membership card is drawn in edit mode even when it has nothing to say).
@@ -427,6 +444,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashleave');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
     await page.goto(at('/'));
@@ -454,6 +472,38 @@ test.describe('journey: a person customises their dashboard', () => {
     await api.dispose();
   });
 
+  test('a person whose widgets have nothing to say sees no heading and no grid, only the button, and finds the grid in edit mode', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    const api = await adminApi(playwright, baseURL, at);
+    const credentials = newPerson('dashplain');
+    await activeUser(api, at, credentials);
+    const opened = await pageAs(browser, baseURL, at, credentials);
+    const page = opened.page;
+    await quiet(page);
+    await page.goto(at('/'));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(fab(page)).toBeVisible();
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toHaveCount(0);
+    await expect(page.locator('[data-grid-id]:visible')).toHaveCount(0);
+    // Edit mode shows the grid, with the widget that has nothing to say, so that it can be removed.
+    await fab(page).click();
+    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
+    await expect(page.getByRole('group', { name: MEMBERSHIP, exact: true })).toBeVisible();
+    await expect(page.getByText('This widget has nothing to show right now.')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Customise dashboard' }).focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toHaveCount(0);
+    await opened.close();
+    await api.dispose();
+  });
+
   test('a visitor sees no grid and no button', async ({ page, at }) => {
     await page.goto(at('/'));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -471,6 +521,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashchk');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
     seen.gridFiles.length = 0;
@@ -498,6 +549,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashnar');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto(at('/'));
@@ -526,6 +578,7 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const who = await administrator(api, at, 'dashkey');
     const opened = await pageAs(browser, baseURL, at, who.credentials);
+    await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
     await page.goto(at('/'));

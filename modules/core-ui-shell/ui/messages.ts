@@ -20,7 +20,6 @@ const shellMessages: UiMessages = {
     'dashboard.done': 'Done',
     'dashboard.editing': 'You are customising your dashboard. Changes are saved automatically.',
     'dashboard.empty': 'Your dashboard is empty. Use “Customise dashboard” to add widgets.',
-    'dashboard.loading': 'Loading the dashboard',
     'dashboard.added': '{name} added at row {row}, column {column}.',
     'dashboard.resetDone': 'The default dashboard is shown. It is saved when you change something.',
     'dashboard.pending': 'Changes will be saved in a moment.',
@@ -87,7 +86,6 @@ const shellMessages: UiMessages = {
     'dashboard.editing': 'Sie passen Ihr Dashboard an. Änderungen werden automatisch gespeichert.',
     'dashboard.empty':
       'Ihr Dashboard ist leer. Mit „Dashboard anpassen“ können Sie Widgets hinzufügen.',
-    'dashboard.loading': 'Das Dashboard wird geladen',
     'dashboard.added': '{name} hinzugefügt: Zeile {row}, Spalte {column}.',
     'dashboard.resetDone':
       'Das Standard-Dashboard wird angezeigt. Es wird gespeichert, sobald Sie etwas ändern.',

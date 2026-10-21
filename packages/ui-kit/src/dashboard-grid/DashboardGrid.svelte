@@ -41,6 +41,7 @@
     tile: body,
     onchange,
     hasSettings,
+    ondrawn,
     settings,
   }: DashboardGridProps = $props();
 
@@ -78,6 +79,12 @@
   $effect(() => {
     const present = new Set(tiles.map((tile) => tile.id));
     for (const id of [...empty]) if (!present.has(id)) empty.delete(id);
+  });
+
+  // How many tiles draw something: the page uses it to take its heading away when nothing is to be seen.
+  $effect(() => {
+    const present = tiles.filter((tile) => !empty.has(tile.id)).length;
+    ondrawn?.(present);
   });
 
   // ---- what a screen reader hears -----------------------------------------------------------------------------
