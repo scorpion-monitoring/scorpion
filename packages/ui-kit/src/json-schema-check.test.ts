@@ -79,6 +79,17 @@ describe('checkJsonSchema', () => {
     expect(checkJsonSchema({ $ref: '#/x' }, 1)[0]).toMatchObject({ detail: '$ref' });
   });
 
+  it('accepts a value that one branch of anyOf accepts (a nullable string), and says anyOf when none does', () => {
+    const nullable = { anyOf: [{ type: 'string', maxLength: 3 }, { type: 'null' }] };
+    expect(verdict(nullable, 'abc')).toEqual([]);
+    expect(verdict(nullable, null)).toEqual([]);
+    expect(verdict(nullable, 'abcd')).toEqual(['/ anyOf']);
+    expect(verdict(nullable, 4)).toEqual(['/ anyOf']);
+    expect(
+      verdict({ type: 'object', properties: { service: nullable } }, { service: 'toolong' }),
+    ).toEqual(['/service anyOf']);
+  });
+
   it('reads a pattern as a Unicode regular expression, unanchored unless it says so', () => {
     expect(verdict({ type: 'string', pattern: 'b' }, 'abc')).toEqual([]);
     expect(verdict({ type: 'string', pattern: '^b$' }, 'abc')).toEqual(['/ pattern']);

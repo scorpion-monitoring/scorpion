@@ -9,6 +9,8 @@ export interface ChartSeries {
   name: string;
   /** One value per category; `null` is a gap. */
   values: readonly (number | null)[];
+  /** Draw the series against a second y axis on the right (line and bar charts), for a series of another magnitude. */
+  secondary?: boolean;
 }
 
 export interface ChartSpec {
@@ -38,6 +40,8 @@ export interface ChartHandle {
   /** Draws a new spec, or the same one in a new theme. */
   update(spec: ChartSpec, theme: ChartTheme): void;
   resize(): void;
+  /** Shows the tooltip of one category (a person reading by keyboard), or hides it with `null`. A library without tooltips may leave it out. */
+  showTip?(index: number | null): void;
   dispose(): void;
 }
 
@@ -87,6 +91,43 @@ export function tableOf(
       }),
     ]),
   };
+}
+
+export type TipKey = 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End' | 'Escape';
+
+/**
+ * Where reading by keyboard goes next: the arrow keys step through the categories (without wrapping), Home and End jump to the ends, Escape
+ * stops (`null`). The first arrow key lands on the first (right) or last (left) category. Any other key changes nothing.
+ */
+export function nextCategory(current: number | null, key: string, count: number): number | null {
+  if (count <= 0) return null;
+  switch (key) {
+    case 'ArrowRight':
+      return current === null ? 0 : Math.min(current + 1, count - 1);
+    case 'ArrowLeft':
+      return current === null ? count - 1 : Math.max(current - 1, 0);
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+    case 'Escape':
+      return null;
+    default:
+      return current;
+  }
+}
+
+/** One category as a sentence for a live region: `March 2026: Downloads 12, Share 3 %`. */
+export function describeCategory(
+  table: { headers: string[]; rows: string[][] },
+  index: number,
+): string {
+  const row = table.rows[index];
+  if (!row) return '';
+  return `${row[0]}: ${row
+    .slice(1)
+    .map((cell, at) => `${table.headers[at + 1]} ${cell}`)
+    .join(', ')}`;
 }
 
 /** The outer ring of a radar chart: the given maximum, or the largest value rounded up to a tidy number. */
@@ -145,6 +186,8 @@ export interface ChartController {
   /** Draws a new spec. Safe to call before the library has loaded: the last call wins. */
   update(spec: ChartSpec, theme: ChartTheme): void;
   resize(): void;
+  /** Shows or hides the tooltip of a category (see `ChartHandle.showTip`). */
+  showTip(index: number | null): void;
   /** Stops the chart. A chart that was still loading is disposed as soon as it arrives. */
   destroy(): void;
 }
@@ -183,6 +226,7 @@ export function createChartController(
       handle?.update(spec, theme);
     },
     resize: () => handle?.resize(),
+    showTip: (index) => handle?.showTip?.(index),
     destroy() {
       destroyed = true;
       handle?.dispose();

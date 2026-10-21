@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   chartProblems,
   createChartController,
+  describeCategory,
+  nextCategory,
   radarMax,
   tableOf,
   type ChartAdapter,
@@ -78,6 +80,32 @@ describe('tableOf', () => {
   });
 });
 
+describe('reading by keyboard', () => {
+  it.each<[number | null, string, number, number | null]>([
+    [null, 'ArrowRight', 5, 0],
+    [null, 'ArrowLeft', 5, 4],
+    [2, 'ArrowRight', 5, 3],
+    [4, 'ArrowRight', 5, 4],
+    [0, 'ArrowLeft', 5, 0],
+    [3, 'Home', 5, 0],
+    [1, 'End', 5, 4],
+    [2, 'Escape', 5, null],
+    [2, 'a', 5, 2],
+    [null, 'Tab', 5, null],
+    [null, 'ArrowRight', 0, null],
+    [3, 'ArrowLeft', 0, null],
+  ])('from %s the key %s of %s categories goes to %s', (from, key, count, to) => {
+    expect(nextCategory(from, key, count)).toBe(to);
+  });
+
+  it('says a category as one sentence with the unit, and nothing for a category that is not there', () => {
+    const table = tableOf(spec, 'Year', 'en');
+    expect(describeCategory(table, 0)).toBe('2022: Services 4 items, Users 10.46 items');
+    expect(describeCategory(table, 2)).toBe('2024: Services –, Users 30 items');
+    expect(describeCategory(table, 9)).toBe('');
+  });
+});
+
 describe('radarMax', () => {
   it.each([
     [undefined, [1, 2, 3], 3],
@@ -100,7 +128,10 @@ describe('radarMax', () => {
 
 interface Option {
   xAxis: { data: string[] };
-  series: { type: string; name?: string; data: unknown[] }[];
+  yAxis: Record<string, unknown> | Record<string, unknown>[];
+  grid: { right: number };
+  tooltip: { backgroundColor: string; borderColor: string; textStyle: { color: string } };
+  series: { type: string; name?: string; data: unknown[]; yAxisIndex?: number }[];
   color: string[];
   legend?: unknown;
   animation: boolean;
@@ -120,6 +151,50 @@ describe('chartOption', () => {
     expect(option.color).toEqual(['#111', '#222']);
     expect(option.legend).toBeDefined();
     expect(option.animation).toBe(true);
+  });
+
+  it('has one y axis and no axis index while no series asks for the second', () => {
+    const option = optionOf(spec, theme);
+    expect(Array.isArray(option.yAxis)).toBe(false);
+    expect(option.series.every((s) => s.yAxisIndex === undefined)).toBe(true);
+  });
+
+  it('draws a second y axis on the right for the series that ask for it, and only those use it', () => {
+    const option = optionOf(
+      { ...spec, series: [spec.series[0]!, { ...spec.series[1]!, secondary: true }] },
+      theme,
+    );
+    const axes = option.yAxis as Record<string, unknown>[];
+    expect(axes).toHaveLength(2);
+    expect(axes[1]).toMatchObject({ position: 'right', splitLine: { show: false } });
+    expect(axes[0]).toMatchObject({ splitLine: { show: true, lineStyle: { color: '#333' } } });
+    expect(option.series.map((s) => s.yAxisIndex)).toEqual([0, 1]);
+    expect(option.grid.right).toBe(48);
+  });
+
+  it('with every series on the second axis still has both axes, so the indices stay valid', () => {
+    const option = optionOf(
+      { ...spec, series: spec.series.map((s) => ({ ...s, secondary: true })) },
+      theme,
+    );
+    expect((option.yAxis as unknown[]).length).toBe(2);
+    expect(option.series.map((s) => s.yAxisIndex)).toEqual([1, 1]);
+  });
+
+  it('draws the grid lines, the text and the tooltip in the colours of the theme (light and dark)', () => {
+    for (const colors of [
+      theme,
+      { ...theme, colorScheme: 'light' as const, text: '#111', grid: '#ccc', background: '#fff' },
+    ]) {
+      const option = optionOf(spec, colors);
+      const axis = option.yAxis as { splitLine: { lineStyle: { color: string } } };
+      expect(axis.splitLine.lineStyle.color).toBe(colors.grid);
+      expect(option.tooltip).toMatchObject({
+        backgroundColor: colors.background,
+        borderColor: colors.grid,
+        textStyle: { color: colors.text },
+      });
+    }
   });
 
   it('draws a bar chart, shows no legend for one series and stops animation for reduced motion', () => {

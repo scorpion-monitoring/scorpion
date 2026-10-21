@@ -87,6 +87,8 @@ export {
 export {
   chartProblems,
   createChartController,
+  describeCategory,
+  nextCategory,
   tableOf,
   type ChartAdapter,
   type ChartHandle,

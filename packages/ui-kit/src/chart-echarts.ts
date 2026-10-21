@@ -19,9 +19,14 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
     backgroundColor: 'transparent',
     textStyle: { color: theme.text },
     legend: spec.series.length > 1 ? { bottom: 0, textStyle: { color: theme.text } } : undefined,
+    // The tooltip follows the theme too (the legacy chart's did not: a white box with dark text on a dark page).
     tooltip: {
       trigger: spec.type === 'radar' ? 'item' : 'axis',
       valueFormatter: (value: unknown) => `${String(value)}${unit}`,
+      backgroundColor: theme.background,
+      borderColor: theme.grid,
+      textStyle: { color: theme.text },
+      axisPointer: { lineStyle: { color: theme.grid } },
     },
   };
   if (spec.type === 'radar') {
@@ -42,24 +47,35 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
       ],
     };
   }
+  const secondary = spec.series.some((series) => series.secondary === true);
+  const valueAxis = (opposite: boolean) => ({
+    type: 'value',
+    axisLabel: { color: theme.text },
+    axisLine: { show: opposite, lineStyle: { color: theme.grid } },
+    // Only the first axis draws grid lines, or the two sets would not line up.
+    splitLine: { show: !opposite, lineStyle: { color: theme.grid } },
+    ...(opposite ? { position: 'right' } : {}),
+  });
   return {
     ...base,
-    grid: { left: 48, right: 16, top: 24, bottom: spec.series.length > 1 ? 48 : 32 },
+    grid: {
+      left: 48,
+      right: secondary ? 48 : 16,
+      top: 24,
+      bottom: spec.series.length > 1 ? 48 : 32,
+    },
     xAxis: {
       type: 'category',
       data: [...spec.categories],
       axisLine: { lineStyle: { color: theme.grid } },
       axisLabel: { color: theme.text },
     },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: theme.text },
-      splitLine: { lineStyle: { color: theme.grid } },
-    },
+    yAxis: secondary ? [valueAxis(false), valueAxis(true)] : valueAxis(false),
     series: spec.series.map((series) => ({
       name: series.name,
       type: spec.type,
       data: [...series.values],
+      ...(secondary ? { yAxisIndex: series.secondary === true ? 1 : 0 } : {}),
       ...(spec.type === 'line' ? { symbolSize: 6 } : {}),
     })),
   };
@@ -91,6 +107,12 @@ export const echartsAdapter: ChartAdapter = {
     return {
       update: draw,
       resize: () => chart.resize(),
+      showTip: (index) =>
+        chart.dispatchAction(
+          index === null
+            ? { type: 'hideTip' }
+            : { type: 'showTip', seriesIndex: 0, dataIndex: index },
+        ),
       dispose: () => chart.dispose(),
     };
   },

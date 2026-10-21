@@ -77,6 +77,8 @@ export const componentMessages: MessageBundles = {
     'kit.chart.hideTable': 'Hide the table',
     'kit.chart.failed': 'The chart could not be drawn. The table has the same data.',
     'kit.chart.invalid': 'The chart data is not valid. The table has what there is.',
+    'kit.chart.keys':
+      'Use the left and right arrow keys to read the values one category at a time, Home and End to jump, Escape to stop. The table has all the values.',
 
     'kit.dashboard.group': 'Controls of {name}',
     'kit.dashboard.positionGroup': 'Position of {name}',
@@ -188,6 +190,8 @@ export const componentMessages: MessageBundles = {
     'kit.chart.failed':
       'Das Diagramm konnte nicht gezeichnet werden. Die Tabelle enthält dieselben Daten.',
     'kit.chart.invalid': 'Die Diagrammdaten sind ungültig. Die Tabelle zeigt, was vorhanden ist.',
+    'kit.chart.keys':
+      'Mit den Pfeiltasten links und rechts lesen Sie die Werte Kategorie für Kategorie, mit Pos1 und Ende springen Sie, mit Escape hören Sie auf. Die Tabelle enthält alle Werte.',
 
     'kit.dashboard.group': 'Steuerung von {name}',
     'kit.dashboard.positionGroup': 'Position von {name}',
