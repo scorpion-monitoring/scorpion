@@ -38,6 +38,12 @@ const navigationSchema = z.object({
       label: z.string().optional().describe('A key of the message catalogue.'),
       description: z.string().optional().describe('A key of the message catalogue.'),
       icon: z.string().optional().describe('A name of the icon table.'),
+      configSchema: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe(
+          'The JSON Schema (draft 2020-12, input side) of the widget’s configuration, derived from the module’s Zod schema; the settings form of a tile is drawn from it. Absent for a widget with no settings.',
+        ),
     }),
   ),
   themes: z.array(

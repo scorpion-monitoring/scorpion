@@ -173,7 +173,7 @@ describe('navigation(actor)', () => {
       });
     });
 
-    it('lists them for a widget the caller may see, and not the configSchema', async () => {
+    it('lists them for a widget the caller may see, with the JSON Schema of its configuration', async () => {
       const result = await shell.navigation(user);
       expect(result.widgets[1]).toStrictEqual({
         id: 'placed',
@@ -184,8 +184,38 @@ describe('navigation(actor)', () => {
         label: 'widget.placed',
         description: 'widget.placed.about',
         icon: 'list',
+        configSchema: {
+          type: 'object',
+          properties: { range: { type: 'string', default: '1y' } },
+        },
       });
-      expect(JSON.stringify(result)).not.toContain('configSchema');
+    });
+
+    it('derives the schema from the input side, so a defaulted field is optional and a nullable one says so', async () => {
+      const withNull = {
+        ...placed,
+        id: 'nullable',
+        configSchema: z.object({
+          service: z.uuid().nullable().default(null),
+          hidden: z
+            .array(z.string().regex(/^[0-9a-f]{12}$/))
+            .max(5)
+            .default([]),
+        }),
+      };
+      const result = await service(
+        { 'ui.widget': [withNull] },
+        declared,
+        holders('m.profile.read'),
+      ).navigation(user);
+      const schema = result.widgets[0]!.configSchema as {
+        required?: string[];
+        properties: Record<string, { anyOf?: unknown[]; maxItems?: number }>;
+      };
+      expect(schema.required ?? []).toEqual([]);
+      expect(schema.properties.service!.anyOf).toHaveLength(2);
+      expect(schema.properties.hidden!.maxItems).toBe(5);
+      expect(JSON.stringify(result)).not.toContain('$schema');
     });
 
     it('says nothing about a widget the caller may not see', async () => {
@@ -223,6 +253,28 @@ describe('the start-up checks', () => {
         { id: 'w', slot: 's', component: 'W', public: true },
       ],
     });
+  });
+
+  it('refuses a widget whose configSchema JSON Schema cannot express, naming the widget', () => {
+    const entry = {
+      id: 'unfit.widget',
+      slot: 'dashboard',
+      component: 'Unfit',
+      public: true,
+    };
+    fails({
+      'ui.widget': [{ ...entry, configSchema: z.object({ n: z.bigint() }) }],
+    });
+    fails({
+      'ui.widget': [{ ...entry, configSchema: z.object({ f: z.custom<() => void>(() => true) }) }],
+    });
+    try {
+      service({ 'ui.widget': [{ ...entry, configSchema: z.object({ d: z.date() }) }] }, declared);
+    } catch (error) {
+      expect((error as KernelStartupError).message).toContain('"unfit.widget"');
+      return;
+    }
+    throw new Error('expected a start-up error');
   });
 
   it('refuses a link to a page nobody registered', () => {
