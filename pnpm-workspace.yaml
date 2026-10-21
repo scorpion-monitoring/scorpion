@@ -29,3 +29,11 @@ autoInstallPeers: false
 # fixed in 0.25.0). Use the esbuild that drizzle-kit itself uses. Remove when drizzle-kit drops the loader.
 overrides:
   '@esbuild-kit/core-utils>esbuild': 0.25.12
+
+# react-grid-layout (a dependency of @snapgridjs/core) declares react and react-dom as peers. Snapgrid imports
+# only `react-grid-layout/core`, the pure layout functions, so React is never in the client build and is not
+# installed (ADR-0042, Decision 4, amended in sprint 2).
+peerDependencyRules:
+  ignoreMissing:
+    - react
+    - react-dom
