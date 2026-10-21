@@ -25,7 +25,11 @@ describe('effectiveIndicatorsAsSystem', () => {
       max: 500,
       unit: 'count',
     });
-    const free = await makeIndicator(w.pool, { name: uniq('Free'), valueType: 'float' });
+    const free = await makeIndicator(w.pool, {
+      name: uniq('Free'),
+      valueType: 'float',
+      thematic: 'Technical',
+    });
     const extra = await makeIndicator(w.pool, { name: uniq('Extra'), valueType: 'duration' });
     const set = await makeKpiSet(w.pool, {
       name: uniq('set'),
@@ -44,12 +48,18 @@ describe('effectiveIndicatorsAsSystem', () => {
       name: bounded.name,
       valueType: 'integer',
       unit: 'count',
+      thematic: 'Usage',
       necessity: 'mandatory',
       source: 'set',
       min: 0,
       max: 500,
     });
-    expect(byId.get(free.id)).toMatchObject({ necessity: 'recommended', min: null, max: null });
+    expect(byId.get(free.id)).toMatchObject({
+      necessity: 'recommended',
+      thematic: 'Technical',
+      min: null,
+      max: null,
+    });
     expect(byId.get(extra.id)).toMatchObject({
       valueType: 'duration',
       necessity: 'optional',
@@ -57,7 +67,17 @@ describe('effectiveIndicatorsAsSystem', () => {
     });
     // nothing of a measurement and nothing the effective set does not carry
     expect(Object.keys(rows[0]!).sort()).toEqual(
-      ['indicatorId', 'max', 'min', 'name', 'necessity', 'source', 'unit', 'valueType'].sort(),
+      [
+        'indicatorId',
+        'max',
+        'min',
+        'name',
+        'necessity',
+        'source',
+        'thematic',
+        'unit',
+        'valueType',
+      ].sort(),
     );
   });
 
@@ -81,6 +101,7 @@ describe('indicatorsByIdAsSystem', () => {
       name: uniq('A'),
       valueType: 'percentage',
       unit: 'percent',
+      thematic: 'Satisfaction',
     });
     const b = await makeIndicator(w.pool, {
       name: uniq('B'),
@@ -96,9 +117,21 @@ describe('indicatorsByIdAsSystem', () => {
     ]);
     expect(rows.map((row) => row.id).sort()).toEqual([a.id, b.id].sort());
     const first = rows.find((row) => row.id === a.id)!;
-    expect(first).toMatchObject({ name: a.name, valueType: 'percentage', unit: 'percent' });
+    expect(first).toMatchObject({
+      name: a.name,
+      valueType: 'percentage',
+      unit: 'percent',
+      thematic: 'Satisfaction',
+    });
     expect(first.iri).toMatch(/\/kpi\/indicator\//);
-    expect(Object.keys(first).sort()).toEqual(['id', 'iri', 'name', 'unit', 'valueType']);
+    expect(Object.keys(first).sort()).toEqual([
+      'id',
+      'iri',
+      'name',
+      'thematic',
+      'unit',
+      'valueType',
+    ]);
     expect(await w.kpi.indicatorsByIdAsSystem([])).toEqual([]);
   });
 });

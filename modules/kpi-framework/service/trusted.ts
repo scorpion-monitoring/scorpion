@@ -15,6 +15,8 @@ export interface EffectiveIndicatorRow {
   name: string;
   valueType: string;
   unit: string | null;
+  /** A term of the vocabulary `thematic-category` (M11: `kpi.analytics` filters by it). */
+  thematic: string;
   /** A term of the vocabulary `necessity`; `optional` for an extra. */
   necessity: string;
   source: 'set' | 'extra';
@@ -50,6 +52,7 @@ export async function effectiveIndicatorsAsSystem(
     name: row.name,
     valueType: row.valueType,
     unit: row.unit,
+    thematic: row.thematic,
     necessity: row.necessity,
     source: row.source,
     min: numberOrNull(byId.get(row.indicatorId)?.min ?? null),
@@ -65,6 +68,8 @@ export interface IndicatorRowAsSystem {
   name: string;
   valueType: string;
   unit: string | null;
+  /** A term of the vocabulary `thematic-category`. */
+  thematic: string;
 }
 
 /**
@@ -87,6 +92,7 @@ export async function indicatorsByIdAsSystem(
         name: indicator.name,
         valueType: indicator.valueType,
         unit: indicator.unit,
+        thematic: indicator.thematic,
       })
       .from(indicator)
       .where(inArray(indicator.id, wanted)),
@@ -98,6 +104,7 @@ export async function indicatorsByIdAsSystem(
     name: row.name,
     valueType: row.valueType,
     unit: row.unit,
+    thematic: row.thematic,
   }));
 }
 

@@ -74,6 +74,8 @@ Two changes in one month leave the later one. `rows` is the effective list of th
 that used it; backlog), and an extra whose indicator was deleted since is named in the history and dropped from `rows`. An impossible period
 (`2026-02-30`, `2026-13`) is 422 naming `period`.
 
+**`thematic` on both trusted reads** (M11 sprint 3, additive): `effectiveIndicatorsAsSystem` rows and `indicatorsByIdAsSystem` rows carry the indicator's `thematic` (a term of the vocabulary `thematic-category`), so that `kpi.analytics` can filter a service's KPIs by category without reading `kpif_indicator`. Tested in `service/trusted.test.ts`.
+
 **Two trusted reads for `kpi.ingestion`** (M10 sprint 2, additive; on the service and so on `public.ts`; no permission check, the caller checks its own, descriptive
 fields only). `effectiveIndicatorsAsSystem(serviceId)` returns the effective KPI set of a service with the value type, unit, necessity, source and
 **bounds** of each indicator (`[]` for a service without KPIs or one that does not exist); it reads the set through `effectiveSet`, so it is the list
