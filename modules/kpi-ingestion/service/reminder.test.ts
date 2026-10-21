@@ -530,11 +530,14 @@ describe('the job as the system', () => {
     expect(s.ingestion.reminder.run.length).toBeLessThanOrEqual(1);
     const { default: manifest } = await import('../module.ts');
     const names: string[] = [];
-    manifest.routes?.({
-      service: () => s.ingestion,
-      internal: (route: { path: string }) => names.push(route.path),
-      public: (_v: string, route: { path: string }) => names.push(route.path),
-    } as never);
+    manifest.routes?.(
+      {
+        service: () => s.ingestion,
+        internal: (route: { path: string }) => names.push(route.path),
+        public: (_v: string, route: { path: string }) => names.push(route.path),
+      } as never,
+      undefined as never,
+    );
     expect(names.length).toBeGreaterThan(5);
     expect(names.filter((path) => /remind/i.test(path))).toEqual([]);
   });

@@ -314,8 +314,9 @@ describe('GET /measurements', () => {
   });
 
   it('holds nothing of another service, and a service with no values is an empty page, not an error', async () => {
-    const mine = JSON.stringify(result(await get(`?service=${world.read.slug}&pageSize=100`)));
-    expect(mine).not.toContain('9999');
+    const mine = result(await get(`?service=${world.read.slug}&pageSize=100`));
+    // The value, not a substring of the JSON: ids are random and may hold the digits by chance.
+    expect(mine.filter((row) => row.valueNumber === 9999 || row.value === '9999')).toEqual([]);
     const none = await get(`?service=${world.write.slug}`);
     expect(none.status).toBe(200);
     expect(metadata(none).totalCount).toBe(0);
