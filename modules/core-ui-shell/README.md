@@ -202,8 +202,8 @@ person may see, and a read never writes (opening the page sends no `PUT`).
   there are already 20 tiles, is disabled and says why), then "Reset to default" and "Done". **Escape** closes it and puts focus on the FAB button; so does a press
   outside it (without moving focus); **Enter** or **Space** on the button toggles it. Adding a widget places it at its default size at the left edge below the lowest
   tile, closes the menu, focuses the new tile's grip and announces where it went. Adding sends nothing by itself; the widget reads its own data, as on arrival.
-- **"Reset to default" shows the default dashboard and stores nothing.** It is the server's `defaultDashboard` function run in the browser over the entries
-  `GET /ui/navigation` listed (its instance ids are a hash of the widget id, so they match the server's); it is saved with the next change. A widget with a
+- **"Reset to default" shows the default dashboard and saves it** (one `PUT`, like any change; the maintainer chose this after sprint 2). It is the server's `defaultDashboard` function run in the browser over the entries
+  `GET /ui/navigation` listed (its instance ids are a hash of the widget id, so they match the server's). A widget with a
   `configSchema` gets `{}` there and its defaults from the server on the next save and read.
 - **Saving.** One `PUT /ui/dashboard` through the typed client **a second after the last change** (a burst of changes is one request), when the page is hidden
   (`visibilitychange`, `pagehide`) and when the page goes away (a client navigation unmounts it; "Done" also sends what is waiting). A "Saved" state is announced

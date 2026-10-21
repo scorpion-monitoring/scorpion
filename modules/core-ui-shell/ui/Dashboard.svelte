@@ -187,8 +187,9 @@
   }
 
   async function reset() {
-    // The default is shown, not stored: it is saved with the next change (M11 plan §3).
-    items = defaultItems(entries);
+    // The default is shown and saved like any other change (the maintainer's decision after sprint 2: a reset that
+    // is not stored would come back as the old layout after a reload).
+    changeItems(defaultItems(entries));
     open = false;
     notice = { dropped: 0, reset: false };
     await tick();

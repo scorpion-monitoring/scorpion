@@ -277,7 +277,7 @@ test.describe('journey: a person customises their dashboard', () => {
     await api.dispose();
   });
 
-  test('"Reset to default" shows the default again and stores nothing until the next change', async ({
+  test('"Reset to default" shows the default again and saves it', async ({
     browser,
     playwright,
     baseURL,
@@ -308,11 +308,13 @@ test.describe('journey: a person customises their dashboard', () => {
     ).toBeVisible();
     await page.keyboard.press('Enter');
     await page.getByRole('button', { name: 'Done' }).click();
-    await page.waitForTimeout(2500);
-    expect(seen.puts, 'a reset stores nothing by itself').toHaveLength(0);
+    await expect.poll(() => seen.puts.length, { timeout: 5000 }).toBe(1);
     const reset = await boxes(page, [PENDING, DEAD]);
     expect(sameBox(reset[PENDING]!, original[PENDING]!)).toBe(true);
     expect(sameBox(reset[DEAD]!, original[DEAD]!)).toBe(true);
+    // Stored: after a reload the default is still there.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: PENDING })).toBeVisible();
     await opened.close();
     await api.dispose();
   });

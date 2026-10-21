@@ -232,7 +232,7 @@ status), each in its `ui/routes.ts`.
 
 **What the page does, in short** (the README of `core.ui-shell` has the detail): the page's `load` reads `GET /ui/dashboard` on the server; the grid is a dynamic import; the FAB button turns edit mode on and
 opens a menu of the widgets the caller may add (Escape closes it and returns focus to the button); a change is saved by one `PUT` a second after the last one, when the page is hidden and when it goes away; "Reset
-to default" shows the default (the server's `defaultDashboard`, run in the browser over the entries of `GET /ui/navigation`) and stores nothing until the next change; two tabs: **the last save wins**, with no
+to default" shows the default (the server's `defaultDashboard`, run in the browser over the entries of `GET /ui/navigation`) and saves it (the maintainer's decision after the sprint; the plan said it stored nothing); two tabs: **the last save wins**, with no
 revision protocol, as the plan says. A widget whose component this build does not have draws nothing and the page says so.
 
 **Measured** (build of `0.12.0`'s `dev` against this branch; the image against the same commit's image, `docker image inspect`; numbers repeated in `docs/backlog.md`):
