@@ -1,10 +1,11 @@
 <script lang="ts">
   import { getShell } from '@scorpion/ui-kit';
+  import Dashboard from './Dashboard.svelte';
+  import type { HomeData } from './home.ts';
 
-  const { t, branding, session, href, navigation, Widgets } = getShell();
+  let { data }: { data: HomeData } = $props();
+  const { t, branding, session, href } = getShell();
   const who = $derived(session());
-  // The cards the modules offer this caller; the server has already left out the ones they may not see.
-  const cards = $derived(navigation().widgets.some((widget) => widget.slot === 'dashboard'));
 </script>
 
 <svelte:head>
@@ -23,15 +24,6 @@
   </div>
 </section>
 
-{#if who && cards}
-  <!-- A module's card may draw nothing (a card that has nothing to say); then the heading goes too. -->
-  <section
-    class="mt-8 flex flex-col gap-4 [&:not(:has(.grid>*))]:hidden"
-    aria-labelledby="dashboard-title"
-  >
-    <h2 id="dashboard-title" class="text-xl font-semibold">{t('home.dashboard')}</h2>
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <Widgets slot="dashboard" />
-    </div>
-  </section>
+{#if who && data.dashboard}
+  <Dashboard initial={data.dashboard} />
 {/if}

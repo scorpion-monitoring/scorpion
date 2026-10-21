@@ -10,6 +10,37 @@ const shellMessages: UiMessages = {
     'home.lead': 'The service registry and KPI tracker of {name}.',
     'home.signedIn': 'You are signed in as {name}.',
     'home.dashboard': 'What needs your attention',
+    'dashboard.customise': 'Customise dashboard',
+    'dashboard.menu': 'Add a widget',
+    'dashboard.addWidget': 'Add {name}',
+    'dashboard.alreadyThere': '{name} (already on your dashboard)',
+    'dashboard.full': '{name} (your dashboard is full)',
+    'dashboard.nothingToAdd': 'There is nothing else to add.',
+    'dashboard.reset': 'Reset to default',
+    'dashboard.done': 'Done',
+    'dashboard.editing': 'You are customising your dashboard. Changes are saved automatically.',
+    'dashboard.empty': 'Your dashboard is empty. Use “Customise dashboard” to add widgets.',
+    'dashboard.loading': 'Loading the dashboard',
+    'dashboard.added': '{name} added at row {row}, column {column}.',
+    'dashboard.resetDone': 'The default dashboard is shown. It is saved when you change something.',
+    'dashboard.pending': 'Changes will be saved in a moment.',
+    'dashboard.saving': 'Saving…',
+    'dashboard.saved': 'Saved',
+    'dashboard.retry': 'Try again',
+    'dashboard.error.failed':
+      'Your dashboard could not be saved. Your changes are kept on this page.',
+    'dashboard.error.forbidden':
+      'Your dashboard cannot be saved with your account. Your changes are kept on this page until you leave it.',
+    'dashboard.error.tooLarge':
+      'Your dashboard is too large to save. Remove a widget or simplify its settings, then try again.',
+    'dashboard.error.repaired':
+      'Some of your widgets are no longer available. The dashboard was reloaded without them.',
+    'dashboard.notice.dropped.one': '{count} widget is no longer available and is not shown.',
+    'dashboard.notice.dropped.other': '{count} widgets are no longer available and are not shown.',
+    'dashboard.notice.reset':
+      'Your saved dashboard could not be read, so the default dashboard is shown.',
+    'dashboard.notice.missing.one': '{count} widget could not be shown on this page.',
+    'dashboard.notice.missing.other': '{count} widgets could not be shown on this page.',
     'legal.terms': 'Terms of use',
     'legal.privacy': 'Privacy policy',
     'legal.imprint': 'Imprint',
@@ -45,6 +76,43 @@ const shellMessages: UiMessages = {
     'home.lead': 'Das Dienstregister und der KPI-Tracker von {name}.',
     'home.signedIn': 'Sie sind angemeldet als {name}.',
     'home.dashboard': 'Was Ihre Aufmerksamkeit braucht',
+    'dashboard.customise': 'Dashboard anpassen',
+    'dashboard.menu': 'Widget hinzufügen',
+    'dashboard.addWidget': '{name} hinzufügen',
+    'dashboard.alreadyThere': '{name} (bereits auf Ihrem Dashboard)',
+    'dashboard.full': '{name} (Ihr Dashboard ist voll)',
+    'dashboard.nothingToAdd': 'Es gibt nichts weiter hinzuzufügen.',
+    'dashboard.reset': 'Auf Standard zurücksetzen',
+    'dashboard.done': 'Fertig',
+    'dashboard.editing': 'Sie passen Ihr Dashboard an. Änderungen werden automatisch gespeichert.',
+    'dashboard.empty':
+      'Ihr Dashboard ist leer. Mit „Dashboard anpassen“ können Sie Widgets hinzufügen.',
+    'dashboard.loading': 'Das Dashboard wird geladen',
+    'dashboard.added': '{name} hinzugefügt: Zeile {row}, Spalte {column}.',
+    'dashboard.resetDone':
+      'Das Standard-Dashboard wird angezeigt. Es wird gespeichert, sobald Sie etwas ändern.',
+    'dashboard.pending': 'Änderungen werden gleich gespeichert.',
+    'dashboard.saving': 'Wird gespeichert …',
+    'dashboard.saved': 'Gespeichert',
+    'dashboard.retry': 'Erneut versuchen',
+    'dashboard.error.failed':
+      'Ihr Dashboard konnte nicht gespeichert werden. Ihre Änderungen bleiben auf dieser Seite erhalten.',
+    'dashboard.error.forbidden':
+      'Ihr Dashboard kann mit Ihrem Konto nicht gespeichert werden. Ihre Änderungen bleiben erhalten, bis Sie die Seite verlassen.',
+    'dashboard.error.tooLarge':
+      'Ihr Dashboard ist zu groß zum Speichern. Entfernen Sie ein Widget oder vereinfachen Sie dessen Einstellungen und versuchen Sie es erneut.',
+    'dashboard.error.repaired':
+      'Einige Ihrer Widgets sind nicht mehr verfügbar. Das Dashboard wurde ohne sie neu geladen.',
+    'dashboard.notice.dropped.one':
+      '{count} Widget ist nicht mehr verfügbar und wird nicht angezeigt.',
+    'dashboard.notice.dropped.other':
+      '{count} Widgets sind nicht mehr verfügbar und werden nicht angezeigt.',
+    'dashboard.notice.reset':
+      'Ihr gespeichertes Dashboard konnte nicht gelesen werden, deshalb wird das Standard-Dashboard angezeigt.',
+    'dashboard.notice.missing.one':
+      '{count} Widget konnte auf dieser Seite nicht angezeigt werden.',
+    'dashboard.notice.missing.other':
+      '{count} Widgets konnten auf dieser Seite nicht angezeigt werden.',
     'legal.terms': 'Nutzungsbedingungen',
     'legal.privacy': 'Datenschutzerklärung',
     'legal.imprint': 'Impressum',

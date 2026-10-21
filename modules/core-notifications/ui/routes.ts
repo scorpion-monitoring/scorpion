@@ -53,5 +53,9 @@ export const NOTIFICATION_WIDGETS: WidgetEntry[] = [
     component: 'dead-deliveries',
     order: 20,
     permission: 'core.notifications.status.read',
+    // A tile of the dashboard grid (M11): shown in the default dashboard of whoever may read the delivery status.
+    label: 'dash.dead.title',
+    icon: 'mail',
+    grid: { w: 4, h: 3, minW: 3, minH: 2, maxW: 8, maxH: 6, default: { x: 8, y: 0, w: 4, h: 3 } },
   },
 ];
