@@ -1491,6 +1491,10 @@ describe('defect 1: the analytics routes', () => {
     'GET /kpi/analytics/summary': {
       sample: (service) => ({ method: 'GET', path: `/kpi/analytics/summary?service=${service}` }),
     },
+    // About the caller only; the service id of the sample is ignored (the route takes none).
+    'GET /kpi/analytics/defaults': {
+      sample: () => ({ method: 'GET', path: '/kpi/analytics/defaults' }),
+    },
   };
   const start = () =>
     app.start({ tokenCacheTtlMs: 0, kpi: true, ingestion: true, analytics: true });
@@ -1533,6 +1537,7 @@ describe('defect 1: the analytics routes', () => {
       const sample = row.sample(service.id);
       expect((await s.call(sample.method, sample.path, session(plain))).status, key).toBe(200);
       // an id that is no service is a 422 naming `service`, never a 404 that tells a service exists elsewhere or a 500
+      if (key.endsWith('/defaults')) continue;
       const unknown = row.sample(FOREIGN);
       expect((await s.call(unknown.method, unknown.path, session(plain))).status, key).toBe(422);
     }

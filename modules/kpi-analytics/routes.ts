@@ -1,4 +1,4 @@
-// The internal routes of kpi.analytics (M11 sprint 3): the series and the summary of a service for the dashboard of sprint 4. Thin: Zod parses,
+// The internal routes of kpi.analytics (M11 sprints 3 and 4): the series and the summary of a service, and the caller's own defaults, for the dashboard widgets. Thin: Zod parses,
 // one service call, the row is mapped field by field. Both name the plain permission `kpi.analytics.read`, which the role `user` holds, and the
 // service checks it again. A page is a page of KPIs, in the envelope every list uses. Never public v1.
 import {
@@ -58,27 +58,29 @@ const info = {
     .describe('The service reports the KPI now. `false`: it was dropped and its values stay.'),
 };
 
-export const seriesRowSchema = z.object({
-  ...info,
-  points: z
-    .array(
-      z.object({
-        period: z.string().describe('The last day of the month, `YYYY-MM-DD`.'),
-        value: z
-          .number()
-          .nullable()
-          .describe('The number, or `null` for a gap and for a text value; never zero for a gap.'),
-        text: z
-          .string()
-          .nullable()
-          .describe('The text of a text value; `null` for a number and for a gap.'),
-      }),
-    )
-    .describe('One point per month of the window, oldest first.'),
-});
+const pointsSchema = z
+  .array(
+    z.object({
+      period: z.string().describe('The last day of the month, `YYYY-MM-DD`.'),
+      value: z
+        .number()
+        .nullable()
+        .describe('The number, or `null` for a gap and for a text value; never zero for a gap.'),
+      text: z
+        .string()
+        .nullable()
+        .describe('The text of a text value; `null` for a number and for a gap.'),
+    }),
+  )
+  .describe('One point per month of the window, oldest first.');
+
+export const seriesRowSchema = z.object({ ...info, points: pointsSchema });
 
 export const summaryRowSchema = z.object({
   ...info,
+  points: pointsSchema.describe(
+    'The same points the series read gives, so one read serves a dashboard of several widgets.',
+  ),
   latest: z
     .object({
       period: z.string(),
@@ -142,6 +144,37 @@ export const getSummaryRoute = createRoute({
   },
 });
 
+export const defaultsSchema = z.object({
+  service: z
+    .string()
+    .nullable()
+    .describe(
+      'The default service: the stored one while it exists, else the first service (by name) of the caller’s own providers, else `null`. Never an arbitrary service.',
+    ),
+  range: z.enum(RANGES).describe('The default range; always one of the five.'),
+  category: z
+    .string()
+    .describe('A key of `categories`, or `all`; a stored key that is no longer a term is `all`.'),
+  categories: z
+    .array(z.object({ key: z.string(), label: z.string() }))
+    .describe('The thematic categories a filter offers, in order: the one list the reads use.'),
+});
+
+export const getDefaultsRoute = createRoute({
+  method: 'get',
+  path: '/kpi/analytics/defaults',
+  permission: PERMISSION_READ,
+  summary: 'The caller’s own dashboard defaults',
+  description:
+    'The service, range and thematic category a new widget starts with, repaired (a stored value that is no longer valid is replaced), with the default service resolved, and the categories the filters offer. It is about the caller only and takes no user id. `Cache-Control: no-store`. The generic `PUT /preferences/kpi.analytics.defaults` stores the values.',
+  responses: {
+    200: {
+      description: 'The defaults of the caller.',
+      content: { 'application/json': { schema: defaultsSchema } },
+    },
+  },
+});
+
 const list = (value: string | undefined) => value?.split(',');
 
 /** Field by field on purpose: a field added to a type later is not exposed by accident. */
@@ -193,6 +226,11 @@ export function registerRoutes(r: RouteRegistrar, analytics: AnalyticsService) {
         result.total,
         result.rows.map((row) => ({
           ...infoOut(row),
+          points: row.points.map((point) => ({
+            period: point.period,
+            value: point.value,
+            text: point.text,
+          })),
           latest: row.latest && {
             period: row.latest.period,
             value: row.latest.value,
@@ -206,4 +244,19 @@ export function registerRoutes(r: RouteRegistrar, analytics: AnalyticsService) {
       200,
     );
   }) satisfies RouteHandler<typeof getSummaryRoute, AppEnv>);
+
+  r.internal(getDefaultsRoute, (async (c) => {
+    // About the caller, so no shared cache may keep it.
+    c.header('cache-control', 'no-store');
+    const own = await analytics.defaults(c.get('actor'));
+    return c.json(
+      {
+        service: own.service,
+        range: own.range,
+        category: own.category,
+        categories: own.categories.map(({ key, label }) => ({ key, label })),
+      },
+      200,
+    );
+  }) satisfies RouteHandler<typeof getDefaultsRoute, AppEnv>);
 }

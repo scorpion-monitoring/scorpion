@@ -68,9 +68,16 @@ describe('parseDefaults', () => {
 describe("defaults(actor): a person's own", () => {
   const h = useAnalytics();
 
+  it('lists the categories the filters offer: the same list as categories(actor), in the same order', async () => {
+    const w = await analyticsWorld(await h.start());
+    const offered = await w.analytics.categories(w.people.plain);
+    expect(offered.length).toBeGreaterThan(0);
+    expect((await w.analytics.defaults(w.people.plain)).categories).toEqual(offered);
+  });
+
   it('is the default range and category and no service for a person with nothing stored and no provider', async () => {
     const w = await analyticsWorld(await h.start());
-    expect(await w.analytics.defaults(w.people.plain)).toEqual({
+    expect(await w.analytics.defaults(w.people.plain)).toMatchObject({
       service: null,
       range: '1y',
       category: 'all',
@@ -84,7 +91,7 @@ describe("defaults(actor): a person's own", () => {
       range: '2y',
       category: 'Technical',
     });
-    expect(await w.analytics.defaults(w.people.plain)).toEqual({
+    expect(await w.analytics.defaults(w.people.plain)).toMatchObject({
       service: w.svc.id,
       range: '2y',
       category: 'Technical',
@@ -107,7 +114,7 @@ describe("defaults(actor): a person's own", () => {
       service: SERVICE,
       category: 'Retired',
     });
-    expect(await w.analytics.defaults(w.people.plain)).toEqual({
+    expect(await w.analytics.defaults(w.people.plain)).toMatchObject({
       service: null,
       range: '1y',
       category: 'all',
