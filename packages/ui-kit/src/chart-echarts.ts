@@ -21,6 +21,8 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
     legend: spec.series.length > 1 ? { bottom: 0, textStyle: { color: theme.text } } : undefined,
     // The tooltip follows the theme too (the legacy chart's did not: a white box with dark text on a dark page).
     tooltip: {
+      // Drawn inside the SVG: the HTML tooltip builds its content with `style` attributes, which the page's Content-Security-Policy refuses.
+      renderMode: 'richText',
       trigger: spec.type === 'radar' ? 'item' : 'axis',
       valueFormatter: (value: unknown) => `${String(value)}${unit}`,
       backgroundColor: theme.background,

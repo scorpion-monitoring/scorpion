@@ -426,7 +426,7 @@ test.describe('DashboardGrid', () => {
     await scene('dashboard-grid', { query: 'edit' });
     await page.getByRole('button', { name: 'Move Trends', exact: true }).focus();
     const stops: string[] = [];
-    for (let step = 0; step < 12; step += 1) {
+    for (let step = 0; step < 13; step += 1) {
       stops.push(
         await page.evaluate(
           () =>
@@ -437,7 +437,7 @@ test.describe('DashboardGrid', () => {
       );
       await page.keyboard.press('Tab');
     }
-    expect(stops.slice(0, 11)).toEqual([
+    expect(stops.slice(0, 12)).toEqual([
       'Move Trends',
       'Move Trends left',
       'Move Trends right',
@@ -448,7 +448,8 @@ test.describe('DashboardGrid', () => {
       'Make Trends taller',
       'Make Trends shorter',
       'Remove Trends',
-      // The chart's own button comes before the next tile's controls.
+      // The chart itself (read with the arrow keys) and its own button come before the next tile's controls.
+      'Services per year',
       'Show the data as a table',
     ]);
     // A button works with Enter and with Space.
