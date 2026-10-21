@@ -37,6 +37,8 @@ import kpiFrameworkModule from '@scorpion/kpi-framework/module';
 import kpiFrameworkPackage from '@scorpion/kpi-framework/package.json' with { type: 'json' };
 import { createKpiIngestionModule } from '@scorpion/kpi-ingestion/module';
 import kpiIngestionPackage from '@scorpion/kpi-ingestion/package.json' with { type: 'json' };
+import { createKpiAnalyticsModule } from '@scorpion/kpi-analytics/module';
+import kpiAnalyticsPackage from '@scorpion/kpi-analytics/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
 import servicesPackage from '@scorpion/registry-services/package.json' with { type: 'json' };
 import uiShellModule from '@scorpion/core-ui-shell/module';
@@ -100,6 +102,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
    * the real date, so a test that writes uses periods well in the past.
    */
   ingestion?: boolean | { clock?: () => Date };
+  /** Loads kpi.analytics (needs `kpi` and `ingestion`). `clock` is the "now" its windows end with. */
+  analytics?: boolean | { clock?: () => Date };
   /** Fixture modules that depend on core.settings, for example one that registers user preferences. */
   extraModules?: {
     id: string;
@@ -210,6 +214,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
               : ['registry.services']),
             ...(options.kpi ? ['kpi.framework'] : []),
             ...(options.kpi && options.ingestion ? ['kpi.ingestion'] : []),
+            ...(options.kpi && options.ingestion && options.analytics ? ['kpi.analytics'] : []),
             ...(options.publicApi ? ['public-api'] : []),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
@@ -257,6 +262,16 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
                 },
               ]
             : []),
+          ...(options.kpi && options.ingestion && options.analytics
+            ? [
+                {
+                  manifest: createKpiAnalyticsModule(
+                    typeof options.analytics === 'object' ? options.analytics : {},
+                  ),
+                  packageJson: kpiAnalyticsPackage,
+                },
+              ]
+            : []),
           ...(options.publicApi
             ? [{ manifest: publicApiModule, packageJson: publicApiPackage }]
             : []),
@@ -283,6 +298,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           'registry.services': '@scorpion/registry-services',
           'kpi.framework': '@scorpion/kpi-framework',
           'kpi.ingestion': '@scorpion/kpi-ingestion',
+          'kpi.analytics': '@scorpion/kpi-analytics',
           'public-api': '@scorpion/public-api',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
