@@ -62,6 +62,6 @@ export const ORGANISATION_WIDGETS: WidgetEntry[] = [
     // A tile of the dashboard grid (M11). It draws nothing at zero, so the grid takes its place away.
     label: 'dash.membership.title',
     icon: 'list',
-    grid: { w: 4, h: 3, minW: 3, minH: 2, maxW: 8, maxH: 6, default: { x: 0, y: 0, w: 4, h: 3 } },
+    grid: { w: 4, h: 3, minW: 3, minH: 2, maxW: 8, maxH: 6, default: { x: 8, y: 0, w: 4, h: 3 } },
   },
 ];

@@ -145,35 +145,15 @@ export function removeTile<T extends GridTile>(tiles: readonly T[], id: string):
 }
 
 /**
- * The layout the grid draws in view mode: a tile that draws nothing takes no room (it has no height), so the
- * ones below rise into its place, and tiles to its right in the same row slide left into the width it leaves, if
- * the places are free. Tiles keep their own size and place in the document; this is only what is drawn.
+ * The layout the grid draws in view mode: a tile that draws nothing takes no room (it has no height), so the tiles below
+ * it rise into its place. Tiles never move sideways: a tile that is empty only while it loads would otherwise make its
+ * neighbours jump twice. Tiles keep their own size and place in the document; this is only what is drawn.
  */
 export function visibleLayout<T extends GridTile>(
   tiles: readonly T[],
   empty: ReadonlySet<string>,
 ): T[] {
-  if (empty.size === 0) return compactUp(tiles);
-  const gone = tiles.filter((tile) => empty.has(tile.id));
-  let shown = compactUp(tiles.filter((tile) => !empty.has(tile.id)));
-  for (const tile of [...shown].sort((a, b) => a.x - b.x)) {
-    // The holes to the left of this tile in its row: it may slide left as far as the leftmost of them.
-    const holes = gone.filter(
-      (hole) => hole.x + hole.w <= tile.x && tile.y < hole.y + hole.h && tile.y + tile.h > hole.y,
-    );
-    if (holes.length === 0) continue;
-    const limit = Math.min(...holes.map((hole) => hole.x));
-    let moved = tile;
-    while (
-      moved.x > limit &&
-      !shown.some((other) => other !== tile && overlaps({ ...moved, x: moved.x - 1 }, other))
-    ) {
-      moved = { ...moved, x: moved.x - 1 };
-    }
-    if (moved !== tile) shown = shown.map((other) => (other === tile ? moved : other));
-  }
-  shown = compactUp(shown);
-  return [...shown, ...gone.map((tile) => ({ ...tile, h: 0 }))];
+  return compactUp(tiles.map((tile) => (empty.has(tile.id) ? { ...tile, h: 0 } : tile)));
 }
 
 // ---- instance ids -----------------------------------------------------------------------------------------

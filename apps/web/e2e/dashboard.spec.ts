@@ -410,7 +410,7 @@ test.describe('journey: a person customises their dashboard', () => {
       const group = page.getByRole('group', { name: MEMBERSHIP, exact: true });
       await expect(group).toBeVisible();
       const before = (await group.boundingBox())!;
-      await page.getByRole('button', { name: `Make ${MEMBERSHIP} wider` }).click();
+      await page.getByRole('button', { name: `Make ${MEMBERSHIP} taller` }).click();
       await expect.poll(() => seen.puts.length, { timeout: 6000 }).toBe(1);
       const alert = page
         .getByRole('alert')
@@ -419,11 +419,11 @@ test.describe('journey: a person customises their dashboard', () => {
       // No permission id or role name in the words.
       expect(await alert.innerText()).not.toMatch(/core\.|reviewer|preference|permission/i);
       // The layout stays on the page, and nothing is sent again by itself.
-      const widened = (await group.boundingBox())!;
-      expect(widened.width).toBeGreaterThan(before.width + 20);
+      const taller = (await group.boundingBox())!;
+      expect(taller.height).toBeGreaterThan(before.height + 20);
       await page.waitForTimeout(4000);
       expect(seen.puts, 'no retry loop').toHaveLength(1);
-      expect((await group.boundingBox())!.width).toBeCloseTo(widened.width, 0);
+      expect((await group.boundingBox())!.height).toBeCloseTo(taller.height, 0);
       // A retry is a request the person makes.
       await alert.getByRole('button', { name: 'Try again' }).click();
       await expect.poll(() => seen.puts.length).toBe(2);
@@ -650,7 +650,8 @@ test.describe('journey: a person customises their dashboard', () => {
       tileOf(page, DEAD).evaluateAll((tiles) =>
         tiles.map((tile) => {
           const { x, y, width, height } = tile.getBoundingClientRect();
-          return [x, y, width, height].map(Math.round);
+          // The page may be scrolled differently before and after a reload: positions are the page's, not the window's.
+          return [x + scrollX, y + scrollY, width, height].map(Math.round);
         }),
       );
     const view = await rects();

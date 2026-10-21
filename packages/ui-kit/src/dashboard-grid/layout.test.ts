@@ -224,23 +224,24 @@ describe('removeTile and visibleLayout', () => {
     expect(tiles[0]!.h).toBe(3);
   });
 
-  it('closes the width a tile that draws nothing leaves in its row, when the places are free', () => {
-    const row = [tile('m', 0, 0, 4, 3), tile('p', 4, 0, 4, 3), tile('d', 8, 0, 4, 3)];
+  it('never moves a tile sideways: the width a tile that draws nothing leaves stays free', () => {
+    const row = [tile('p', 0, 0, 4, 3), tile('m', 4, 0, 4, 3), tile('d', 8, 0, 4, 3)];
     const shown = visibleLayout(row, new Set(['m']));
     expect(at(shown, 'p')).toEqual([0, 0, 4, 3]);
-    expect(at(shown, 'd')).toEqual([4, 0, 4, 3]);
-    const two = visibleLayout(row, new Set(['m', 'p']));
-    expect(at(two, 'd')).toEqual([0, 0, 4, 3]);
-    // A tile below the row does not slide sideways (it rises into the room the row leaves).
-    const below = visibleLayout([...row, tile('z', 8, 5, 4, 2)], new Set(['m']));
-    expect(at(below, 'z')).toEqual([8, 0, 4, 2]);
+    expect(at(shown, 'd')).toEqual([8, 0, 4, 3]);
   });
 
-  it('keeps a tile where it is when sliding it would cover another', () => {
-    const tiles = [tile('a', 0, 0, 4, 3), tile('b', 0, 3, 4, 3), tile('c', 4, 0, 4, 3)];
+  it('keeps a tile where it is when another is above it, and lets one with nothing above it rise', () => {
+    const tiles = [
+      tile('a', 0, 0, 4, 3),
+      tile('b', 0, 3, 4, 3),
+      tile('c', 4, 0, 4, 3),
+      tile('z', 8, 5, 4, 2),
+    ];
     const shown = visibleLayout(tiles, new Set(['a']));
     expect(at(shown, 'b')).toEqual([0, 0, 4, 3]);
     expect(at(shown, 'c')).toEqual([4, 0, 4, 3]);
+    expect(at(shown, 'z')).toEqual([8, 0, 4, 2]);
   });
 
   it('is the layout itself when nothing is empty and it has no gaps', () => {

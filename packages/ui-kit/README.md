@@ -102,8 +102,8 @@ directory imports Snapgrid or dnd-kit (ESLint `no-restricted-imports` and `dashb
   the tile that had it.
 - **Words.** dnd-kit's own announcements are English; its accessibility plugin is given the page's words (`Provider.svelte` builds the manager with the plugin already configured, because the
   plugin reads its options once): "Picked up …", "Moving … was cancelled", and the instructions. A drop is announced by the grid with the new row and column.
-- **Tiles that draw nothing.** The grid watches each tile's body (no element child = nothing to draw): in view mode such a tile has no height, the tiles below rise and those to its right in the
-  row slide left; in edit mode it stays, with a note.
+- **Tiles that draw nothing.** The grid watches each tile's body (no element child = nothing to draw): in view mode such a tile has no height and the tiles below rise (tiles never move sideways); in edit mode it stays, with a note. A
+  widget that is still loading should leave an element in its place (the web app's `Widget` host does), so it does not count as empty.
 - **Style and the CSP.** The component has no `<style>` block (SvelteKit adds the CSS of every dynamic import to the page), only utility classes. dnd-kit's injected `<style>` gets the page's nonce.
 - `Icon` is the closed icon table (`@scorpion/contracts/icons`) as a component for shared parts and module pages.
 - **New runtime dependencies** (ADR-0042, Decision 4): `@snapgridjs/svelte` 0.12.0, `@dnd-kit/svelte` and `@dnd-kit/dom` 0.5.1, pinned exactly (19 packages new to the lockfile, all MIT, none with an install script). `fast-check` is a development dependency (the layout properties).

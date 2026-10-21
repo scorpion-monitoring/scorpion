@@ -175,7 +175,8 @@ entries that have them.
 
 A widget that ignores the props (the three cards that exist) works unchanged, and so does the bell in the header, which gets none.
 **A tile that draws nothing is removed from view.** The grid watches the body of each tile: a widget that renders no element (the membership card at zero
-requests, or a widget whose code has not loaded) takes no room in view mode, the tiles below it rise and the tiles to its right in the same row slide left. It needs
+requests, or a widget whose code has not loaded) takes no room in view mode and the tiles below it rise (tiles never move sideways). While a widget's code is loading, the web app's widget host keeps a hidden
+marker in the tile, so "loading" is not "has nothing to say". It needs
 nothing from the widget (the old `:has` rule of the start page is gone). In edit mode the tile stays, with a note, so that it can be removed.
 A tile whose widget this build has no code for (a `component` name the web app does not know, or code that fails to load) draws nothing and the page says
 "N widgets could not be shown on this page"; it is never an error page.
