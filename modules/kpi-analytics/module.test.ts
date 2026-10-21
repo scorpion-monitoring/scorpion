@@ -85,9 +85,7 @@ describe('the registries', () => {
     const bad = contributor('analytics.aggregate', [
       { id: 'Bad Id', labels: { en: 'x' }, apply: 'not a function' },
     ]);
-    await expect(h.start({ extra: [bad] })).rejects.toThrow(
-      new RegExp(String(bad.manifest.id).replace(/\./g, '\\.')),
-    );
+    await expect(h.start({ extra: [bad] })).rejects.toThrow(String(bad.manifest.id));
   });
 });
 
