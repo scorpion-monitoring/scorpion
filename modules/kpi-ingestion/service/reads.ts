@@ -28,6 +28,9 @@ export const MAX_INDICATOR_FILTER = 50;
 export const MAX_COVERAGE_MONTHS = 36;
 /** The months of the coverage when the caller names none. */
 export const DEFAULT_COVERAGE_MONTHS = 12;
+/** The most months, and the most indicators, one call of `seriesAsSystem` reads. */
+export const MAX_SERIES_MONTHS = 120;
+export const MAX_SERIES_INDICATORS = 200;
 
 /** One value of the time series, as `GET /api/v1/measurements` shows it. */
 export interface MeasurementRead {
@@ -58,6 +61,17 @@ export interface SeriesQuery {
   start?: string | undefined;
   /** `YYYY-MM` or `YYYY-MM-DD`: up to that month. */
   stop?: string | undefined;
+}
+
+/** One stored value of `seriesAsSystem`: the indicator, the month and the value, and nothing else (no id of a row, a person, a run or a source). */
+export interface SeriesPoint {
+  indicatorId: string;
+  /** The last day of the month, `YYYY-MM-DD`. */
+  period: string;
+  /** The number for a numeric type (a duration in seconds), `null` for text. */
+  valueNumber: number | null;
+  /** The canonical text of the value, as the value type formats it. */
+  value: string;
 }
 
 /** A row of the grid of one month: an indicator of the effective set with the value stored for the month, if any. */
@@ -116,6 +130,21 @@ export interface ReadsService {
    * indicators and of the mandatory ones have a value. Needs `kpi.ingestion.measurement.read`; 404 for a service that does not exist.
    */
   coverage(actor: Actor, serviceId: string, months?: number): Promise<CoverageMonth[]>;
+  /**
+   * The values stored for some indicators of one service in the months `fromPeriod` to `toPeriod` (`YYYY-MM` or `YYYY-MM-DD`, both
+   * included), oldest month first, within a month by indicator name without case, then id: the order of `list`. Only months that have
+   * a value appear (a gap is the absence of a point; the caller lays out its months). The values of an indicator the service has since
+   * dropped are returned like any other. **A trusted read for other modules' services** (`kpi.analytics`, M11): it checks **no
+   * permission** and names no caller, so no route may call it; the caller checks its own and that the service exists. Bounded: at most
+   * ${'`'}MAX_SERIES_MONTHS${'`'} months and ${'`'}MAX_SERIES_INDICATORS${'`'} distinct indicators, and a bad period, a `fromPeriod` after
+   * `toPeriod`, an id that is not an id or too many of either is an `Invalid` that names `fromPeriod`, `toPeriod` or `indicatorIds`.
+   */
+  seriesAsSystem(
+    serviceId: string,
+    indicatorIds: readonly string[],
+    fromPeriod: string,
+    toPeriod: string,
+  ): Promise<SeriesPoint[]>;
 }
 
 export interface ReadsDeps {
@@ -319,6 +348,79 @@ export function createReadsService(ctx: ModuleContext, deps: ReadsDeps): ReadsSe
           };
         }),
       };
+    },
+
+    async seriesAsSystem(serviceId, indicatorIds, fromPeriod, toPeriod) {
+      const problems: FieldProblem[] = [];
+      const bound = (name: 'fromPeriod' | 'toPeriod', input: string) => {
+        const parsed = normalisePeriodBound(input);
+        if (!parsed.ok) problems.push(queryProblem(name, parsed.problem));
+        return parsed.ok ? parsed.value : undefined;
+      };
+      const from = bound('fromPeriod', fromPeriod);
+      const to = bound('toPeriod', toPeriod);
+      if (from !== undefined && to !== undefined) {
+        if (from > to) problems.push(queryProblem('fromPeriod', 'must not be after toPeriod'));
+        else if (
+          Number(to.slice(0, 4)) * 12 +
+            Number(to.slice(5, 7)) -
+            (Number(from.slice(0, 4)) * 12 + Number(from.slice(5, 7))) +
+            1 >
+          MAX_SERIES_MONTHS
+        )
+          problems.push(
+            queryProblem('toPeriod', `must be within ${MAX_SERIES_MONTHS} months of fromPeriod`),
+          );
+      }
+      const wanted = [...new Set(indicatorIds)];
+      if (wanted.length > MAX_SERIES_INDICATORS)
+        problems.push(
+          queryProblem('indicatorIds', `must name at most ${MAX_SERIES_INDICATORS} indicators`),
+        );
+      else if (wanted.some((id) => !uuidPattern.test(id)))
+        problems.push(queryProblem('indicatorIds', 'must be ids of indicators'));
+      if (!uuidPattern.test(serviceId))
+        problems.push(queryProblem('service', 'must be the id of a service'));
+      if (problems.length > 0 || from === undefined || to === undefined)
+        throw new Invalid('The request is not valid.', problems);
+      if (wanted.length === 0) return [];
+
+      const details = await deps.kpi.indicatorsByIdAsSystem(wanted);
+      const byId = new Map(details.map((row) => [row.id, row]));
+      // The order within a month is the order of the names, as in `list`: rank the few indicators in memory and let the database sort by it.
+      const ranked = details
+        .map((row) => ({ id: row.id, name: row.name }))
+        .sort(byNameThenId)
+        .map((row) => row.id);
+      if (ranked.length === 0) return [];
+      const rank = sql`array_position(array[${sql.join(
+        ranked.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}], ${measurement.indicatorId})`;
+      const rows = await db
+        .select({
+          indicatorId: measurement.indicatorId,
+          period: measurement.period,
+          valueNumeric: measurement.valueNumeric,
+          valueText: measurement.valueText,
+        })
+        .from(measurement)
+        .where(
+          and(
+            eq(measurement.serviceId, serviceId),
+            inArray(measurement.indicatorId, ranked),
+            gte(measurement.period, from),
+            lte(measurement.period, to),
+          ),
+        )
+        .orderBy(asc(measurement.period), rank, asc(measurement.id))
+        // 120 months of 200 indicators: the bound of the call, so a caller cannot ask for more than the cap says.
+        .limit(MAX_SERIES_MONTHS * MAX_SERIES_INDICATORS);
+      return rows.map((row) => ({
+        indicatorId: row.indicatorId,
+        period: row.period,
+        ...present(byId.get(row.indicatorId)?.valueType, row),
+      }));
     },
 
     async coverage(actor, serviceId, months = DEFAULT_COVERAGE_MONTHS) {

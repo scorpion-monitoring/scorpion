@@ -45,6 +45,7 @@ export type {
   MeasurementRead,
   MonthGrid,
   ReadsService,
+  SeriesPoint,
   SeriesQuery,
 } from './service/reads.ts';
 export type {

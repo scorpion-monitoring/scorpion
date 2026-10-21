@@ -119,6 +119,8 @@ added. `value` is the **canonical text** the legacy API returned (the value type
 `valueNumber` the number (a duration in seconds) or `null` for text. A row never holds the id of the person who wrote it, a source, a run or a file name
 (`response-fields.test.ts`). A value of an indicator the service has since dropped is still listed, and the indicator can be asked for by name.
 
+**A trusted series read for `kpi.analytics` (M11 sprint 3).** `reads.seriesAsSystem(serviceId, indicatorIds, fromPeriod, toPeriod)` returns `{ indicatorId, period, valueNumber | null, value }` for the stored values of the months asked (both ends included, `YYYY-MM` or `YYYY-MM-DD`), oldest month first and within a month by indicator name without case, then id (the order of `reads.list`). It checks **no permission** and no route calls it: only another module's service does, after its own check (the sibling of the `AsSystem` reads of `kpi.framework`). It is bounded: at most 120 months and 200 distinct indicators, otherwise a 422 naming `fromPeriod`, `toPeriod` or `indicatorIds`. A month with no value has no point (the caller lays out its months); the values of an indicator the service has dropped are returned. A point holds no row id, person, run or source. Tested in `service/reads.test.ts`.
+
 The routes are thin: Zod parses, one service call (`reads.list`, `reads.grid`, `reads.coverage`, `measurements.upsertByName`), the row is mapped
 field by field. The write route sets `maxBodyBytes` to 3 MiB: 500 items of the legacy shape are about 60 kB, but a text value may be 4 000 characters, so the
 worst plain-ASCII batch is about 2.1 MB; the server-wide 1 MiB would refuse a batch the schema accepts. The preflight for the path names `GET, POST,
