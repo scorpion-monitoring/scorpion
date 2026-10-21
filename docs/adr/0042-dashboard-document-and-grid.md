@@ -239,11 +239,11 @@ revision protocol, as the plan says. A widget whose component this build does no
 
 | What                                                                                  | Before          | After                        | Change                                                                                      |
 | ------------------------------------------------------------------------------------- | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
-| Client build, JavaScript and CSS (`.svelte-kit/output/client/_app`, 75 → 78 files)    | 5,911,288 B raw | 6,085,618 B raw              | +174,330 B (+2.9 %)                                                                         |
-| the same, gzip of each file                                                           | 1,715,206 B     | 1,772,337 B                  | +57,131 B (+3.3 %)                                                                          |
-| The grid chunk (Snapgrid, dnd-kit, `DashboardGrid` and its parts), loaded on `/` only | not there       | 145,656 B raw, 47,936 B gzip | the prototype's figures were 133.7 kB and 43.9 kB                                           |
-| The rest of the client build                                                          |                 |                              | +28,674 B raw, +9,195 B gzip (the page, its words in two languages, the icons, shared code) |
-| Image `full` (`docker image inspect`, uncompressed)                                   | 634,197,977 B   | 652,782,246 B                | +18,584,269 B (+2.9 %)                                                                      |
+| Client build, JavaScript and CSS (`.svelte-kit/output/client/_app`, 75 → 78 files)    | 5,911,288 B raw | 6,085,445 B raw              | +174,157 B (+2.9 %)                                                                         |
+| the same, gzip of each file                                                           | 1,715,206 B     | 1,772,245 B                  | +57,039 B (+3.3 %)                                                                          |
+| The grid chunk (Snapgrid, dnd-kit, `DashboardGrid` and its parts), loaded on `/` only | not there       | 145,656 B raw, 47,934 B gzip | the prototype's figures were 133.7 kB and 43.9 kB                                           |
+| The rest of the client build                                                          |                 |                              | +28,501 B raw, +9,105 B gzip (the page, its words in two languages, the icons, shared code) |
+| Image `full` (`docker image inspect`, uncompressed)                                   | 634,197,977 B   | 652,779,456 B                | +18,581,479 B (+2.9 %)                                                                      |
 
 The image grows more than the build because the run-time install carries every package of the server's closure, **including the client-only packages of `ui-kit`** (it already carried `echarts`): Snapgrid,
 dnd-kit, the layout functions of react-grid-layout and **`svelte` itself with its compiler's dependencies (about 9.5 MB of the 14.3 MB the package store grew by)**, which the two packages list as a peer. None of
