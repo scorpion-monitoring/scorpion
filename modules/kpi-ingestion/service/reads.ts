@@ -145,6 +145,17 @@ export interface ReadsService {
     fromPeriod: string,
     toPeriod: string,
   ): Promise<SeriesPoint[]>;
+  /**
+   * The ids of the indicators that have at least one stored value for the service in the months `fromPeriod` to `toPeriod` (the same
+   * bounds and the same 422 as `seriesAsSystem`), sorted by id, at most `MAX_SERIES_INDICATORS`. It is how a caller learns of an
+   * indicator the service has since dropped, whose values the series still holds. A trusted read like `seriesAsSystem`: no permission,
+   * no route.
+   */
+  measuredIndicatorsAsSystem(
+    serviceId: string,
+    fromPeriod: string,
+    toPeriod: string,
+  ): Promise<string[]>;
 }
 
 export interface ReadsDeps {
@@ -195,6 +206,48 @@ export function createReadsService(ctx: ModuleContext, deps: ReadsDeps): ReadsSe
       ]);
     if (!(await deps.services.existsAsSystem(serviceId)))
       throw new NotFound('There is no such service.');
+  }
+
+  /** The checks both trusted series reads make: the window, the ids and the service. `indicatorIds` is `undefined` for a read that names none. */
+  function checkSeriesQuery(
+    serviceId: string,
+    indicatorIds: readonly string[] | undefined,
+    fromPeriod: string,
+    toPeriod: string,
+  ): { from: string; to: string; wanted: string[] } {
+    const problems: FieldProblem[] = [];
+    const bound = (name: 'fromPeriod' | 'toPeriod', input: string) => {
+      const parsed = normalisePeriodBound(input);
+      if (!parsed.ok) problems.push(queryProblem(name, parsed.problem));
+      return parsed.ok ? parsed.value : undefined;
+    };
+    const from = bound('fromPeriod', fromPeriod);
+    const to = bound('toPeriod', toPeriod);
+    if (from !== undefined && to !== undefined) {
+      if (from > to) problems.push(queryProblem('fromPeriod', 'must not be after toPeriod'));
+      else if (
+        Number(to.slice(0, 4)) * 12 +
+          Number(to.slice(5, 7)) -
+          (Number(from.slice(0, 4)) * 12 + Number(from.slice(5, 7))) +
+          1 >
+        MAX_SERIES_MONTHS
+      )
+        problems.push(
+          queryProblem('toPeriod', `must be within ${MAX_SERIES_MONTHS} months of fromPeriod`),
+        );
+    }
+    const wanted = [...new Set(indicatorIds ?? [])];
+    if (wanted.length > MAX_SERIES_INDICATORS)
+      problems.push(
+        queryProblem('indicatorIds', `must name at most ${MAX_SERIES_INDICATORS} indicators`),
+      );
+    else if (wanted.some((id) => !uuidPattern.test(id)))
+      problems.push(queryProblem('indicatorIds', 'must be ids of indicators'));
+    if (!uuidPattern.test(serviceId))
+      problems.push(queryProblem('service', 'must be the id of a service'));
+    if (problems.length > 0 || from === undefined || to === undefined)
+      throw new Invalid('The request is not valid.', problems);
+    return { from, to, wanted };
   }
 
   return {
@@ -351,38 +404,7 @@ export function createReadsService(ctx: ModuleContext, deps: ReadsDeps): ReadsSe
     },
 
     async seriesAsSystem(serviceId, indicatorIds, fromPeriod, toPeriod) {
-      const problems: FieldProblem[] = [];
-      const bound = (name: 'fromPeriod' | 'toPeriod', input: string) => {
-        const parsed = normalisePeriodBound(input);
-        if (!parsed.ok) problems.push(queryProblem(name, parsed.problem));
-        return parsed.ok ? parsed.value : undefined;
-      };
-      const from = bound('fromPeriod', fromPeriod);
-      const to = bound('toPeriod', toPeriod);
-      if (from !== undefined && to !== undefined) {
-        if (from > to) problems.push(queryProblem('fromPeriod', 'must not be after toPeriod'));
-        else if (
-          Number(to.slice(0, 4)) * 12 +
-            Number(to.slice(5, 7)) -
-            (Number(from.slice(0, 4)) * 12 + Number(from.slice(5, 7))) +
-            1 >
-          MAX_SERIES_MONTHS
-        )
-          problems.push(
-            queryProblem('toPeriod', `must be within ${MAX_SERIES_MONTHS} months of fromPeriod`),
-          );
-      }
-      const wanted = [...new Set(indicatorIds)];
-      if (wanted.length > MAX_SERIES_INDICATORS)
-        problems.push(
-          queryProblem('indicatorIds', `must name at most ${MAX_SERIES_INDICATORS} indicators`),
-        );
-      else if (wanted.some((id) => !uuidPattern.test(id)))
-        problems.push(queryProblem('indicatorIds', 'must be ids of indicators'));
-      if (!uuidPattern.test(serviceId))
-        problems.push(queryProblem('service', 'must be the id of a service'));
-      if (problems.length > 0 || from === undefined || to === undefined)
-        throw new Invalid('The request is not valid.', problems);
+      const { from, to, wanted } = checkSeriesQuery(serviceId, indicatorIds, fromPeriod, toPeriod);
       if (wanted.length === 0) return [];
 
       const details = await deps.kpi.indicatorsByIdAsSystem(wanted);
@@ -421,6 +443,23 @@ export function createReadsService(ctx: ModuleContext, deps: ReadsDeps): ReadsSe
         period: row.period,
         ...present(byId.get(row.indicatorId)?.valueType, row),
       }));
+    },
+
+    async measuredIndicatorsAsSystem(serviceId, fromPeriod, toPeriod) {
+      const { from, to } = checkSeriesQuery(serviceId, undefined, fromPeriod, toPeriod);
+      const rows = await db
+        .selectDistinct({ id: measurement.indicatorId })
+        .from(measurement)
+        .where(
+          and(
+            eq(measurement.serviceId, serviceId),
+            gte(measurement.period, from),
+            lte(measurement.period, to),
+          ),
+        )
+        .orderBy(asc(measurement.indicatorId))
+        .limit(MAX_SERIES_INDICATORS);
+      return rows.map((row) => row.id);
     },
 
     async coverage(actor, serviceId, months = DEFAULT_COVERAGE_MONTHS) {

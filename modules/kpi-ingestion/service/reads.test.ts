@@ -519,3 +519,30 @@ describe('reads.seriesAsSystem: the trusted series read of kpi.analytics', () =>
     ]);
   });
 });
+
+describe('reads.measuredIndicatorsAsSystem: which indicators have values in a window', () => {
+  const measured = (w: IngestionWorld, from: string, to: string, serviceId = w.svc.id) =>
+    w.ingestion.reads.measuredIndicatorsAsSystem(serviceId, from, to);
+
+  it('names each indicator with a value in the window once, sorted by id, a dropped one included, and nothing of another service', async () => {
+    const w = await seeded();
+    await w.put(w.ind.outside, '2026-02-28', 5);
+    await w.put(w.ind.share, '2026-01-31', 1, w.elsewhereSvc.id);
+    const ids = await measured(w, '2026-01', '2026-06');
+    expect(ids).toEqual(
+      [w.ind.downloads.id, w.ind.share.id, w.ind.uptime.id, w.ind.note.id, w.ind.outside.id].sort(),
+    );
+    expect(await measured(w, '2026-04', '2026-04')).toEqual([w.ind.downloads.id]);
+    expect(await measured(w, '2027-01', '2027-02')).toEqual([]);
+    expect(await measured(w, '2026-01', '2026-06', w.elsewhereSvc.id)).toEqual([w.ind.share.id]);
+  });
+
+  it('has the bounds and the 422 of seriesAsSystem', async () => {
+    const w = await seeded();
+    expect(paths(await rejection(measured(w, '2026-13', '2026-06')))).toEqual(['query:fromPeriod']);
+    expect(paths(await rejection(measured(w, '2016-12', '2026-12')))).toEqual(['query:toPeriod']);
+    expect(paths(await rejection(measured(w, '2026-01', '2026-06', 'nope')))).toEqual([
+      'query:service',
+    ]);
+  });
+});
