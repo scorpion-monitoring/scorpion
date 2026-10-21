@@ -414,3 +414,135 @@ describe('reads.coverage: the last months and the mandatory values [ASVS-8.2.1]'
     ]);
   });
 });
+
+describe('reads.seriesAsSystem: the trusted series read of kpi.analytics', () => {
+  const series = (
+    w: IngestionWorld,
+    ids: string[],
+    from: string,
+    to: string,
+    serviceId = w.svc.id,
+  ) => w.ingestion.reads.seriesAsSystem(serviceId, ids, from, to);
+
+  it('returns the stored values of the months asked, both ends included, with the number and the canonical text, and nothing else', async () => {
+    const w = await seeded();
+    const points = await series(
+      w,
+      [w.ind.downloads.id, w.ind.uptime.id, w.ind.note.id],
+      '2026-01',
+      '2026-02-10',
+    );
+    expect(points).toEqual([
+      { indicatorId: w.ind.downloads.id, period: '2026-01-31', valueNumber: 100, value: '100' },
+      { indicatorId: w.ind.note.id, period: '2026-01-31', valueNumber: null, value: 'all well' },
+      { indicatorId: w.ind.uptime.id, period: '2026-01-31', valueNumber: 3661, value: '01-01-01' },
+      { indicatorId: w.ind.downloads.id, period: '2026-02-28', valueNumber: 101, value: '101' },
+      { indicatorId: w.ind.uptime.id, period: '2026-02-28', valueNumber: 7200, value: '02-00-00' },
+    ]);
+    expect(Object.keys(points[0]!).sort()).toEqual([
+      'indicatorId',
+      'period',
+      'value',
+      'valueNumber',
+    ]);
+  });
+
+  it('is in the stable order: month, then indicator name without case, then id', async () => {
+    const w = await seeded();
+    const ids = [w.ind.uptime.id, w.ind.downloads.id, w.ind.share.id, w.ind.note.id];
+    const names = new Map(
+      [w.ind.uptime, w.ind.downloads, w.ind.share, w.ind.note].map((i) => [
+        i.id,
+        i.name.toLowerCase(),
+      ]),
+    );
+    const points = await series(w, ids, '2026-01', '2026-06');
+    const keys = points.map((p) => `${p.period}|${names.get(p.indicatorId)}`);
+    expect(keys).toEqual([...keys].sort());
+    expect(await series(w, [...ids].reverse(), '2026-01', '2026-06')).toEqual(points);
+  });
+
+  it('leaves a month with no value out (the caller lays out its months), and an empty list asks nothing', async () => {
+    const w = await seeded();
+    const points = await series(w, [w.ind.share.id], '2026-01', '2026-06');
+    expect(points.map((p) => p.period)).toEqual(['2026-01-31', '2026-03-31', '2026-05-31']);
+    expect(await series(w, [], '2026-01', '2026-06')).toEqual([]);
+    expect(await series(w, [w.ind.share.id], '2027-01', '2027-06')).toEqual([]);
+  });
+
+  it('holds nothing of another service, and still returns a value of an indicator the service dropped', async () => {
+    const w = await seeded();
+    await w.put(w.ind.downloads, '2026-01-31', 999, w.elsewhereSvc.id);
+    await w.put(w.ind.outside, '2026-02-28', 5);
+    const mine = await series(w, [w.ind.downloads.id, w.ind.outside.id], '2026-01', '2026-02');
+    expect(mine.some((p) => p.valueNumber === 999)).toBe(false);
+    expect(mine.find((p) => p.indicatorId === w.ind.outside.id)).toMatchObject({ value: '5' });
+  });
+
+  it('checks no permission: it takes no actor, and no route of this module calls it', async () => {
+    const w = await seeded();
+    expect(w.ingestion.reads.seriesAsSystem.length).toBe(4);
+    expect(await series(w, [w.ind.downloads.id], '2026-06', '2026-06')).toHaveLength(1);
+  });
+
+  it('is bounded: 120 months and 200 indicators are allowed, one more of either is a 422 that names the argument', async () => {
+    const w = await seeded();
+    expect(await series(w, [w.ind.downloads.id], '2017-01', '2026-12')).toHaveLength(6);
+    expect(paths(await rejection(series(w, [w.ind.downloads.id], '2016-12', '2026-12')))).toEqual([
+      'query:toPeriod',
+    ]);
+    const ids = Array.from(
+      { length: 200 },
+      (_, n) => `0198f3a8-5b21-7d40-9c1e-${String(n).padStart(12, '0')}`,
+    );
+    expect(await series(w, ids, '2026-01', '2026-02')).toEqual([]);
+    expect(
+      paths(await rejection(series(w, [...ids, w.ind.downloads.id], '2026-01', '2026-02'))),
+    ).toEqual(['query:indicatorIds']);
+  });
+
+  it('is 422 for a bad period, a start after the end, an id that is not an id and a bad service, naming each', async () => {
+    const w = await seeded();
+    const ok = [w.ind.downloads.id];
+    expect(paths(await rejection(series(w, ok, '2026-13', '2026-06')))).toEqual([
+      'query:fromPeriod',
+    ]);
+    expect(paths(await rejection(series(w, ok, '2026-01', 'soon')))).toEqual(['query:toPeriod']);
+    expect(paths(await rejection(series(w, ok, '2026-06', '2026-01')))).toEqual([
+      'query:fromPeriod',
+    ]);
+    expect(paths(await rejection(series(w, ['x'], '2026-01', '2026-06')))).toEqual([
+      'query:indicatorIds',
+    ]);
+    expect(paths(await rejection(series(w, ok, '2026-01', '2026-06', 'nope')))).toEqual([
+      'query:service',
+    ]);
+  });
+});
+
+describe('reads.measuredIndicatorsAsSystem: which indicators have values in a window', () => {
+  const measured = (w: IngestionWorld, from: string, to: string, serviceId = w.svc.id) =>
+    w.ingestion.reads.measuredIndicatorsAsSystem(serviceId, from, to);
+
+  it('names each indicator with a value in the window once, sorted by id, a dropped one included, and nothing of another service', async () => {
+    const w = await seeded();
+    await w.put(w.ind.outside, '2026-02-28', 5);
+    await w.put(w.ind.share, '2026-01-31', 1, w.elsewhereSvc.id);
+    const ids = await measured(w, '2026-01', '2026-06');
+    expect(ids).toEqual(
+      [w.ind.downloads.id, w.ind.share.id, w.ind.uptime.id, w.ind.note.id, w.ind.outside.id].sort(),
+    );
+    expect(await measured(w, '2026-04', '2026-04')).toEqual([w.ind.downloads.id]);
+    expect(await measured(w, '2027-01', '2027-02')).toEqual([]);
+    expect(await measured(w, '2026-01', '2026-06', w.elsewhereSvc.id)).toEqual([w.ind.share.id]);
+  });
+
+  it('has the bounds and the 422 of seriesAsSystem', async () => {
+    const w = await seeded();
+    expect(paths(await rejection(measured(w, '2026-13', '2026-06')))).toEqual(['query:fromPeriod']);
+    expect(paths(await rejection(measured(w, '2016-12', '2026-12')))).toEqual(['query:toPeriod']);
+    expect(paths(await rejection(measured(w, '2026-01', '2026-06', 'nope')))).toEqual([
+      'query:service',
+    ]);
+  });
+});

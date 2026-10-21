@@ -8,6 +8,7 @@ export const WORKSPACE_MODULES = {
   'core.notifications': '@scorpion/core-notifications',
   'core.settings': '@scorpion/core-settings',
   'core.ui-shell': '@scorpion/core-ui-shell',
+  'kpi.analytics': '@scorpion/kpi-analytics',
   'kpi.framework': '@scorpion/kpi-framework',
   'kpi.ingestion': '@scorpion/kpi-ingestion',
   'public-api': '@scorpion/public-api',

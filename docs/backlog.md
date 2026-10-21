@@ -805,6 +805,44 @@ The image grew by more than the build: its package store grew by 14.3 MB, of whi
 - **A screen-reader pass of the announcements is a manual step** (plan §6, item 10); the texts and the live regions are tested, what NVDA, JAWS and VoiceOver make of them is not.
 - **Fourteen icons joined the closed table** (`plus`, `check`, `edit`, `refresh`, `trash`, `move`, the four arrows, `wider`, `narrower`, `taller`, `shorter`; the table is `@scorpion/contracts/icons`).
 
+## Analytics follow-ups (M11 sprint 3)
+
+### Measured in sprint 3
+
+| What                                                                       | Before                          | After                           | Change                   |
+| -------------------------------------------------------------------------- | ------------------------------- | ------------------------------- | ------------------------ |
+| Image `full`, uncompressed (`docker image inspect`), against `0.12.0-full` | 634,129,376 B                   | 504,277,492 B                   | -129,851,884 B (-20.5 %) |
+| the same, against the sprint 2 figure                                      | 652,779,456 B                   | 504,277,492 B                   | -148,501,964 B (-22.8 %) |
+| Image `core-only` and `registry`, against the sprint 2 figures             | 636,627,551 B and 639,750,178 B | 487,879,180 B and 490,994,807 B | -148.7 MB each           |
+
+The change is one flag in step 5 of `docker/Dockerfile`: `--filter-prod "@scorpion/server..."` instead of `--filter`. `--filter` follows the workspace graph **including development dependencies**, so `@scorpion/ui-kit` and `@scorpion/testing`
+were selected (modules list them as development dependencies) and their production dependencies installed: ECharts, Svelte and its compiler, Snapgrid, dnd-kit. The web app is bundled in step 4, so nothing at run time imports them.
+The image is also 129.9 MB smaller than `0.12.0-full`, which carried ECharts and its siblings already. The module-set check passes for `full`, `core-only` and `registry`, the three images start (`/healthz`, `/readyz`, the start page, the navigation,
+`/metrics` on the API port only) and refuse a `PROFILE` they were not built for, and `scripts/image-run.test.ts` and `scripts/image-tree.test.ts` pass.
+
+`GET /kpi/analytics/series` and `/summary` at **49,800 measurements** (one service with 200 KPIs x 120 months = 24,000 rows, three others of 8,600; local Postgres in Docker, the service layer without HTTP, median of 5 after a warm-up):
+
+| Read      | Window             | KPIs on the page      | Time   | Body            |
+| --------- | ------------------ | --------------------- | ------ | --------------- |
+| `series`  | `1y`               | 200                   | 35 ms  |                 |
+| `summary` | `1y`               | 200                   | 38 ms  |                 |
+| `series`  | `all` (120 months) | 200                   | 138 ms | 1.18 MB of JSON |
+| `summary` | `all`              | 200                   | 139 ms |                 |
+| `series`  | `1y`               | 50 (the default page) |        | 38 kB of JSON   |
+
+The worst case (a window of 120 months and a page of 200 KPIs) is 1.2 MB, which is why the default page is 50 KPIs and a widget asks for the KPIs it shows. HTTP overhead, the rate limiter and the browser's parse time are sprint 6's measurement.
+
+### Entries
+
+- **The defaults have no read route.** `kpi.analytics.defaults` is stored through the generic `PUT /preferences/{key}`, and the repaired value (with the default service resolved) is a service method, `defaults(actor)`. The widgets of sprint 4 need it in the browser: **a third internal route** (`GET /kpi/analytics/defaults`, plus the list of categories the filter offers, which `categories(actor)` already returns) is the likely shape; it was not in the plan's two routes and was not added. The maintainer decides before sprint 4.
+- **`all` is 120 months**, the bound of the trusted series read. A service with older data does not see it. A longer window means a paged or aggregated read (yearly points), which the dashboard does not need yet.
+- **A KPI answer is capped at 200 KPIs** (the effective ones, then the dropped ones that have values in the window, by name). A service with more is silently cut at 200; no service has that many yet. The answer could say `truncated: true`.
+- **The current month is the last point of every window and is usually a gap** until it is reported (the plan counts from the current month so that every KPI and widget has the same window). A window that ends with the last month that has a value would show fuller charts; it would give each KPI its own window.
+- **`all` and a category named `all`:** the filter value `all` means "no filter" and would shadow a vocabulary term with that key. Nothing stops an administrator from creating one; a reserved-key check in `core.settings` is the way out.
+- **Bands are `low`, `medium` and `high`** and the boundaries belong to the higher band (0.4 is medium, 0.8 is high). The legacy page's exact boundary is not in the source; if it differs, it is a one-line change in `band()` with its table.
+- **`modules/kpi-ingestion/service/reminder.test.ts` does not type-check** (line 533: `manifest.routes?.(...)` with one argument, two expected). It was already so on `dev`: `kpi.ingestion` is not in the root `tsconfig.json` references, so `pnpm typecheck` does not build it, and it shows only when a project that references it (`kpi.analytics`) is built with `tsc -b`. Neither module is in the root references. Adding both, and fixing the line, is a small change for the next pull request that touches the type check.
+- **`pnpm check` does not type-check `kpi.analytics`** for the same reason; `npx tsc -b modules/kpi-analytics` does, and is clean for the module's own files.
+
 ## Observed by the maintainer (after M9 sprint 4)
 
 - **A `pg` deprecation warning from a node process.** `DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.` Seen once by chance in a local run (pid 58754; which process and command is not known). It means some code issues a second query on one `pg` client before the first has finished (a `Promise.all` over a single client or transaction, a query in an event handler, or a missing `await`). Nothing fails today, but `pg@9` will stop queueing them. To find it: run with `node --trace-deprecation` (`NODE_OPTIONS=--trace-deprecation pnpm test`, or the same for `pnpm dev`) and fix the call site; then make the test setup fail on a deprecation warning (`--throw-deprecation` in the vitest and e2e processes) so it cannot return. Candidates to look at first: code that runs several reads through one `ctx.db.tx()` transaction in parallel (a drizzle transaction is one client), and the test helpers that share one client.

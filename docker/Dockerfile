@@ -64,9 +64,13 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 
 # 5. The run-time packages: the server's closure, and what the web front imports. Optional module
 #    dependencies (optional peer dependencies) are not installed unless the profile lists them.
+#    `--filter-prod` follows production dependencies only: `--filter "@scorpion/server..."` also selects the
+#    workspace projects that modules list as development dependencies (`@scorpion/ui-kit`,
+#    `@scorpion/testing`), and with them the packages only the browser needs (ECharts, Svelte and its
+#    compiler, the grid). The web app is bundled in step 4, so nothing at run time imports them.
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     find . -name node_modules -prune -exec rm -rf {} + \
-    && pnpm install --frozen-lockfile --prod --filter "@scorpion/server..." --filter "@scorpion/web"
+    && pnpm install --frozen-lockfile --prod --filter-prod "@scorpion/server..." --filter "@scorpion/web"
 
 # 6. Assemble the run-time tree: the server's closure, and the web build when there is one.
 RUN node scripts/image-tree.ts /out

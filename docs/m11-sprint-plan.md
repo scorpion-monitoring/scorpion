@@ -210,6 +210,19 @@ Tests (sprint 3): the library (table-driven and `fast-check`); the reads against
 
 Definition of done: as sprint 2, minus the browser journeys, plus the image module-set check for `full`, `core-only` and `registry` (the module is in `full` only).
 
+**Amended in sprint 3 (what was decided while building it; the reasons and the measurements are in [ADR-0043](adr/0043-analytics-calculations-ranges-and-exports.md) and the backlog):**
+
+Checked against the source before starting: `dev` carries PR #120 (sprint 2). The value-type API, `kpisInPeriod`, the vocabularies `thematic-category`, `necessity` and `aggregate`, `registry.services/public` (`existsAsSystem`, `listForPickerAsSystem` with `memberOf`) and
+the order of the reads of `kpi.ingestion` are as the plan names them. Where the plan and the source differed, the source won:
+
+1. **The trusted reads of `kpi.framework` did not carry the thematic category** (`effectiveIndicatorsAsSystem`, `indicatorsByIdAsSystem`). Both gained `thematic` (additive, own commit).
+2. **`seriesAsSystem` takes the ids of the indicators, so it cannot find a KPI the service has dropped.** `kpi.ingestion` gained a companion trusted read, `measuredIndicatorsAsSystem(serviceId, from, to)` (own commit, README line, tests). `kpisInPeriod` was rejected for this: one query per month and it misses a KPI removed from a set.
+3. **`all` is 120 months**, the bound of the series read. A range that is not one is a 422; a missing one is `1y`.
+4. **No route reads the defaults.** The preference is written through the generic `PUT /preferences/{key}`; `service.defaults(actor)` and `defaultServiceOfAsSystem` exist, and a route for the widgets is a decision for sprint 4 (backlog).
+5. **A page is a page of KPIs** (default 50, at most 200), because a series of 120 months of 200 KPIs is 1.2 MB. Both reads take the service as an id; an unknown one is a 422 naming `service`.
+6. **The image change** (the maintainer's decision after sprint 2) is one flag, `--filter-prod`, in step 5 of the `Dockerfile`: `full` is 504,277,492 B, 148.5 MB below the sprint 2 figure and 129.9 MB below `0.12.0-full`.
+7. **No new runtime dependency.** `fast-check` 4.10.2 is a development dependency of the new package, as elsewhere. `pnpm openapi:diff` is clean; the typed client's types gained the two internal routes.
+
 ## 8. Sprint 4: the widgets
 
 **Branch:** `feature/m11-widgets`. **Goal:** the widgets of FEATURES §3.8 exist as placeable, configurable tiles that read little, draw in both themes and have a text alternative.
