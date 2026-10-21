@@ -51,7 +51,9 @@
     {#if field.kind === 'service'}
       <ServiceChoice
         value={typeof draft[field.name] === 'string' ? (draft[field.name] as string) : null}
-        onchange={(next) => (draft[field.name] = next)}
+        onchange={(next) => {
+          draft[field.name] = next;
+        }}
         invalid={bad(field.name)}
       />
     {:else if field.kind === 'range'}

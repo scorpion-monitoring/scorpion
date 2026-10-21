@@ -18,7 +18,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const stringEnum = (rule: Record<string, unknown>): string[] | undefined => {
   const values = rule.enum;
   return Array.isArray(values) && values.every((value) => typeof value === 'string')
-    ? (values as string[])
+    ? values
     : undefined;
 };
 

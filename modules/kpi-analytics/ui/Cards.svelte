@@ -6,6 +6,7 @@
   import { getShell } from '@scorpion/ui-kit';
   import { changeView, formatLatest } from './format.ts';
   import Sparkline from './Sparkline.svelte';
+  import type { Body } from './types.ts';
   import WidgetFrame from './WidgetFrame.svelte';
 
   let { config, editing, setConfig }: UiWidgetProps = $props();
@@ -21,7 +22,7 @@
 </script>
 
 <WidgetFrame title={t('analytics.cards.title')} {config} {editing} {setConfig} units>
-  {#snippet body({ rows, unit })}
+  {#snippet body({ rows, unit }: Body)}
     <p class="text-base-content/70 text-sm" role="status">
       {t('analytics.cards.count', { count: rows.length })}
     </p>

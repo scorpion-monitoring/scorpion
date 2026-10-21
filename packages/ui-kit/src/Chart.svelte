@@ -105,7 +105,7 @@
   });
 </script>
 
-<figure class="flex flex-col gap-2" class:h-full={size === 'fill'}>
+<figure class="flex flex-col items-stretch justify-start gap-2" class:h-full={size === 'fill'}>
   {#if problems.length > 0}
     <p role="alert" class="text-error">{t('kit.chart.invalid')}</p>
   {:else}
@@ -141,7 +141,16 @@
       {showTable ? t('kit.chart.hideTable') : t('kit.chart.showTable')}
     </button>
   </div>
-  <div id={tableId} hidden={!showTable} class="overflow-x-auto">
+  <!-- A table wider than its box scrolls, and a scrolling region must take focus or a keyboard cannot reach what is off screen. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <div
+    id={tableId}
+    hidden={!showTable}
+    class="overflow-x-auto"
+    role="region"
+    aria-label={label}
+    tabindex="0"
+  >
     <table class="table table-sm">
       <caption class="sr-only">{label}</caption>
       <thead class="text-base-content">

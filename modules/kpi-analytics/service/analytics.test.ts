@@ -264,14 +264,19 @@ describe('summary: the figures of each KPI', () => {
   it('carries the points of the series read, so one read serves a dashboard (ADR-0044)', async () => {
     const w = await seeded();
     for (const range of ['3m', '1y', 'all']) {
-      const [rows, points] = [(await summary(w, { range })).rows, (await series(w, { range })).rows];
+      const [rows, points] = [
+        (await summary(w, { range })).rows,
+        (await series(w, { range })).rows,
+      ];
       expect(rows.map((one) => [one.indicatorId, one.points])).toEqual(
         points.map((one) => [one.indicatorId, one.points]),
       );
     }
     // a gap is null and a text value has its text, never a zero
     const note = row((await summary(w, { range: '6m' })).rows, w.ind.note);
-    expect(note.points.some((point) => point.value === null && point.text === 'all well')).toBe(true);
+    expect(note.points.some((point) => point.value === null && point.text === 'all well')).toBe(
+      true,
+    );
     expect(note.points.some((point) => point.value === 0)).toBe(false);
   });
 

@@ -13,7 +13,6 @@ import { MAX_CATEGORY_LENGTH, MAX_SERIES_STATES, SHORT_ID } from './widget-limit
 
 export { MAX_CATEGORY_LENGTH, MAX_SERIES_STATES };
 
-
 const shortId = z.string().regex(SHORT_ID, 'must be 12 lower-case hexadecimal digits');
 const states = z
   .array(shortId)

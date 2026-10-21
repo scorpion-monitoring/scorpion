@@ -8,7 +8,8 @@
   import { MAX_SERIES_STATES } from '../service/widget-limits.ts';
   import { monthLabel } from './format.ts';
   import { hasState, toggleState, trendSeries, type SeriesState } from './settings.ts';
-  import WidgetFrame, { type Body } from './WidgetFrame.svelte';
+  import type { Body } from './types.ts';
+  import WidgetFrame from './WidgetFrame.svelte';
 
   let { config, editing, setConfig }: UiWidgetProps = $props();
   const { t, locale } = getShell();
@@ -42,7 +43,7 @@
 </script>
 
 <WidgetFrame title={t('analytics.trends.title')} {config} {editing} {setConfig} units>
-  {#snippet body(data)}
+  {#snippet body(data: Body)}
     {@const { lines, shown, spec } = specOf(data)}
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
       {#if lines.length === 0}

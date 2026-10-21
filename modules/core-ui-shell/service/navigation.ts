@@ -101,10 +101,11 @@ export function createNavigationService(
   for (const entry of widgets) {
     if (entry.configSchema === undefined) continue;
     try {
-      const { $schema: _draft, ...schema } = z.toJSONSchema(entry.configSchema, {
-        io: 'input',
-        unrepresentable: 'throw',
-      });
+      const schema: Record<string, unknown> = {
+        ...z.toJSONSchema(entry.configSchema, { io: 'input', unrepresentable: 'throw' }),
+      };
+      // The draft is the same for every schema of the answer; naming it on each one is noise.
+      delete schema.$schema;
       configSchemas.set(entry.id, schema);
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error);

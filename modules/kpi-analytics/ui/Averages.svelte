@@ -4,6 +4,7 @@
   import type { UiWidgetProps } from '@scorpion/contracts';
   import { getShell } from '@scorpion/ui-kit';
   import { formatNumber } from './format.ts';
+  import type { Body } from './types.ts';
   import WidgetFrame from './WidgetFrame.svelte';
 
   let { config, editing, setConfig }: UiWidgetProps = $props();
@@ -11,7 +12,7 @@
 </script>
 
 <WidgetFrame title={t('analytics.averages.title')} {config} {editing} {setConfig} units>
-  {#snippet body({ rows, unit })}
+  {#snippet body({ rows, unit }: Body)}
     <!-- A scrolling region must take focus, or a keyboard cannot scroll it (axe: scrollable-region-focusable). -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div

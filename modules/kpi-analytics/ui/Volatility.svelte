@@ -5,6 +5,7 @@
   import type { UiWidgetProps } from '@scorpion/contracts';
   import { getShell } from '@scorpion/ui-kit';
   import { barFill, formatPercent } from './format.ts';
+  import type { Body } from './types.ts';
   import WidgetFrame from './WidgetFrame.svelte';
 
   let { config, editing, setConfig }: UiWidgetProps = $props();
@@ -26,7 +27,7 @@
 </script>
 
 <WidgetFrame title={t('analytics.volatility.title')} {config} {editing} {setConfig}>
-  {#snippet body({ rows })}
+  {#snippet body({ rows }: Body)}
     <div>
       <button
         type="button"

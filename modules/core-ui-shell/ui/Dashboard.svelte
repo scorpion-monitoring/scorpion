@@ -66,9 +66,13 @@
   let editing = $state(false);
   let open = $state(false);
   const tiles = $derived(toTiles(items, byId));
+  // The name of a tile for people and screen readers: its widget's label, and a number when the dashboard has several tiles of one widget
+  // (two trends charts of two services), in the order of the document, so that "Move Trends" never names two controls.
   const nameOf = (id: string) => {
     const item = items.find((candidate) => candidate.id === id);
-    return nameOfEntry(item ? byId.get(item.widget) : undefined, item?.widget ?? id);
+    const name = nameOfEntry(item ? byId.get(item.widget) : undefined, item?.widget ?? id);
+    const same = item ? items.filter((candidate) => candidate.widget === item.widget) : [];
+    return same.length > 1 ? `${name} (${same.indexOf(item!) + 1})` : name;
   };
 
   // How many tiles draw something, as the grid reports it; nothing is known until it has.
@@ -340,7 +344,7 @@
             <WidgetSettings
               {schema}
               config={item.config}
-              onapply={(next) => setConfigOf(item.id, next)}
+              onapply={(next: Record<string, unknown>) => setConfigOf(item.id, next)}
               onclose={close}
             />
           {/if}

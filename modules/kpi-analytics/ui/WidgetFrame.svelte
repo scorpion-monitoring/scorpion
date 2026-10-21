@@ -1,20 +1,3 @@
-<script lang="ts" module>
-  import type { AnalyticsSummary } from '@scorpion/contracts/client';
-
-  export type Row = AnalyticsSummary['result'][number];
-
-  /** What a widget's body is given once its numbers have arrived. */
-  export interface Body {
-    rows: Row[];
-    /** How many KPIs the service has in this window (the envelope's count); more than `rows` when the page is full. */
-    total: number;
-    /** The months of the window, oldest first, as the first KPI's points have them. */
-    months: string[];
-    /** The label of a unit term in the person's language; the term's own key where the vocabulary has none, `''` for no unit. */
-    unit: (key: string | null) => string;
-  }
-</script>
-
 <script lang="ts">
   // The frame every widget of kpi.analytics draws itself in: the heading (the widget's name and the service), the states that say what to do
   // (choose a service, loading, no KPIs, no values in this range, a failed read with a retry) and, once the numbers have arrived, the widget's own
@@ -23,7 +6,7 @@
   // A tile that has never been set up shows the person's defaults and, in edit mode, takes them (a new widget starts with the defaults).
   // Every state is a `role="status"` or an `Alert`: no blank tile.
   import type { Snippet } from 'svelte';
-  import { ApiError } from '@scorpion/contracts/client';
+  import { ApiError, type AnalyticsSummary } from '@scorpion/contracts/client';
   import {
     Alert,
     getAnalyticsReads,
@@ -32,6 +15,7 @@
     type ServiceName,
   } from '@scorpion/ui-kit';
   import { resolveConfig, seeded, type Filter } from './settings.ts';
+  import type { Body } from './types.ts';
 
   let {
     title,
@@ -86,9 +70,12 @@
   let read = $state.raw<State>({ kind: 'idle' });
   let attempt = $state(0);
 
+  // A boolean, not the object: `resolved` is a new object whenever the configuration changes, and the read must not start again (the body
+  // would be torn down and drawn anew: the options of a chart would close under the person's hand) for a change that is not the filter.
+  const known = $derived(resolved !== undefined);
   $effect(() => {
     void attempt;
-    if (resolved === undefined || service === null) {
+    if (!known || service === null) {
       read = { kind: 'idle' };
       return;
     }
@@ -135,6 +122,8 @@
 
   // ---- what to say ---------------------------------------------------------------------------------------------------------
   const rangeText = $derived(RANGE_KEYS[range] ? t(RANGE_KEYS[range]) : range);
+  // One string, so the separator keeps its spaces: `Name · Last year`.
+  const subtitle = $derived(named ? `${named.name} · ${rangeText}` : rangeText);
   const ready = $derived(read.kind === 'ready' ? read.page : undefined);
   const hasNoKpis = $derived(ready !== undefined && ready.metadata.totalCount === 0);
   const hasNoValues = $derived(
@@ -161,10 +150,7 @@
     <div>
       <h2 id={titleId} class="card-title text-base">{title}</h2>
       {#if service !== null}
-        <p class="text-base-content/70 text-sm">
-          {#if named}{named.name} ·
-          {/if}{rangeText}
-        </p>
+        <p class="text-base-content/70 text-sm">{subtitle}</p>
       {/if}
     </div>
 

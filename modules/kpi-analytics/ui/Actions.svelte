@@ -1,12 +1,10 @@
 <script lang="ts">
   // The quick actions (FEATURES §3.8): Report data (the Data Submission page), Services, Notification preferences, and the dashboard defaults.
   // A link is shown only for a page the person may open (the navigation lists those), so there is no dead link, and every address is built
-  // with the base path by `href()`.
-  import type { UiWidgetProps } from '@scorpion/contracts';
+  // with the base path by `href()`. It has no settings and ignores the props a tile receives.
   import { DashboardDefaults, getShell } from '@scorpion/ui-kit';
   import { RANGES } from '../service/widget-limits.ts';
 
-  let {}: UiWidgetProps = $props();
   const { t, href, navigation } = getShell();
   const titleId = $props.id();
   let showDefaults = $state(false);

@@ -59,7 +59,7 @@
   // The service the widget has now, found by id, so it is an option however the list looks.
   $effect(() => {
     const wanted = value;
-    if (wanted === null || listed.some((option) => option.id === wanted)) {
+    if (wanted === null) {
       current = undefined;
       return;
     }
@@ -71,7 +71,10 @@
     );
   });
 
-  const options = $derived(current ? [current, ...listed] : listed);
+  // The current service is listed once: the search may or may not have it, and either can arrive first.
+  const options = $derived(
+    current && !listed.some((option) => option.id === current!.id) ? [current, ...listed] : listed,
+  );
 </script>
 
 <div class="flex flex-col gap-2">
