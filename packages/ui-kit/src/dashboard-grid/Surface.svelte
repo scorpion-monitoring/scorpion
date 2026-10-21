@@ -9,7 +9,7 @@
     type Layout,
     type LayoutItem,
   } from '@snapgridjs/svelte';
-  import type { Snippet } from 'svelte';
+  import type { BodyHost } from './body-host.ts';
   import Tile from './Tile.svelte';
   import {
     GRID_COLUMNS,
@@ -30,21 +30,20 @@
     empty,
     reducedMotion,
     label,
-    tile: body,
+    host,
     hasSettings,
     onchange,
     onmove,
     onresize,
     onremove,
     onsettings,
-    onempty,
   }: {
     tiles: GridTile[];
     editing: boolean;
     empty: ReadonlySet<string>;
     reducedMotion: () => boolean;
     label: (id: string) => string;
-    tile: Snippet<[GridTile]>;
+    host: BodyHost<HTMLElement>;
     hasSettings: (id: string) => boolean;
     /** A drag or a resize by pointer or keyboard ended with a different layout. */
     onchange: (tiles: GridTile[], change: GridChange) => void;
@@ -52,7 +51,6 @@
     onresize: (id: string, direction: ResizeDirection) => void;
     onremove: (id: string) => void;
     onsettings: (id: string) => void;
-    onempty: (id: string, empty: boolean) => void;
   } = $props();
 
   const measure = createContainerWidth();
@@ -142,12 +140,11 @@
           {reducedMotion}
           empty={empty.has(tile.id)}
           hasSettings={hasSettings(tile.id)}
-          {body}
+          {host}
           onmove={(direction: MoveDirection) => onmove(tile.id, direction)}
           onresize={(direction: ResizeDirection) => onresize(tile.id, direction)}
           onremove={() => onremove(tile.id)}
           onsettings={() => onsettings(tile.id)}
-          onempty={(isEmpty: boolean) => onempty(tile.id, isEmpty)}
         />
       {/each}
     </div>

@@ -2,6 +2,7 @@
   // A dashboard of four tiles: a chart, a card with a link, a card that has nothing to say, and one with settings.
   // The scene is the page that owns the tiles, as the shell's start page is. `?edit` starts in edit mode.
   import { onMount } from 'svelte';
+  import Counted from '../Counted.svelte';
   import {
     Chart,
     loadDashboardGrid,
@@ -73,6 +74,7 @@
         <section class="card bg-base-100 border-base-300 border" aria-labelledby="h-cards">
           <div class="card-body gap-2 p-3">
             <h2 id="h-cards" class="card-title text-base">Service cards</h2>
+            <Counted name="cards" />
             <p class="text-3xl font-bold">42</p>
             <a class="link text-sm" href="#services">All services</a>
           </div>
@@ -86,8 +88,8 @@
         </section>
       {/if}
     {/snippet}
-    {#snippet settings(_one: GridTile, close: () => void)}
-      <p>The settings of this widget would be here.</p>
+    {#snippet settings(one: GridTile, close: () => void)}
+      <p>The settings of {names[one.id]} would be here.</p>
       <button type="button" class="btn mt-4" onclick={close}>Close the settings</button>
     {/snippet}
   </Grid>

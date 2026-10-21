@@ -220,6 +220,31 @@ test.describe('DashboardGrid', () => {
     expect(await disabled()).toBe(0);
   });
 
+  test('draws a widget once: a change of mode or of viewport moves its element and does not create it again', async ({
+    page,
+    scene,
+  }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await scene('dashboard-grid');
+    const mounts = () =>
+      page.evaluate(() => (window as unknown as { __mounts: Record<string, number> }).__mounts);
+    await expect(page.getByRole('heading', { name: 'Service cards' })).toBeVisible();
+    expect(await mounts()).toEqual({ cards: 1 });
+    await page.locator('#mode').click(); // edit
+    await expect(
+      page.getByRole('button', { name: 'Move Service cards', exact: true }),
+    ).toBeVisible();
+    await page.locator('#mode').click(); // view
+    await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
+    await page.setViewportSize({ width: 500, height: 800 });
+    await expect(page.locator('.snapgrid')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Service cards' })).toBeVisible();
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect(page.locator('.snapgrid')).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Service cards' })).toBeVisible();
+    expect(await mounts()).toEqual({ cards: 1 });
+  });
+
   test('keeps focus on the mode button through a change of mode', async ({ page, scene }) => {
     await scene('dashboard-grid');
     await page.locator('#mode').focus();
@@ -251,7 +276,7 @@ test.describe('DashboardGrid', () => {
     await scene('dashboard-grid');
     await expect(page.locator('.snapgrid')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Trends' })).toBeVisible();
-    const order = await page.locator('h2').allInnerTexts();
+    const order = await page.locator('h2:visible').allInnerTexts();
     expect(
       order.filter((text) => ['Trends', 'Service cards', 'Tuned card'].includes(text)),
     ).toEqual(['Trends', 'Service cards', 'Tuned card']);

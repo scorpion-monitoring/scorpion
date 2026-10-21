@@ -3,10 +3,9 @@
   // the resize handle and the tile's body. It is the part of the adapter that touches a tile's DOM; the rules of
   // a move live in `layout.ts`. See ADR-0042, Decision 2, for why each piece is the way it is.
   import { createGridItem, createGridResizeHandle } from '@snapgridjs/svelte';
-  import type { Snippet } from 'svelte';
   import { getShell } from '../context.ts';
   import Icon from '../Icon.svelte';
-  import { observeEmpty } from './empty.ts';
+  import type { BodyHost } from './body-host.ts';
   import type { GridTile, MoveDirection, ResizeDirection } from './layout.ts';
 
   let {
@@ -17,12 +16,11 @@
     reducedMotion,
     empty,
     hasSettings,
-    body,
+    host,
     onmove,
     onresize,
     onremove,
     onsettings,
-    onempty,
   }: {
     tile: GridTile;
     /** The grid's id: Snapgrid resolves the controller by it. */
@@ -33,12 +31,12 @@
     /** The body draws nothing. In view mode the tile then takes no room; in edit mode it stays, so it can be removed. */
     empty: boolean;
     hasSettings: boolean;
-    body: Snippet<[GridTile]>;
+    /** Where the tile's body is drawn once and shown; see `body-host.ts`. */
+    host: BodyHost<HTMLElement>;
     onmove: (direction: MoveDirection) => void;
     onresize: (direction: ResizeDirection) => void;
     onremove: () => void;
     onsettings: () => void;
-    onempty: (empty: boolean) => void;
   } = $props();
 
   const { t } = getShell();
@@ -164,9 +162,10 @@
            handle that is not drawn takes them, so the tile (and the links in it) stay what they are. -->
       <span hidden {@attach item.attachHandle}></span>
     {/if}
-    <div class="min-h-0 flex-1 overflow-auto *:h-full" {@attach observeEmpty(onempty)}>
-      {@render body(tile)}
-    </div>
+    <div
+      class="min-h-0 flex-1 overflow-auto"
+      {@attach (node: HTMLElement) => host.slot(tile.id, node)}
+    ></div>
     {#if editing && empty}
       <!-- The body's own state (nothing to draw) is judged from its elements, so this note is a sibling. -->
       <p class="text-base-content/70 text-sm">{t('kit.dashboard.nothing')}</p>

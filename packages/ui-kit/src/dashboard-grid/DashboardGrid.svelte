@@ -15,6 +15,7 @@
   import { getShell } from '../context.ts';
   import Dialog from '../Dialog.svelte';
   import Icon from '../Icon.svelte';
+  import { BodyHost } from './body-host.ts';
   import { observeEmpty } from './empty.ts';
   import {
     describeChange,
@@ -62,6 +63,10 @@
       motion.removeEventListener('change', onMotion);
     };
   });
+
+  // The bodies are drawn once, in the parking element at the end of this component, and shown by the tiles of the
+  // grid that is current: a change of mode remounts the grid and must not create the widgets again (ADR-0042).
+  const bodies = new BodyHost<HTMLElement>();
 
   // ---- tiles that draw nothing --------------------------------------------------------------------------------
   const empty = new SvelteSet<string>();
@@ -122,13 +127,13 @@
     else announce(texts.atLimit(nameOf(id)));
   }
 
-  let host = $state<HTMLElement>();
+  let root = $state<HTMLElement>();
 
   /** Puts focus on a tile's move grip (or, with no grip, its remove button); `true` when there was one. */
   export async function focusTile(id: string): Promise<boolean> {
     await tick();
     const tileElement = [
-      ...(host?.querySelectorAll<HTMLElement>('[data-grid-id], [data-tile-id]') ?? []),
+      ...(root?.querySelectorAll<HTMLElement>('[data-grid-id], [data-tile-id]') ?? []),
     ].find((element) => (element.dataset.gridId ?? element.dataset.tileId) === id);
     const target = tileElement?.querySelector<HTMLElement>('.dashboard-grip, .dashboard-remove');
     target?.focus();
@@ -146,7 +151,7 @@
     // Focus goes to the tile that now has the removed one's place in the reading order, never to nothing.
     if (!(neighbour && (await focusTile(neighbour.id)))) {
       await tick();
-      host?.focus();
+      root?.focus();
     }
   }
 
@@ -167,7 +172,7 @@
     if (restore === undefined) return;
     void tick().then(async () => {
       if (document.activeElement === document.body || document.activeElement === null) {
-        if (!(await focusTile(restore))) host?.focus();
+        if (!(await focusTile(restore))) root?.focus();
       }
     });
   });
@@ -178,7 +183,7 @@
 </script>
 
 <!-- The page's tiles; a tile with a settings snippet gets a dialog. Focus returns to the gear on close. -->
-<div bind:this={host} tabindex="-1" class="outline-none" onfocusin={remember}>
+<div bind:this={root} tabindex="-1" class="outline-none" onfocusin={remember}>
   {#key `${editing}:${wide}`}
     {#if wide}
       <Provider announcements={said} instructions={t('kit.dashboard.instructions')}>
@@ -188,14 +193,13 @@
           {empty}
           reducedMotion={() => reduced}
           {label}
-          tile={body}
+          host={bodies}
           hasSettings={(id: string) => settings !== undefined && (hasSettings?.(id) ?? false)}
           onchange={changed}
           onmove={move}
           onresize={resize}
           onremove={remove}
           onsettings={(id: string) => (settingsFor = id)}
-          onempty={setEmpty}
         />
       </Provider>
     {:else}
@@ -225,9 +229,7 @@
                   </button>
                 </div>
               {/if}
-              <div class="*:h-full" {@attach observeEmpty((isEmpty) => setEmpty(tile.id, isEmpty))}>
-                {@render body(tile)}
-              </div>
+              <div {@attach (node: HTMLElement) => bodies.slot(tile.id, node)}></div>
               {#if editing && empty.has(tile.id)}
                 <p class="text-base-content/70 text-sm">{t('kit.dashboard.nothing')}</p>
               {/if}
@@ -237,6 +239,19 @@
       </ul>
     {/if}
   {/key}
+</div>
+
+<!-- Where the bodies wait, and are drawn once; the tiles of the current grid show them (see `body-host.ts`). -->
+<div hidden {@attach (node: HTMLElement) => bodies.home(node)}>
+  {#each tiles as tile (tile.id)}
+    <div
+      class="h-full *:h-full"
+      {@attach (node: HTMLElement) => bodies.stage(tile.id, node)}
+      {@attach observeEmpty((isEmpty) => setEmpty(tile.id, isEmpty))}
+    >
+      {@render body(tile)}
+    </div>
+  {/each}
 </div>
 
 <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
