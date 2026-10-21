@@ -843,6 +843,43 @@ The worst case (a window of 120 months and a page of 200 KPIs) is 1.2 MB, which 
 - ~~**`modules/kpi-ingestion/service/reminder.test.ts` does not type-check**~~ Done in M11 sprint 4: `kpi-framework`, `kpi-ingestion` and `kpi-analytics` are in the root `tsconfig.json` references and the call is fixed.
 - ~~**`pnpm check` does not type-check `kpi.analytics`**~~ Done in M11 sprint 4 (see the entry above).
 
+## Widget follow-ups (M11 sprint 4)
+
+What the widgets left for later ([ADR-0044](adr/0044-widgets-settings-and-the-read-store.md); [m11-sprint-plan.md](m11-sprint-plan.md), "Amended in sprint 4").
+
+### Measured in sprint 4
+
+| What                                                                                                       | Before (`dev`, sprint 3)          | After                                          | Change                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client build, JavaScript and CSS (78 → 94 files; each file gzipped alone, level 9)                         | 6,085,395 B raw, 1,757,783 B gzip | 7,238,513 B raw, 2,140,786 B gzip              | +1,153,118 B raw (+18.9 %), +383,003 B gzip (+21.8 %)                                                                                                                               |
+| of which ECharts (six lazy chunks: core, charts, components, the SVG renderer, tslib, the adapter)         | not in the build                  | 917,978 B raw, 301,511 B gzip                  | ECharts was a dependency since M5 but **no build held it**, because nothing imported `Chart`; it loads only when a chart mounts, so only a dashboard with a trends chart fetches it |
+| the rest (five widgets, the read store, the settings form, the defaults dialog, the words, chart keyboard) |                                   |                                                | +235,140 B raw, +81,492 B gzip                                                                                                                                                      |
+| The page of a summary read, 50 KPIs, window `1y` (service layer, JSON as the route writes it)              | `series` 38,626 B                 | `summary` 46,419 B (it now carries the points) | +7.8 kB over the series; `all` (120 months) is 297,826 B for `series` and 305,602 B for `summary`                                                                                   |
+| Image `full`, `core-only` and `registry`                                                                   | 504,277,492 B (`full`)            | IMAGE_FULL B                                   | IMAGE_NOTE                                                                                                                                                                          |
+
+`[dashboard-calls]` of the widgets (`e2e/dashboard-widgets.spec.ts`, both base paths): **a dashboard of eight widgets over two (service, range) pairs** makes, on a full page load, `GET /inbox/stream` (the shell), **2** `GET /kpi/analytics/summary`
+(one per pair), 2 `GET /services/{id}` (the names of the two services, once each) and 1 `GET /vocabularies/kpi.unit/terms` (the labels of units); turning edit mode on, a move and a resize send **none**; changing the range of one widget sends **1**
+`GET /kpi/analytics/summary` for its own key. A tile that was never set up reads `GET /kpi/analytics/defaults` once.
+
+### Entries
+
+- **The default dashboard now reads on arrival for everyone**, and a person with a service also fetches ECharts (about 0.3 MB gzip) on the start page. A person with no defaults and no provider sees three tiles that say "Choose a service."
+  Options: leave the cards and the chart out of the default for a person with no service, or place them only after the person chose a service in the defaults dialog.
+- **A widget shows at most 50 KPIs** (the shared page size) and says "Showing the first 50 of N KPIs. Choose a category to see others." There is no "show more" and no paging in a widget. The server still serves at most 200 KPIs of a service silently; a `truncated` flag is
+  not needed yet because `totalCount` tells a widget that more exist (ADR-0044, decision 15).
+- **The labels of units and the names of services cost reads**: one `GET /vocabularies/kpi.unit/terms` and one `GET /services/{id}` per distinct service. Folding `unitLabel` and the service's name into the analytics answers would make them none (a contract change, so for
+  sprint 6 if the numbers above matter).
+- **"Dashboard defaults" opens from the quick actions and from the settings form only**, not from the FAB menu (the shell names no widget). A person who removed the quick actions reaches it through the gear of any analytics widget.
+- **The service picker of the settings form lists the first 50 services by name** and a search narrows them; a catalogue of thousands wants a type-ahead combobox.
+- **A KPI that holds only text has no line in the trends chart and no row in its series options**; the cards and the table of the chart show it. **The chart's second axis has no unit label** (the series' names carry their units, since two series may not share one).
+- **The ECharts tooltip is drawn inside the SVG** (`richText`), because the HTML tooltip writes `style` attributes that the Content-Security-Policy refuses (86 reports in one component spec); it is plain text with no colour marker.
+- **No refresh while the page is open.** The store keeps a read for the visit and nothing polls, so data reported in another tab shows on the next visit or reload. A refresh button on a tile, or `visibilitychange`, is small if wanted.
+- **The names "Trends (1)", "Trends (2)" follow the document order**, so the number of a tile can change when tiles are moved past each other; the names are for people and screen readers, not for ids.
+- **The component spec cannot change a `<select>` with the arrow keys**: headless Chromium here does not (End, ArrowUp and ArrowDown left the value alone), so `widget-settings.spec.ts` checks the tab order, Enter in the search and Enter on Apply, and the mouse path changes the values.
+- **A category that left the vocabulary** (planted through the generic preference route, or retired) makes a widget say that its settings are no longer valid; the person opens the settings and chooses again. A server-side repair of the category on read would need the vocabulary in `parseDashboard`.
+- **The legacy "first number in a text value" is dropped** (decision 11 of the plan), the legacy "4 cards per page" is a scrolling list, and the legacy carousel of averages is a table.
+- **More random-id flakes of the same class as `9999` and `bad-`** (a substring that a UUID can hold): `modules/kpi-ingestion/service/reminder.test.ts:253` (`'4242'`) and `apps/server/src/ui-dashboard-routes.test.ts:346` (`'bbbb'`, `'aaaa'`). Their odds are small; the fix is the same (assert on a value, or on text no id can hold).
+
 ## Observed by the maintainer (after M9 sprint 4)
 
 - **A `pg` deprecation warning from a node process.** `DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.` Seen once by chance in a local run (pid 58754; which process and command is not known). It means some code issues a second query on one `pg` client before the first has finished (a `Promise.all` over a single client or transaction, a query in an event handler, or a missing `await`). Nothing fails today, but `pg@9` will stop queueing them. To find it: run with `node --trace-deprecation` (`NODE_OPTIONS=--trace-deprecation pnpm test`, or the same for `pnpm dev`) and fix the call site; then make the test setup fail on a deprecation warning (`--throw-deprecation` in the vitest and e2e processes) so it cannot return. Candidates to look at first: code that runs several reads through one `ctx.db.tx()` transaction in parallel (a drizzle transaction is one client), and the test helpers that share one client.

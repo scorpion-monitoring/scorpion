@@ -183,24 +183,10 @@ async function storedTiles(api: AdminApi, widget: string): Promise<Tile[]> {
 function watch(page: Page) {
   const calls: string[] = [];
   page.on('pageerror', (error) => console.log('PAGEERROR', String(error).slice(0, 600)));
-  page.on('console', (message) => {
-    if (message.type() === 'error') console.log('CONSOLE-ERROR', message.text().slice(0, 600));
-  });
   page.on('request', (request) => {
     const url = new URL(request.url());
     const at = url.pathname.indexOf('/api/internal/');
-    if (at >= 0) {
-      calls.push(`${request.method()} ${url.pathname.slice(at + 13)}${url.search}`);
-      if (process.env.E2E_DEBUG_CALLS)
-        console.log(
-          'REQ',
-          request.url().slice(-110),
-          request.redirectedFrom() ? 'REDIRECTED' : '',
-          request.frame().url().slice(-20),
-          request.headers()['sec-fetch-mode'],
-          request.headers()['x-requested-with'] ?? '',
-        );
-    }
+    if (at >= 0) calls.push(`${request.method()} ${url.pathname.slice(at + 13)}${url.search}`);
   });
   return {
     calls,
@@ -230,12 +216,6 @@ async function configure(
 ) {
   await page.getByRole('button', { name: `Settings of ${name}`, exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.waitFor({ timeout: 3000 }).catch(async () => {
-    await page.screenshot({
-      path: '/tmp/claude-1000/-home-ubuntu-scorpion/2007acc1-5632-4746-a595-92c935155844/scratchpad/debug2.png',
-      fullPage: true,
-    });
-  });
   await expect(dialog).toBeVisible();
   if (choice.service) {
     await dialog.getByLabel('Search services').fill(choice.service.slug);
@@ -678,6 +658,40 @@ test.describe('calls: a dashboard of eight widgets over two (service, range) pai
     expect(changed[0]).toContain('range=6m');
     await opened.close();
     await me.dispose();
+    await w.api.dispose();
+  });
+});
+
+test.describe('calls: the default dashboard of a person with no service', () => {
+  test('reads the defaults once for all its tiles, and no numbers, no names and no vocabulary', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const w = await world(playwright, baseURL, at);
+    const opened = await pageAs(browser, baseURL, at, w.person);
+    const page = opened.page;
+    await page.goto('about:blank');
+    const seen = watch(page);
+    seen.clear();
+    await page.goto(at('/'));
+    await expect(
+      tileOf(page, 'KPI cards').getByRole('status').filter({ hasText: 'Choose a service.' }),
+    ).toBeVisible();
+    await expect(
+      tileOf(page, 'Trends').getByRole('status').filter({ hasText: 'Choose a service.' }),
+    ).toBeVisible();
+    await page.waitForTimeout(1000);
+    const mine = seen.calls.filter((call) => /\/kpi\/|\/services\/|\/vocabularies\//.test(call));
+    console.log(`[dashboard-calls] widgets, default dashboard, no service: ${mine.join(' | ')}`);
+    test.info().annotations.push({
+      type: 'dashboard-calls: widgets default dashboard',
+      description: mine.join(' | '),
+    });
+    expect(mine).toEqual(['GET /kpi/analytics/defaults']);
+    await opened.close();
     await w.api.dispose();
   });
 });

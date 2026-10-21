@@ -108,8 +108,10 @@
   });
 
   let unitTerms = $state<Map<string, string>>();
+  // The labels are read together with the numbers, not before: a tile that says "Choose a service" needs none.
+  const wantsUnits = $derived(units && read.kind !== 'idle');
   $effect(() => {
-    if (!units) return;
+    if (!wantsUnits) return;
     reads.terms('kpi.unit').then(
       (terms) =>
         (unitTerms = new Map(

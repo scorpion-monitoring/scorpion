@@ -1,6 +1,13 @@
 import type { Page, Request } from '@playwright/test';
 import { violations } from './support/a11y.ts';
-import { activeUser, adminApi, newPerson, permissionsOf, type AdminApi } from './support/admin.ts';
+import {
+  activeUser,
+  adminApi,
+  apiAs,
+  newPerson,
+  permissionsOf,
+  type AdminApi,
+} from './support/admin.ts';
 import { expect, test } from './support/fixtures.ts';
 import { pageAs } from './support/members.ts';
 
@@ -483,6 +490,24 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const credentials = newPerson('dashplain');
     await activeUser(api, at, credentials);
+    // The default dashboard of every signed-in person holds the analytics widgets (M11 sprint 4), which always say something ("Choose a
+    // service"), so this person's dashboard is the one card that has nothing to say, stored as a person would have left it.
+    const own = await apiAs(playwright, baseURL, at, credentials);
+    const stored = await own.send('PUT', '/ui/dashboard', {
+      items: [
+        {
+          id: 'member01',
+          widget: 'organisations.membership-requests',
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 3,
+          config: {},
+        },
+      ],
+    });
+    expect(stored.status, JSON.stringify(stored.body)).toBe(200);
+    await own.dispose();
     const opened = await pageAs(browser, baseURL, at, credentials);
     const page = opened.page;
     await quiet(page);
@@ -595,27 +620,21 @@ test.describe('journey: a person customises their dashboard', () => {
     expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toMatch(/^Add /);
     await page.getByRole('button', { name: `Add ${DEAD}`, exact: true }).focus();
     await page.keyboard.press('Enter');
-    // The delivery card is on the default dashboard already, so the new one is the last of two.
-    const grip = page.getByRole('button', { name: `Move ${DEAD}`, exact: true }).last();
+    // The delivery card is on the default dashboard already, so the dashboard has two tiles of it, named "(1)" and "(2)" in document order.
+    const grip = page.getByRole('button', { name: `Move ${DEAD} (2)`, exact: true });
     await expect(grip).toBeFocused();
 
     // Move it with the buttons, resize it, with Enter and Space.
-    await page
-      .getByRole('button', { name: `Make ${DEAD} wider` })
-      .last()
-      .focus();
+    await page.getByRole('button', { name: `Make ${DEAD} (2) wider` }).focus();
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
     await expect(
-      page.getByRole('status').filter({ hasText: `${DEAD} resized: width 6` }),
+      page.getByRole('status').filter({ hasText: `${DEAD} (2) resized: width 6` }),
     ).toBeVisible();
-    await page
-      .getByRole('button', { name: `Move ${DEAD} right` })
-      .last()
-      .focus();
+    await page.getByRole('button', { name: `Move ${DEAD} (2) right` }).focus();
     await page.keyboard.press('Enter');
     await expect(
-      page.getByRole('status').filter({ hasText: `${DEAD} moved to row` }),
+      page.getByRole('status').filter({ hasText: `${DEAD} (2) moved to row` }),
     ).toBeVisible();
 
     // The keyboard drag of dnd-kit on the grip: Space picks up, an arrow moves, Space drops.

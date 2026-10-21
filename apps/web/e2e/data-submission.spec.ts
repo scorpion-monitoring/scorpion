@@ -738,6 +738,8 @@ test.describe('the calls the page makes', () => {
     const w = await world(playwright, baseURL, at);
     const opened = await pageAs(browser, baseURL, at, w.member);
     const page = opened.page;
+    // Signing in left the person on the start page, whose widgets may still be reading: leave it, so only this page's arrival is counted.
+    await page.goto('about:blank');
     const seen = watch(page);
 
     await page.goto(at(`/submit?service=${w.service.id}`));
