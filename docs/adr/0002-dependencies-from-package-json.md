@@ -40,7 +40,7 @@ modules:sync` generates it and `pnpm check` fails if it is stale. It also gives 
   it for its `PROFILE`.
 - **The image holds only the profile's modules.** The Docker build runs `profile:generate`, updates
   the lockfile (versions are all reused; only the server's workspace links change), and installs
-  with a frozen, filtered install (`--prod --filter @scorpion/server...`). `scripts/image-tree.ts`
+  with a frozen, filtered install (`--prod --filter-prod @scorpion/server...`: production dependencies only, so the browser-only packages of `@scorpion/ui-kit` stay out; ADR-0043). `scripts/image-tree.ts`
   then copies the server's closure (following `dependencies` from `apps/server`, which the
   generator set to the profile's modules) and nothing else into the runtime image: no other
   module, no tests, no dev tools. `autoInstallPeers: false` in `pnpm-workspace.yaml` is what keeps
