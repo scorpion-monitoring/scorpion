@@ -4,7 +4,7 @@ The shell of the web app: the registries through which modules put pages, links,
 route that tells the browser what the caller may see. It owns no table. The web app (`apps/web`) draws the layout and one catch-all
 route `/[...path]`; this module is the part the server knows about ([ADR-0027](../../docs/adr/0027-web-shell-catch-all-proxy-and-typed-client.md)).
 
-Status: M11 sprint 1 (the dashboard document, its two routes and the extended `ui.widget`; the grid on screen comes in sprint 2). Before that, M5 sprint 3. Its own pages are the start page, the legal pages, the API documentation and the administration of roles and settings; the screens of the other `core.*`
+Status: M11 sprint 2 (the dashboard on the start page: the grid, edit mode, the FAB menu and the saving; sprint 1 added the document, its two routes and the extended `ui.widget`). Before that, M5 sprint 3. Its own pages are the start page, the legal pages, the API documentation and the administration of roles and settings; the screens of the other `core.*`
 modules come with those modules (the sign-in, registration, recovery and profile pages and the administration of users are `core.identity`'s; the audit and notification screens arrive in sprint 4).
 
 ## Manifest
@@ -163,8 +163,64 @@ a `default` outside the 12 columns or outside the limits, an icon that is not in
 placement, so a singleton cannot have two. `GET /ui/navigation` lists `grid`, `label`, `description` and `icon` for the widgets the caller may see, only on
 entries that have them.
 
-**What the browser half receives (from sprint 2; not built yet).** A tile's component is rendered with `{ instance: string, config: unknown, editing: boolean,
-setConfig(next): void, size: { w, h } }`. A widget that ignores the props (the cards that exist) works unchanged.
+**What the browser half receives.** A tile's component is rendered with `UiWidgetProps` (`@scorpion/contracts`):
+
+| Prop        | Meaning                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `instance`  | The tile's instance id (4 to 12 lower-case letters and digits), unique on the dashboard                                              |
+| `config`    | The tile's settings as the server repaired them (`{}` for a widget with no `configSchema`)                                           |
+| `editing`   | The dashboard is being edited: a widget may show its settings, and must not start anything the person did not ask for                |
+| `setConfig` | `setConfig(next)` replaces the settings; the dashboard saves them with the layout (the same one save a second after the last change) |
+| `size`      | `{ w, h }` in grid units, which a chart may use to decide how much to draw                                                           |
+
+A widget that ignores the props (the three cards that exist) works unchanged, and so does the bell in the header, which gets none.
+**A tile that draws nothing is removed from view.** The grid watches the body of each tile: a widget that renders no element (the membership card at zero
+requests, or a widget whose code has not loaded) takes no room in view mode, the tiles below it rise and the tiles to its right in the same row slide left. It needs
+nothing from the widget (the old `:has` rule of the start page is gone). In edit mode the tile stays, with a note, so that it can be removed.
+A tile whose widget this build has no code for (a `component` name the web app does not know, or code that fails to load) draws nothing and the page says
+"N widgets could not be shown on this page"; it is never an error page.
+
+## The start page: the grid, edit mode and the FAB menu
+
+`/` is `ui/Home.svelte`. The hero stays; for a signed-in person with the permission `core.ui-shell.dashboard.read` the section "What needs your attention" is the grid.
+The page's `load` (`ui/home.ts`) reads `GET /ui/dashboard` **on the server**, so the browser sends nothing for the document or the widget list on arrival, and a
+visitor (401) or a caller whose role has no dashboard (403) gets no grid. **The server's repaired document is the only source**: the browser never decides what a
+person may see, and a read never writes (opening the page sends no `PUT`).
+
+- **The grid is `DashboardGrid` of `packages/ui-kit`** (Snapgrid's headless API behind one directory; see its README). It is a **dynamic import** (`loadDashboardGrid()`),
+  so only this page fetches it. Below `md` there is no grid but a stacked list in reading order with the remove button only.
+- **View mode and edit mode.** The FAB button at the bottom right ("Customise dashboard", a daisyUI `fab` with a `div role="button" tabindex="0"`, `aria-expanded` and
+  `aria-controls`) turns edit mode on and opens the menu. In edit mode each tile has a move grip, buttons for every move (left, right, up, down) and size (wider, narrower,
+  taller, shorter), a remove button and a resize handle, so **nothing depends on a pointer** (WCAG 2.2, 2.5.7); every change is announced in a polite live region
+  ("Trends moved to row 2, column 7"; "cannot move further in that direction") and focus stays on the button that was pressed. The section reserves space under
+  the grid so the button never covers what it edits.
+- **The menu** has one button per widget the caller may add (icon and `label` of the entry; one already on the dashboard that is a `singleton`, and any widget when
+  there are already 20 tiles, is disabled and says why), then "Reset to default" and "Done". **Escape** closes it and puts focus on the FAB button; so does a press
+  outside it (without moving focus); **Enter** or **Space** on the button toggles it. Adding a widget places it at its default size at the left edge below the lowest
+  tile, closes the menu, focuses the new tile's grip and announces where it went. Adding sends nothing by itself; the widget reads its own data, as on arrival.
+- **"Reset to default" shows the default dashboard and stores nothing.** It is the server's `defaultDashboard` function run in the browser over the entries
+  `GET /ui/navigation` listed (its instance ids are a hash of the widget id, so they match the server's); it is saved with the next change. A widget with a
+  `configSchema` gets `{}` there and its defaults from the server on the next save and read.
+- **Saving.** One `PUT /ui/dashboard` through the typed client **a second after the last change** (a burst of changes is one request), when the page is hidden
+  (`visibilitychange`, `pagehide`) and when the page goes away (a client navigation unmounts it; "Done" also sends what is waiting). A "Saved" state is announced
+  politely. **Two tabs: the last save wins**; there is no revision protocol, and an edit made in another tab is not detected (backlog).
+  - A **403** (the caller lacks `core.settings.preference.write`, which the save also needs) shows an alert that says the dashboard cannot be saved with this account
+    (no permission id, no role) with "Try again"; the layout stays on the page. **It does not retry by itself**: the next attempt is the person's next change or "Try again".
+  - A **422 that names a tile** (its widget is gone, or the right to it was taken away) reads the repaired document again, shows it and says some widgets are no
+    longer available; a **422 on `items` alone** (the document would not fit its 8 KiB) says the dashboard is full and keeps the layout.
+  - Any other failure (network, 5xx, 429) shows the same alert with "Try again".
+- **What a load left out** (`dropped`, `reset`) is shown above the grid ("2 widgets are no longer available and are not shown", "Your saved dashboard could not be read,
+  so the default dashboard is shown") until the next successful save has written the repaired document.
+- **Instance ids** of new tiles come from `crypto.getRandomValues` (never `Math.random`), 8 characters of lower-case letters and digits, redrawn on a collision.
+- **Calls** (measured by `e2e/dashboard.spec.ts`, printed as `[dashboard-calls]`): on arrival the browser sends only what the cards and the shell read (`/inbox/stream`,
+  `/memberships/summary`, `/notifications/status`, `/users/pending?pageSize=1`); adding a widget sends that widget's own read; moving, resizing and dragging send nothing;
+  a burst of changes is one `PUT`.
+- **The CSP.** dnd-kit writes a `<style>` element while something is dragged. The page's policy has no `'unsafe-inline'` for styles, so the grid gives dnd-kit the nonce
+  SvelteKit puts on the page's own script and style tags (`element.nonce`).
+
+Files: `ui/Home.svelte`, `ui/Dashboard.svelte` (the page), `ui/dashboard.ts` (the pure part: tiles and items, what can be added, what a failed save means, the autosave;
+`ui/dashboard.test.ts`), `ui/home.ts` (the loader). The browser imports `defaultDashboard` and the packer from the server's pure functions (`service/dashboard/document.ts`,
+`@scorpion/contracts/dashboard-layout`): there is one implementation.
 
 ### The dashboard
 

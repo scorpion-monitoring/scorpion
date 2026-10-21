@@ -85,12 +85,6 @@ const sameBox = (
   Math.abs(a.width - b.width) < 2 &&
   Math.abs(a.height - b.height) < 2;
 
-/** Opens the menu and chooses what to add; the menu closes and the new tile has focus. */
-async function addWidget(page: Page, name: string) {
-  await fab(page).click();
-  await page.getByRole('button', { name: `Add ${name}`, exact: true }).click();
-}
-
 const saved = (page: Page) => page.getByRole('status').filter({ hasText: 'Saved' });
 
 test.describe('journey: a person customises their dashboard', () => {
@@ -124,9 +118,17 @@ test.describe('journey: a person customises their dashboard', () => {
     console.log(`[dashboard-calls] arrival (a full page load): ${arrival.join(' | ')}`);
     test.info().annotations.push({ type: 'dashboard: arrival', description: arrival.join(' | ') });
 
-    // Take the delivery card off (the save of that is its own burst), then add it again from the menu.
+    // Edit mode on: the grid is rebuilt, the widgets are not drawn again, so the browser sends nothing.
+    seen.clear();
     await fab(page).click();
     await expect(fab(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('button', { name: `Move ${PENDING}`, exact: true })).toBeVisible();
+    await page.waitForTimeout(800);
+    expect(seen.calls, 'turning edit mode on sends nothing').toEqual([]);
+    console.log('[dashboard-calls] edit mode on (the grid is rebuilt): none');
+    test.info().annotations.push({ type: 'dashboard: edit mode', description: 'none' });
+
+    // Take the delivery card off (the save of that is its own burst), then add it again from the menu.
     await page.getByRole('button', { name: `Remove ${DEAD}` }).click();
     await expect(page.getByRole('heading', { name: DEAD })).toHaveCount(0);
     await expect(fab(page)).toHaveAttribute('aria-expanded', 'false');
@@ -416,6 +418,42 @@ test.describe('journey: a person customises their dashboard', () => {
     }
   });
 
+  test('saves a change made a moment before the person leaves the page, and shows it when they come back', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    const api = await adminApi(playwright, baseURL, at);
+    const who = await administrator(api, at, 'dashleave');
+    const opened = await pageAs(browser, baseURL, at, who.credentials);
+    const page = opened.page;
+    const seen = watch(page);
+    await page.goto(at('/'));
+    await expect(page.getByRole('heading', { name: DEAD })).toBeVisible();
+    await fab(page).click();
+    await page.keyboard.press('Escape');
+    const before = (await tileOf(page, DEAD).boundingBox())!;
+    await page.getByRole('button', { name: `Make ${DEAD} taller` }).click();
+    expect(seen.puts, 'the second has not passed yet').toHaveLength(0);
+    // A link of the shell: a client-side navigation, which takes the page away at once.
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link', { name: 'Services' })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${at('/services')}`));
+    await expect.poll(() => seen.puts.length, { timeout: 5000 }).toBe(1);
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link', { name: 'Home' })
+      .click();
+    await expect(page.getByRole('heading', { name: DEAD })).toBeVisible();
+    const after = (await tileOf(page, DEAD).boundingBox())!;
+    expect(after.height).toBeGreaterThan(before.height + 20);
+    await opened.close();
+    await api.dispose();
+  });
+
   test('a visitor sees no grid and no button', async ({ page, at }) => {
     await page.goto(at('/'));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -554,12 +592,20 @@ test.describe('journey: a person customises their dashboard', () => {
     await page.getByRole('button', { name: 'Done', exact: true }).focus();
     await page.keyboard.press('Enter');
     await expect(fab(page)).toBeFocused();
-    await page.waitForTimeout(1500);
-    const view = await boxes(page, [DEAD]);
+    await expect.poll(() => seen.puts.length, { timeout: 8000 }).toBeGreaterThanOrEqual(1);
+    const rects = () =>
+      tileOf(page, DEAD).evaluateAll((tiles) =>
+        tiles.map((tile) => {
+          const { x, y, width, height } = tile.getBoundingClientRect();
+          return [x, y, width, height].map(Math.round);
+        }),
+      );
+    const view = await rects();
     await page.reload();
     await expect(page.getByRole('heading', { name: DEAD }).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: PENDING })).toHaveCount(0);
-    expect(await tileOf(page, DEAD).count()).toBe(2);
+    expect(await rects()).toEqual(view);
+    expect(view).toHaveLength(2);
     await opened.close();
     await api.dispose();
   });

@@ -40,7 +40,7 @@ Contributed to the registries of `core.ui-shell` (an optional peer: a profile wi
 
 Widgets (registry `ui.widget` of `core.ui-shell`): the bell `inbox-bell` (slot `header`, `core.notifications.inbox.read`): the unread count, a
 dropdown with the latest items, "Mark all read" and a link to the inbox, kept up to date by the stream with a 60 s polling fallback; and the card
-`dead-deliveries` (slot `dashboard`, `core.notifications.status.read`).
+`dead-deliveries` (slot `dashboard`, `core.notifications.status.read`; since M11 sprint 2 a tile of the dashboard grid: label `dash.dead.title`, icon `mail`, 4×3, 3 to 8 wide and 2 to 6 high, default placement `x: 8, y: 0`). The bell is not a tile.
 
 ### Which mails earn an inbox item
 
