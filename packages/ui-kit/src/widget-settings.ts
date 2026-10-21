@@ -40,7 +40,7 @@ export function fieldsOf(schema: JsonSchema): SettingsField[] {
 
 /**
  * What the form sends: the configuration it was opened with, with the drawn fields replaced by the draft. A key the form does not draw
- * (`hidden`, `secondary`) is kept exactly; a draft value of `undefined` leaves the key out.
+ * (`hidden`, `secondary`) is kept exactly; a draft value of `undefined` leaves the key out, except for the service, which becomes `null`.
  */
 export function merged(
   config: Readonly<Record<string, unknown>>,
@@ -48,9 +48,12 @@ export function merged(
   fields: readonly SettingsField[],
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...config };
-  for (const { name } of fields) {
-    if (draft[name] === undefined) delete next[name];
-    else next[name] = draft[name];
+  for (const { name, kind } of fields) {
+    // A service the person did not choose is a choice made: "Choose a service" (`null`), not a tile that was never set up (no key).
+    if (draft[name] === undefined) {
+      if (kind === 'service') next[name] = null;
+      else delete next[name];
+    } else next[name] = draft[name];
   }
   return next;
 }

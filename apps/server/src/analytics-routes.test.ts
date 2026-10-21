@@ -214,8 +214,14 @@ describe('GET /kpi/analytics/defaults', () => {
   it('is the caller’s own: another person’s stored defaults are not read, and no user id can be named', async () => {
     const dave = await started.signedIn('dave-analytics-defaults');
     const erin = await started.signedIn('erin-analytics-defaults');
-    expect((await store(dave, { range: '2y', category: 'Technical', service: service.id })).status).toBe(200);
-    expect((await read(dave)).body).toMatchObject({ service: service.id, range: '2y', category: 'Technical' });
+    expect(
+      (await store(dave, { range: '2y', category: 'Technical', service: service.id })).status,
+    ).toBe(200);
+    expect((await read(dave)).body).toMatchObject({
+      service: service.id,
+      range: '2y',
+      category: 'Technical',
+    });
     expect((await read(erin)).body).toMatchObject({ service: null, range: '1y', category: 'all' });
     const named = await started.get(`/kpi/analytics/defaults?user=${dave.user.id}`, as(erin));
     expect(named.status).toBe(200);
@@ -237,7 +243,11 @@ describe('GET /kpi/analytics/defaults', () => {
     const mine = await makeOrganisation(pool, { type: 'provider' });
     await makeService(pool, { provider: mine.id, name: 'Zulu analytics defaults' });
     const first = await makeService(pool, { provider: mine.id, name: 'Alpha analytics defaults' });
-    await makeMembership(pool, { organisationId: mine.id, userId: gina.user.id, state: 'approved' });
+    await makeMembership(pool, {
+      organisationId: mine.id,
+      userId: gina.user.id,
+      state: 'approved',
+    });
     expect((await read(gina)).body.service).toBe(first.id);
     // a stored service that exists wins over the rule
     expect((await store(gina, { service: service.id })).status).toBe(200);
@@ -248,6 +258,58 @@ describe('GET /kpi/analytics/defaults', () => {
     const nobody = await started.signedIn('nobody-analytics-defaults', { roles: [] });
     expect((await started.get('/kpi/analytics/defaults')).status).toBe(401);
     expect((await started.get('/kpi/analytics/defaults', as(nobody))).status).toBe(403);
+  });
+});
+
+describe('GET /ui/navigation: the widgets of kpi.analytics (M11 sprint 4)', () => {
+  type Widget = {
+    id: string;
+    slot: string;
+    component: string;
+    configSchema?: {
+      properties: Record<string, { enum?: string[]; anyOf?: unknown[]; maxItems?: number }>;
+    };
+  };
+  const widgetsOf = async (who: { cookie: string; csrf: string }) =>
+    ((await started.get('/ui/navigation', as(who))).body as { widgets: Widget[] }).widgets;
+
+  it('lists the five widgets for a holder of the permission, with the JSON Schema of their settings, and none for a caller without it', async () => {
+    const mine = (await widgetsOf(alice)).filter((widget) =>
+      widget.id.startsWith('kpi.analytics.'),
+    );
+    expect(mine.map((widget) => widget.id).sort()).toEqual([
+      'kpi.analytics.actions',
+      'kpi.analytics.averages',
+      'kpi.analytics.cards',
+      'kpi.analytics.trends',
+      'kpi.analytics.volatility',
+    ]);
+    const byId = new Map(mine.map((widget) => [widget.id, widget]));
+    const trends = byId.get('kpi.analytics.trends')!.configSchema!;
+    expect(Object.keys(trends.properties).sort()).toEqual([
+      'category',
+      'cumulative',
+      'hidden',
+      'range',
+      'secondary',
+      'service',
+    ]);
+    expect(trends.properties.range!.enum).toEqual(['3m', '6m', '1y', '2y', 'all']);
+    // a nullable service is `anyOf`, and a list of series states is bounded
+    expect(trends.properties.service!.anyOf).toHaveLength(2);
+    expect(trends.properties.hidden!.maxItems).toBe(14);
+    expect(Object.keys(byId.get('kpi.analytics.cards')!.configSchema!.properties).sort()).toEqual([
+      'category',
+      'range',
+      'service',
+    ]);
+    // the quick actions have no settings, so no schema (an entry without one answers as before)
+    expect('configSchema' in byId.get('kpi.analytics.actions')!).toBe(false);
+
+    const nobody = await started.signedIn('nobody-analytics-widgets', { roles: [] });
+    const theirs = (await started.get('/ui/navigation', as(nobody))).body as { widgets: Widget[] };
+    expect(theirs.widgets.filter((widget) => widget.id.startsWith('kpi.analytics.'))).toEqual([]);
+    expect(JSON.stringify(theirs)).not.toContain('cumulative');
   });
 });
 

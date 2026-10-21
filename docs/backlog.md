@@ -834,14 +834,14 @@ The worst case (a window of 120 months and a page of 200 KPIs) is 1.2 MB, which 
 
 ### Entries
 
-- **The defaults have no read route.** `kpi.analytics.defaults` is stored through the generic `PUT /preferences/{key}`, and the repaired value (with the default service resolved) is a service method, `defaults(actor)`. The widgets of sprint 4 need it in the browser: **a third internal route** (`GET /kpi/analytics/defaults`, plus the list of categories the filter offers, which `categories(actor)` already returns) is the likely shape; it was not in the plan's two routes and was not added. The maintainer decides before sprint 4.
+- ~~**The defaults have no read route.**~~ Done in M11 sprint 4: `GET /kpi/analytics/defaults` (ADR-0044, decision 9).
 - **`all` is 120 months**, the bound of the trusted series read. A service with older data does not see it. A longer window means a paged or aggregated read (yearly points), which the dashboard does not need yet.
 - **A KPI answer is capped at 200 KPIs** (the effective ones, then the dropped ones that have values in the window, by name). A service with more is silently cut at 200; no service has that many yet. The answer could say `truncated: true`.
 - **The current month is the last point of every window and is usually a gap** until it is reported (the plan counts from the current month so that every KPI and widget has the same window). A window that ends with the last month that has a value would show fuller charts; it would give each KPI its own window.
 - **`all` and a category named `all`:** the filter value `all` means "no filter" and would shadow a vocabulary term with that key. Nothing stops an administrator from creating one; a reserved-key check in `core.settings` is the way out.
 - **Bands are `low`, `medium` and `high`** and the boundaries belong to the higher band (0.4 is medium, 0.8 is high). The legacy page's exact boundary is not in the source; if it differs, it is a one-line change in `band()` with its table.
-- **`modules/kpi-ingestion/service/reminder.test.ts` does not type-check** (line 533: `manifest.routes?.(...)` with one argument, two expected). It was already so on `dev`: `kpi.ingestion` is not in the root `tsconfig.json` references, so `pnpm typecheck` does not build it, and it shows only when a project that references it (`kpi.analytics`) is built with `tsc -b`. Neither module is in the root references. Adding both, and fixing the line, is a small change for the next pull request that touches the type check.
-- **`pnpm check` does not type-check `kpi.analytics`** for the same reason; `npx tsc -b modules/kpi-analytics` does, and is clean for the module's own files.
+- ~~**`modules/kpi-ingestion/service/reminder.test.ts` does not type-check**~~ Done in M11 sprint 4: `kpi-framework`, `kpi-ingestion` and `kpi-analytics` are in the root `tsconfig.json` references and the call is fixed.
+- ~~**`pnpm check` does not type-check `kpi.analytics`**~~ Done in M11 sprint 4 (see the entry above).
 
 ## Observed by the maintainer (after M9 sprint 4)
 

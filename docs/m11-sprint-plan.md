@@ -245,6 +245,25 @@ Tests (sprint 4): the pure helpers (the read key, the sparkline path, the format
 
 Definition of done: as sprint 2.
 
+**Amended in sprint 4 (what was decided while building it; the reasons and the measurements are in [ADR-0044](adr/0044-widgets-settings-and-the-read-store.md) and the backlog):**
+
+Checked against the source before starting: `dev` carries PR #121; the reads, `defaults(actor)`, `categories(actor)`, the `ui.widget` entry, the widget props, the `settings` snippet of `DashboardGrid` and `GET /ui/navigation` are as the prompt names them,
+except that the navigation did not list `configSchema`. Where the plan and the source differed, the source won:
+
+1. **A defaults route** (`GET /kpi/analytics/defaults`, decision 9): the repaired defaults with the default service resolved, and the categories the filters offer. Plan item 5 and §3 had no read for them.
+2. **The call budget needed `points` on the summary** (decision 10; the maintainer chose it when asked): the cards need the figures and the sparkline's points, which were two reads. Every widget reads `summary`; `series` stays for sprint 5.
+   Item 8 holds as written: **two** reads for eight widgets over two pairs, none on a move or resize, one on a change of a range (plus the names of the services and the vocabulary of units, once each).
+3. **The shared store is `createAnalyticsReads` in `packages/ui-kit`**, keyed by (kind, service, range, category, KPIs, page) rather than `loadSeries(service, range, category)` alone (item 1); it also holds the defaults, the names of services and the units.
+4. **The settings schema is derived from the Zod `configSchema`** and listed in `GET /ui/navigation` (decision 11): §3 said the schema was "not JSON"; item 5 needed it. An unrepresentable schema stops the start.
+5. **`WidgetSettings` and `DashboardDefaults` are in `packages/ui-kit`** (decision 12) and are opened from the gear through the `settings` snippet and from the quick actions; "Dashboard defaults" is not a FAB entry because the shell names no widget.
+6. **The configuration** (decision 13): `cumulative` is a **per-series** list (§3's example had a boolean), the lists hold short ids, 14 in all; `service` absent is a tile never set up, `service: null` is "Choose a service"; `MAX_CONFIG_BYTES` stays 400.
+7. **The default dashboard** holds the cards, the trends chart and the quick actions (§3), below the three older cards. The averages and the volatility bars are placeable only (item 4 does not put them in the default).
+8. **Found in the real app and fixed by a test, not by a decision:** daisyUI centred the chart's `<figure>`; ECharts' HTML tooltip broke the Content-Security-Policy (so it is drawn inside the SVG); a scrolling table needed focus; two tiles of one
+   widget had one name; a service listed twice crashed the form; a body was torn down when only a series option changed (ADR-0044, "What the source forced").
+9. **A chart is read by keyboard** (item 9's "the tooltip by keyboard"): the arrow keys, Home, End and Escape step through the categories and a live region says the values.
+10. **The housekeeping of sprint 3 is done**: the three `kpi-*` modules are in the root `tsconfig.json` references, the type error in `reminder.test.ts` is fixed, the `9999` contract test looks at values. The 200-KPI cap stays silent (decision 15): no `truncated`.
+11. **No new runtime dependency.** `pnpm openapi:diff` is clean; the typed client and the web app's document changed for the new route and the navigation field.
+
 ## 9. Sprint 5: the exporters
 
 **Branch:** `feature/m11-exporters`. **Goal:** a person exports what a widget shows as CSV or XLSX, correctly escaped, with every KPI's own months.

@@ -49,9 +49,9 @@ describe('merged', () => {
       extra: { n: 1 },
     });
   });
-  it('leaves a key out when the draft has none, and does not change its input', () => {
+  it('leaves a key out when the draft has none, except the service, which is "Choose a service" (null), and does not change its input', () => {
     const config = Object.freeze({ range: '1y', category: 'Usage' });
-    expect(merged(config, { range: '2y' }, fields)).toEqual({ range: '2y' });
+    expect(merged(config, { range: '2y' }, fields)).toEqual({ range: '2y', service: null });
     expect(config).toEqual({ range: '1y', category: 'Usage' });
   });
 });

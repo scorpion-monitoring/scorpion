@@ -3,11 +3,11 @@
 The numbers a dashboard shows: the values of a service month by month, and the change, the average and the volatility of each KPI, from **one tested
 calculation library** and two reads, with the range and the thematic filter **always applied**. Defect 10 of [FEATURES.md](../../docs/FEATURES.md) §5
 is what it must not repeat (no duration meant no date filter, a thematic list that was not the one of the defaults dialog, an arbitrary first
-service). The decisions are in [ADR-0043](../../docs/adr/0043-analytics-calculations-ranges-and-exports.md), the plan in
+service). The decisions are in [ADR-0043](../../docs/adr/0043-analytics-calculations-ranges-and-exports.md) and [ADR-0044](../../docs/adr/0044-widgets-settings-and-the-read-store.md), the plan in
 [m11-sprint-plan.md](../../docs/m11-sprint-plan.md).
 
-Status: M11 sprint 3: the module, the library, the registries, the reads, the settings and the defaults. **No widget, no chart, no exporter and no page yet**
-(sprints 4 and 5). The module is in the `full` profile only.
+Status: M11 sprint 4: the module, the library, the registries, the reads, the settings, the defaults, **the widgets of the dashboard** and their settings
+(the exporters are sprint 5). The module has no page of its own: its widgets are tiles of the dashboard of `core.ui-shell`. The module is in the `full` profile only.
 
 ## Manifest
 
@@ -16,8 +16,9 @@ Status: M11 sprint 3: the module, the library, the registries, the reads, the se
 | id           | `kpi.analytics` (package `@scorpion/kpi-analytics`)                                                                                                                                                                                                                                                                                                                                                               |
 | tables       | **none**, and so no table prefix. The architecture's `dashboard_preference` is replaced by preference keys (ADR-0042 Decision 1, ADR-0043)                                                                                                                                                                                                                                                                        |
 | dependencies | `core.authz`, `core.settings` (the vocabulary `thematic-category`, the preference, the module settings), `kpi.framework` (the effective KPI set and indicators through trusted reads), `kpi.ingestion` (the trusted series reads) and `registry.services` (a service exists, a person's providers' services). `core.ui-shell` is an **optional peer** (the widgets of sprint 4). Nothing depends on it before M12 |
-| routes       | internal: `GET /kpi/analytics/series`, `GET /kpi/analytics/summary` (see "The reads")                                                                                                                                                                                                                                                                                                                             |
-| registries   | declares `analytics.aggregate` and `analytics.score` and contributes their entries; `analytics.exporter` arrives in sprint 5. Contributes the user preference `kpi.analytics.defaults` (`settings.userPreference`) and the permission to the role `user` (`authz.defaultRole`)                                                                                                                                    |
+| routes       | internal: `GET /kpi/analytics/series`, `GET /kpi/analytics/summary`, `GET /kpi/analytics/defaults` (see "The reads" and "The defaults route")                                                                                                                                                                                                                                                                     |
+| registries   | declares `analytics.aggregate` and `analytics.score` and contributes their entries; `analytics.exporter` arrives in sprint 5. Contributes the user preference `kpi.analytics.defaults` (`settings.userPreference`), the permission to the role `user` (`authz.defaultRole`) and **five entries of `ui.widget`** (see "The widgets")                                                                               |
+| ui           | `ui/index.ts` (package export `./ui`): the widgets, their texts in English and German and no page. The server half is `ui/routes.ts`; `ui/ui.test.ts` checks that the two agree                                                                                                                                                                                                                                   |
 | settings     | `volatility.thresholds.low` (0.4) and `.high` (0.8)                                                                                                                                                                                                                                                                                                                                                               |
 | permissions  | the plain `kpi.analytics.read`, held by the role `user` and by Admin                                                                                                                                                                                                                                                                                                                                              |
 | events, jobs | none                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -56,10 +57,10 @@ Both need `kpi.analytics.read` on the route and again in the service, are open t
 measurements are), and are never anonymous and never public v1. Query: `service` (an id; required), `range`, `category`, `indicators` (ids or names, comma
 separated, at most 50), and `page` and `pageSize` (default 50, at most 200; pages count from 0). A page is a page of **KPIs**, in the envelope every list uses.
 
-| Route                        | Answer                                                                                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /kpi/analytics/series`  | per KPI: `indicatorId`, `name`, `valueType`, `unit`, `thematic`, `necessity`, `current`, and `points`: one `{ period, value, text }` per month of the window |
-| `GET /kpi/analytics/summary` | per KPI: the same fields and `latest` (`period`, `value`, `text`), `change` (percent), `average`, `volatility` (`value`, `band`)                             |
+| Route                        | Answer                                                                                                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /kpi/analytics/series`  | per KPI: `indicatorId`, `name`, `valueType`, `unit`, `thematic`, `necessity`, `current`, and `points`: one `{ period, value, text }` per month of the window                                                        |
+| `GET /kpi/analytics/summary` | per KPI: the same fields, **`points`** (the series read's, so one read serves every widget of a dashboard), and `latest` (`period`, `value`, `text`), `change` (percent), `average`, `volatility` (`value`, `band`) |
 
 - **The KPIs** are the effective KPIs of the service plus **any KPI it has dropped that still has values in the window** (`current: false`, `necessity: null`), by name without case then id, at most 200.
 - **The category** is read from the vocabulary `thematic-category` (the one read `categories()` uses, which also serves the defaults): an unknown one is a 422 naming `category`; `all` or none means every category.
@@ -81,6 +82,43 @@ write (a range that is not one, a service that is not an id: 422). `parseDefault
 a category that is not `all` and not an active term of the vocabulary becomes `all`. `service.defaults(actor)` adds the default service: the stored one while it exists, else
 **the first service of the person's providers by name** (`defaultServiceOfAsSystem`, through `registry.services`), else **none** (`null`), never an arbitrary first service.
 
+## The defaults route
+
+`GET /kpi/analytics/defaults` (permission `kpi.analytics.read` on the route and again in `service.defaults(actor)`; **about the caller only, no user id**; `Cache-Control: no-store`) answers
+`{ service: string | null, range, category, categories: [{ key, label }] }`: the stored defaults **repaired** (a range that is not one is `1y`, a category that is no longer a term is `all`),
+the **default service resolved** (the stored one while it exists, else the first service by name of the person's own providers, else `null`: never an arbitrary one) and the **thematic
+categories the filters offer**, the one vocabulary read the reads use. The generic `PUT /preferences/kpi.analytics.defaults` stays the writer (`DashboardDefaults` in `packages/ui-kit` calls it).
+
+## The widgets
+
+Five entries of `ui.widget` (`ui/routes.ts`), all `permission: kpi.analytics.read`, contributed through the module's `ui` entry; the shell knows none by name. The numbers come from `summary` through the
+dashboard's **shared read store** (`packages/ui-kit/src/read-store.ts`): one in-flight read per distinct (service, range, category, KPIs, page), so a dashboard of eight widgets over two (service, range) pairs
+sends **two** reads, none on a move, a resize or a toggle of a chart's series, and one on a change of a widget's range. A widget calculates nothing.
+
+| Widget `id` (component)                   | What it shows                                                                                                                                                                                                                                  | Default place  |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `kpi.analytics.cards` (`cards`)           | per KPI the latest value with its unit, the change as ▲ ▼ **and the words "up", "down", "unchanged"**, an SVG sparkline with a text alternative; a text KPI shows its text and no change. A scrolling list with the count announced            | `0,3` 4×5      |
+| `kpi.analytics.trends` (`trends`)         | one line per KPI through the chart adapter (theme-aware lines, text and tooltip); per KPI **running total**, **show/hide** and **second axis**, kept in the tile's `config`; the table of the numbers; the arrow keys read it                  | `4,3` 8×5      |
+| `kpi.analytics.averages` (`averages`)     | a compact table of the average of each KPI ("n/a" where it is not defined)                                                                                                                                                                     | placeable only |
+| `kpi.analytics.volatility` (`volatility`) | a bar per KPI with the value and the **band in words** (low, medium, high); the explanation is a disclosure button (keyboard and touch). Bands keep their edges: below `low` is low, from `low` to below `high` is medium, from `high` is high | placeable only |
+| `kpi.analytics.actions` (`actions`)       | links to Report data (the Data Submission page, when the person may open it), Services and Notification preferences, built with the base path, and the **Dashboard defaults** dialog. A `singleton`, no settings                               | `0,8` 4×3      |
+
+The cards, the trends chart and the quick actions are in the **default dashboard** (the places are below the three cards of earlier milestones); the other two are added from the FAB menu.
+
+**Configuration** (`service/widget-config.ts`, `config` of a tile, at most 400 bytes as JSON; the JSON Schema of each is listed in `GET /ui/navigation` and draws the settings form):
+
+- cards, averages, volatility: `{ service?: uuid | null, range: '3m' | '6m' | '1y' | '2y' | 'all' (default '1y'), category: <key> | 'all' (default 'all') }`;
+- trends: the same and `cumulative`, `hidden`, `secondary`: lists of **short ids** (the last 12 hex digits of a KPI's id) of at most **14 in all**, so the configuration fits 400 bytes.
+- **`service` absent** means the tile was never set up: it shows the person's defaults and, **in edit mode**, takes them (a new widget starts with the defaults; opening the page never writes).
+  **`service: null`** is a choice that was made, "Choose a service". The range and the category are always applied (defect 10).
+- A configuration that fails its schema is replaced by the widget's defaults (`parseWidgetConfig`, never throws; a property test).
+
+**States** (each a `role="status"` or an `Alert`, never a blank tile): "Choose a service.", loading, "This service has no KPIs.", "No values for this range.", a failed read with "Try again", and a
+422 (the category left the vocabulary) which asks the person to open the settings. A page of KPIs is 50; more are said ("Showing the first 50 of N KPIs"; the server serves at most 200 of a service).
+
+**Accessibility**: every tile has a heading; every chart has its table; the sparkline and the volatility bar have text alternatives; scrolling regions take focus; both themes and reduced motion; axe in
+`apps/web/e2e/dashboard-widgets.spec.ts`.
+
 ## What undefined means
 
 A figure the data cannot support is `null`, and the page says "n/a": a change with fewer than two values or from 0, a volatility with fewer than two values or a mean of 0, an average of
@@ -88,6 +126,8 @@ nothing, any figure of a text KPI. It is never `0`, `NaN` or a guess.
 
 ## Tests
 
-`service/calc/calc.test.ts` and `calc.properties.test.ts` (the library), `service/analytics.test.ts` (the reads on real Postgres, tagged for V8), `service/defaults.test.ts`,
+`service/calc/calc.test.ts` and `calc.properties.test.ts` (the library), `service/analytics.test.ts` (the reads on real Postgres, tagged for V8), `service/defaults.test.ts`, `service/widget-config.test.ts` (the configuration of the widgets, with properties),
+`ui/*.test.ts` (the pure helpers of the widgets: the formatting of a change, the sparkline path, the series states, the agreement of the two halves and the catalogue),
 `settings-schema.test.ts`, `module.test.ts` (no table, the registries and the layers), `defect-10.dashboard-filters.test.ts` (never weaken), and in `apps/server`:
-`analytics-routes.test.ts`, the analytics block of `defect-01.privilege-escalation.test.ts` and `response-fields.test.ts`.
+`analytics-routes.test.ts`, the analytics block of `defect-01.privilege-escalation.test.ts` and `response-fields.test.ts`; the journeys of the widgets under both base paths are in
+`apps/web/e2e/dashboard-widgets.spec.ts`.
