@@ -13691,6 +13691,249 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/kpi/analytics/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The values of a service month by month
+         * @description One point per month of the window and KPI, gaps as `null`. The window is counted back from the current month (UTC) and is always applied; `range` missing means `1y`. KPIs are the effective KPIs of the service plus any KPI it dropped that still has values in the window, by name without case then id, at most 200; pages count from 0. An unknown or malformed `service`, `range`, `category` or `indicators` is 422 naming the parameter; a service with no KPIs is an empty list.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 200. */
+                    pageSize?: string;
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The window, counted back from the current month: 3m, 6m, 1y, 2y, all. Missing means 1y; it is always applied. */
+                    range?: string;
+                    /** @description A key of the vocabulary `thematic-category`, or `all`. Missing means every category. */
+                    category?: string;
+                    /** @description Ids or names of KPIs of the service, separated by commas (at most 50). */
+                    indicators?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of KPIs with their points. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                indicatorId: string;
+                                name: string;
+                                /** @description A key of the registry `kpi.valueType`. */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                /** @description A term of the vocabulary `thematic-category`. */
+                                thematic: string;
+                                /** @description A term of the vocabulary `necessity`; `null` for a KPI the service has dropped. */
+                                necessity: string | null;
+                                /** @description The service reports the KPI now. `false`: it was dropped and its values stay. */
+                                current: boolean;
+                                /** @description One point per month of the window, oldest first. */
+                                points: {
+                                    /** @description The last day of the month, `YYYY-MM-DD`. */
+                                    period: string;
+                                    /** @description The number, or `null` for a gap and for a text value; never zero for a gap. */
+                                    value: number | null;
+                                    /** @description The text of a text value; `null` for a number and for a gap. */
+                                    text: string | null;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest value, change, average and volatility of each KPI
+         * @description Per KPI: the latest value, the change in percent, the average and the volatility with its band (thresholds from the settings). The window is counted back from the current month (UTC) and is always applied; `range` missing means `1y`. KPIs are the effective KPIs of the service plus any KPI it dropped that still has values in the window, by name without case then id, at most 200; pages count from 0. An unknown or malformed `service`, `range`, `category` or `indicators` is 422 naming the parameter; a service with no KPIs is an empty list.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 200. */
+                    pageSize?: string;
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The window, counted back from the current month: 3m, 6m, 1y, 2y, all. Missing means 1y; it is always applied. */
+                    range?: string;
+                    /** @description A key of the vocabulary `thematic-category`, or `all`. Missing means every category. */
+                    category?: string;
+                    /** @description Ids or names of KPIs of the service, separated by commas (at most 50). */
+                    indicators?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of KPIs with their figures. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                indicatorId: string;
+                                name: string;
+                                /** @description A key of the registry `kpi.valueType`. */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                /** @description A term of the vocabulary `thematic-category`. */
+                                thematic: string;
+                                /** @description A term of the vocabulary `necessity`; `null` for a KPI the service has dropped. */
+                                necessity: string | null;
+                                /** @description The service reports the KPI now. `false`: it was dropped and its values stay. */
+                                current: boolean;
+                                /** @description The newest month of the window with a value, or `null`. */
+                                latest: {
+                                    period: string;
+                                    value: number | null;
+                                    /** @description The canonical text of the value (a duration as `HH-MM-SS`). */
+                                    text: string;
+                                } | null;
+                                /** @description The change from the oldest to the newest value of the window, in percent; `null` (n/a) when fewer than two values exist or the oldest is 0. */
+                                change: number | null;
+                                average: number | null;
+                                volatility: {
+                                    /** @description The mean absolute percentage deviation from the mean, as a fraction; `null` when it is not defined. */
+                                    value: number | null;
+                                    /** @description `low`, `medium` or `high` by the thresholds in the settings; `null` with the value. */
+                                    band: string | null;
+                                };
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

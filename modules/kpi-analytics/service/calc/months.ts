@@ -1,5 +1,5 @@
 import { daysInMonth } from '@scorpion/kpi-ingestion/public';
-import type { Maybe } from './numbers.ts';
+import { isNumber, type Maybe } from './numbers.ts';
 
 const pad = (value: number, width: number) => String(value).padStart(width, '0');
 
@@ -33,13 +33,14 @@ export function alignToMonths(
   points: readonly { period: string; value: Maybe }[],
 ): (number | null)[] {
   const byMonth = new Map<string, number | null>();
-  if (!Array.isArray(months) || !Array.isArray(points))
-    return Array.isArray(months) ? months.map(() => null) : [];
-  for (const point of points) {
+  for (const point of listOf(points)) {
     if (typeof point !== 'object' || point === null) continue;
-    const value =
-      typeof point.value === 'number' && Number.isFinite(point.value) ? point.value : null;
-    byMonth.set(point.period, value);
+    byMonth.set(point.period, isNumber(point.value) ? point.value : null);
   }
-  return months.map((month) => byMonth.get(month) ?? null);
+  return listOf(months).map((month) => byMonth.get(month) ?? null);
+}
+
+/** The list itself, or an empty one for anything that is not a list (the library never throws for a caller that hands over the wrong thing). */
+function listOf<T>(value: readonly T[]): readonly T[] {
+  return Array.isArray(value) ? (value as readonly T[]) : [];
 }

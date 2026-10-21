@@ -146,9 +146,12 @@ describe('defect 10: no service chosen means none', () => {
 
   it('does not read without a service: the reads name the parameter, they do not pick one', async () => {
     const w = await analyticsWorld(await h.start());
-    for (const read of [w.analytics.series, w.analytics.summary] as const)
-      expect(
-        paths(await rejection(read(w.people.plain, { service: undefined as never }, FIRST))),
-      ).toEqual(['query:service']);
+    for (const read of [
+      (query: never) => w.analytics.series(w.people.plain, query, FIRST),
+      (query: never) => w.analytics.summary(w.people.plain, query, FIRST),
+    ])
+      expect(paths(await rejection(read({ service: undefined } as never)))).toEqual([
+        'query:service',
+      ]);
   });
 });
