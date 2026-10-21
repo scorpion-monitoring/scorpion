@@ -8,15 +8,18 @@ import { basename, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repo = resolve(import.meta.dirname, '../../..');
-const kit = globSync('packages/ui-kit/src/*.svelte', { cwd: repo }).map((file) =>
-  basename(file, '.svelte'),
-);
+const kit = [
+  ...globSync('packages/ui-kit/src/*.svelte', { cwd: repo }),
+  // The dashboard grid lives in a directory of its own, behind which Snapgrid is hidden (ADR-0042).
+  'packages/ui-kit/src/dashboard-grid/DashboardGrid.svelte',
+].map((file) => basename(file, '.svelte'));
 
 /** Components with specs of their own in e2e/components. */
 const WITH_SPECS = [
   'Breadcrumb',
   'Chart',
   'ConfirmDialog',
+  'DashboardGrid',
   'DataTable',
   'Facets',
   'Pagination',
@@ -36,6 +39,9 @@ const PARTS_OF: Record<string, string> = { FieldShell: 'SchemaForm', SchemaField
 const THROUGH_PAGES = [
   'Alert',
   'Dialog',
+  // The icon of the closed table (`@scorpion/contracts/icons`): decorative, `aria-hidden`, drawn inside the buttons and
+  // links that carry the name. The web app has had its own copy since M5; this one is for the shared components.
+  'Icon',
   // Moved from the organisation module's `LogoBlock` (M7 sprint 2, Decision 18) with its behaviour unchanged:
   // the logo journeys of `e2e/organisations.spec.ts` upload, replace and remove through it, and
   // `e2e/accessibility-organisations.spec.ts` runs axe over the pages that hold it.

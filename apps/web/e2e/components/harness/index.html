@@ -7,11 +7,14 @@
          inline script or style fails here and not in production. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'nonce-harness'; style-src-attr 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'"
     />
     <title>Components</title>
   </head>
   <body>
+    <!-- The page of the application carries a nonce on its own tags (SvelteKit, vite.config.ts); a component that
+         writes a style element takes it from one of them. This inert data block is the harness's. -->
+    <script nonce="harness" type="application/json" id="nonce"></script>
     <div id="app"></div>
     <script type="module" src="./main.ts"></script>
   </body>

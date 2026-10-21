@@ -77,6 +77,26 @@ export default defineConfig(
   },
 
   {
+    // The dashboard grid library is behind one directory (M11, ADR-0042, Decision 2): Snapgrid and dnd-kit are
+    // imported by `packages/ui-kit/src/dashboard-grid/` and by nothing else, so a replacement touches only it.
+    ignores: ['packages/ui-kit/src/dashboard-grid/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@snapgridjs/*', '@dnd-kit/*'],
+              message:
+                'Only packages/ui-kit/src/dashboard-grid/ may import the grid library (ADR-0042, Decision 2).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
     // The one `{@html}` of the product besides ui-kit's SafeHtml (which carries its own disable comment): the
     // JSON-LD block of the organisation and the service page. Its only input is the output of `serializeJsonLd`
     // (M6 plan, Decision 17; ADR-0033; M7 Decision 15, ADR-0036). Exactly this path: another file keeps the rule,

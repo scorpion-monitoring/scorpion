@@ -179,3 +179,76 @@ and states in the repository that React is not used; **(c)** add `react` and `re
 - Known gaps, in the backlog: a document stored but unreadable by the structural schema (after a change of the schema) looks like "nothing stored";
   the configuration form of a widget needs more than a Zod schema on the server (a JSON Schema for `SchemaForm`, sprint 4); dnd-kit's announcements are
   English only.
+
+## Amended in sprint 2 (2026-10-21)
+
+Sprint 2 put the grid on the start page (`DashboardGrid` in `packages/ui-kit/src/dashboard-grid/`, the page in `core.ui-shell`). This block records what was checked, what was
+decided and what the real app showed that the prototype had not. Where the source and the plan disagreed, the source won.
+
+**Checked against the source before starting.** `GET /ui/dashboard` and `PUT /ui/dashboard`, `setUserPreference(actor, key, value)` in the public service of `core.settings`, `grid`,
+`label` and `icon` on the entries, and `GET /ui/navigation` listing them for the widgets the caller may see are all as sprint 1 recorded. The plan names `core.audit` as a possible owner of one
+of the three cards; it is not one. The cards are owned by `registry.organisations` (the membership summary), `core.identity` (the pending approvals) and `core.notifications` (the delivery
+status), each in its `ui/routes.ts`.
+
+**Decisions taken before the sprint (recorded, not reopened).**
+
+- **The dependencies of Decision 4 are installed exactly as listed**, pinned, in `packages/ui-kit` (where `DashboardGrid` lives): `@snapgridjs/svelte` 0.12.0, `@dnd-kit/svelte` 0.5.1 and
+  `@dnd-kit/dom` 0.5.1. The lockfile gained **19 packages**, the ones of the table (names and versions as listed, all MIT, none with an install script; the one `hasBin` is `loose-envify`).
+- **The peer question is answered (b):** `peerDependencyRules.ignoreMissing: ['react', 'react-dom']` in `pnpm-workspace.yaml`. `pnpm install` no longer prints the warning. **No React is in the
+  client build**: a search of every client chunk finds no React (the strings that match are Svelte's "reactions" and the signals library's name). `react` and `react-dom` are not dependencies.
+- **`MAX_CONFIG_BYTES` stays 400.** Nothing in this sprint writes a configuration of its own (no widget has a `configSchema` yet), and nothing in building the sprint broke on it. A save
+  that does not fit is a 422 on `items`, which the page shows ("Your dashboard is too large to save. Remove a widget or simplify its settings, then try again.").
+- **A save needs `core.settings.preference.write` as well as `core.ui-shell.dashboard.write`.** The page shows a 403 as an alert that says the dashboard cannot be saved with this account
+  (no permission id, no role), keeps the layout, offers "Try again" and does **not retry by itself**; e2e removes the permission from the role `user` and counts the requests.
+
+**What the real app showed (each was found by a test, and is now one).**
+
+1. **The Content-Security-Policy.** dnd-kit writes a `<style>` element into the page while something is dragged, and the page's policy has no `'unsafe-inline'` for styles (only the nonce SvelteKit
+   puts on its own tags). The harness page, which has the application's policy, reported three `style-src-elem` violations. dnd-kit's style injector takes a `nonce`; `Provider.svelte` gives it the
+   nonce of a script or style tag of the page (`element.nonce` stays readable). The harness page now carries one inert nonce-bearing data block, as the application's pages carry their tags.
+2. **The `@scorpion/contracts` barrel pulls in zod, which probes `new Function` at load** and so breaks the policy (`script-src: eval`) on a page that has not set zod to `jitless`. The shared layout
+   rules (`pack`, `compactUp`) are therefore a subpath, `@scorpion/contracts/dashboard-layout`, which imports nothing; the server's `parseDashboard` and the browser use the same file (the plan's
+   "the browser must not reimplement `pack` differently" is met by there being one `pack`).
+3. **dnd-kit's accessibility plugin reads its options once.** The announcements of Decision 2's open question are therefore set by building the manager with the plugin already configured
+   (`Provider.svelte`); setting them later is silently ignored. The keyboard drag now says "Picked up …" and "Moving … was cancelled" and gives its instructions in the page's language (en and de, tested);
+   a drop is announced by the grid itself with the new row and column, so dnd-kit stays silent for it. The English-only entry of the sprint 1 backlog is closed.
+4. **SvelteKit adds the CSS of every dynamic import to every page**, so a `<style>` block in a lazily loaded component would be fetched by pages that never draw the grid. The grid has no
+   `<style>` block (utility classes only), which is what lets the e2e check say that no other page requests anything of it.
+5. **A sixth, small wrapper in view mode.** The five of Decision 2 were written for edit mode. In view mode the draggable still needs an activator, and without one dnd-kit gives the tile itself a role
+   and a tab stop, which axe reports as `nested-interactive` (the tile holds links and, for a chart, a button). A hidden element takes the activator (`<span hidden {@attach item.attachHandle}>`), so the
+   tile stays a plain tile. It is three lines in `Tile.svelte`; **it is not on the list of this sprint's brief and the maintainer is asked to confirm it** (the report says so).
+6. **A tile that draws nothing is removed from view, not left as a hole.** The grid watches each tile's body (no element child = nothing to draw). In view mode such a tile has no height and the tiles
+   below it rise (the grid's own vertical compaction). **Tiles never move sideways**: a first version slid the tiles to the right of an empty one into its width, and a tile that is
+   empty only while it loads made its neighbours jump twice. For the same reason the widget host (`Widget.svelte`) leaves a hidden marker until a widget's code has arrived, so "loading" is not "has
+   nothing to say". The default placements put the
+   membership card **last** (`x: 8`) for that reason: it is empty for almost everybody, and an empty tile at the end of the row leaves no hole to see (pending approvals `x: 0`, delivery status `x: 4`). When **no** tile draws anything and no edit is in progress, the page also takes its heading and the grid out of view (the grid stays in place, hidden, so it notices when a widget has something to say), as the old start page did with its `:has` rule; edit mode always shows it. A plain person therefore sees the hero and the button, as before.
+7. **A remount costs no request, and costs no widget.** The plan's rule ("tile data comes from the shared read store, so a remount costs no request") would have meant refetching for the three cards,
+   which read their own data. Instead each tile's body is drawn **once**, in a parking element that is not part of the remounted tree, and the tile that is current adopts its element
+   (`body-host.ts`, tested with plain objects; a component spec counts mounts across a change of mode and of viewport and finds one). Turning edit mode on sends nothing (`[dashboard-calls]`). The shared
+   read store of sprint 4 is still needed for widgets that share a read, but not for this.
+8. **A button move passes a tile that is in the way** (up and down swap the two, as a drag does; left and right jump to the next free place in the row and refuse when there is none) rather than
+   pushing it aside, because pushing a neighbour sideways has no place to go in a full row. The rules are table-driven in `layout.ts`, with a property that no sequence of moves leaves an overlap or a
+   tile outside the grid.
+
+**What the page does, in short** (the README of `core.ui-shell` has the detail): the page's `load` reads `GET /ui/dashboard` on the server; the grid is a dynamic import; the FAB button turns edit mode on and
+opens a menu of the widgets the caller may add (Escape closes it and returns focus to the button); a change is saved by one `PUT` a second after the last one, when the page is hidden and when it goes away; "Reset
+to default" shows the default (the server's `defaultDashboard`, run in the browser over the entries of `GET /ui/navigation`) and saves it (the maintainer's decision after the sprint; the plan said it stored nothing); two tabs: **the last save wins**, with no
+revision protocol, as the plan says. A widget whose component this build does not have draws nothing and the page says so.
+
+**Measured** (build of `0.12.0`'s `dev` against this branch; the image against the same commit's image, `docker image inspect`; numbers repeated in `docs/backlog.md`):
+
+| What                                                                                  | Before          | After                        | Change                                                                                      |
+| ------------------------------------------------------------------------------------- | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| Client build, JavaScript and CSS (`.svelte-kit/output/client/_app`, 75 → 78 files)    | 5,911,288 B raw | 6,085,445 B raw              | +174,157 B (+2.9 %)                                                                         |
+| the same, gzip of each file                                                           | 1,715,206 B     | 1,772,245 B                  | +57,039 B (+3.3 %)                                                                          |
+| The grid chunk (Snapgrid, dnd-kit, `DashboardGrid` and its parts), loaded on `/` only | not there       | 145,656 B raw, 47,934 B gzip | the prototype's figures were 133.7 kB and 43.9 kB                                           |
+| The rest of the client build                                                          |                 |                              | +28,501 B raw, +9,105 B gzip (the page, its words in two languages, the icons, shared code) |
+| Image `full` (`docker image inspect`, uncompressed)                                   | 634,197,977 B   | 652,779,456 B                | +18,581,479 B (+2.9 %)                                                                      |
+
+The image grows more than the build because the run-time install carries every package of the server's closure, **including the client-only packages of `ui-kit`** (it already carried `echarts`): Snapgrid,
+dnd-kit, the layout functions of react-grid-layout and **`svelte` itself with its compiler's dependencies (about 9.5 MB of the 14.3 MB the package store grew by)**, which the two packages list as a peer. None of
+it is needed at run time (the web app is bundled by the node adapter); excluding the client-only packages from step 5 of the `Dockerfile` is a backlog entry, not part of this sprint.
+
+**Not done, and why.** No new route and no change to `apps/server/src/pipeline/**` or `packages/contracts/src/route.ts` was needed. A per-widget settings screen is not built: the grid has the shell of it (a gear
+that opens a dialog and a `settings` snippet, tested in the harness), and no widget uses it before sprint 4. "Reset to default" does not store the default (the plan's wording); whether it should is a question for
+the maintainer, because a person who resets and leaves the page without another change finds their old layout again.

@@ -21,6 +21,9 @@ const TRENDS = 'fixture.dash.trends';
 const SINGLE = 'fixture.dash.single';
 const ADMIN = 'fixture.dash.admin';
 const NOTES = 'fixture.dash.notes';
+// A real card of `registry.organisations` (the full profile): since M11 sprint 2 it has a default placement, and every
+// signed-in person holds its permission, so it is in everyone's default dashboard (it is pushed below the fixture's tiles).
+const MEMBERSHIP = 'organisations.membership-requests';
 
 const fixture = defineModule({
   id: 'fixture.dash',
@@ -158,7 +161,7 @@ describe('GET /ui/dashboard', () => {
     expect(reply.res.headers.get('cache-control')).toBe('no-store');
     const body = reply.body as View;
     expect(body).toMatchObject({ version: 1, dropped: [], reset: false, isDefault: true });
-    expect(body.items.map((item) => item.widget)).toEqual([TRENDS, SINGLE]);
+    expect(body.items.map((item) => item.widget)).toEqual([TRENDS, SINGLE, MEMBERSHIP]);
     expect(body.items[0]).toMatchObject({
       x: 0,
       y: 0,
@@ -285,7 +288,7 @@ describe('GET /ui/dashboard', () => {
       expect(put.status).toBe(200);
       const body = (await read(app, alice)).body as View;
       expect(body).toMatchObject({ reset: true, resetReason: reason, isDefault: false });
-      expect(body.items.map((item) => item.widget)).toEqual([TRENDS, SINGLE]);
+      expect(body.items.map((item) => item.widget)).toEqual([TRENDS, SINGLE, MEMBERSHIP]);
       expect(await stored(app, alice.user.id)).toEqual([planted]);
     },
   );
@@ -325,7 +328,7 @@ describe('GET /ui/dashboard', () => {
     await makePreference(app.kernel.pool, { id: alice.user.id }, KEY, 'not a dashboard');
     const body = (await read(app, alice)).body as View;
     expect(body.isDefault).toBe(true);
-    expect(body.items.map((item) => item.widget)).toEqual([TRENDS, SINGLE]);
+    expect(body.items.map((item) => item.widget)).toEqual([TRENDS, SINGLE, MEMBERSHIP]);
   });
 
   it('keeps two people’s dashboards apart, and a route takes no user id [ASVS-8.2.3]', async () => {
