@@ -88,7 +88,10 @@ others." A service with more than 200 is still cut at 200 without a word (backlo
 9. **The default dashboard now holds the cards, the trends chart and the quick actions** for everyone who holds `kpi.analytics.read` (the plan, §3). They sit below the three cards of earlier milestones; a person with no defaults sees
    "Choose a service." in them.
 10. **`core.ui-shell`'s `Dashboard.svelte` knows the read store and the settings form** (both in `ui-kit`) and nothing of any widget: the shell still names no widget.
-11. The housekeeping of sprint 3 is done: `kpi-framework`, `kpi-ingestion` and `kpi-analytics` are in the root `tsconfig.json` references (so `pnpm check` type-checks them), the type error of `reminder.test.ts` is fixed,
+11. **The web server's bundle held ECharts and its source maps** (about 10 MB, 8.6 MB of it in `build/server`): the first image of the sprint was 14.2 MB larger than sprint 3's. The server never runs the chart
+    (`chart-echarts.ts` is imported inside `onMount`), so `apps/web/vite.config.ts` marks `echarts` and `zrender` external for the `ssr` environment (`ssr.external` does not reach them: the web app bundles the linked `ui-kit`).
+    The `full` image is then 3.5 MB (+0.70 %) larger than sprint 3's, which is the client build's growth in its three forms (raw, gzip, brotli) and the widgets' server rendering.
+12. The housekeeping of sprint 3 is done: `kpi-framework`, `kpi-ingestion` and `kpi-analytics` are in the root `tsconfig.json` references (so `pnpm check` type-checks them), the type error of `reminder.test.ts` is fixed,
     and the contract test that searched a JSON string for `9999` now looks at the values.
 
 ## Consequences
@@ -96,6 +99,6 @@ others." A service with more than 200 is still cut at 200 without a word (backlo
 - A dashboard of eight widgets over two (service, range) pairs makes two analytics reads; the number is asserted in the end-to-end spec under both base paths.
 - The settings form of any widget is data (a JSON Schema) and one component; a new widget with a `configSchema` gets its gear and its form without a line of shell code.
 - Widgets are `ui.widget` entries of `kpi.analytics`; the exporters of sprint 5 add buttons to the cards and the trends widgets and use `series` or `summary` as they need.
-- The default dashboard of every user now makes reads on arrival (the cards and the chart, when the person has a service). The bundle and image sizes are in the backlog.
+- The default dashboard of every user now makes reads on arrival (one for the defaults while no service is chosen; the cards and the chart read once for a person with a service). The bundle and image sizes are in the backlog.
 - A configuration that is hand-planted through the generic preference route is repaired on read; a category that left the vocabulary shows "The settings of this widget are no longer valid".
 - No new runtime dependency (`fast-check` is a development dependency of `kpi.analytics`, as elsewhere). No change to `apps/server/src/pipeline/**` or `packages/contracts/src/route.ts`.
