@@ -455,7 +455,7 @@ test.describe('journey: a person exports what a widget shows (M11 sprint 5)', ()
       const chunks: Buffer[] = [];
       for await (const chunk of (await file.createReadStream()) as AsyncIterable<Buffer>)
         chunks.push(chunk);
-      await expect(page.getByRole('status').filter({ hasText: /^Saved / })).toContainText(
+      await expect(owner.getByRole('status').filter({ hasText: /^Saved / })).toContainText(
         file.suggestedFilename(),
       );
       await page.waitForTimeout(500);
@@ -500,13 +500,14 @@ test.describe('journey: a person exports what a widget shows (M11 sprint 5)', ()
         else expect(cell, `${kpi.name} ${point.period}`).toBe(point.text ?? '');
       });
     }
-    // The values this journey reported: downloads 100 to 150, over the last five months of the six.
-    expect(lines.find((line) => line[0] === w.names.downloads)!.slice(3)).toEqual([
+    // The values this journey reported: downloads 100 to 150 in the five months before the current one, which has none yet.
+    expect(lines.find((line) => line[0] === w.names.downloads)!.slice(2)).toEqual([
       '100',
       '110',
       '120',
       '130',
       '150',
+      '',
     ]);
 
     // The cards offer the same menu; an XLSX is a workbook (a zip) with the name of the service.

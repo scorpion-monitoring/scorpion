@@ -66,7 +66,7 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
       },
       [PERMISSION_EXPORT]: {
         description:
-          'Export the series of a service as a CSV or XLSX file: names, units and values month by month, no person',
+          'Export the series of a service as a CSV or XLSX file: KPI titles, units and values month by month, no person',
       },
     },
 
