@@ -748,6 +748,8 @@ const ANALYTICS_INFO = [
 ];
 const ANALYTICS_ANSWERS: Record<string, readonly string[]> = {
   'GET /kpi/analytics/series': [...ANALYTICS_INFO, 'points', 'period', 'value', 'text'],
+  // A file, not JSON: it has no named field (its columns are the field table's "export file" row, escaped and tested in analytics-export-routes.test.ts).
+  'GET /kpi/analytics/export': [],
   'GET /kpi/analytics/defaults': ['service', 'range', 'category', 'categories', 'key', 'label'],
   'GET /kpi/analytics/summary': [
     ...ANALYTICS_INFO,
