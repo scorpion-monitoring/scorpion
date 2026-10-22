@@ -1,5 +1,0 @@
----
-'scorpion': minor
----
-
-New module `kpi.analytics` (profile `full`): two signed-in reads for the dashboard, `GET /kpi/analytics/series` (the values of a service month by month, over `3m`, `6m`, `1y`, `2y` or `all`, filtered by thematic category) and `GET /kpi/analytics/summary` (per KPI: the latest value, the change, the average and the volatility with its band), both for every signed-in person with the new permission `kpi.analytics.read` (held by the role `user`). The range is always applied: no range means one year. A text value is shown as text, never as a number, and a month with no value stays empty instead of zero. Two new settings, `volatility.thresholds.low` and `.high` (0.4 and 0.8), set where the volatility bands change; a value outside the allowed range is refused. People can store dashboard defaults (service, range, category) as the preference `kpi.analytics.defaults`. The container images no longer carry packages that only the browser needs: the `full` image is about 130 MB smaller than `0.12.0-full`. The public API is unchanged.
