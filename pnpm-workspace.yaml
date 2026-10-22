@@ -29,6 +29,9 @@ autoInstallPeers: false
 # fixed in 0.25.0). Use the esbuild that drizzle-kit itself uses. Remove when drizzle-kit drops the loader.
 overrides:
   '@esbuild-kit/core-utils>esbuild': 0.25.12
+  # launch-editor <= 2.14.1 has three advisories (fixed in 2.14.2); it comes in only through @changesets/cli (dev).
+  # Remove when @changesets/cli requires 2.14.2 or later.
+  launch-editor: '>=2.14.2'
 
 # react-grid-layout (a dependency of @snapgridjs/core) declares react and react-dom as peers. Snapgrid imports
 # only `react-grid-layout/core`, the pure layout functions, so React is never in the client build and is not

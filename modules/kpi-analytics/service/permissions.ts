@@ -4,3 +4,9 @@
  * anonymous, never public v1.
  */
 export const PERMISSION_READ = 'kpi.analytics.read';
+
+/**
+ * Export the analytics of a service as a file (`GET /kpi/analytics/export`). Plain, no resource: the role `user` holds it. An export holds
+ * what the series read holds (names, units and values of a service everyone signed in may read) and no person.
+ */
+export const PERMISSION_EXPORT = 'kpi.analytics.export';

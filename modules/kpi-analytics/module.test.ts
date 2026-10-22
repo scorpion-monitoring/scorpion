@@ -41,12 +41,15 @@ describe('the manifest', () => {
     expect(rows).toEqual([]);
   });
 
-  it('gives the role user the plain permission, and no other', async () => {
+  it('gives the role user the two plain permissions, read and export, and no other', async () => {
     const w = await analyticsWorld(await h.start());
     const { rows } = await w.pool.query<{ role: string; permission: string }>(
       "select role_id as role, permission from authz_role_permission where permission like 'kpi.analytics.%' order by 1, 2",
     );
-    expect(rows.map((row) => row.permission)).toEqual(['kpi.analytics.read']);
+    expect(rows.map((row) => row.permission)).toEqual([
+      'kpi.analytics.export',
+      'kpi.analytics.read',
+    ]);
   });
 
   it('maps every term of the vocabulary `aggregate` to a function, and has the average and the volatility it shows', async () => {
@@ -89,6 +92,41 @@ describe('the registries', () => {
   });
 });
 
+describe('the registry analytics.exporter', () => {
+  const exporter = (id: string) => ({
+    id,
+    labels: { en: id },
+    extension: 'txt',
+    mediaType: 'text/plain',
+    write: () => new Uint8Array(),
+  });
+
+  it('starts with CSV and XLSX, and with a format another module contributes', async () => {
+    const w = await analyticsWorld(
+      await h.start({ extra: [contributor('analytics.exporter', [exporter('tsv')])] }),
+    );
+    expect(w.kernel).toBeDefined();
+  });
+
+  it('stops the start when an entry has the id of a built-in one, or two entries share an id', async () => {
+    await expect(
+      h.start({ extra: [contributor('analytics.exporter', [exporter('csv')])] }),
+    ).rejects.toThrow(/two exporter entries have the id "csv"/);
+    await expect(
+      h.start({
+        extra: [contributor('analytics.exporter', [exporter('twice'), exporter('twice')])],
+      }),
+    ).rejects.toThrow(/id "twice"/);
+  });
+
+  it('stops the start for an entry that fails the schema, naming the module', async () => {
+    const bad = contributor('analytics.exporter', [{ ...exporter('ok'), extension: '.txt' }]);
+    await expect(h.start({ extra: [bad] })).rejects.toThrow(String(bad.manifest.id));
+    const noWriter = contributor('analytics.exporter', [{ ...exporter('x'), write: 'nope' }]);
+    await expect(h.start({ extra: [noWriter] })).rejects.toThrow(String(noWriter.manifest.id));
+  });
+});
+
 describe('the layers', () => {
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((name) => {
@@ -122,12 +160,15 @@ describe('the layers', () => {
       routes.map((entry) => `${entry.route.method.toUpperCase()} ${entry.route.path}`).sort(),
     ).toEqual([
       'GET /kpi/analytics/defaults',
+      'GET /kpi/analytics/export',
       'GET /kpi/analytics/series',
       'GET /kpi/analytics/summary',
     ]);
     for (const entry of routes) {
       expect(entry.route.public).toBeFalsy();
-      expect(entry.route.permission).toBe('kpi.analytics.read');
+      expect(entry.route.permission).toBe(
+        entry.route.path.endsWith('/export') ? 'kpi.analytics.export' : 'kpi.analytics.read',
+      );
     }
   });
 });

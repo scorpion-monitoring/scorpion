@@ -59,6 +59,14 @@ export const messages: UiMessages = {
       'Showing the first {shown} of {total} KPIs. Choose a category to see others.',
     'analytics.state.defaultsFailed': 'Your dashboard defaults could not be loaded.',
 
+    'analytics.export.button': 'Export',
+    'analytics.export.menu': 'Export the numbers of this widget as a file',
+    'analytics.export.csv': 'CSV',
+    'analytics.export.xlsx': 'XLSX',
+    'analytics.export.busy': 'Preparing the file…',
+    'analytics.export.done': 'Saved {name}.',
+    'analytics.export.failed': 'The file could not be exported.',
+
     'analytics.change.up': 'up',
     'analytics.change.down': 'down',
     'analytics.change.flat': 'unchanged',
@@ -133,6 +141,14 @@ export const messages: UiMessages = {
       'Die ersten {shown} von {total} KPIs werden angezeigt. Wählen Sie eine Kategorie, um andere zu sehen.',
     'analytics.state.defaultsFailed':
       'Ihre Dashboard-Voreinstellungen konnten nicht geladen werden.',
+
+    'analytics.export.button': 'Exportieren',
+    'analytics.export.menu': 'Die Zahlen dieses Widgets als Datei exportieren',
+    'analytics.export.csv': 'CSV',
+    'analytics.export.xlsx': 'XLSX',
+    'analytics.export.busy': 'Die Datei wird vorbereitet …',
+    'analytics.export.done': '{name} wurde gespeichert.',
+    'analytics.export.failed': 'Die Datei konnte nicht exportiert werden.',
 
     'analytics.change.up': 'gestiegen',
     'analytics.change.down': 'gesunken',

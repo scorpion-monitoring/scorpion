@@ -42,7 +42,7 @@
   }
 </script>
 
-<WidgetFrame title={t('analytics.trends.title')} {config} {editing} {setConfig} units>
+<WidgetFrame title={t('analytics.trends.title')} {config} {editing} {setConfig} units exportable>
   {#snippet body(data: Body)}
     {@const { lines, shown, spec } = specOf(data)}
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">

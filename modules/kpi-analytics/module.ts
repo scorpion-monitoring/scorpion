@@ -7,7 +7,13 @@ import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { registerRoutes } from './routes.ts';
 import { createAnalyticsService, type AnalyticsService } from './service/analytics.ts';
 import { DEFAULTS_PREFERENCE, storedDefaultsSchema } from './service/defaults.ts';
-import { PERMISSION_READ } from './service/permissions.ts';
+import { PERMISSION_EXPORT, PERMISSION_READ } from './service/permissions.ts';
+import {
+  BUILTIN_EXPORTERS,
+  EXPORTER_REGISTRY,
+  exporterEntrySchema,
+  type ExporterEntry,
+} from './service/exporters.ts';
 import { ANALYTICS_WIDGETS } from './ui/routes.ts';
 import {
   AGGREGATE_REGISTRY,
@@ -58,6 +64,10 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
         description:
           'Read the series and the summary of a service on the signed-in pages (the dashboard): values month by month, change, average and volatility',
       },
+      [PERMISSION_EXPORT]: {
+        description:
+          'Export the series of a service as a CSV or XLSX file: KPI titles, units and values month by month, no person',
+      },
     },
 
     settings: settingsSchema,
@@ -65,11 +75,12 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
     registries: {
       [AGGREGATE_REGISTRY]: aggregateEntrySchema,
       [SCORE_REGISTRY]: scoreEntrySchema,
+      [EXPORTER_REGISTRY]: exporterEntrySchema,
     },
 
     contributes: {
       // Every signed-in person reads the analytics of every service, as the measurements are readable (decision 4 of M10). Admin holds all declared ones.
-      'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ] }],
+      'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ, PERMISSION_EXPORT] }],
       // What seeds a new widget: service, range and category of the person.
       'settings.userPreference': [
         {
@@ -84,6 +95,7 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
       'ui.widget': ANALYTICS_WIDGETS,
       [AGGREGATE_REGISTRY]: BUILTIN_AGGREGATES,
       [SCORE_REGISTRY]: BUILTIN_SCORES,
+      [EXPORTER_REGISTRY]: BUILTIN_EXPORTERS,
     },
 
     services: (ctx) => {
@@ -93,6 +105,10 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
         ctx.registry(AGGREGATE_REGISTRY) as AggregateEntry[],
       );
       const scores = indexEntries('score', ctx.registry(SCORE_REGISTRY) as ScoreEntry[]);
+      const exporters = indexEntries(
+        'exporter',
+        ctx.registry(EXPORTER_REGISTRY) as ExporterEntry[],
+      );
       return createAnalyticsService(ctx, {
         authz: ctx.deps['core.authz'],
         settings: ctx.deps['core.settings'],
@@ -101,6 +117,7 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
         reads: ctx.deps['kpi.ingestion'].reads,
         aggregates,
         scores,
+        exporters,
         clock: options.clock ?? (() => new Date()),
       });
     },
