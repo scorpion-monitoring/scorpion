@@ -6,7 +6,7 @@ is what it must not repeat (no duration meant no date filter, a thematic list th
 service). The decisions are in [ADR-0043](../../docs/adr/0043-analytics-calculations-ranges-and-exports.md) and [ADR-0044](../../docs/adr/0044-widgets-settings-and-the-read-store.md), the plan in
 [m11-sprint-plan.md](../../docs/m11-sprint-plan.md).
 
-Status: M11 sprint 5: the module, the library, the registries, the reads, the settings, the defaults, the widgets of the dashboard and their settings, and **the exporters** (CSV and XLSX). The module has no page of its own: its widgets are tiles of the dashboard of `core.ui-shell`. The module is in the `full` profile only.
+Status: released in `0.13.0` (M11): the module, the library, the registries, the reads, the settings, the defaults, the widgets of the dashboard and their settings, and **the exporters** (CSV and XLSX). The module has no page of its own: its widgets are tiles of the dashboard of `core.ui-shell`. The module is in the `full` profile only.
 
 ## Manifest
 

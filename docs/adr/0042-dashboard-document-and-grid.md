@@ -252,3 +252,33 @@ it is needed at run time (the web app is bundled by the node adapter); excluding
 **Not done, and why.** No new route and no change to `apps/server/src/pipeline/**` or `packages/contracts/src/route.ts` was needed. A per-widget settings screen is not built: the grid has the shell of it (a gear
 that opens a dialog and a `settings` snippet, tested in the harness), and no widget uses it before sprint 4. "Reset to default" does not store the default (the plan's wording); whether it should is a question for
 the maintainer, because a person who resets and leaves the page without another change finds their old layout again.
+
+## Amended in sprint 3 (2026-10-21)
+
+Sprint 3 added `kpi.analytics`, the first module with widgets of its own, and changed the image. One decision above is touched.
+
+- **Decision 4's cost to the image is gone.** Sprint 2 measured the dependencies of the grid, `svelte` and `echarts` into the run-time image because step 5 of `docker/Dockerfile` selected the server's closure with `pnpm --filter`, which follows development dependencies
+  and so reached `@scorpion/ui-kit` and its production dependencies (the maintainer decided the change after sprint 2). The step now uses `--filter-prod "@scorpion/server..."`. The web app is bundled in step 4, so nothing at run time imports the client-only packages: a search of the
+  `full` image finds no `@snapgridjs`, no `@dnd-kit`, no `react-grid-layout`, no `svelte`, no `echarts` and no `zrender`. The grid costs the **web build** (the chunk below) and **no bytes of the image**; the image is smaller than `0.12.0-full` (sizes in "Amended in sprint 6").
+- The module-set check passes for `full`, `core-only` and `registry`, and the three images start and refuse a `PROFILE` they were not built for.
+
+## Amended in sprint 4 (2026-10-21)
+
+Sprint 4 gave the first widgets a configuration of their own (ADR-0044). Three statements above change.
+
+- **Decision 3 said `GET /ui/navigation` does not list `configSchema`** ("a Zod schema is not JSON"). It lists the schema's **JSON Schema** (ADR-0044, Decision 11), derived from the Zod schema (`z.toJSONSchema`, input side), for each widget the caller may see; a schema that cannot be
+  expressed stops the start. The browser draws the settings form from it, and the server still validates a save with the Zod schema.
+- **What a configuration holds.** `cumulative`, `hidden` and `secondary` of the trends chart are lists of short ids (the last 12 hex digits of a KPI's id), at most 14 in all, so a configuration fits `MAX_CONFIG_BYTES` (400, unchanged: Decision 1's question stays answered "no change").
+  `service` absent means a tile that was never set up (it takes the person's defaults in edit mode); `service: null` is the choice "Choose a service". A configuration that fails its schema is replaced by the widget's defaults, as the document says.
+- **The default dashboard** holds the three older cards, then the KPI cards, the trends chart and the quick actions, for everyone who holds `kpi.analytics.read`. The averages and the volatility bars are placeable only. A person with no defaults and no provider sees three tiles that say "Choose a service."
+
+## Amended in sprint 6 (2026-10-22)
+
+The release measured what the earlier sprints estimated. The method, the machine and every other figure are in `docs/backlog.md`, "Release follow-ups (M11 sprint 6)".
+
+- **Bundle and image against `0.12.0-full`.** The client build grew from 5,911,291 to 7,242,090 B (+1,330,799 B, +22.5 %; gzip +25.9 %). Of that, the grid chunk of this decision (Snapgrid, dnd-kit, `DashboardGrid`; loaded on `/` only) is **145,656 B raw and 47,859 B gzip**, about a tenth;
+  the larger part is ECharts and the widgets of sprint 4. The image is **126.2 MB smaller** than `0.12.0-full` (634,129,833 to 507,888,071 B), because of the `--filter-prod` change above.
+- **Decision 1's sizes.** A stored document of 20 trends tiles with a service, a range and a category is **4,174 B**; with four, four and four series options on each tile it is **7,714 B**, under the 8 KiB cap (8,192 B); 20 KPI-card tiles are 3,434 B. Twenty tiles that each carry the 400-byte
+  maximum do not fit, as sprint 1 said (17 of 391 bytes do); the save refuses with a 422 on `items`.
+- **Repairing a bad document** is a pure function of 0.03 to 0.3 ms (a valid document of 20 tiles 0.21 ms, a planted one with eight tiles to drop 0.15 ms; the default replaces an unreadable one in 0.03 ms), so the read of `GET /ui/dashboard` is one preference query plus the pipeline.
+- **Two packages remain young.** Snapgrid is still 0.12.0 and dnd-kit 0.5.1, pinned, behind the one directory of `packages/ui-kit`; the fallback of the plan (our own CSS grid and the buttons over the same document) was not needed and is not built.

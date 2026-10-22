@@ -1,6 +1,6 @@
 # M11 Sprint Plan: `kpi.analytics` and the widget grid dashboard
 
-Status: **accepted**, 2026-10-20. The maintainer answered four questions while this was drafted (recorded in §14, decisions 1 to 4) and answered "yes" to every decision marked "taken by this plan" (decisions 6 to 14) on 2026-10-20, before sprint 1 started; they stay reversible without a migration.
+Status: **accepted**, 2026-10-20; sprints 1 to 5 are merged into `dev` and sprint 6, the release `0.13.0`, is §10. The maintainer answered four questions while this was drafted (recorded in §14, decisions 1 to 4) and answered "yes" to every decision marked "taken by this plan" (decisions 6 to 14) on 2026-10-20, before sprint 1 started; they stay reversible without a migration.
 Scope source: [implementation.md](implementation.md) §5, M11, [architecture.md](architecture.md) (the `kpi.analytics` rows of the module, registry and job tables, and the `core.ui-shell` row, which already says "dashboard grid"), FEATURES §3.8 (the KPI analytics dashboard) and defect 10 ([FEATURES.md](FEATURES.md) §5), and what M9 and M10 hand over (the effective KPI set, the KPI history, the value types, the measurements, the chart adapter, the `ui.widget` registry).
 
 M11 is size L in `implementation.md`. Because the maintainer added a **widget-based grid dashboard** on [Snapgrid](https://snapgrid.dev/svelte/docs/getting-started/) with a daisyUI [FAB](https://daisyui.com/components/fab/) menu and a per-user stored configuration, and PDF export leaves the milestone (decision 4), this plan has **six sprints (about seven to eight weeks for one developer)**. It adds **two runtime dependencies** (Snapgrid and dnd-kit, with their own packages) and changes one contract (`ui.widget`). It releases as `0.13.0` (`0.12.0` is M10, released 2026-10-20). M12 (`kpi.impact`) follows; Gate 3 follows M13.
@@ -282,6 +282,17 @@ Tests (sprint 5): the table function (table-driven); the route through the pipel
 
 Definition of done: as sprint 2.
 
+**Amended in sprint 5 (what was decided while building it; the reasons are in [ADR-0043](adr/0043-analytics-calculations-ranges-and-exports.md), "Amended in sprint 5", and the backlog):**
+
+Checked against the source before starting: `dev` carries PR #122 (sprint 4); `escapeCell` of `kpi.ingestion`, `write-excel-file` 4.1.1 and the reads of `kpi.analytics` are as the plan names them. Where the plan and the source differed, the source won:
+
+1. **The route has its own permission**, `kpi.analytics.export` (plain, role `user`, also Admin), not `kpi.analytics.read`: exporting a file is a different act from reading a page. The route is audited (denied calls too) and in the default rate bucket; the service checks the permission again **before** it validates anything.
+2. **The format is a key of the registry `analytics.exporter`,** not a Zod enum: `format` is a string of at most 32 characters and an unknown one is a 422 naming `format`, so a module that contributes an exporter needs no change to the route.
+3. **A number is not escaped,** only text is: a negative value stays a number, so the file parses back to the numbers of the series.
+4. **The file name is the slug of the service** (the legacy v1 field `abbreviation` is the slug), reduced to `a-z0-9-`, then `-kpis-<range>.<extension>`; no free text reaches the header.
+5. **The unit is written as its label** (the term of `kpi.unit`), the key where there is none; the month columns are `YYYY-MM`, written as text in the XLSX so that no spreadsheet turns them into dates.
+6. **No new package in the lockfile:** `write-excel-file` is declared by `kpi.analytics` at the version `kpi.ingestion` pins (4.1.1); `read-excel-file` (9.3.12) is a development dependency of `kpi.analytics` and `apps/server` for the tests. The "Export" menu lists CSV and XLSX in the browser (backlog: it does not read the registry).
+
 ## 10. Sprint 6: documents, the backlog and the release
 
 **Branch:** `feature/m11-release`. **Goal:** the ASVS and gate documents, the backlog and `0.13.0` are done.
@@ -295,6 +306,18 @@ Work items
 ASVS impact (sprint 6): V8 notes as item 1; V6, V7 and V10 `asvs-no-impact`.
 
 Definition of done: `pnpm check`, the full `pnpm test`, `CI=true pnpm test:e2e:parallel`, `pnpm security:asvs` green on `dev` after the merge; the release tagged and its images in ghcr; `main` merged back; the backlog says what is true.
+
+**Amended in sprint 6 (what was decided while building it; the measurements and their method are in `docs/backlog.md`, "Release follow-ups (M11 sprint 6)"):**
+
+Checked against the source before starting: `dev` carries PR #123 (sprint 5) and `assessed_commit` is still the one of `0.12.0` (`0e09c9c`; a human field, left alone). Where a document, the plan and the source differed, the source won:
+
+1. **`authorization.md`** was read against the route table (which `authorization-doc.test.ts` generates from the manifests), the response schemas and the tests: every claim has a test. It gained one sentence, that both dashboard routes answer `Cache-Control: no-store` and `PUT` is audited without its body (both tested). The ASVS V8 notes for sprints 1 to 5 are **one statement per requirement** (8.1.2, 8.2.1, 8.2.3, 8.3.1), with every `test:` tag kept and none added; V7 is unchanged and so are the human fields.
+2. **The READMEs** of `core.ui-shell` and `kpi.analytics` were checked against the manifests, the routes and the widget entries: their statements held; the status lines (still "M11 sprint 2" and "sprint 5") and the calls bullet of `core.ui-shell` (which still named the three older cards' reads only) were stale and are fixed. The manifests of `core.settings` and `kpi.ingestion` changed by one additive method (`setUserPreference`) and one exported type; the READMEs of both already name the additive reads and the method.
+3. **The ADRs:** ADR-0042 gained "Amended in sprint 3", "sprint 4" and "sprint 6"; ADR-0043 gained "Amended in sprint 4" and "sprint 6" (its sprint 5 block exists); ADR-0044 gained "Amended in sprint 6" (the rate limit). This plan gained the block of sprint 5 above, which it lacked.
+4. **Measured, with the method stated** (table of figures in the backlog): the client build grew +1,330,799 B raw (+22.5 %) against `0.12.0-full`, of which the grid chunk (Snapgrid, dnd-kit, `DashboardGrid`) is 145,656 B (47,859 B gzip) and ECharts about 918 kB; the **image is 126.2 MB smaller** than `0.12.0-full` and holds none of the grid's packages; both analytics reads at 49,800 measurements take 13 to 154 ms (13 to 26 ms for the page of 50 KPIs over a year that a widget asks for); a document of 20 tiles is 3.4 to 7.7 KiB and its repair takes 0.03 to 0.3 ms; a load of the eight-widget start page draws 11.6 requests from the caller's bucket (6 from the browser, 5 to 6 from the web server), so **13 loads in a row** and about **10 a minute** pass under the default limits.
+5. **The bucket of the dashboard's reads stays out of M11** (§12): the measurement is in the backlog with three options, cheapest first.
+6. **No new dependency** in this pull request, and no code change: the benchmarks were throwaway tests and specs, removed before the commit. `pnpm openapi:diff` shows no change of public v1 since `0.12.0`.
+7. **The release** follows the steps of CONTRIBUTING.md "Releases"; every outward step waits for the maintainer, who bumps `assessed_commit` first.
 
 ## 11. Risks
 

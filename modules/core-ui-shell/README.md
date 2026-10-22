@@ -4,8 +4,8 @@ The shell of the web app: the registries through which modules put pages, links,
 route that tells the browser what the caller may see. It owns no table. The web app (`apps/web`) draws the layout and one catch-all
 route `/[...path]`; this module is the part the server knows about ([ADR-0027](../../docs/adr/0027-web-shell-catch-all-proxy-and-typed-client.md)).
 
-Status: M11 sprint 2 (the dashboard on the start page: the grid, edit mode, the FAB menu and the saving; sprint 1 added the document, its two routes and the extended `ui.widget`). Before that, M5 sprint 3. Its own pages are the start page, the legal pages, the API documentation and the administration of roles and settings; the screens of the other `core.*`
-modules come with those modules (the sign-in, registration, recovery and profile pages and the administration of users are `core.identity`'s; the audit and notification screens arrive in sprint 4).
+Status: released in `0.13.0` (M11): the dashboard of widgets on the start page (the document and its two routes, the extended `ui.widget`, the grid, edit mode, the FAB menu and the saving, the settings of a tile and the shared read store). Its other pages are the start page, the legal pages, the API documentation and the administration of roles and settings; the screens of the other `core.*`
+modules are theirs (the sign-in, registration, recovery and profile pages and the administration of users are `core.identity`'s; the audit and notification screens are `core.audit`'s and `core.notifications`').
 
 ## Manifest
 
@@ -223,9 +223,9 @@ person may see, and a read never writes (opening the page sends no `PUT`).
 - **The read store.** `Dashboard.svelte` makes one `createAnalyticsReads(api)` store when it mounts and provides it with `setAnalyticsReads`: the widgets of the page read through it, so widgets over the same
   (service, range, category) cost one request together. It lives as long as the page, so data reported in the meantime is read again on the next visit.
 - **Names of tiles.** The name of a tile (its controls and its announcements) is its widget's `label`; when the dashboard has several tiles of one widget they are numbered in document order ("Trends (1)", "Trends (2)").
-- **Calls** (measured by `e2e/dashboard.spec.ts`, printed as `[dashboard-calls]`): on arrival the browser sends only what the cards and the shell read (`/inbox/stream`,
-  `/memberships/summary`, `/notifications/status`, `/users/pending?pageSize=1`); adding a widget sends that widget's own read; moving, resizing and dragging send nothing;
-  a burst of changes is one `PUT`.
+- **Calls** (counted by `e2e/dashboard.spec.ts` and `e2e/dashboard-widgets.spec.ts`, printed as `[dashboard-calls]`; the numbers are in `docs/backlog.md`, "Release follow-ups (M11 sprint 6)"): the document and the widget list come with the page, so on arrival the browser
+  sends only what the shell and the widgets read (`/inbox/stream`, the three older cards' reads and, for the analytics widgets, **one read per distinct (service, range)**, one `GET /services/{id}` per distinct service, one read of the vocabulary of units, and one `GET /kpi/analytics/defaults` while a tile has no service);
+  adding a widget sends that widget's own read; moving, resizing and dragging send nothing; a burst of changes is one `PUT`.
 - **The CSP.** dnd-kit writes a `<style>` element while something is dragged. The page's policy has no `'unsafe-inline'` for styles, so the grid gives dnd-kit the nonce
   SvelteKit puts on the page's own script and style tags (`element.nonce`).
 

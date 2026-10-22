@@ -463,7 +463,7 @@ In the tables, **self** is the caller acting on their own object, **holder** is 
 actor. The save stores **through the preference service as the caller**, so it also needs `core.settings.preference.write` (a person who may not
 change preferences may not save a dashboard). The anonymous caller gets 401 and a caller without the permission 403, on both routes. The permission
 is the **widget's**, not the dashboard's: a tile whose widget the person may no longer see is left out of every read, with a reason, and stays in the
-stored document until the next save. `GET /ui/navigation` stays public; these routes do not.
+stored document until the next save. `GET /ui/navigation` stays public; these routes do not. Both answer `Cache-Control: no-store`, and `PUT` is audited (the call and its outcome, never the body).
 
 | Field                                            | Read                                      | Write                                                                                                                                                  | Notes                                                                                                                                                  |
 | ------------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
