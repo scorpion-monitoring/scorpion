@@ -8,6 +8,7 @@ import type { SettingsService } from '@scorpion/core-settings/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import {
   THEMATIC_CATEGORY_VOCABULARY,
+  UNIT_VOCABULARY,
   type KpiFrameworkPublic,
 } from '@scorpion/kpi-framework/public';
 import {
@@ -20,7 +21,9 @@ import type { ServicesPublic } from '@scorpion/registry-services/public';
 import type { AnalyticsSettings } from '../settings-schema.ts';
 import { alignToMonths, changePercent } from './calc/index.ts';
 import { ALL_CATEGORIES, DEFAULTS_PREFERENCE, parseDefaults, type Defaults } from './defaults.ts';
-import { PERMISSION_READ } from './permissions.ts';
+import { buildTable } from './export-table.ts';
+import type { ExporterEntry } from './exporters.ts';
+import { PERMISSION_EXPORT, PERMISSION_READ } from './permissions.ts';
 import { parseRange, repairRange, windowOf, type Range } from './range.ts';
 import {
   AGGREGATE_AVERAGE,
@@ -87,6 +90,13 @@ export interface Page<T> {
   months: string[];
 }
 
+/** A file an export produced. The name comes from the service's abbreviation (its slug), never from free text. */
+export interface ExportFile {
+  fileName: string;
+  mediaType: string;
+  bytes: Uint8Array;
+}
+
 export interface DefaultsView extends Omit<Defaults, 'service'> {
   /** The default service, or `null` while there is none. */
   service: string | null;
@@ -107,6 +117,11 @@ export interface AnalyticsService {
     query: AnalyticsQuery,
     page: { page: number; pageSize: number },
   ): Promise<Page<SummaryRow>>;
+  /**
+   * Needs `kpi.analytics.export`. The KPIs of a service in the window of a range as one table, written by the exporter `format` (a key of the
+   * registry `analytics.exporter`; any other is a 422 naming `format`). At most 120 months and 200 KPIs, as the reads.
+   */
+  export(actor: Actor, query: AnalyticsQuery, format: string): Promise<ExportFile>;
   /** Needs `kpi.analytics.read`. The thematic categories a filter offers (the active terms of the vocabulary), in order. The one list the reads and the defaults use. */
   categories(actor: Actor): Promise<{ key: string; label: string }[]>;
   /** Needs `kpi.analytics.read`. The caller's own defaults, repaired, with the default service resolved and the categories a filter offers. */
@@ -121,11 +136,12 @@ export interface AnalyticsService {
 export interface AnalyticsDeps {
   authz: Pick<AuthzService, 'require'>;
   settings: Pick<SettingsService, 'listTerms' | 'getUserPreference'>;
-  services: Pick<ServicesPublic, 'existsAsSystem' | 'listForPickerAsSystem'>;
+  services: Pick<ServicesPublic, 'existsAsSystem' | 'findByIdsAsSystem' | 'listForPickerAsSystem'>;
   kpi: Pick<KpiFrameworkPublic, 'effectiveIndicatorsAsSystem' | 'indicatorsByIdAsSystem'>;
   reads: Pick<KpiIngestionPublic['reads'], 'seriesAsSystem' | 'measuredIndicatorsAsSystem'>;
   aggregates: ReadonlyMap<string, AggregateEntry>;
   scores: ReadonlyMap<string, ScoreEntry>;
+  exporters: ReadonlyMap<string, ExporterEntry>;
   clock: () => Date;
 }
 
@@ -167,8 +183,9 @@ export function createAnalyticsService(
     actor: Actor,
     query: AnalyticsQuery,
     page: { page: number; pageSize: number },
+    permission: string = PERMISSION_READ,
   ) {
-    await deps.authz.require(actor, PERMISSION_READ);
+    await deps.authz.require(actor, permission);
     const problems: FieldProblem[] = [];
     if (
       typeof query.service !== 'string' ||
@@ -338,6 +355,47 @@ export function createAnalyticsService(
               : { value: null, band: null },
           };
         }),
+      };
+    },
+
+    async export(actor, query, format) {
+      // The permission is checked first, so a caller without it learns nothing about formats, services or categories.
+      await deps.authz.require(actor, PERMISSION_EXPORT);
+      const exporter = typeof format === 'string' ? deps.exporters.get(format) : undefined;
+      if (!exporter)
+        throw new Invalid('The request is not valid.', [
+          queryProblem('format', `must be one of ${[...deps.exporters.keys()].join(', ')}`),
+        ]);
+      // The same bounds as the reads: 120 months (the window) and 200 KPIs (all of them, not a page).
+      const { range, months, chosen } = await resolve(
+        actor,
+        query,
+        { page: 0, pageSize: MAX_SERIES_INDICATORS },
+        PERMISSION_EXPORT,
+      );
+      const [lay, terms, [found]] = await Promise.all([
+        laidOut(query.service, chosen, months),
+        deps.settings.listTerms(UNIT_VOCABULARY),
+        deps.services.findByIdsAsSystem([query.service]),
+      ]);
+      const unitLabel = new Map(terms.map((term) => [term.key, term.label]));
+      const table = buildTable(
+        chosen.map((row) => ({
+          name: row.name,
+          unit: row.unit === null ? null : (unitLabel.get(row.unit) ?? row.unit),
+          points: lay(row).points,
+        })),
+      );
+      const stem =
+        (found?.slug ?? 'service')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 60) || 'service';
+      return {
+        fileName: `${stem}-kpis-${range}.${exporter.extension}`,
+        mediaType: exporter.mediaType,
+        bytes: await exporter.write(table),
       };
     },
 

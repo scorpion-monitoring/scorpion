@@ -342,3 +342,105 @@ describe('summary: the figures of each KPI', () => {
     expect(await band()).toBe('medium');
   });
 });
+
+// ---- the export (sprint 5) --------------------------------------------------------------------------------------------------------
+describe('export', () => {
+  const asText = (bytes: Uint8Array) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
+  const exportOf = (
+    w: AnalyticsWorld,
+    format: string,
+    query: Record<string, unknown> = {},
+    who: Actor = w.people.plain,
+  ) => w.analytics.export(who, { service: w.svc.id, ...query }, format);
+
+  it('refuses an anonymous caller (401) and a person without the export permission (403), twice checked [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const w = await seeded();
+    await expect(exportOf(w, 'csv', {}, anonymous)).rejects.toBeInstanceOf(Unauthorized);
+    await expect(exportOf(w, 'csv', {}, await w.actor())).rejects.toBeInstanceOf(Forbidden);
+    // a token with the read scope only may not export, and one with the export scope may
+    const token = (scopes: string[]): Actor => ({ ...w.people.plain, via: 'token', scopes });
+    await expect(exportOf(w, 'csv', {}, token(['kpi.analytics.read']))).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    expect(
+      (await exportOf(w, 'csv', {}, token(['kpi.analytics.export']))).bytes.length,
+    ).toBeGreaterThan(0);
+    // a holder of the permission exports every service: a member of the provider, a person with no tie to it and Admin
+    for (const who of ['member', 'plain', 'admin'] as const)
+      expect((await exportOf(w, 'csv', {}, w.people[who])).fileName, who).toMatch(/\.csv$/);
+  });
+
+  it('answers a caller without the permission 403 before it says anything about the format or the service', async () => {
+    const w = await seeded();
+    const nobody = await w.actor();
+    await expect(exportOf(w, 'nonsense', { range: 'x' }, nobody)).rejects.toBeInstanceOf(Forbidden);
+  });
+
+  it('is 422 naming `format` for an unknown one, and names every bad parameter at once', async () => {
+    const w = await seeded();
+    for (const format of ['pdf', '', 'CSV', 'csv ', '__proto__', 'constructor'])
+      expect(paths(await rejection(exportOf(w, format))), format).toEqual(['query:format']);
+    expect(paths(await rejection(exportOf(w, 'csv', { range: '5y', category: 'Nope' })))).toEqual([
+      'query:category',
+      'query:range',
+    ]);
+    await expect(
+      w.analytics.export(w.people.plain, { service: 'nope' }, 'csv'),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('writes one row per KPI on the months of the window, with a dropped KPI and a text value, named by the service abbreviation', async () => {
+    const w = await seeded();
+    const file = await exportOf(w, 'csv', { range: '6m' });
+    expect(file.fileName).toBe(`${w.svc.slug}-kpis-6m.csv`);
+    expect(file.mediaType).toBe('text/csv; charset=utf-8');
+    expect([...file.bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const lines = asText(file.bytes)
+      .replace(/^\uFEFF/, '')
+      .trimEnd()
+      .split('\r\n');
+    expect(lines[0]).toBe('KPI,Unit,2026-01,2026-02,2026-03,2026-04,2026-05,2026-06');
+    const byName = new Map(lines.slice(1).map((line) => [line.split(',')[0]!, line]));
+    expect(byName.size).toBe(5);
+    // the unit is the label of the vocabulary term, the gap in April stays empty and the current month has no value yet
+    expect(byName.get(w.ind.downloads.name)).toMatch(/^[^,]+,[^,]+,100,110,121,,90,$/);
+    expect(byName.get(w.ind.dropped.name)).toMatch(/,,,,,7,,$/);
+    expect(byName.get(w.ind.note.name)).toMatch(/,,,all well,,,$/);
+  });
+
+  it('keeps the filters of the reads: the category, and only the KPIs of the service', async () => {
+    const w = await seeded();
+    const file = await exportOf(w, 'csv', { category: 'Technical' });
+    const lines = asText(file.bytes)
+      .replace(/^\uFEFF/, '')
+      .trimEnd()
+      .split('\r\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain(w.ind.uptime.name);
+    // another service's values never leak in
+    const other = await makeService(w.pool, { provider: w.provider.id });
+    const empty = await w.analytics.export(w.people.plain, { service: other.id }, 'csv');
+    expect(asText(empty.bytes).trimEnd().split('\r\n')).toHaveLength(1);
+  });
+
+  it('is the same table in XLSX, and the name has no free text: an odd abbreviation becomes a safe stem', async () => {
+    const w = await seeded();
+    const odd = await makeService(w.pool, { provider: w.provider.id, slug: 'weird-slug' });
+    const file = await w.analytics.export(w.people.plain, { service: odd.id }, 'xlsx');
+    expect(file.fileName).toBe('weird-slug-kpis-1y.xlsx');
+    expect(file.mediaType).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    expect([...file.bytes.subarray(0, 2)]).toEqual([0x50, 0x4b]);
+  });
+
+  it('reads and writes nothing else: no outbox event, no row', async () => {
+    const w = await seeded();
+    const count = async () =>
+      (await w.pool.query<{ n: number }>('select count(*)::int as n from kernel_outbox')).rows[0]!
+        .n;
+    const before = await count();
+    await exportOf(w, 'xlsx');
+    expect(await count()).toBe(before);
+  });
+});

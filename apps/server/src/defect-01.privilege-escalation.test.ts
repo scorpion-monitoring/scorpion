@@ -1491,6 +1491,13 @@ describe('defect 1: the analytics routes', () => {
     'GET /kpi/analytics/summary': {
       sample: (service) => ({ method: 'GET', path: `/kpi/analytics/summary?service=${service}` }),
     },
+    // Sprint 5: the export names its own plain permission, `kpi.analytics.export`, which the role `user` holds too.
+    'GET /kpi/analytics/export': {
+      sample: (service) => ({
+        method: 'GET',
+        path: `/kpi/analytics/export?service=${service}&format=csv`,
+      }),
+    },
     // About the caller only; the service id of the sample is ignored (the route takes none).
     'GET /kpi/analytics/defaults': {
       sample: () => ({ method: 'GET', path: '/kpi/analytics/defaults' }),
@@ -1506,7 +1513,7 @@ describe('defect 1: the analytics routes', () => {
       .map((entry) => {
         expect(entry.route.public, `${entry.route.path} is not public`).toBeFalsy();
         expect(entry.route.permission, `${entry.route.path} names a permission`).toBe(
-          'kpi.analytics.read',
+          entry.route.path.endsWith('/export') ? 'kpi.analytics.export' : 'kpi.analytics.read',
         );
         return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
       })

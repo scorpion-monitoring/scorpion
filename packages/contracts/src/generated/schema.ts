@@ -13947,6 +13947,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/kpi/analytics/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The values of a service as a CSV or XLSX file
+         * @description One row per KPI (name, unit, then one column per month of the window; empty where a KPI has no value), as an attachment. The CSV is UTF-8 with a byte order mark; the XLSX writes the month headings as text. Every text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`. The file name is the service's abbreviation, the word `kpis`, the range and the extension. The window is counted back from the current month (UTC) and is always applied; `range` missing means `1y`. KPIs are the effective KPIs of the service plus any KPI it dropped that still has values in the window, by name without case then id, at most 200; pages count from 0. An unknown or malformed `service`, `range`, `category` or `indicators` is 422 naming the parameter; a service with no KPIs is an empty list. `format` is a key of the registry `analytics.exporter` (`csv` or `xlsx`); every KPI of the window is in the file, up to 200. An export holds names, units and values of a service everyone signed in may read, and no person.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The window, counted back from the current month: 3m, 6m, 1y, 2y, all. Missing means 1y; it is always applied. */
+                    range?: string;
+                    /** @description A key of the vocabulary `thematic-category`, or `all`. Missing means every category. */
+                    category?: string;
+                    /** @description The file format: `csv` or `xlsx`. Any other is 422 naming `format`. */
+                    format: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The file, as an attachment. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/kpi/analytics/defaults": {
         parameters: {
             query?: never;

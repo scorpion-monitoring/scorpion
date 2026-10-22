@@ -1,4 +1,4 @@
-// The internal routes of kpi.analytics (M11 sprints 3 and 4): the series and the summary of a service, and the caller's own defaults, for the dashboard widgets. Thin: Zod parses,
+// The internal routes of kpi.analytics (M11 sprints 3 to 5): the series and the summary of a service, the caller's own defaults, for the dashboard widgets, and the export of a service as a file. Thin: Zod parses,
 // one service call, the row is mapped field by field. Both name the plain permission `kpi.analytics.read`, which the role `user` holds, and the
 // service checks it again. A page is a page of KPIs, in the envelope every list uses. Never public v1.
 import {
@@ -13,7 +13,7 @@ import {
 import type { RouteRegistrar } from '@scorpion/kernel';
 import { MAX_INDICATOR_FILTER, MAX_SERIES_INDICATORS } from '@scorpion/kpi-ingestion/public';
 import type { AnalyticsService, SeriesRow, SummaryRow } from './service/analytics.ts';
-import { PERMISSION_READ } from './service/permissions.ts';
+import { PERMISSION_EXPORT, PERMISSION_READ } from './service/permissions.ts';
 import { RANGES } from './service/range.ts';
 
 const query = paginationQuery({ defaultPageSize: 50, maxPageSize: 200 }).extend({
@@ -175,6 +175,37 @@ export const getDefaultsRoute = createRoute({
   },
 });
 
+export const exportRoute = createRoute({
+  method: 'get',
+  path: '/kpi/analytics/export',
+  permission: PERMISSION_EXPORT,
+  audit: true,
+  summary: 'The values of a service as a CSV or XLSX file',
+  description: `One row per KPI (name, unit, then one column per month of the window; empty where a KPI has no value), as an attachment. The CSV is UTF-8 with a byte order mark; the XLSX writes the month headings as text. Every text cell that starts with \`=\`, \`+\`, \`-\`, \`@\`, a tab or a carriage return is prefixed with \`'\`. The file name is the service's abbreviation, the word \`kpis\`, the range and the extension. ${window} \`format\` is a key of the registry \`analytics.exporter\` (\`csv\` or \`xlsx\`); every KPI of the window is in the file, up to ${MAX_SERIES_INDICATORS}. An export holds names, units and values of a service everyone signed in may read, and no person.`,
+  request: {
+    query: z.strictObject({
+      service: query.shape.service,
+      range: query.shape.range,
+      category: query.shape.category,
+      format: z
+        .string()
+        .min(1)
+        .max(32)
+        .describe('The file format: `csv` or `xlsx`. Any other is 422 naming `format`.'),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'The file, as an attachment.',
+      content: {
+        'application/octet-stream': {
+          schema: z.string().openapi({ type: 'string', format: 'binary' }),
+        },
+      },
+    },
+  },
+});
+
 const list = (value: string | undefined) => value?.split(',');
 
 /** Field by field on purpose: a field added to a type later is not exposed by accident. */
@@ -244,6 +275,17 @@ export function registerRoutes(r: RouteRegistrar, analytics: AnalyticsService) {
       200,
     );
   }) satisfies RouteHandler<typeof getSummaryRoute, AppEnv>);
+
+  r.internal(exportRoute, (async (c) => {
+    const { service, range, category, format } = c.req.valid('query');
+    const file = await analytics.export(c.get('actor'), { service, range, category }, format);
+    return c.body(file.bytes as Uint8Array<ArrayBuffer>, 200, {
+      'content-type': file.mediaType,
+      'content-disposition': `attachment; filename="${file.fileName}"`,
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'no-store',
+    });
+  }) satisfies RouteHandler<typeof exportRoute, AppEnv>);
 
   r.internal(getDefaultsRoute, (async (c) => {
     // About the caller, so no shared cache may keep it.

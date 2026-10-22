@@ -21,6 +21,7 @@
     "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/kpi-ingestion": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
+    "write-excel-file": "4.1.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -32,7 +33,8 @@
     "@scorpion/testing": "workspace:*",
     "@scorpion/ui-kit": "workspace:*",
     "fast-check": "4.10.2",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "read-excel-file": "9.3.12"
   },
   "peerDependencies": {
     "@scorpion/core-ui-shell": "workspace:*"

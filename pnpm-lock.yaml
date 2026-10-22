@@ -142,6 +142,9 @@ importers:
       pg:
         specifier: ^8.23.1
         version: 8.23.1
+      read-excel-file:
+        specifier: 9.3.12
+        version: 9.3.12
 
   apps/web:
     dependencies:
@@ -519,6 +522,9 @@ importers:
       '@scorpion/registry-services':
         specifier: workspace:*
         version: link:../registry-services
+      write-excel-file:
+        specifier: 4.1.1
+        version: 4.1.1
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -550,6 +556,9 @@ importers:
       pg:
         specifier: ^8.23.1
         version: 8.23.1
+      read-excel-file:
+        specifier: 9.3.12
+        version: 9.3.12
 
   modules/kpi-framework:
     dependencies:
