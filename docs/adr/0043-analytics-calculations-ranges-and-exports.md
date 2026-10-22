@@ -55,7 +55,7 @@ service and for every widget (the alternative, counting from the latest month wi
 
 ### 8. The exporters' table and the escaping (sprint 5)
 
-Recorded now so that sprint 5 builds on it; nothing of it is built in sprint 3. An exporter (registry `analytics.exporter`, `{ id, labels, extension, mediaType, write(table) }`) writes **one table**: one row per KPI (name, unit,
+Recorded in sprint 3 and built in sprint 5 (see "Amended in sprint 5" below). An exporter (registry `analytics.exporter`, `{ id, labels, extension, mediaType, write(table) }`) writes **one table**: one row per KPI (name, unit,
 then **one column per month of the union of the months of all the series** in the window, empty where a KPI has no value). The legacy export assumed every KPI shared the first KPI's dates and so misplaced values. Every cell is
 escaped with `escapeCell` of `kpi.ingestion` (a cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is neutralised), the CSV is UTF-8 with a BOM like the import templates, the file name comes from the service's
 abbreviation and never from free text, and no instance name or contact appears in the file unless the settings carry it.
@@ -80,3 +80,14 @@ abbreviation and never from free text, and no instance name or contact appears i
   measurements is in the backlog.
 - `kpi.ingestion` and `kpi.framework` each gained additive trusted reads; no public v1 route changed (`pnpm openapi:diff` is clean).
 - The run-time image no longer carries the packages only the browser needs (ECharts, Svelte, the grid): step 5 of `docker/Dockerfile` selects the server's closure with `--filter-prod`. The sizes are in the backlog.
+
+## Amended in sprint 5
+
+The exporters are built as Decision 8 says. What the source added or decided:
+
+1. **The route has its own permission.** `GET /kpi/analytics/export` needs `kpi.analytics.export` (plain, role `user`, also Admin), not `kpi.analytics.read`: exporting a file is a different act from reading a page, so an instance can withdraw one and keep the other. The route is audited and in the default rate bucket; the service checks the permission again **before** it validates anything, so a caller without it learns nothing about formats, services or categories (decision 13 of the plan: every holder, every service, never anonymous).
+2. **The format is a key of the registry, not a Zod enum.** `format` is a string of at most 32 characters; the service looks it up in `analytics.exporter` and answers 422 naming `format` when there is none, so a module that contributes an exporter needs no change to the route. The registry entry is `{ id, labels, extension, mediaType, write(table) }`; `write` returns the bytes at once (a PDF, which needs a job, is in the backlog).
+3. **A number is not escaped.** `escapeCell` is applied to text only (headings, names, units, text values). A negative number stays a number, so that the file parses back to the numbers of the series; Excel reads `-5` as a number, not a formula.
+4. **The file name is the slug of the service.** The plan says "abbreviation"; the legacy v1 field `abbreviation` of a service **is** its slug (`registry.services` maps `abbreviation: row.slug`), so the name is the slug reduced to `a-z0-9-`, then `-kpis-<range>.<extension>`. `range` is one of five fixed words, so no free text reaches the header.
+5. **The unit is written as its label** (the term of the vocabulary `kpi.unit`), the key where there is none. The month columns are `YYYY-MM`, written as text in the XLSX (format `@`) so that no spreadsheet turns them into dates.
+6. **One dependency, no new package.** `write-excel-file` is declared by `kpi.analytics` at the exact version `kpi.ingestion` pins (4.1.1); `read-excel-file` (9.3.12, as in `kpi.ingestion`) is a dev dependency of `kpi.analytics` and `apps/server` for the tests. The lockfile gains only the importer entries.
