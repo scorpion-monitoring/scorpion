@@ -14,6 +14,7 @@
     RANGE_KEYS,
     type ServiceName,
   } from '@scorpion/ui-kit';
+  import ExportMenu from './ExportMenu.svelte';
   import { resolveConfig, seeded, type Filter } from './settings.ts';
   import type { Body } from './types.ts';
 
@@ -23,6 +24,7 @@
     editing,
     setConfig,
     units = false,
+    exportable = false,
     body,
   }: {
     /** The widget's name, as the heading and the tile's accessible name. */
@@ -32,6 +34,8 @@
     setConfig: (next: Record<string, unknown>) => void;
     /** The widget shows units: read the vocabulary of units once for the dashboard. */
     units?: boolean;
+    /** The widget offers the Export menu (CSV, XLSX) of what it shows. */
+    exportable?: boolean;
     body: Snippet<[Body]>;
   } = $props();
 
@@ -149,10 +153,16 @@
 
 <section class="card bg-base-100 border-base-300 h-full min-h-0 border" aria-labelledby={titleId}>
   <div class="card-body min-h-0 gap-2 p-4">
-    <div>
-      <h2 id={titleId} class="card-title text-base">{title}</h2>
-      {#if service !== null}
-        <p class="text-base-content/70 text-sm">{subtitle}</p>
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <h2 id={titleId} class="card-title text-base">{title}</h2>
+        {#if service !== null}
+          <p class="text-base-content/70 text-sm">{subtitle}</p>
+        {/if}
+      </div>
+      <!-- Only when there is something to export; the file is the window the tile shows, in every category the tile shows. -->
+      {#if exportable && shown && service !== null}
+        <ExportMenu {service} {range} {category} slug={named?.slug ?? 'service'} />
       {/if}
     </div>
 
