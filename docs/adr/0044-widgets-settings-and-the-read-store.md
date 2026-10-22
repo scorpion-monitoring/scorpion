@@ -102,3 +102,12 @@ others." A service with more than 200 is still cut at 200 without a word (backlo
 - The default dashboard of every user now makes reads on arrival (one for the defaults while no service is chosen; the cards and the chart read once for a person with a service). The bundle and image sizes are in the backlog.
 - A configuration that is hand-planted through the generic preference route is repaired on read; a category that left the vocabulary shows "The settings of this widget are no longer valid".
 - No new runtime dependency (`fast-check` is a development dependency of `kpi.analytics`, as elsewhere). No change to `apps/server/src/pipeline/**` or `packages/contracts/src/route.ts`.
+
+## Amended in sprint 6
+
+The release measured what Decision 10 only counted (method and machine in `docs/backlog.md`, "Release follow-ups (M11 sprint 6)").
+
+- **What a dashboard of eight widgets draws from the caller's bucket.** Under the shipped limits (a burst of 120, then 120 a minute per address) a full load of the start page makes **11.6 API requests on average** for the eight-widget dashboard of the end-to-end spec (10 to 12; 6 from the browser, 5 to 6 from the web server's loaders) and 10.5 for the default dashboard of an administrator. **Thirteen loads in a row pass** (the 14th is refused, and the page fails because its loader's reads are refused) at the 1.35 s a load took there, and about **10 a minute** can be sustained (derived: 120 ÷ 11.6). The baseline of M10's Data Submission page was about 13 requests and 7 loads. The shared read store is why eight widgets do not
+  cost more: they make 2 analytics reads, not 8.
+- **Of the 11.6, three are names and units** (`GET /services/{id}` for each of two services and `GET /vocabularies/kpi.unit/terms`). Folding the service's name and the unit labels into the analytics answers (a contract change, backlog) would take a load to about 8.6. A bucket of its own for the dashboard's reads is an `apps/server/src/pipeline/**` change and stays out of M11, as the plan says.
+- Decision 11's derived JSON Schema and Decision 13's configuration limits held: a document of 20 trends tiles with four, four and four series options each is 7,714 B, under the 8 KiB cap.

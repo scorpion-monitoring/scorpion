@@ -91,3 +91,30 @@ The exporters are built as Decision 8 says. What the source added or decided:
 4. **The file name is the slug of the service.** The plan says "abbreviation"; the legacy v1 field `abbreviation` of a service **is** its slug (`registry.services` maps `abbreviation: row.slug`), so the name is the slug reduced to `a-z0-9-`, then `-kpis-<range>.<extension>`. `range` is one of five fixed words, so no free text reaches the header.
 5. **The unit is written as its label** (the term of the vocabulary `kpi.unit`), the key where there is none. The month columns are `YYYY-MM`, written as text in the XLSX (format `@`) so that no spreadsheet turns them into dates.
 6. **One dependency, no new package.** `write-excel-file` is declared by `kpi.analytics` at the exact version `kpi.ingestion` pins (4.1.1); `read-excel-file` (9.3.12, as in `kpi.ingestion`) is a dev dependency of `kpi.analytics` and `apps/server` for the tests. The lockfile gains only the importer entries.
+
+## Amended in sprint 4
+
+The widgets (ADR-0044) read through the routes of Decision 5 and changed one of them.
+
+1. **`summary` carries `points`**, the monthly points of each KPI that `series` returns (maintainer's choice in sprint 4, ADR-0044 Decision 10). The cards need the latest value and the sparkline's points; as two reads they would have doubled the calls of a dashboard. Every widget reads `summary`;
+   `series` stays as the plain read of the values; the read store offers it (`series`) and no widget calls it. The answer still holds no person, run, source or file name (`response-fields.test.ts`).
+2. **The defaults have a read route**, `GET /kpi/analytics/defaults` (ADR-0044 Decision 9): the repaired defaults with the default service resolved and the categories the filters offer. Decision 7 had left the defaults to the generic preference route, which cannot resolve the default service.
+3. **The 200-KPI cap stays silent** (ADR-0044 Decision 15): `totalCount` tells a widget that a page is full, and a tile says "Showing the first 50 of N KPIs".
+
+## Amended in sprint 6
+
+Measured at the release (method and machine in `docs/backlog.md`, "Release follow-ups (M11 sprint 6)"): one service of 200 KPIs by 120 months and three more services, **49,800 measurements** in all; the service layer over real Postgres, median of 7 after 2 warm-ups.
+
+| Read      | Window       | KPIs on the page | Service layer | Through the pipeline (in process) | Body    |
+| --------- | ------------ | ---------------- | ------------- | --------------------------------- | ------- |
+| `series`  | `1y`         | 50               | 12.8 ms       | 25.9 ms                           | 38 kB   |
+| `summary` | `1y`         | 50               | 15.9 ms       | 17.7 ms                           | 46 kB   |
+| `series`  | `1y`         | 200              | 29.2 ms       | 31.2 ms                           | 151 kB  |
+| `summary` | `1y`         | 200              | 31.3 ms       | 40.7 ms                           | 184 kB  |
+| `series`  | `all` (120m) | 50               | 70.2 ms       | 72.9 ms                           | 296 kB  |
+| `summary` | `all`        | 50               | 75.0 ms       | 73.7 ms                           | 304 kB  |
+| `series`  | `all`        | 200              | 138.5 ms      | 139.1 ms                          | 1.18 MB |
+| `summary` | `all`        | 200              | 154.0 ms      | 153.2 ms                          | 1.21 MB |
+
+The cost follows the number of points, not the number of measurements in the table (sprint 3 measured 35 and 138 ms at the same size for the `1y` and `all` pages of 200). The export of the same service for `1y` takes 44 ms as CSV (12.7 kB) and 48 ms as XLSX (16.9 kB). The sizes of Decision 5's bounds
+stand: a 120-month, 200-KPI answer is the worst case at 1.2 MB, which is why the default page is 50 KPIs.
