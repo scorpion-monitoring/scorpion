@@ -29,6 +29,15 @@
       "path": "./modules/core-ui-shell"
     },
     {
+      "path": "./modules/kpi-analytics"
+    },
+    {
+      "path": "./modules/kpi-framework"
+    },
+    {
+      "path": "./modules/kpi-ingestion"
+    },
+    {
       "path": "./modules/public-api"
     },
     {

@@ -525,6 +525,12 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'DELETE', path: '/preferences/nobody.registered.this' }),
   },
+  // M11 sprint 1: the caller's own dashboard. Neither route names a user; the plain permissions are held by every User.
+  'GET /ui/dashboard': { kind: 'self', sample: () => ({ method: 'GET', path: '/ui/dashboard' }) },
+  'PUT /ui/dashboard': {
+    kind: 'self',
+    sample: () => ({ method: 'PUT', path: '/ui/dashboard', body: { items: [] } }),
+  },
 };
 
 const send = (s: Started, sample: Sample, auth: { cookie?: string; csrf?: string } = {}) =>
@@ -1471,5 +1477,80 @@ describe('defect 1: the ingestion routes', () => {
     // a direct call for a service the person may not submit for is 403, however the picker looks
     const direct = await s.call('GET', `/kpi/ingestion/runs?service=${service.id}`, session(plain));
     expect(direct.status).toBe(403);
+  });
+});
+
+// M11 sprint 3: the routes of kpi.analytics (the series and the summary). Same idea as the measurement block: a decision for every route and
+// a walker that fails for one added later without a row. The role `user` holds the plain permission and reads every service (decision 13 of the
+// plan), so the matrix is 401 for nobody, 403 for a user without roles, 200 for a plain User; there is no write.
+describe('defect 1: the analytics routes', () => {
+  const ANALYTICS_SAMPLES: Record<string, { sample: (service: string) => Sample }> = {
+    'GET /kpi/analytics/series': {
+      sample: (service) => ({ method: 'GET', path: `/kpi/analytics/series?service=${service}` }),
+    },
+    'GET /kpi/analytics/summary': {
+      sample: (service) => ({ method: 'GET', path: `/kpi/analytics/summary?service=${service}` }),
+    },
+    // Sprint 5: the export names its own plain permission, `kpi.analytics.export`, which the role `user` holds too.
+    'GET /kpi/analytics/export': {
+      sample: (service) => ({
+        method: 'GET',
+        path: `/kpi/analytics/export?service=${service}&format=csv`,
+      }),
+    },
+    // About the caller only; the service id of the sample is ignored (the route takes none).
+    'GET /kpi/analytics/defaults': {
+      sample: () => ({ method: 'GET', path: '/kpi/analytics/defaults' }),
+    },
+  };
+  const start = () =>
+    app.start({ tokenCacheTtlMs: 0, kpi: true, ingestion: true, analytics: true });
+
+  it('has a decision for every route of kpi.analytics, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
+    const { kernel } = await start();
+    const live = kernel.routes
+      .filter((entry) => entry.route.path.startsWith('/kpi/analytics'))
+      .map((entry) => {
+        expect(entry.route.public, `${entry.route.path} is not public`).toBeFalsy();
+        expect(entry.route.permission, `${entry.route.path} names a permission`).toBe(
+          entry.route.path.endsWith('/export') ? 'kpi.analytics.export' : 'kpi.analytics.read',
+        );
+        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+      })
+      .sort();
+    expect(live).toEqual(Object.keys(ANALYTICS_SAMPLES).sort());
+  });
+
+  it('answers 401 to an anonymous caller and 403 to a user without roles, with an id that exists nowhere [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const roleless = await s.signedIn('norole-analytics', { roles: [] });
+    for (const [key, row] of Object.entries(ANALYTICS_SAMPLES)) {
+      const sample = row.sample(FOREIGN);
+      const anonymous = await s.call(sample.method, sample.path, {});
+      expect(anonymous.status, `${key}: anonymous`).toBe(401);
+      expect(problem(anonymous), key).toContain('application/problem+json');
+      const nobody = await s.call(sample.method, sample.path, session(roleless));
+      expect(nobody.status, `${key}: a user without roles`).toBe(403);
+      expect(problem(nobody), key).toContain('application/problem+json');
+    }
+  });
+
+  it('lets a plain User read every service, a token only with the scope, and writes nothing [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const plain = await s.signedIn('plain-analytics');
+    const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const service = await makeService(s.kernel.pool, { provider: provider.id });
+    for (const [key, row] of Object.entries(ANALYTICS_SAMPLES)) {
+      const sample = row.sample(service.id);
+      expect((await s.call(sample.method, sample.path, session(plain))).status, key).toBe(200);
+      // an id that is no service is a 422 naming `service`, never a 404 that tells a service exists elsewhere or a 500
+      if (key.endsWith('/defaults')) continue;
+      const unknown = row.sample(FOREIGN);
+      expect((await s.call(unknown.method, unknown.path, session(plain))).status, key).toBe(422);
+    }
+    expect(
+      (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'measurement.%'"))
+        .rows,
+    ).toEqual([]);
   });
 });

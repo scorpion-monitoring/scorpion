@@ -36,3 +36,16 @@ describe('the registry modules', () => {
     expect(core.filter((id) => id.startsWith('registry.'))).toEqual([]);
   });
 });
+
+describe('kpi.analytics', () => {
+  const modulesOf = async (name: string) =>
+    ((await import(`./${name}.ts`)) as { default: { modules: string[] } }).default.modules;
+
+  it('is in the full profile only, after the modules it reads', async () => {
+    const full = await modulesOf('full');
+    for (const dependency of ['kpi.framework', 'kpi.ingestion', 'registry.services'])
+      expect(full.indexOf(dependency), dependency).toBeLessThan(full.indexOf('kpi.analytics'));
+    expect(await modulesOf('registry')).not.toContain('kpi.analytics');
+    expect(await modulesOf('core-only')).not.toContain('kpi.analytics');
+  });
+});

@@ -37,6 +37,7 @@ export {
   type Returned,
 } from './reauth.ts';
 export { default as Alert } from './Alert.svelte';
+export { default as Icon } from './Icon.svelte';
 export { default as ImageBlock } from './ImageBlock.svelte';
 export type { ImageBlockTexts } from './image-block.ts';
 export { default as Dialog } from './Dialog.svelte';
@@ -86,6 +87,8 @@ export {
 export {
   chartProblems,
   createChartController,
+  describeCategory,
+  nextCategory,
   tableOf,
   type ChartAdapter,
   type ChartHandle,
@@ -123,3 +126,52 @@ export {
   type WizardFieldContext,
   type WizardFieldInfo,
 } from './wizard-extensions.ts';
+export {
+  describeChange,
+  dragAnnouncements,
+  GRID_COLUMNS,
+  moveTile,
+  newInstanceId,
+  placeNew,
+  removeTile,
+  resizeTile,
+  settle,
+  stackedOrder,
+  visibleLayout,
+  type GridChange,
+  type GridTexts,
+  type GridTile,
+  type MoveDirection,
+  type MoveResult,
+  type ResizeDirection,
+} from './dashboard-grid/layout.ts';
+export {
+  loadDashboardGrid,
+  type DashboardGridComponent,
+  type DashboardGridExports,
+  type DashboardGridProps,
+} from './dashboard-grid/load.ts';
+export {
+  createAnalyticsReads,
+  createDedupe,
+  getAnalyticsReads,
+  normalise as normaliseRead,
+  readKey,
+  setAnalyticsReads,
+  WIDGET_PAGE_SIZE,
+  type AnalyticsReads,
+  type Dedupe,
+  type ReadKind,
+  type ReadQuery,
+  type ServiceName,
+  type VocabularyTerm,
+} from './read-store.ts';
+export { default as WidgetSettings } from './WidgetSettings.svelte';
+export { default as DashboardDefaults } from './DashboardDefaults.svelte';
+export {
+  fieldsOf,
+  merged as mergedSettings,
+  problemsOf,
+  RANGE_KEYS,
+  type SettingsField,
+} from './widget-settings.ts';

@@ -813,7 +813,8 @@ describe('the mapping', () => {
 
   it('keeps at most 100 problems and never echoes a cell beyond 64 characters', async () => {
     const w = await world();
-    const rows = Array.from({ length: 300 }, (_, i) => [`2026-01`, `bad-${i}`]);
+    // A text no random id can hold (a UUID has only hexadecimal digits), so the check below cannot fail by chance.
+    const rows = Array.from({ length: 300 }, (_, i) => [`2026-01`, `not-a-number-${i}`]);
     const header = ['Period', `${'H'.repeat(100)}`, w.ind.downloads.name];
     const long = await w.ingestion.ingestion.preview(w.people.member, {
       serviceId: w.svc.id,
@@ -830,7 +831,7 @@ describe('the mapping', () => {
       dryRun: false,
     });
     expect(many.problems).toHaveLength(100);
-    expect(JSON.stringify(many)).not.toContain('bad-');
+    expect(JSON.stringify(many)).not.toContain('not-a-number');
     const [run] = await w.ingestion.ingestion.listRuns(w.people.member, w.svc.id);
     expect(run!.problems).toHaveLength(100);
   });

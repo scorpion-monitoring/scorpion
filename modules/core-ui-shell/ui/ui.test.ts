@@ -42,6 +42,7 @@ describe('the pages of the shell', () => {
   it('load their data in `load`, which a page with data must have', () => {
     const withLoad = routes.filter((route) => route.load).map((route) => route.path);
     expect(withLoad.sort()).toEqual([
+      '/',
       '/admin/roles',
       '/admin/settings',
       '/admin/settings/:module',

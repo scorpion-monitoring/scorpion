@@ -26,11 +26,14 @@ export {
   MANDATORY_NECESSITY,
   MAX_COVERAGE_MONTHS,
   MAX_INDICATOR_FILTER,
+  MAX_SERIES_INDICATORS,
+  MAX_SERIES_MONTHS,
   type CoverageMonth,
   type GridRow,
   type MeasurementRead,
   type MonthGrid,
   type ReadsService,
+  type SeriesPoint,
   type SeriesQuery,
 } from './service/reads.ts';
 // The route definitions, for their contract tests (`apps/server/src/measurements.contract.test.ts`).

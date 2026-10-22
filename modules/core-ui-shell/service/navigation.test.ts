@@ -2,6 +2,7 @@ import type { Actor } from '@scorpion/contracts';
 import { ANONYMOUS } from '@scorpion/contracts';
 import { KernelStartupError } from '@scorpion/kernel';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { REGISTRIES } from '../registries.ts';
 import { createNavigationService } from './navigation.ts';
 
@@ -145,6 +146,86 @@ describe('navigation(actor)', () => {
     ]);
     expect(result.widgets.map((widget) => widget.id)).toEqual(['open']);
   });
+
+  describe('the grid fields of a widget (M11)', () => {
+    const old = { id: 'old', slot: 'dashboard', component: 'Old', order: 10, public: true };
+    const placed = {
+      id: 'placed',
+      slot: 'dashboard',
+      component: 'Placed',
+      order: 20,
+      permission: 'm.profile.read',
+      grid: { w: 6, h: 4, minW: 3, default: { x: 0, y: 0, w: 6, h: 4 } },
+      label: 'widget.placed',
+      description: 'widget.placed.about',
+      icon: 'list',
+      configSchema: z.object({ range: z.string().default('1y') }),
+    };
+    const shell = service({ 'ui.widget': [old, placed] }, declared, holders('m.profile.read'));
+
+    it('answers an entry that has none exactly as before', async () => {
+      const result = await shell.navigation(user);
+      expect(result.widgets[0]).toStrictEqual({
+        id: 'old',
+        slot: 'dashboard',
+        component: 'Old',
+        order: 10,
+      });
+    });
+
+    it('lists them for a widget the caller may see, with the JSON Schema of its configuration', async () => {
+      const result = await shell.navigation(user);
+      expect(result.widgets[1]).toStrictEqual({
+        id: 'placed',
+        slot: 'dashboard',
+        component: 'Placed',
+        order: 20,
+        grid: { w: 6, h: 4, minW: 3, default: { x: 0, y: 0, w: 6, h: 4 } },
+        label: 'widget.placed',
+        description: 'widget.placed.about',
+        icon: 'list',
+        configSchema: {
+          type: 'object',
+          properties: { range: { type: 'string', default: '1y' } },
+        },
+      });
+    });
+
+    it('derives the schema from the input side, so a defaulted field is optional and a nullable one says so', async () => {
+      const withNull = {
+        ...placed,
+        id: 'nullable',
+        configSchema: z.object({
+          service: z.uuid().nullable().default(null),
+          hidden: z
+            .array(z.string().regex(/^[0-9a-f]{12}$/))
+            .max(5)
+            .default([]),
+        }),
+      };
+      const result = await service(
+        { 'ui.widget': [withNull] },
+        declared,
+        holders('m.profile.read'),
+      ).navigation(user);
+      const schema = result.widgets[0]!.configSchema as {
+        required?: string[];
+        properties: Record<string, { anyOf?: unknown[]; maxItems?: number }>;
+      };
+      expect(schema.required ?? []).toEqual([]);
+      expect(schema.properties.service!.anyOf).toHaveLength(2);
+      expect(schema.properties.hidden!.maxItems).toBe(5);
+      expect(JSON.stringify(result)).not.toContain('$schema');
+    });
+
+    it('says nothing about a widget the caller may not see', async () => {
+      const result = await service({ 'ui.widget': [old, placed] }, declared, holders()).navigation(
+        user,
+      );
+      expect(result.widgets.map((widget) => widget.id)).toEqual(['old']);
+      expect(JSON.stringify(result)).not.toContain('widget.placed');
+    });
+  });
 });
 
 describe('the start-up checks', () => {
@@ -172,6 +253,28 @@ describe('the start-up checks', () => {
         { id: 'w', slot: 's', component: 'W', public: true },
       ],
     });
+  });
+
+  it('refuses a widget whose configSchema JSON Schema cannot express, naming the widget', () => {
+    const entry = {
+      id: 'unfit.widget',
+      slot: 'dashboard',
+      component: 'Unfit',
+      public: true,
+    };
+    fails({
+      'ui.widget': [{ ...entry, configSchema: z.object({ n: z.bigint() }) }],
+    });
+    fails({
+      'ui.widget': [{ ...entry, configSchema: z.object({ f: z.custom<() => void>(() => true) }) }],
+    });
+    try {
+      service({ 'ui.widget': [{ ...entry, configSchema: z.object({ d: z.date() }) }] }, declared);
+    } catch (error) {
+      expect((error as KernelStartupError).message).toContain('"unfit.widget"');
+      return;
+    }
+    throw new Error('expected a start-up error');
   });
 
   it('refuses a link to a page nobody registered', () => {

@@ -22,6 +22,7 @@
     "@scorpion/core-ui-shell": "workspace:*",
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "@scorpion/kpi-analytics": "workspace:*",
     "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/kpi-ingestion": "workspace:*",
     "@scorpion/public-api": "workspace:*",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@scorpion/testing": "workspace:*",
     "@types/pg": "^8.23.1",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "read-excel-file": "9.3.12"
   }
 }

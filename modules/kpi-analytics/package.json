@@ -1,0 +1,47 @@
+{
+  "name": "@scorpion/kpi-analytics",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./ui": "./ui/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@scorpion/contracts": "workspace:*",
+    "@scorpion/core-authz": "workspace:*",
+    "@scorpion/core-settings": "workspace:*",
+    "@scorpion/kernel": "workspace:*",
+    "@scorpion/kpi-framework": "workspace:*",
+    "@scorpion/kpi-ingestion": "workspace:*",
+    "@scorpion/registry-services": "workspace:*",
+    "write-excel-file": "4.1.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@scorpion/core-blob": "workspace:*",
+    "@scorpion/core-identity": "workspace:*",
+    "@scorpion/core-notifications": "workspace:*",
+    "@scorpion/core-ui-shell": "workspace:*",
+    "@scorpion/registry-organisations": "workspace:*",
+    "@scorpion/testing": "workspace:*",
+    "@scorpion/ui-kit": "workspace:*",
+    "fast-check": "4.10.2",
+    "pg": "^8.23.1",
+    "read-excel-file": "9.3.12"
+  },
+  "peerDependencies": {
+    "@scorpion/core-ui-shell": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@scorpion/core-ui-shell": {
+      "optional": true
+    }
+  }
+}

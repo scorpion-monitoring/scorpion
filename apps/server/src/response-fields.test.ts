@@ -734,3 +734,52 @@ describe('the measurement answers', () => {
     ).toEqual(['actorId', 'inserted', 'periods', 'runId', 'serviceId', 'updated']);
   });
 });
+
+// The analytics reads (M11 sprint 3): the names of the two internal answers are pinned. An analytics answer never holds a person, a run, a source
+// or a file name, and a field added passes through this list and through the field table of docs/security/authorization.md.
+const ANALYTICS_INFO = [
+  'current',
+  'indicatorId',
+  'name',
+  'necessity',
+  'thematic',
+  'unit',
+  'valueType',
+];
+const ANALYTICS_ANSWERS: Record<string, readonly string[]> = {
+  'GET /kpi/analytics/series': [...ANALYTICS_INFO, 'points', 'period', 'value', 'text'],
+  // A file, not JSON: it has no named field (its columns are the field table's "export file" row, escaped and tested in analytics-export-routes.test.ts).
+  'GET /kpi/analytics/export': [],
+  'GET /kpi/analytics/defaults': ['service', 'range', 'category', 'categories', 'key', 'label'],
+  'GET /kpi/analytics/summary': [
+    ...ANALYTICS_INFO,
+    'points',
+    'latest',
+    'period',
+    'value',
+    'text',
+    'change',
+    'average',
+    'volatility',
+    'band',
+  ],
+};
+
+describe('the analytics answers', () => {
+  it('name the fields of the field table, and no person, file, run or source [ASVS-8.2.3]', async () => {
+    const { kernel } = await app.start({ kpi: true, ingestion: true, analytics: true });
+    const routes = kernel.routes.filter((entry) => entry.route.path.startsWith('/kpi/analytics'));
+    const key = (entry: { route: { method: string; path: string } }) =>
+      `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+    expect(routes.map(key).sort()).toEqual(Object.keys(ANALYTICS_ANSWERS).sort());
+    for (const entry of routes) {
+      const found = v1Names(entry.route as RouteLike, '200');
+      for (const name of ENVELOPE) found.delete(name);
+      expect([...found].sort(), key(entry)).toEqual(
+        [...new Set(ANALYTICS_ANSWERS[key(entry)])].sort(),
+      );
+      // the same walk the v1 routes get: no field that names a person, a run, a source or a file
+      expect(v1Violations([entry.route as RouteLike]), key(entry)).toEqual([]);
+    }
+  });
+});

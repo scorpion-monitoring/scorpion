@@ -4,7 +4,9 @@
 // its own settings with `ctx.settings` (ADR 0017), registers preferences in the registry
 // `settings.userPreference` and declares vocabularies in the registry `vocabulary`. What remains is
 // what other modules ask of it at run time: a secret, the instance's branding and the terms of a
-// vocabulary. None of these methods checks a permission; they are for trusted code (ADR 0015).
+// vocabulary. None of these methods checks a permission, except `setUserPreference`, which acts as
+// the caller; they are for trusted code (ADR 0015).
+import type { Actor } from '@scorpion/contracts';
 
 /** The effective branding of the instance, defaults applied (ADR 0018). */
 export interface Branding {
@@ -71,6 +73,16 @@ export interface SettingsService {
    * route calls it. Used to pick the language of a mail for a user who is not the caller.
    */
   getUserPreference(userId: string, key: string): Promise<unknown>;
+
+  /**
+   * Stores one preference **of the caller** (`actor`), exactly as `PUT /preferences/{key}` does: needs
+   * `core.settings.preference.write` (`Forbidden`, `Unauthorized` for a caller who is not a signed-in user),
+   * the key's schema decides (`Invalid`, `NotFound` for a key nobody registered), at most 8 KiB as JSON,
+   * `settings.preference.changed@1` in the same transaction. Unlike `getUserPreference` it takes no user id:
+   * the owner is always the actor, so a module that stores a document of its own for a person (the
+   * dashboard of core.ui-shell) can write it without reaching into this module's table.
+   */
+  setUserPreference(actor: Actor, key: string, value: unknown): Promise<void>;
 
   /**
    * Stores `values` as the settings of `moduleId` **only when nothing is stored for the module**; what

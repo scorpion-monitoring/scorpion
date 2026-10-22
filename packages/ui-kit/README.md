@@ -77,3 +77,48 @@ fails for a component that has neither the pair of specs nor a place in its list
   **`Breadcrumb`** (the last item is the page).
 - `zod` is set to `jitless` by `@scorpion/contracts/client`, because the page's policy has no `unsafe-eval` and zod would otherwise try `new Function` on first use.
 - **New runtime dependency: `echarts`** (the one named in CLAUDE.md), behind the adapter.
+
+## `DashboardGrid` (M11 sprint 2)
+
+The widget grid of the start page, on [Snapgrid](https://snapgrid.dev/svelte/docs/getting-started)'s **headless API** (`createGridContainer`, `createGridItem` with
+`attachHandle`, `createGridResizeHandle`, `createContainerWidth`, under dnd-kit's `DragDropProvider`), **in `src/dashboard-grid/` and nowhere else**: nothing outside that
+directory imports Snapgrid or dnd-kit (ESLint `no-restricted-imports` and `dashboard-grid/boundary.test.ts` say so), so a replacement is that directory
+([ADR-0042](../../docs/adr/0042-dashboard-document-and-grid.md), Decision 2, "Amended in sprint 2").
+
+- **Loading.** The component is not in the main entry. `loadDashboardGrid()` (typed by `DashboardGridComponent`) imports it, so Snapgrid and dnd-kit are fetched by the page that draws the
+  grid and by no other. The pure rules are exported normally (`moveTile`, `resizeTile`, `placeNew`, `stackedOrder`, `visibleLayout`, `newInstanceId`, ... in `src/dashboard-grid/layout.ts`).
+- **Props.** `tiles: GridTile[]` (`{ id, x, y, w, h, minW?, maxW?, minH?, maxH? }`; the page owns them), `editing`, `label(id)` (the name for people and screen readers),
+  `tile` (a snippet that draws a tile's body), `onchange(tiles, { kind: 'move' | 'resize' | 'remove', id })`, and optionally `hasSettings(id)`, `ondrawn(count)` (how many tiles draw something now) and `settings` (a snippet: the shell of a
+  widget's settings dialog, with a gear on the tile). The instance exposes `focusTile(id)` and `announce(text)`.
+- **The five wrappers the prototype proved necessary** (each has a test in `e2e/components/dashboard-grid.spec.ts`): the **move grip** is a real `<button aria-label="Move …">` that carries
+  `attachHandle` (dnd-kit then puts its role, tab stop and keyboard sensor on the grip and not on the tile, which would be `nested-interactive`; in view mode a hidden handle takes
+  them); the **resize handle** is ours, 24 px, `aria-hidden`, `tabindex="-1"`, `role="presentation"` set before attachment (Snapgrid has no keyboard resize, so the buttons are the only
+  keyboard path); the grid is **remounted when the mode changes** (`{#key}`), which clears the stale `aria-disabled` dnd-kit leaves; under **`prefers-reduced-motion`** the tile has
+  `transition: none` and the element's `animate` is taken off, so Snapgrid moves it instantly (zero running animations after a move, one otherwise); **below `md` Snapgrid is not
+  rendered**: a stacked list in reading order (`y`, then `x`), no drag, no handles.
+- **Buttons.** Every tile has a move grip and buttons for left, right, up, down, wider, narrower, taller, shorter and remove, each named with the widget (`Move Trends right`),
+  announced in a polite live region and clamped to the grid and the widget's limits. A tile in the way is passed (up and down swap places; left and right jump to the next free
+  place of the row, and refuse when there is none). Focus stays on the pressed button; after a removal it goes to the tile that takes the place; after a remount it goes back to
+  the tile that had it.
+- **Words.** dnd-kit's own announcements are English; its accessibility plugin is given the page's words (`Provider.svelte` builds the manager with the plugin already configured, because the
+  plugin reads its options once): "Picked up …", "Moving … was cancelled", and the instructions. A drop is announced by the grid with the new row and column.
+- **Tiles that draw nothing.** The grid watches each tile's body (no element child = nothing to draw): in view mode such a tile has no height and the tiles below rise (tiles never move sideways); in edit mode it stays, with a note. A
+  widget that is still loading should leave an element in its place (the web app's `Widget` host does), so it does not count as empty.
+- **Style and the CSP.** The component has no `<style>` block (SvelteKit adds the CSS of every dynamic import to the page), only utility classes. dnd-kit's injected `<style>` gets the page's nonce.
+- `Icon` is the closed icon table (`@scorpion/contracts/icons`) as a component for shared parts and module pages.
+- **New runtime dependencies** (ADR-0042, Decision 4): `@snapgridjs/svelte` 0.12.0, `@dnd-kit/svelte` and `@dnd-kit/dom` 0.5.1, pinned exactly (19 packages new to the lockfile, all MIT, none with an install script). `fast-check` is a development dependency (the layout properties).
+
+## The widgets of the dashboard (M11 sprint 4, [ADR-0044](../../docs/adr/0044-widgets-settings-and-the-read-store.md))
+
+- **The read store** (`read-store.ts`): `createAnalyticsReads(api)` gives `summary(query)`, `series(query)`, `defaults()`, `service(id)` and `terms(vocabulary)`; each returns **one in-flight promise per distinct
+  key** and keeps it for the visit (the dashboard makes a store when it mounts and provides it with `setAnalyticsReads`; widgets use `getAnalyticsReads()`). A read that fails is forgotten, so "Try again" sends a new one.
+  `readKey(kind, query)` is the canonical key (KPIs trimmed, without duplicates, sorted; a page that is not a whole number is the default) and `createDedupe()` the pure part; both are table-driven and have properties.
+  It calls the API only through the typed client. `WIDGET_PAGE_SIZE` (50) is the one page size of every widget read, so widgets share a request.
+- **`WidgetSettings`** (+ `SettingsFields`, `ServiceChoice`, `widget-settings.ts`): the settings form every widget shares, drawn from the JSON Schema of the widget's configuration: `service` (a search box and a select
+  over the services the person may read, with "Choose a service"), `range` (the schema's values), `category` (the thematic categories the defaults route lists), any boolean (a checkbox) and any other string enum (a
+  select). A field of another shape (the lists a chart keeps for itself) is not drawn and is kept as it was. "Apply" checks the draft with `checkJsonSchema` and gives the new configuration to the widget.
+  `json-schema-check` understands `anyOf` (how Zod writes a nullable value).
+- **`DashboardDefaults`**: the "Dashboard defaults" dialog of FEATURES §3.8. It edits the preference `kpi.analytics.defaults` through `PUT /preferences/{key}` with the same fields and the same lists, and forgets the cached defaults.
+- **`Chart`** gained (additively) `ChartSeries.secondary` (a second y axis on the right, `chartOption` tests), a tooltip drawn **inside the SVG** (`renderMode: 'richText'`; the HTML tooltip needs `style`
+  attributes the page's policy refuses) in the colours of the theme, `size="fill"` (the height of the box it is in), reading by keyboard (the arrow keys, Home, End and Escape step through the categories, the tooltip
+  follows and a live region says the values: `nextCategory`, `describeCategory`) and a focusable table region when the table is wider than its box.

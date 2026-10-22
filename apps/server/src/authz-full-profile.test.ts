@@ -89,6 +89,7 @@ describe('profile full with core.authz', () => {
       'registry.services',
       'kpi.framework',
       'kpi.ingestion',
+      'kpi.analytics',
       'public-api',
     ]);
   });

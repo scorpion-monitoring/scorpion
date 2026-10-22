@@ -13,6 +13,12 @@ import { scorpionFront } from './src/front/vite-plugin.ts';
 // request, so one build serves any prefix (ADR-0027). `BASE_PATH` and `API_ORIGIN` are read when the
 // process starts, never at build time.
 export default defineConfig({
+  // The chart library is loaded by the browser when a chart mounts (`ui-kit`'s `chart-echarts.ts`, imported inside `onMount`), never
+  // by the server: left out of the server bundle, it would only add its code and source maps (about 10 MB) to every image that has a chart.
+  // (`ssr.external` does not reach it: the web app bundles the linked `ui-kit`, whose imports are bundled with it.)
+  environments: {
+    ssr: { build: { rollupOptions: { external: [/^echarts(\/|$)/, /^zrender(\/|$)/] } } },
+  },
   // `pnpm dev`: the web app is the public origin on PORT, as in an image; the API sits behind it.
   server: { host: '127.0.0.1', port: Number(process.env.PORT ?? 3000), strictPort: true },
   plugins: [

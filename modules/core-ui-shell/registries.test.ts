@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   navEntrySchema,
   pathSchema,
@@ -102,6 +103,132 @@ describe('widgets and themes', () => {
     ).toBe(true);
     expect(themeEntrySchema.safeParse({ id: 'x', label: 'x', colorScheme: 'sepia' }).success).toBe(
       false,
+    );
+  });
+});
+
+describe('a widget entry for the dashboard grid (M11)', () => {
+  const base = {
+    id: 'trends',
+    slot: 'dashboard',
+    component: 'Trends',
+    permission: 'm.trends.read',
+  };
+  const grid = {
+    w: 6,
+    h: 4,
+    minW: 3,
+    maxW: 12,
+    minH: 2,
+    maxH: 8,
+    default: { x: 0, y: 0, w: 6, h: 4 },
+  };
+  const parse = (extra: Record<string, unknown>) =>
+    widgetEntrySchema.safeParse({ ...base, ...extra });
+  const messages = (extra: Record<string, unknown>) => {
+    const result = parse(extra);
+    return result.success
+      ? []
+      : result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+  };
+
+  it('stays valid without any of the new fields, and carries them when given', () => {
+    expect(parse({}).success).toBe(true);
+    const full = parse({
+      grid: { ...grid, singleton: true },
+      label: 'widget.trends',
+      description: 'widget.trends.about',
+      icon: 'list',
+      configSchema: z.object({ range: z.string().default('1y') }),
+    });
+    expect(full.success).toBe(true);
+  });
+
+  it('accepts a grid of just a size, and one with every field', () => {
+    expect(parse({ grid: { w: 4, h: 3 } }).success).toBe(true);
+    expect(parse({ grid }).success).toBe(true);
+    expect(parse({ grid: { w: 12, h: 50, minW: 12, maxW: 12 } }).success).toBe(true);
+  });
+
+  it.each([
+    [
+      'a minW above maxW',
+      { grid: { ...grid, minW: 8, maxW: 5, w: 6, default: undefined } },
+      'grid.minW',
+    ],
+    [
+      'a minH above maxH',
+      { grid: { ...grid, minH: 7, maxH: 3, h: 4, default: undefined } },
+      'grid.minH',
+    ],
+    ['a w below its own minW', { grid: { ...grid, w: 2, default: undefined } }, 'grid.w'],
+    ['a w above its own maxW', { grid: { ...grid, maxW: 5, default: undefined } }, 'grid.w'],
+    ['an h above its own maxH', { grid: { ...grid, h: 9, default: undefined } }, 'grid.h'],
+    [
+      'a default that leaves the 12 columns',
+      { grid: { ...grid, default: { x: 8, y: 0, w: 6, h: 4 } } },
+      'grid.default',
+    ],
+    [
+      'a default that starts outside the grid',
+      { grid: { ...grid, default: { x: 12, y: 0, w: 1, h: 4 } } },
+      'grid.default.x',
+    ],
+    [
+      'a default with a negative column',
+      { grid: { ...grid, default: { x: -1, y: 0, w: 6, h: 4 } } },
+      'grid.default.x',
+    ],
+    [
+      'a default width outside its own limits',
+      { grid: { ...grid, default: { x: 0, y: 0, w: 2, h: 4 } } },
+      'grid.default.w',
+    ],
+    [
+      'a default height outside its own limits',
+      { grid: { ...grid, default: { x: 0, y: 0, w: 6, h: 9 } } },
+      'grid.default.h',
+    ],
+    ['a width above the 12 columns', { grid: { w: 13, h: 3 } }, 'grid.w'],
+    ['a zero height', { grid: { w: 4, h: 0 } }, 'grid.h'],
+    ['a fractional width', { grid: { w: 4.5, h: 3 } }, 'grid.w'],
+    ['an unknown key in the grid', { grid: { w: 4, h: 3, resizable: true } }, 'grid'],
+    [
+      'two defaults for a singleton (a default is one placement, not a list)',
+      {
+        grid: {
+          w: 4,
+          h: 3,
+          singleton: true,
+          default: [
+            { x: 0, y: 0, w: 4, h: 3 },
+            { x: 4, y: 0, w: 4, h: 3 },
+          ],
+        },
+      },
+      'grid.default',
+    ],
+    ['an icon that is not in the table', { icon: 'rocket' }, 'icon'],
+    ['an icon named after a prototype key', { icon: 'constructor' }, 'icon'],
+    [
+      'a configSchema that is not a Zod schema',
+      { configSchema: { type: 'object' } },
+      'configSchema',
+    ],
+    ['an empty label', { label: '' }, 'label'],
+    ['an id that is too long', { id: `a${'b'.repeat(100)}` }, 'id'],
+  ])('refuses %s', (_name, extra, path) => {
+    const found = messages(extra);
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.some((line) => line.startsWith(path))).toBe(true);
+  });
+
+  it('says what is wrong in words', () => {
+    expect(messages({ grid: { ...grid, minW: 8, maxW: 5, w: 6, default: undefined } })).toContain(
+      'grid.minW: minW must not exceed maxW',
+    );
+    expect(messages({ grid: { ...grid, default: { x: 8, y: 0, w: 6, h: 4 } } })).toContain(
+      'grid.default: default must fit the 12 columns (x + w <= 12)',
     );
   });
 });

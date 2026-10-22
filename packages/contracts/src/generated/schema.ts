@@ -6755,6 +6755,32 @@ export interface paths {
                                 slot: string;
                                 component: string;
                                 order: number;
+                                /** @description Where and how big the widget is on the dashboard grid (twelve columns). */
+                                grid?: {
+                                    w: number;
+                                    h: number;
+                                    minW?: number;
+                                    minH?: number;
+                                    maxW?: number;
+                                    maxH?: number;
+                                    default?: {
+                                        x: number;
+                                        y: number;
+                                        w: number;
+                                        h: number;
+                                    };
+                                    singleton?: boolean;
+                                };
+                                /** @description A key of the message catalogue. */
+                                label?: string;
+                                /** @description A key of the message catalogue. */
+                                description?: string;
+                                /** @description A name of the icon table. */
+                                icon?: string;
+                                /** @description The JSON Schema (draft 2020-12, input side) of the widget’s configuration, derived from the module’s Zod schema; the settings form of a tile is drawn from it. Absent for a widget with no settings. */
+                                configSchema?: {
+                                    [key: string]: unknown;
+                                };
                             }[];
                             themes: {
                                 id: string;
@@ -6777,6 +6803,201 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The caller’s own dashboard, repaired; the default dashboard when none is stored. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {number} */
+                            version: 1;
+                            /** @description What the page draws: repaired, only widgets the caller may see, by row and column. */
+                            items: {
+                                /** @description The instance id: 4 to 12 lower-case letters and digits, unique on the dashboard. */
+                                id: string;
+                                /** @description The id of a `ui.widget` entry the caller may see. */
+                                widget: string;
+                                x: number;
+                                y: number;
+                                w: number;
+                                h: number;
+                                /** @description The tile’s own settings, shaped by the widget; at most 400 bytes as JSON. */
+                                config: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            /** @description What the repair left out of the stored document. A read changes nothing that is stored. */
+                            dropped: {
+                                /** @description The tile’s instance id, or `#<position>` when it had none. */
+                                id: string;
+                                /** @enum {string} */
+                                reason: "invalid-item" | "duplicate-id" | "unknown-widget" | "not-permitted" | "singleton-repeated" | "document-too-large";
+                            }[];
+                            /** @description The stored document was replaced by the default dashboard. */
+                            reset: boolean;
+                            /** @enum {string} */
+                            resetReason?: "invalid" | "too-many-items" | "newer-version";
+                            /** @description Nothing is stored: `items` is the default dashboard. */
+                            isDefault: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            widget: string;
+                            x: number;
+                            y: number;
+                            w: number;
+                            h: number;
+                            config: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The caller’s own dashboard is stored; this is what a read now gives. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {number} */
+                            version: 1;
+                            /** @description What the page draws: repaired, only widgets the caller may see, by row and column. */
+                            items: {
+                                /** @description The instance id: 4 to 12 lower-case letters and digits, unique on the dashboard. */
+                                id: string;
+                                /** @description The id of a `ui.widget` entry the caller may see. */
+                                widget: string;
+                                x: number;
+                                y: number;
+                                w: number;
+                                h: number;
+                                /** @description The tile’s own settings, shaped by the widget; at most 400 bytes as JSON. */
+                                config: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            /** @description What the repair left out of the stored document. A read changes nothing that is stored. */
+                            dropped: {
+                                /** @description The tile’s instance id, or `#<position>` when it had none. */
+                                id: string;
+                                /** @enum {string} */
+                                reason: "invalid-item" | "duplicate-id" | "unknown-widget" | "not-permitted" | "singleton-repeated" | "document-too-large";
+                            }[];
+                            /** @description The stored document was replaced by the default dashboard. */
+                            reset: boolean;
+                            /** @enum {string} */
+                            resetReason?: "invalid" | "too-many-items" | "newer-version";
+                            /** @description Nothing is stored: `items` is the default dashboard. */
+                            isDefault: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -13448,6 +13669,423 @@ export interface paths {
                 };
                 /** @description The input is not valid. */
                 422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/analytics/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The values of a service month by month
+         * @description One point per month of the window and KPI, gaps as `null`. The window is counted back from the current month (UTC) and is always applied; `range` missing means `1y`. KPIs are the effective KPIs of the service plus any KPI it dropped that still has values in the window, by name without case then id, at most 200; pages count from 0. An unknown or malformed `service`, `range`, `category` or `indicators` is 422 naming the parameter; a service with no KPIs is an empty list.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 200. */
+                    pageSize?: string;
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The window, counted back from the current month: 3m, 6m, 1y, 2y, all. Missing means 1y; it is always applied. */
+                    range?: string;
+                    /** @description A key of the vocabulary `thematic-category`, or `all`. Missing means every category. */
+                    category?: string;
+                    /** @description Ids or names of KPIs of the service, separated by commas (at most 50). */
+                    indicators?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of KPIs with their points. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                indicatorId: string;
+                                name: string;
+                                /** @description A key of the registry `kpi.valueType`. */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                /** @description A term of the vocabulary `thematic-category`. */
+                                thematic: string;
+                                /** @description A term of the vocabulary `necessity`; `null` for a KPI the service has dropped. */
+                                necessity: string | null;
+                                /** @description The service reports the KPI now. `false`: it was dropped and its values stay. */
+                                current: boolean;
+                                /** @description One point per month of the window, oldest first. */
+                                points: {
+                                    /** @description The last day of the month, `YYYY-MM-DD`. */
+                                    period: string;
+                                    /** @description The number, or `null` for a gap and for a text value; never zero for a gap. */
+                                    value: number | null;
+                                    /** @description The text of a text value; `null` for a number and for a gap. */
+                                    text: string | null;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest value, change, average and volatility of each KPI
+         * @description Per KPI: the latest value, the change in percent, the average and the volatility with its band (thresholds from the settings). The window is counted back from the current month (UTC) and is always applied; `range` missing means `1y`. KPIs are the effective KPIs of the service plus any KPI it dropped that still has values in the window, by name without case then id, at most 200; pages count from 0. An unknown or malformed `service`, `range`, `category` or `indicators` is 422 naming the parameter; a service with no KPIs is an empty list.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 200. */
+                    pageSize?: string;
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The window, counted back from the current month: 3m, 6m, 1y, 2y, all. Missing means 1y; it is always applied. */
+                    range?: string;
+                    /** @description A key of the vocabulary `thematic-category`, or `all`. Missing means every category. */
+                    category?: string;
+                    /** @description Ids or names of KPIs of the service, separated by commas (at most 50). */
+                    indicators?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of KPIs with their figures. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                indicatorId: string;
+                                name: string;
+                                /** @description A key of the registry `kpi.valueType`. */
+                                valueType: string;
+                                /** @description A term of the vocabulary `kpi.unit`. */
+                                unit: string | null;
+                                /** @description A term of the vocabulary `thematic-category`. */
+                                thematic: string;
+                                /** @description A term of the vocabulary `necessity`; `null` for a KPI the service has dropped. */
+                                necessity: string | null;
+                                /** @description The service reports the KPI now. `false`: it was dropped and its values stay. */
+                                current: boolean;
+                                /** @description The same points the series read gives, so one read serves a dashboard of several widgets. */
+                                points: {
+                                    /** @description The last day of the month, `YYYY-MM-DD`. */
+                                    period: string;
+                                    /** @description The number, or `null` for a gap and for a text value; never zero for a gap. */
+                                    value: number | null;
+                                    /** @description The text of a text value; `null` for a number and for a gap. */
+                                    text: string | null;
+                                }[];
+                                /** @description The newest month of the window with a value, or `null`. */
+                                latest: {
+                                    period: string;
+                                    value: number | null;
+                                    /** @description The canonical text of the value (a duration as `HH-MM-SS`). */
+                                    text: string;
+                                } | null;
+                                /** @description The change from the oldest to the newest value of the window, in percent; `null` (n/a) when fewer than two values exist or the oldest is 0. */
+                                change: number | null;
+                                average: number | null;
+                                volatility: {
+                                    /** @description The mean absolute percentage deviation from the mean, as a fraction; `null` when it is not defined. */
+                                    value: number | null;
+                                    /** @description `low`, `medium` or `high` by the thresholds in the settings; `null` with the value. */
+                                    band: string | null;
+                                };
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/analytics/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The values of a service as a CSV or XLSX file
+         * @description One row per KPI (name, unit, then one column per month of the window; empty where a KPI has no value), as an attachment. The CSV is UTF-8 with a byte order mark; the XLSX writes the month headings as text. Every text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`. The file name is the service's abbreviation, the word `kpis`, the range and the extension. The window is counted back from the current month (UTC) and is always applied; `range` missing means `1y`. KPIs are the effective KPIs of the service plus any KPI it dropped that still has values in the window, by name without case then id, at most 200; pages count from 0. An unknown or malformed `service`, `range`, `category` or `indicators` is 422 naming the parameter; a service with no KPIs is an empty list. `format` is a key of the registry `analytics.exporter` (`csv` or `xlsx`); every KPI of the window is in the file, up to 200. An export holds names, units and values of a service everyone signed in may read, and no person.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the service. */
+                    service: string;
+                    /** @description The window, counted back from the current month: 3m, 6m, 1y, 2y, all. Missing means 1y; it is always applied. */
+                    range?: string;
+                    /** @description A key of the vocabulary `thematic-category`, or `all`. Missing means every category. */
+                    category?: string;
+                    /** @description The file format: `csv` or `xlsx`. Any other is 422 naming `format`. */
+                    format: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The file, as an attachment. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/analytics/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller’s own dashboard defaults
+         * @description The service, range and thematic category a new widget starts with, repaired (a stored value that is no longer valid is replaced), with the default service resolved, and the categories the filters offer. It is about the caller only and takes no user id. `Cache-Control: no-store`. The generic `PUT /preferences/kpi.analytics.defaults` stores the values.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The defaults of the caller. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description The default service: the stored one while it exists, else the first service (by name) of the caller’s own providers, else `null`. Never an arbitrary service. */
+                            service: string | null;
+                            /**
+                             * @description The default range; always one of the five.
+                             * @enum {string}
+                             */
+                            range: "3m" | "6m" | "1y" | "2y" | "all";
+                            /** @description A key of `categories`, or `all`; a stored key that is no longer a term is `all`. */
+                            category: string;
+                            /** @description The thematic categories a filter offers, in order: the one list the reads use. */
+                            categories: {
+                                key: string;
+                                label: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
