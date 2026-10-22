@@ -1,0 +1,5 @@
+---
+'scorpion': minor
+---
+
+Release notes for the dashboard milestone (`0.13.0`), with what was measured. The `full` image is 126 MB smaller than `0.12.0-full` (507.9 MB against 634.1 MB), because the images no longer carry packages that only the browser needs. The dashboard's grid libraries add 146 kB (48 kB gzip) to the web build and are fetched on the start page only. **Rate limits:** a full load of the start page makes about 11 requests from the per-address bucket (a burst of 120, then 120 a minute), so a person can load it about 13 times in a row and about 10 times a minute; people behind one address share the bucket, so an instance with many of them at one office address may want a higher `default` limit under Settings. The analytics reads take 13 to 154 ms at 50 000 measurements. The consolidated authorization notes for the dashboard, the analytics reads and the export are in `docs/security/authorization.md`. PDF export is not part of this release (CSV and XLSX are). The public API is unchanged since `0.12.0`.
