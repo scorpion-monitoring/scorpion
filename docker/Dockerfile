@@ -17,7 +17,7 @@
 
 # Base images are pinned by digest (Scorecard: Pinned-Dependencies). Dependabot moves the tag and the digest
 # together; scripts/pinned-dependencies.test.ts checks that the tag's major version matches .nvmrc.
-FROM node:24.22.0@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0 AS build
+FROM node:24.22.1@sha256:6449e19d8184d84062525b6a7524def03146c2cb04a7f08b076680d0e8e4240a AS build
 ARG PROFILE=full
 ARG PROFILE_FILE=
 ARG MODULE_ROOTS=modules
@@ -75,7 +75,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 # 6. Assemble the run-time tree: the server's closure, and the web build when there is one.
 RUN node scripts/image-tree.ts /out
 
-FROM node:24.22.0-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS runtime
+FROM node:24.22.1-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime
 ARG PROFILE=full
 LABEL org.opencontainers.image.title="scorpion" \
       org.opencontainers.image.description="Scorpion service registry and KPI tracker (profile ${PROFILE})"
