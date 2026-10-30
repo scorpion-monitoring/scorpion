@@ -2,6 +2,7 @@
 // through the API as the administrator, and a catalogue of known shape. Each journey makes its own data
 // under a tag of its own (the specs of a run share one database, and a retry must not meet what its first
 // try left), and searches for the tag so that the counts it asserts are its own.
+import type { Page } from '@playwright/test';
 import { activeUser, unique, type AdminApi } from './admin.ts';
 import { withDb } from './db.ts';
 import { expect, type Credentials } from './fixtures.ts';
@@ -123,3 +124,17 @@ export async function serviceEvents(
     return rows.map((row) => ({ payload: row.payload, userId: row.user_id }));
   });
 }
+
+/** The reason the edit form gives for the short name and the owner, which only a manager or an administrator may change. */
+export const IDENTITY_LINE = 'Only a manager of the provider or an administrator can change these.';
+
+// The catalogue page, as the specs read it.
+export const rows = (page: Page) =>
+  page.getByRole('row').filter({ has: page.getByRole('rowheader') });
+export const range = (page: Page, text: string | RegExp) =>
+  expect(page.getByRole('status').filter({ hasText: /–.* of / })).toContainText(text);
+export const params = (page: Page) => new URL(page.url()).searchParams;
+
+/** The checkbox of a facet value, named by its label and count: `Development (1)`. */
+export const choice = (page: Page, label: string | RegExp) =>
+  page.getByRole('checkbox', { name: label });
