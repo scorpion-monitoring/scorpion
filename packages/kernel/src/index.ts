@@ -15,8 +15,8 @@ export type {
   RegisteredRegistry,
   RegistryEntry,
 } from './composition.ts';
-export type { ModuleContext, ModuleServices } from './context.ts';
-export { KernelStartupError } from './errors.ts';
+export type { InstanceInfo, InstanceModule, ModuleContext, ModuleServices } from './context.ts';
+export { DemoSeedRefused, KernelStartupError } from './errors.ts';
 export { resolveOrder, type GraphNode } from './graph.ts';
 export {
   COMMAND_NAME,
@@ -28,7 +28,9 @@ export {
   validateManifest,
   type CommandDef,
   type CommandIo,
+  type DemoSeedContext,
   type DomainEvent,
+  type EnvDef,
   type EventHandler,
   type JobDef,
   type JobRun,
@@ -59,7 +61,7 @@ export {
   type ResolveOptions,
 } from './resolve.ts';
 export { WORKSPACE_MODULES, type ModuleId } from './workspace-modules.ts';
-export { loadConfig, mountPath, type Config } from './config.ts';
+export { ENV_SECRETS, envSchema, loadConfig, mountPath, type Config } from './config.ts';
 export {
   activeTransaction,
   closePool,

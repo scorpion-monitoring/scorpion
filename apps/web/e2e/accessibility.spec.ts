@@ -57,6 +57,16 @@ test.describe('the pages of the shell have no serious accessibility violation', 
     expect(await violations(page)).toEqual([]);
   });
 
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the About page, signed in, ${scheme} theme`, async ({ page, at }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await signIn(page.request, at, admin);
+      await page.goto(at('/about'));
+      await expect(page.getByTestId('about-profile')).toBeVisible();
+      expect(await violations(page)).toEqual([]);
+    });
+  }
+
   test('the sidebar in its icon rail has names for every link', async ({ page, at }) => {
     await page.goto(at('/'));
     await page.getByRole('button', { name: 'Collapse the sidebar' }).click();

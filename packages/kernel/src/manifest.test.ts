@@ -221,6 +221,20 @@ describe('validateManifest', () => {
   });
 });
 
+describe('validateManifest displayName', () => {
+  it('accepts a short name and refuses an empty or a long one', () => {
+    expect(
+      validateManifest({ ...valid, displayName: 'Service registry' }, 'test').displayName,
+    ).toBe('Service registry');
+    expect(() => validateManifest({ ...valid, displayName: '' }, 'test')).toThrow(
+      KernelStartupError,
+    );
+    expect(() => validateManifest({ ...valid, displayName: 'x'.repeat(61) }, 'test')).toThrow(
+      KernelStartupError,
+    );
+  });
+});
+
 describe('defineProfile', () => {
   it('keeps name and modules', () => {
     expect(defineProfile({ name: 'x', modules: [] })).toEqual({ name: 'x', modules: [] });
@@ -229,5 +243,18 @@ describe('defineProfile', () => {
   it('checks module ids against the workspace (no module exists yet, so any id is an error)', () => {
     // @ts-expect-error 'kpi.impact' is not a module in the workspace
     defineProfile({ name: 'x', modules: ['kpi.impact'] });
+  });
+});
+
+describe('validateManifest env', () => {
+  it('accepts the variables a module reads, and refuses an entry with no description', () => {
+    const env = { SECRETS_KEY: { description: 'The key.', secret: true, required: true } };
+    expect(validateManifest({ ...valid, env }, 'test').env).toEqual(env);
+    expect(() => validateManifest({ ...valid, env: { X: { description: '' } } }, 'test')).toThrow(
+      KernelStartupError,
+    );
+    expect(() =>
+      validateManifest({ ...valid, env: { X: { description: 'x', extra: 1 } } }, 'test'),
+    ).toThrow(KernelStartupError);
   });
 });

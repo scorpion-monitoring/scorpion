@@ -9,6 +9,7 @@ import { registerMembershipRoutes } from './routes-membership.ts';
 import { registerOrganisationRoutes } from './routes.ts';
 import { registerV1Routes } from './routes-v1.ts';
 import { createMembershipsService, type MembershipsService } from './service/memberships.ts';
+import { createDemoSeed } from './service/demo-seed.ts';
 import { createOrganisationsService, type OrganisationsService } from './service/organisations.ts';
 import {
   PERMISSION_DECIDE,
@@ -90,6 +91,7 @@ export function createOrganisationsModule() {
     OrganisationsSettings
   >({
     id: 'registry.organisations',
+    displayName: 'Organisations',
     version: '0.1.0',
     // `org_organisation`, not `registry_organisations_organisation` (ADR 0004, ADR-0033).
     tablePrefix: 'org_',
@@ -139,6 +141,13 @@ export function createOrganisationsModule() {
       },
     },
     settings: settingsSchema,
+
+    // `scorpion seed --demo`: fictional organisations and one membership (ADR-0046).
+    demoSeed: (ctx, demo) =>
+      createDemoSeed(() => {
+        const service = serviceOrThrow();
+        return { organisations: service, memberships: service };
+      })(ctx, demo),
 
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),

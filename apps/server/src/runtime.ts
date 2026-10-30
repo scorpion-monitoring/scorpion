@@ -7,6 +7,7 @@ import {
   createKernel,
   type CommandIo,
   type Config,
+  type JobResult,
   type Kernel,
   type Logger,
   type MigrationReport,
@@ -16,6 +17,7 @@ import {
 import { createApp } from './app.ts';
 import { corsOriginsOf } from './pipeline/cors.ts';
 import { limitsFromSettings } from './pipeline/rate-limit.ts';
+import { scorpionVersion } from './version.ts';
 import { createMetrics, type Metrics } from './metrics.ts';
 import type { ReadinessResult, SystemProbes } from './system-routes.ts';
 
@@ -55,6 +57,7 @@ function newKernel(options: RuntimeOptions, metrics?: Metrics): Kernel {
     modulePackages: options.modulePackages,
     config: options.config,
     log: options.log,
+    version: scorpionVersion(),
     onJobRun: metrics?.onJobRun,
     ...options.kernelOptions,
   });
@@ -254,6 +257,23 @@ export async function runModuleCommand(
   const kernel = newKernel(options);
   try {
     return await kernel.runCommand(name, args, io);
+  } finally {
+    await kernel.stop();
+  }
+}
+
+/**
+ * `scorpion seed --demo` (ADR-0046): migrations, the services, then the demo seed of every module that has one, and a
+ * clean shutdown. What each module reported, by module id.
+ */
+export async function runDemoSeed(
+  options: RuntimeOptions,
+  seed: { password?: string; allowProduction?: boolean },
+  io: Pick<CommandIo, 'out'>,
+): Promise<Record<string, JobResult>> {
+  const kernel = newKernel(options);
+  try {
+    return await kernel.runDemoSeed(seed, io);
   } finally {
     await kernel.stop();
   }

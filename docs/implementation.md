@@ -18,7 +18,7 @@ A milestone is **done** only when all of the following hold:
 5. New tables live in the owning module's schema file and migration folder, prefixed with the module name.
 6. Every defect from FEATURES.md §5 that the milestone touches has a named regression test (`defect-NN.*.test.ts`).
 7. The public OpenAPI diff shows no breaking change, or the milestone explicitly bumps the API version.
-8. Module docs (`modules/<id>/README.md`) are updated: permissions, settings keys, events, registries, jobs.
+8. Module docs (`modules/<id>/README.md`) are updated: permissions, settings keys, events, registries, jobs. The **manifest is the source** of these facts: `scorpion docs:export` ([ADR-0047](adr/0047-docs-export.md)) publishes them from the manifests for the knowledge base, so a permission, setting, event, registry, job, environment variable (`env`) or command that is missing from the manifest is missing from the docs, and the README explains what the manifest cannot say (why, how the parts fit, what to do). Do not repeat the lists in prose that can drift.
 9. Every merged pull request carries a changeset (`pnpm changeset`, or `pnpm changeset --empty` for changes that operators and API users do not notice), except docs-only pull requests (`docs/**`, `**/*.md` other than `CHANGELOG.md`, `.github/ISSUE_TEMPLATE/**`). `CHANGELOG.md` is written by `changeset version` at a release and never edited by hand.
 10. From M4a on, a pull request that touches a security-scoped path (see §8.4) either updates the matching ASVS assessment file in `docs/security/asvs/`, or carries the label `asvs-no-impact` with a one-line reason in the description. CI enforces this.
 
@@ -410,6 +410,7 @@ These run alongside the milestones and are not tied to a single one.
 | i18n | M5 | All UI strings go through the message catalogue from the start (English first, German second); vocabularies have labels per locale |
 | Accessibility | M5 | Every `ui-kit` component keyboard- and screen-reader-tested |
 | Security assurance | M4a | ASVS chapter assessments and tool, Scorecard, Best Practices, SECURITY.md (§8) |
+| Knowledge-base support | after M11 | The five requests of the Scorpion knowledge base (R1 to R5), so that it documents Scorpion from generated data: the About page (#136, [ADR-0045](adr/0045-about-page-and-instance-info.md)), `scorpion seed --demo` (#135), journey specs (#133), `docShot()` (#134) and `scorpion docs:export` (#132). Each is one pull request and none belongs to a milestone gate |
 
 ---
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.0
+
+### Minor Changes
+
+- a7189e7: New page "About" (`/about`, in the main navigation) for every signed-in person: it names the profile of the instance, the Scorpion version and the loaded modules with their version, split into core and optional modules. It needs the new permission `core.ui-shell.about.read`, which the role `user` holds by default; an administrator can take it from a role. The internal route is `GET /api/internal/ui/about`. Modules may now set an optional `displayName` in their manifest.
+- 155d831: New command `scorpion seed --demo` fills an instance with fictional, non-personal demo data for the modules of its profile: two demo accounts (`demo-admin`, `demo-user`; set `SCORPION_DEMO_PASSWORD`, or a random password is shown once), three organisations and a consortium, four services (two public), five indicators with a KPI set, and six months of measurements. It is safe to run twice. It refuses a database that holds a non-demo account, and a production build on a public address, unless you pass `--allow-production`. Modules can contribute a seed with the new manifest field `demoSeed`.
+- 52c2a7c: New command `scorpion docs:export` (run in a checkout) writes the reference data of the modules, the environment variables, the CLI, the public API of each profile, the profiles and the journey steps as JSON, and CI attaches it as `docs-export.zip` to each GitHub release. A module can now list the environment variables it reads in its manifest (`env`); `core.settings` lists `SECRETS_KEY` and `SECRETS_KEY_NEXT`.
+
+### Patch Changes
+
+- 398d05f: Update nodemailer to 10.1.4 and pin undici 7.x (used by the API reference viewer) to 7.30.1 or later, which fixes the open dependency advisories (address-parser recipient injection, undici denial of service).
+
 ## 0.13.0
 
 ### Minor Changes

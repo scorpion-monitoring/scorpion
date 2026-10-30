@@ -45,6 +45,41 @@ This file summarises how work gets into `main`.
   bypass. Do not rename a required job without changing the setting in the same step.
 - Public API v1 changes must be additive. A breaking change goes to v2 and needs an ADR.
 
+## Journey specs
+
+The main user journeys of a profile are Playwright specs in `apps/web/e2e/journeys/`, one file per journey of the knowledge base catalogue
+(J01 to J18; only the journeys that have a browser spec today exist: J01 to J10 and J12; J11 is API-only and J13 to J18 need modules that are not released).
+
+- **Name:** `jNN-<slug>.spec.ts`, with the id and the slug of the catalogue (`j06-create-service.spec.ts`), and `test.describe('J06: Create a service with the wizard', ...)`.
+- **Steps:** one `test.step` per thing a person sees or does, titled as the knowledge base shows it: a short imperative sentence that starts with a capital
+  letter and has no full stop (`Open the wizard from the catalogue`). Setup, calls of the API that stand for fixtures, and assertions about what no person sees
+  stay outside a step. A step title is a string literal, never built from a value.
+- **A spec that covers two journeys is split,** and every assertion is kept: the journey's own tests move into its file; the edge cases stay in the feature spec
+  (`services.spec.ts`, `profile.spec.ts`, ...), which are not journeys and keep their names. Shared helpers live in `apps/web/e2e/support/`.
+- `apps/web/src/journeys.test.ts` fails for a spec in the folder that breaks these rules, and the docs export lists the steps.
+- **Pictures:** where a screen is not obvious from the step's words, call `await docShot(page, 'j06', 'wizard-basics')` at the end of the step (sparingly; not every
+  step). It takes the screen in the light and the dark theme at 1280 x 800 and writes `reports/doc-shots/j06/01-wizard-basics.light.png` and `.dark.png`
+  (the number counts the calls of the test; a slug is used once per journey, which `apps/web/src/doc-shot.test.ts` checks). It does nothing unless `DOC_SHOTS=1`, and
+  only in the `root` project, so the default suite is not slower. Pass `mask` for anything that is not fictional (the secret of a token is masked) and `scrollTo`
+  to bring a part of the page into view. Take them yourself with
+  `E2E_STACKS=root DOC_SHOTS=1 pnpm test:e2e --project=root journeys`; the CI job **Doc screenshots** does the same and keeps the folder as the artifact
+  `docs-screenshots` (the docs export puts it in `screenshots/`). The pictures show only demo data (`scorpion seed --demo`) or what the spec made up.
+
+## The docs export
+
+`pnpm scorpion docs:export [--out <dir>] [--zip <file>] [--screenshots <dir>]` writes the reference data of a checkout as JSON for the
+[knowledge base](https://github.com/scorpion-monitoring/knowledgebase): modules, permissions, settings (with JSON Schemas and defaults), events,
+registries, jobs, the environment variables, the CLI with its flags, the public OpenAPI document of each profile, the profile matrix (defined and planned),
+the journeys with their steps, and the pictures of `docShot()`. The layout and the schema are in [ADR-0047](docs/adr/0047-docs-export.md).
+
+- **The manifests are the source.** A permission, setting, event, registry, job, command or `env` entry that the manifest does not declare is not in the export,
+  and the README of a module must not carry a second copy of those lists: it explains what the manifest cannot say.
+- **CI builds it on every run** (job **Docs export**, artifact `docs-export`), so a change that breaks it fails the pull request. On a release tag the job
+  **Release assets** attaches `docs-export.zip` to the GitHub release (and makes the release when there is none).
+- It is deterministic (sorted keys, sorted rows, a fixed time stamp in the zip), so a diff of two exports shows real changes. `apps/server/src/docs-export.test.ts`
+  exports twice and compares, checks every file against its schema and the permissions against the manifests.
+- A journey spec with no `test.step` fails the export. A change that removes or renames a file, or changes what a field means, raises `schemaVersion`.
+
 ## Security assurance
 
 The README badges for ASVS 5.0 (chapters V6, V7, V8 and V10), OpenSSF Best Practices and OpenSSF Scorecard are claims that CI keeps true; see
@@ -103,14 +138,16 @@ The internal `@scorpion/*` packages are not versioned separately. The root packa
 
 The `CI` workflow runs its work as parallel jobs, so a run takes as long as its slowest job:
 
-| Job                          | Does                                                                                    |
-| ---------------------------- | --------------------------------------------------------------------------------------- |
-| `Static checks`              | branch policy, changeset check, `pnpm check`, `pnpm openapi:diff` (v1 compatibility)    |
-| `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                       |
-| `End-to-end tests (n/3)`     | Playwright, one JUnit file per shard (the browser download is cached)                   |
-| `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                      |
-| **`Lint, type check, test`** | the gate: succeeds only when the four jobs above did; this is the required check        |
-| `Image (...)`                | builds and smoke-tests each profile image beside the tests (needs only `Static checks`) |
+| Job                          | Does                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Static checks`              | branch policy, changeset check, `pnpm check`, `pnpm openapi:diff` (v1 compatibility)                                                                   |
+| `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                                                                                      |
+| `End-to-end tests (n/3)`     | Playwright, one JUnit file per shard (the browser download is cached)                                                                                  |
+| `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                                                                                     |
+| **`Lint, type check, test`** | the gate: succeeds only when the four jobs above did; this is the required check                                                                       |
+| `Docs export`                | `scorpion docs:export` with the pictures of the job above; keeps `docs-export` (folder and zip); a release tag attaches the zip (job `Release assets`) |
+| `Doc screenshots`            | the journey specs with `DOC_SHOTS=1`; keeps the pictures as the artifact `docs-screenshots` (not part of the gate)                                     |
+| `Image (...)`                | builds and smoke-tests each profile image beside the tests (needs only `Static checks`)                                                                |
 
 Branch protection requires the gate by name, so the jobs behind it can be split, renamed or
 added without a change to the ruleset. When the unit tests near the 20-minute limit of a job,

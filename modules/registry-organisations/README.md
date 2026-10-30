@@ -485,6 +485,12 @@ visible in the trail, and the module starts, serving its API, without either. Th
 - Usernames in a manager's list come from `core.identity` one lookup per distinct person on the page (at most the page size); a batch lookup would need a change in a scoped path (backlog).
 - The image of the `registry` profile (`dev-registry`, `<x.y.z>-registry`) holds the core modules and this module.
 
+## Demo data (`scorpion seed --demo`)
+
+`demoSeed` creates three fictional providers (EBC, SDI, DCF) and one consortium (ERN) with `create`, as the demo administrator, and asks for the membership of `demo-user` in the
+first provider and approves it as the administrator (so a documented journey can create a service). Names, addresses and contact points are on `example.org` and
+`*.example.org`; there is no ROR id. A second run finds each organisation by its abbreviation and adds nothing ([ADR-0046](../../docs/adr/0046-demo-seed.md)).
+
 ## Tests
 
 `service/fields.test.ts`, `service/field-rules.test.ts` and `service/membership-state.test.ts` are table-driven and need no database.

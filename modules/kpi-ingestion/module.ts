@@ -21,6 +21,7 @@ import {
   indexAdapters,
   type AdapterEntry,
 } from './service/adapters.ts';
+import { createDemoSeed, type IngestionDemoDeps } from './service/demo-seed.ts';
 import { createIngestionService, type IngestionService } from './service/ingestion.ts';
 import { createMeasurementsService, type MeasurementsService } from './service/measurements.ts';
 import {
@@ -103,6 +104,8 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
   // The policy and the usage count are contributions made before the module starts; they reach the registry of
   // registry.services and the database through these closures (the pattern of kpi.framework).
   let database: Db | undefined;
+  // What the demo seed calls, set when the services are built.
+  let demoParts: IngestionDemoDeps | undefined;
   let isProviderMember: ServicesPublic['isProviderMemberAsSystem'] | undefined;
   let reminder: ReminderService | undefined;
   const need = <T>(value: T | undefined): T => {
@@ -121,6 +124,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     | 'registry.services'
   >({
     id: 'kpi.ingestion',
+    displayName: 'KPI data submission',
     version: '0.1.0',
     // `kpii_measurement`, not `kpi_ingestion_measurement` (ADR 0004, ADR-0040; `kpi.framework` has `kpif_`).
     tablePrefix: 'kpii_',
@@ -225,6 +229,13 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       ],
     },
 
+    // `scorpion seed --demo`: six months of measurements for the demo services (ADR-0046).
+    demoSeed: (ctx, demo) =>
+      createDemoSeed(() => {
+        if (!demoParts) throw new Error('kpi.ingestion: the service was asked before start');
+        return demoParts;
+      })(ctx, demo),
+
     services: (ctx) => {
       database = ctx.db;
       isProviderMember = ctx.deps['registry.services'].isProviderMemberAsSystem;
@@ -246,6 +257,11 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
         settings: ctx.deps['core.settings'],
         clock: common.clock,
       });
+      demoParts = {
+        measurements,
+        services: ctx.deps['registry.services'],
+        kpi: ctx.deps['kpi.framework'],
+      };
       return {
         measurements,
         reads: createReadsService(ctx, common),

@@ -32,7 +32,7 @@
     "@scorpion/testing": "workspace:*",
     "@scorpion/ui-kit": "workspace:*",
     "@types/jsonld": "^1.5.15",
-    "@types/n3": "^1.26.4",
+    "@types/n3": "^1.26.5",
     "@types/pg": "^8.23.1",
     "fast-check": "4.10.2",
     "jsonld": "9.0.0",

@@ -1,115 +1,14 @@
-import { startStubIdp, type StubIdp } from '@scorpion/testing';
-import type { Page } from '@playwright/test';
 import { makeSessionsStale, linkIn, mailTo } from './support/db.ts';
-import {
-  admin,
-  createUser,
-  expect,
-  person,
-  saveSettings,
-  signIn,
-  signInThroughPage,
-  test,
-} from './support/fixtures.ts';
+import { approve, providerButton, useStubProvider } from './support/oidc.ts';
+import { createUser, expect, person, signInThroughPage, test } from './support/fixtures.ts';
 
 // Sign-in at a provider, with a provider that runs on a local port (no third party is called): a new
 // account waits for approval, an address that an account holds is not signed in but mailed, the mailed
 // link connects the provider, and an account without a password confirms its identity at the provider.
 
-let idp: StubIdp;
-test.beforeAll(async () => {
-  // A public client: the stub then needs no client secret, so none has to be stored.
-  idp = await startStubIdp({ clientSecret: '' });
-});
-test.afterAll(async () => {
-  await idp.stop();
-});
-
-test.beforeEach(async ({ request, at }) => {
-  const csrf = await signIn(request, at, admin);
-  await saveSettings(request, at, csrf, 'core.identity', (values) => ({
-    ...values,
-    oidcProviders: [idp.provider('stub')],
-  }));
-});
-test.afterEach(async ({ request, at }) => {
-  const csrf = await signIn(request, at, admin);
-  await saveSettings(request, at, csrf, 'core.identity', (values) => ({
-    ...values,
-    oidcProviders: [],
-  }));
-});
-
-/**
- * Who the provider says is signing in. Changed in place: the provider keeps the object it was started
- * with for the browsers that reach its authorisation page.
- */
-function signInAs(login: StubIdp['login']) {
-  for (const key of Object.keys(idp.login)) delete idp.login[key as keyof StubIdp['login']];
-  Object.assign(idp.login, login);
-}
-
-const providerButton = (page: Page) =>
-  page.getByRole('button', { name: 'Sign in with Stub provider' });
-
-/** Approves a pending account through the API (the administration screen is sprint 3). */
-async function approve(
-  playwright: import('@playwright/test').PlaywrightWorkerArgs['playwright'],
-  baseURL: string | undefined,
-  at: (path: string) => string,
-  username: string,
-) {
-  const api = await playwright.request.newContext({ baseURL });
-  try {
-    const csrf = await signIn(api, at, admin);
-    const pending = (await (await api.get(at('/api/internal/users/pending'))).json()) as {
-      result: { id: string; username: string }[];
-    };
-    const user = pending.result.find((entry) => entry.username === username);
-    expect(user, `${username} waits for approval: ${JSON.stringify(pending)}`).toBeDefined();
-    const done = await api.post(at(`/api/internal/users/${user!.id}/approve`), {
-      headers: { 'x-csrf-token': csrf },
-      data: {},
-    });
-    expect(done.status()).toBe(200);
-  } finally {
-    await api.dispose();
-  }
-}
+const { idp, signInAs } = useStubProvider();
 
 test.describe('a sign-in at a provider', () => {
-  test('[ASVS-10.2.1] creates an account that waits for approval, and signs in once it is approved', async ({
-    page,
-    playwright,
-    baseURL,
-    at,
-  }) => {
-    signInAs({
-      subject: 'sub-newbie',
-      email: 'newbie@example.org',
-      emailVerified: true,
-      preferredUsername: 'newbie',
-    });
-    await page.goto(at('/login'));
-    await providerButton(page).click();
-    // The account exists but waits: nobody is signed in, and the sign-in page says so (ADR-0029: the
-    // callback sent the browser here with a fixed code, not a page of JSON).
-    await expect(page).toHaveURL(/\/login\?error=account-pending$/);
-    await expect(
-      page.getByRole('heading', { name: 'Your account is waiting for approval' }),
-    ).toBeVisible();
-    expect((await page.context().cookies()).some((c) => c.name === '__Host-session')).toBe(false);
-
-    await approve(playwright, baseURL, at, 'newbie');
-    await page.goto(at('/login'));
-    await providerButton(page).click();
-    // Back at the start page of the application, signed in, with no password anywhere.
-    await expect(page).toHaveURL(new RegExp(`${at('/')}$`));
-    await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
-    await page.getByRole('button', { name: 'Account menu' }).click();
-    await expect(page.locator('#account-menu').getByText('Signed in as newbie')).toBeVisible();
-  });
-
   test('[ASVS-10.2.1] says why a sign-in failed on the sign-in page, with a fixed code and none of the provider’s words', async ({
     page,
     at,

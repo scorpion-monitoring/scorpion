@@ -138,6 +138,7 @@ the same file answers 401 and 403 on every non-public route.
 | `PUT /preferences/{key}`                        | core.settings          | `core.settings.preference.write`             | default    | no             |
 | `PUT /secrets/{name}`                           | core.settings          | `core.settings.secret.write`                 | strict     | yes            |
 | `PUT /settings/{module}`                        | core.settings          | `core.settings.write`                        | default    | yes, with body |
+| `GET /ui/about`                                 | core.ui-shell          | `core.ui-shell.about.read`                   | default    | no             |
 | `GET /ui/dashboard`                             | core.ui-shell          | `core.ui-shell.dashboard.read`               | default    | no             |
 | `GET /ui/navigation`                            | core.ui-shell          | **public**                                   | default    | no             |
 | `PUT /ui/dashboard`                             | core.ui-shell          | `core.ui-shell.dashboard.write`              | default    | yes            |

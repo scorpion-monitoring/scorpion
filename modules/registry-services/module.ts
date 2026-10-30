@@ -57,6 +57,8 @@ import {
   type WizardStepEntry,
 } from './service/registries.ts';
 import { createPublicationMail } from './service/publication-mail.ts';
+import { createDemoSeed } from './service/demo-seed.ts';
+import type { OrganisationsPublic } from '@scorpion/registry-organisations/public';
 import { createServicesService, type ServicesService } from './service/services.ts';
 import { TEMPLATES } from './templates/registry.ts';
 import { SERVICE_NAV, SERVICE_ROUTES } from './ui/routes.ts';
@@ -122,6 +124,8 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
   let policy: MemberPolicy | undefined;
   // The same for the public services an organisation is named by (the contribution to `org.publicReference`).
   let publicServices: ServicesService['listPublicByOrganisationAsSystem'] | undefined;
+  let current: ServicesService | undefined;
+  let currentOrganisations: OrganisationsPublic | undefined;
   const policyOrThrow = () => {
     if (!policy) throw new Error('registry.services: the member policy was asked before start');
     return policy;
@@ -139,6 +143,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
     ServicesSettings
   >({
     id: 'registry.services',
+    displayName: 'Services',
     version: '0.1.0',
     // `svc_service`, not `registry_services_service` (ADR 0004, ADR-0035).
     tablePrefix: 'svc_',
@@ -269,6 +274,14 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       ],
     },
 
+    // `scorpion seed --demo`: fictional services of the demo organisations (ADR-0046).
+    demoSeed: (ctx, demo) =>
+      createDemoSeed(() => {
+        if (!current || !currentOrganisations)
+          throw new Error('registry.services: the service was asked before start');
+        return { services: current, organisations: currentOrganisations };
+      })(ctx, demo),
+
     services: (ctx) => {
       const orgTypes = new Set(
         (ctx.registry(ORG_TYPE_REGISTRY) as readonly OrgTypeEntry[]).map((type) => type.id),
@@ -343,6 +356,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         }),
       });
       publicServices = services.listPublicByOrganisationAsSystem;
+      currentOrganisations = ctx.deps['registry.organisations'];
       stageInUse = async (termKey) => {
         const [row] = await ctx.db
           .select({ id: serviceTable.id })
@@ -351,6 +365,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
           .limit(1);
         return row !== undefined;
       };
+      current = services;
       return services;
     },
 

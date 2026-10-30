@@ -54,7 +54,8 @@ pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a mod
 pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts and apps/web/src/generated/ui.ts (build time)
 pnpm openapi:generate          # write the typed client's types (packages/contracts/src/generated) and the web app's v1 document; pnpm check fails on a diff
 pnpm scorpion start | worker | migrate   # web server, jobs and events only, migrations only
-                               # (seed arrives with the modules that need it)
+pnpm scorpion docs:export [--out <dir>] [--zip <file>]   # reference data (modules, env, CLI, OpenAPI, profiles, journey steps) as JSON for the knowledge base; ADR-0047
+pnpm scorpion seed --demo      # fictional demo data from each module's `demoSeed` (ADR-0046); never real data
 pnpm scorpion create-admin | set-secret <name> | rotate-secrets   # commands of core.identity and core.settings;
                                # profiles with core.settings need SECRETS_KEY (openssl rand -base64 32)
 pnpm modules:sync              # regenerate the module id list that defineProfile() checks against
@@ -139,7 +140,7 @@ These are FEATURES §5; each has a regression test. Do not bring these patterns 
 - Small, reviewable commits (commits, not PRs: many commits per PR is fine). Commit messages: `<module>: <imperative summary>` (for example `kpi-ingestion: add XLSX adapter`).
 - **Branches:** never commit to `main` or `dev` directly. Work on `feature/<topic>` from `dev` (lower-case kebab case, milestone first: `feature/m1-module-loader`) and open the pull request into `dev`. Only `release/<x.y.z>` and `hotfix/<x.y.z>` branches merge into `main`. See CONTRIBUTING.md, "Branches" and "Releases".
 - **Every pull request adds a changeset** (`pnpm changeset`, package `scorpion`; `pnpm changeset --empty` for tests, CI or refactoring). Docs-only pull requests (every file in `docs/**`, `**/*.md` other than `CHANGELOG.md`, or `.github/ISSUE_TEMPLATE/**`) are exempt. Write it for operators and API users. Never edit `CHANGELOG.md` by hand; `changeset version` writes it at a release. CI fails a pull request without a changeset.
-- When a manifest changes (permissions, settings, events, registries, jobs), update the module's `README.md` in the same commit.
+- When a manifest changes (permissions, settings, events, registries, jobs, `env`, commands), update the module's `README.md` in the same commit. The manifest is the source of the reference data in the docs export (`pnpm scorpion docs:export`, ADR-0047): put every permission, setting, event, registry, job, environment variable and command in the manifest, and keep the README for what the manifest cannot say.
 - If a requirement in FEATURES.md looks wrong or conflicts with the architecture, stop and ask rather than guessing; record the answer in an ADR.
 
 <!-- code-review-graph MCP tools -->

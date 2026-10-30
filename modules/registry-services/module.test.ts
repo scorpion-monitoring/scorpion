@@ -220,6 +220,8 @@ describe('no hard-coded vocabulary', () => {
     'service/field-rules.ts',
     'config/fields.ts',
     'config/steps.ts',
+    // The demo seed names the demo providers' types and the stages of its fictional services (ADR-0046).
+    'service/demo-seed.ts',
   ]);
 
   it('keeps the words provider and consortium out of messages and logic outside the seeds and the config', () => {
@@ -248,6 +250,7 @@ describe('no hard-coded vocabulary', () => {
 
   it('keeps stage terms out of the code', () => {
     for (const file of [...sourceFiles('service'), 'module.ts', 'routes.ts']) {
+      if (file === 'service/demo-seed.ts') continue; // the fictional services have stages (ADR-0046)
       const text = readFileSync(join(dir, file), 'utf8');
       expect(text, file).not.toMatch(/['"](DEV|DEMO|PROD|TERM)['"]/);
     }

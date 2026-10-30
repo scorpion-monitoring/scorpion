@@ -120,6 +120,103 @@ jobs:
             apps/web/test-results/
           retention-days: 7
 
+  # The pictures of the journeys for the knowledge base (`docShot()`, issue #134): the journey specs run once on the root base path with
+  # DOC_SHOTS=1, and every picture they take (light and dark, 1280 x 800) is kept as the artifact `docs-screenshots`. The docs export
+  # (`docs-export.zip`) puts the same files in its `screenshots/` folder. Not part of the gate: a broken picture fails this job, which
+  # a release waits for (job `docs`, when it exists).
+  docshots:
+    name: Doc screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser
+        run: pnpm --filter @scorpion/web exec playwright install --with-deps chromium
+
+      - name: Take the pictures
+        run: pnpm test:e2e --project=root journeys
+        env:
+          DOC_SHOTS: '1'
+          # One stack (the root base path) is enough: a picture is taken in that project only.
+          E2E_STACKS: root
+      - name: Check the pictures
+        run: node scripts/check-doc-shots.ts reports/doc-shots
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-screenshots
+          path: reports/doc-shots
+          if-no-files-found: error
+          retention-days: 14
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docshots-failure
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+
+  # The reference data for the knowledge base (`scorpion docs:export`, ADR-0047), built on every run so that a change that breaks it
+  # fails the pull request, with the pictures of the job above in `screenshots/`. The result is kept as the artifact `docs-export`
+  # (the folder and `docs-export.zip`); a release tag attaches the zip to the GitHub release (job `release-assets`).
+  docs:
+    name: Docs export
+    needs: docshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The first release of a module is read from the tags and the history.
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs-screenshots
+          path: reports/doc-shots
+      - name: Check the pictures
+        run: node scripts/check-doc-shots.ts reports/doc-shots
+      - name: Export
+        run: node apps/server/src/cli.ts docs:export --out docs-export --zip docs-export.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-export
+          path: |
+            docs-export/
+            docs-export.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # A release tag v<x.y.z> gets `docs-export.zip` as an asset of its GitHub release (made here when it does not exist yet). It runs only
+  # after the whole run is green, and is the one job with write access to the repository's contents.
+  release-assets:
+    name: Release assets
+    needs: [verify, docs]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs-export
+          path: assets
+      - name: Attach docs-export.zip to the release
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          gh release upload "$TAG" assets/docs-export.zip --clobber
+
   # Checks the four ASVS assessments in docs/security/asvs/ against the pinned source and the JUnit
   # reports of the test jobs above, and that the generated reports and the README badge block are what
   # the tool writes (CLAUDE.md, "Security assurance"). CI is strict: a missing report is an error. On a
@@ -376,7 +473,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

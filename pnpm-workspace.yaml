@@ -32,6 +32,9 @@ overrides:
   # launch-editor <= 2.14.1 has three advisories (fixed in 2.14.2); it comes in only through @changesets/cli (dev).
   # Remove when @changesets/cli requires 2.14.2 or later.
   launch-editor: '>=2.14.2'
+  # undici 7.x < 7.30.1 has three advisories; it comes in only through @scalar/api-reference (apps/web).
+  # Remove when @scalar/json-magic requires 7.30.1 or later.
+  '@scalar/json-magic>undici': '>=7.30.1 <8'
 
 # react-grid-layout (a dependency of @snapgridjs/core) declares react and react-dom as peers. Snapgrid imports
 # only `react-grid-layout/core`, the pure layout functions, so React is never in the client build and is not

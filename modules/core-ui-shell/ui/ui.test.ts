@@ -11,10 +11,13 @@ describe('the pages of the shell', () => {
     );
   });
 
-  it('are public with a reason, or need a permission (the administration pages)', () => {
+  it('are public with a reason, or need a permission (the administration pages and the About page)', () => {
     for (const route of SHELL_ROUTES) {
       if (route.public) {
         expect(route.publicReason?.length, route.path).toBeGreaterThan(10);
+      } else if (route.path === '/about') {
+        // The one page that is not administration and not public: every signed-in person holds it (ADR-0045).
+        expect(route.permission).toBe('core.ui-shell.about.read');
       } else {
         expect(route.permission, route.path).toMatch(/^core\.(authz|settings)\./);
         expect(route.path, route.path).toMatch(/^\/admin\//);
@@ -43,6 +46,7 @@ describe('the pages of the shell', () => {
     const withLoad = routes.filter((route) => route.load).map((route) => route.path);
     expect(withLoad.sort()).toEqual([
       '/',
+      '/about',
       '/admin/roles',
       '/admin/settings',
       '/admin/settings/:module',

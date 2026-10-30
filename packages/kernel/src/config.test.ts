@@ -167,3 +167,13 @@ describe('mountPath', () => {
     expect(mountPath({ BASE_PATH: basePath })).toBe(expected);
   });
 });
+
+describe('envSchema (the source of the environment table of the docs export)', () => {
+  it('describes every variable, and names DATABASE_URL as the secret', async () => {
+    const { ENV_SECRETS, envSchema } = await import('./config.ts');
+    for (const [name, field] of Object.entries(envSchema.shape)) {
+      expect(field.description?.length ?? 0, name).toBeGreaterThan(20);
+    }
+    expect(ENV_SECRETS).toEqual(['DATABASE_URL']);
+  });
+});

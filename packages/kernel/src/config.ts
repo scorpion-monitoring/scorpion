@@ -64,20 +64,48 @@ const trustedProxies = z
     }
   });
 
-/** The environment variables the kernel reads. Everything else is configuration in settings. */
-const envSchema = z.object({
-  DATABASE_URL: databaseUrl,
+/**
+ * The environment variables the kernel reads. Everything else is configuration in settings. The descriptions are what
+ * `scorpion docs:export` publishes (ADR-0047), so each says what the variable does in one sentence.
+ */
+export const envSchema = z.object({
+  DATABASE_URL: databaseUrl.describe(
+    'The PostgreSQL connection URL (postgres:// or postgresql://). It carries the database password, so it is a secret.',
+  ),
   PROFILE: z
     .string()
     .regex(/^[a-z][a-z0-9-]*$/, 'must be a profile name such as "full"')
-    .default('full'),
-  PORT: port.default(3000),
-  BASE_PATH: basePath.default('/'),
-  LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
-  WORKER_MODE: z.enum(['inline', 'separate']).default('inline'),
-  ORIGIN: origin.optional(),
-  TRUSTED_PROXIES: trustedProxies.default([]),
+    .default('full')
+    .describe(
+      'The deployment profile this build was made for; the server refuses to start for another one.',
+    ),
+  PORT: port.default(3000).describe('The port the web server listens on.'),
+  BASE_PATH: basePath
+    .default('/')
+    .describe(
+      'The URL path the application is served under, for example /scorpion (no trailing slash).',
+    ),
+  LOG_LEVEL: z.enum(LOG_LEVELS).default('info').describe('How much the server logs.'),
+  WORKER_MODE: z
+    .enum(['inline', 'separate'])
+    .default('inline')
+    .describe(
+      'Whether jobs and events run in the web process (inline) or in `scorpion worker` (separate).',
+    ),
+  ORIGIN: origin
+    .optional()
+    .describe(
+      'The public origin of the instance (scheme, host, optional port), used in links and for the browser origin checks. Default: http://localhost:<PORT>.',
+    ),
+  TRUSTED_PROXIES: trustedProxies
+    .default([])
+    .describe(
+      'Comma-separated IP addresses or CIDR ranges of the reverse proxies whose X-Forwarded-For header is trusted. Empty: none.',
+    ),
 });
+
+/** The variables of `envSchema` that hold a secret (a password, a key): the export marks them, and never carries a value. */
+export const ENV_SECRETS: readonly string[] = ['DATABASE_URL'];
 
 export type Config = Readonly<Omit<z.output<typeof envSchema>, 'ORIGIN'> & { ORIGIN: string }>;
 

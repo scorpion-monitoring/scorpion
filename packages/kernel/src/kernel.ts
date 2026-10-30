@@ -7,11 +7,17 @@ import { anonymousOnly, AUTHENTICATOR_REGISTRY, type Authenticator } from './aut
 import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
 import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
 import type { Config } from './config.ts';
-import type { ModuleContext } from './context.ts';
+import type { InstanceInfo, ModuleContext } from './context.ts';
 import { closePool, createDb, createPool, type Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { childLogger, createLogger, type Logger } from './logger.ts';
-import { SYSTEM_READY, type CommandIo, type DomainEvent } from './manifest.ts';
+import {
+  SYSTEM_READY,
+  type CommandIo,
+  type DemoSeedContext,
+  type DomainEvent,
+  type JobResult,
+} from './manifest.ts';
 import {
   createDispatcher,
   createEvents,
@@ -51,6 +57,8 @@ export interface KernelOptions {
   sources: readonly ModuleSource[];
   config: Config;
   log?: Logger;
+  /** The Scorpion product version `ctx.instance` reports. Default `unknown`. */
+  version?: string;
   /** Module id → package name. Default: the workspace's modules. */
   modulePackages?: Readonly<Record<string, string>>;
   /** Tuning for the outbox dispatcher: attempts, backoff, polling. Defaults suit production. */
@@ -121,6 +129,16 @@ export interface Kernel {
    * and 5), then runs the command. No routes, no `system.ready`, no workers. Returns its exit code.
    */
   runCommand(name: string, args: readonly string[], io: CommandIo): Promise<number>;
+  /**
+   * `scorpion seed --demo` (ADR-0046): applies pending migrations, builds the services, then runs the `demoSeed` hook of
+   * every module that has one, dependencies first, with one shared `DemoSeedContext`. A hook that throws
+   * `DemoSeedRefused` stops the run with its message; the modules before it have already written (each is idempotent).
+   * Returns what each hook reported, by module id.
+   */
+  runDemoSeed(
+    options: { password?: string; allowProduction?: boolean },
+    io: Pick<CommandIo, 'out'>,
+  ): Promise<Record<string, JobResult>>;
   /** Loader step 2 alone: apply pending migrations. */
   migrate(): Promise<MigrationReport>;
   /** Modules whose migrations have not all been applied. Empty when the database is ready. */
@@ -212,6 +230,20 @@ export function createKernel(options: KernelOptions): Kernel {
       module.manifest.settings ? [[module.id, module.manifest.settings] as const] : [],
     ),
   );
+  const instance: InstanceInfo = Object.freeze({
+    profile: profile.name,
+    version: options.version ?? 'unknown',
+    modules: Object.freeze(
+      profile.modules.map((module) =>
+        Object.freeze({
+          id: module.id,
+          displayName: module.manifest.displayName ?? module.id,
+          version: module.manifest.version,
+          kind: module.id.startsWith('core.') ? ('core' as const) : ('optional' as const),
+        }),
+      ),
+    ),
+  });
   const storeEntry = composition.registries.get(SETTINGS_STORE_REGISTRY)!.entries[0];
   const settingsStore = storeEntry ? (storeEntry.value as SettingsStore) : undefined;
   const allPermissions = Object.freeze(
@@ -292,6 +324,7 @@ export function createKernel(options: KernelOptions): Kernel {
       }),
       jobs: jobs.apiFor(module.id),
       audit: (entry) => auditSink(entry),
+      instance,
       config,
       deps: dependencyView(module, services),
       permissions: allPermissions,
@@ -345,6 +378,25 @@ export function createKernel(options: KernelOptions): Kernel {
   const commands = profile.modules.flatMap((module) =>
     (module.manifest.commands ?? []).map((command) => ({ module, command })),
   );
+
+  async function runDemoSeed(
+    seedOptions: { password?: string; allowProduction?: boolean },
+    io: Pick<CommandIo, 'out'>,
+  ): Promise<Record<string, JobResult>> {
+    await build();
+    const demo: DemoSeedContext = {
+      actors: new Map(),
+      password: seedOptions.password,
+      allowProduction: seedOptions.allowProduction === true,
+      out: (text) => io.out(text),
+    };
+    const reported: Record<string, JobResult> = {};
+    for (const module of profile.modules) {
+      if (!module.manifest.demoSeed) continue;
+      reported[module.id] = (await module.manifest.demoSeed(contextFor(module), demo)) ?? {};
+    }
+    return reported;
+  }
 
   async function runCommand(name: string, args: readonly string[], io: CommandIo): Promise<number> {
     const found = commands.find((entry) => entry.command.name === name);
@@ -401,6 +453,7 @@ export function createKernel(options: KernelOptions): Kernel {
       usage: command.usage,
     })),
     runCommand,
+    runDemoSeed,
     rateLimiter: createRateLimiter(db),
     settingsOf(moduleId) {
       if (!moduleById.has(moduleId)) {

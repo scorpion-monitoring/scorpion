@@ -9,6 +9,7 @@ import {
   loadSettingsModule,
   loadVocabularies,
 } from './admin/loaders.ts';
+import { loadAbout } from './about.ts';
 import { loadDocs } from './docs.ts';
 import { loadHome } from './home.ts';
 import { loadLegal } from './legal.ts';
@@ -19,6 +20,7 @@ export { widgets } from './widgets.ts';
 const routes: UiRoute[] = [
   { path: '/', load: loadHome, component: () => import('./Home.svelte') },
   { path: '/legal/:page', load: loadLegal, component: () => import('./Legal.svelte') },
+  { path: '/about', load: loadAbout, component: () => import('./About.svelte') },
   { path: '/docs', load: loadDocs, component: () => import('./Docs.svelte') },
   { path: '/admin/roles', load: loadRoles, component: () => import('./admin/Roles.svelte') },
   {

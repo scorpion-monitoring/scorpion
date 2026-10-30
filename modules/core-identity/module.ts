@@ -11,6 +11,7 @@ import type { IdentityService } from './public.ts';
 import { registerIdentityRoutes } from './routes.ts';
 import { createAccountService } from './service/accounts.ts';
 import { createBootstrapService, type BootstrapService } from './service/bootstrap.ts';
+import { createDemoSeed } from './service/demo-seed.ts';
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
 import { createCleanupService, type CleanupService } from './service/cleanup.ts';
@@ -174,6 +175,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     IdentitySettingsValues
   >({
     id: 'core.identity',
+    displayName: 'Identity',
     version: '0.1.0',
     // Short on purpose: the module's tables are `identity_user`, not `core_identity_user` (ADR 0004).
     tablePrefix: 'identity_',
@@ -221,6 +223,15 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     migrations: new URL('./migrations', import.meta.url),
 
     commands: [createAdminCommand(bootstrapOrThrow)],
+
+    // `scorpion seed --demo`: the demo accounts the other modules' seeds act as (ADR-0046).
+    demoSeed: (ctx, demo) =>
+      createDemoSeed({
+        db: ctx.db,
+        bootstrap: bootstrapOrThrow,
+        users: usersOrThrow,
+        authz: ctx.deps['core.authz'],
+      })(ctx, demo),
 
     jobs: [
       {
