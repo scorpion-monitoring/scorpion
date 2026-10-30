@@ -21,54 +21,6 @@ async function signInAsAdmin(page: Page, at: (path: string) => string) {
 const toast = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 
 test.describe('approving accounts', () => {
-  test('an Admin approves one account and rejects another on the page the mail links to, and each person is told', async ({
-    page,
-    playwright,
-    baseURL,
-    at,
-    browser,
-  }) => {
-    const api = await adminApi(playwright, baseURL, at);
-    const yes = newPerson('yes');
-    const no = newPerson('no');
-    await registerPending(api, at, yes);
-    await registerPending(api, at, no);
-    await signInAsAdmin(page, at);
-
-    await page.goto(at('/admin/users/pending'));
-    await expect(
-      page.getByRole('heading', { name: 'Accounts waiting for approval', level: 1 }),
-    ).toBeVisible();
-    const table = page.getByRole('table', { name: 'Accounts waiting for approval' });
-    await expect(table.getByRole('rowheader', { name: yes.username })).toBeVisible();
-    await expect(table.getByRole('rowheader', { name: no.username })).toBeVisible();
-
-    await table.getByRole('button', { name: `Approve ${yes.username}` }).click();
-    await expect(toast(page).getByText(`${yes.username} was approved.`)).toBeVisible();
-    await expect(table.getByRole('rowheader', { name: yes.username })).toHaveCount(0);
-
-    await table.getByRole('button', { name: `Reject ${no.username}` }).click();
-    const dialog = page.getByRole('dialog', { name: 'Reject this account?' });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Reject' }).click();
-    await expect(toast(page).getByText(`${no.username} was rejected.`)).toBeVisible();
-    await expect(table.getByRole('rowheader', { name: no.username })).toHaveCount(0);
-
-    // The approved person signs in; the rejected one cannot.
-    const context = await browser.newContext({ baseURL });
-    const visitor = await context.newPage();
-    await signInThroughPage(visitor, at, yes);
-    await visitor.getByRole('button', { name: 'Account menu' }).click();
-    await visitor.getByRole('button', { name: 'Log out' }).click();
-    await visitor.goto(at('/login'));
-    await visitor.getByLabel('Username').fill(no.username);
-    await visitor.getByLabel('Password', { exact: true }).fill(no.password);
-    await visitor.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(visitor.getByRole('alert')).toContainText('The username or password is wrong.');
-    await context.close();
-    await api.dispose();
-  });
-
   test('an Admin gives the role chosen on the page to the account they approve', async ({
     page,
     playwright,

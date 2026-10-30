@@ -1,19 +1,8 @@
 import { expect, person, test } from './support/fixtures.ts';
+import { register } from './support/register.ts';
 
 // Registering says the same thing for a new address and a taken one, and a person whose account waits
 // for approval is told so by the API's answer, not by the page.
-
-async function register(
-  page: import('@playwright/test').Page,
-  at: (path: string) => string,
-  who: { username: string; email: string; password: string },
-) {
-  await page.goto(at('/register'));
-  await page.getByLabel('Username').fill(who.username);
-  await page.getByLabel('Email address').fill(who.email);
-  await page.getByLabel('Password', { exact: true }).fill(who.password);
-  await page.getByRole('button', { name: 'Create the account' }).click();
-}
 
 test.describe('registering', () => {
   test('says the same for a new address and for a taken one', async ({ page, at }) => {
@@ -64,39 +53,5 @@ test.describe('registering', () => {
     const message = page.locator(`#${await field.getAttribute('aria-describedby')}`).last();
     await expect(message).not.toBeEmpty();
     await expect(page.getByRole('heading', { name: 'Check your mail' })).toHaveCount(0);
-  });
-
-  test('turns a person whose account waits for approval to the pending page, from the answer of the API', async ({
-    page,
-    at,
-  }) => {
-    const waiting = person('waiting');
-    await register(page, at, {
-      username: waiting.username,
-      email: 'waiting@example.org',
-      password: waiting.password,
-    });
-    await expect(page.getByRole('heading', { name: 'Check your mail' })).toBeVisible();
-
-    await page.goto(at('/login'));
-    await page.getByLabel('Username').fill(waiting.username);
-    await page.getByLabel('Password', { exact: true }).fill(waiting.password);
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Your account is waiting for approval' }),
-    ).toBeVisible();
-    // Nobody is signed in: the session cookie was never made.
-    await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
-    expect(
-      (await page.context().cookies()).some((cookie) => cookie.name === '__Host-session'),
-    ).toBe(false);
-
-    // The wrong password gets the ordinary refusal, never the pending page: the page cannot be used
-    // to learn that a username exists.
-    await page.goto(at('/login'));
-    await page.getByLabel('Username').fill(waiting.username);
-    await page.getByLabel('Password', { exact: true }).fill('not the right password');
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('The username or password is wrong.');
   });
 });

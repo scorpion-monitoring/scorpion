@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 import { makePng } from '@scorpion/testing';
 import { activeUser, adminApi, apiAs, newPerson, unique } from './support/admin.ts';
 import { mailTo, withDb } from './support/db.ts';
@@ -7,8 +6,12 @@ import {
   makeOrg,
   memberOf,
   pageAs,
+  prefixOf,
   rowOf,
+  rowOfTable,
+  toast,
   uniqueAbbreviation,
+  waitingOnCard,
 } from './support/members.ts';
 import { jsonLd, watchCsp } from './support/page-checks.ts';
 import { uniqueRorId } from './support/ror.ts';
@@ -19,8 +22,6 @@ import { mailbox } from '@scorpion/testing';
 // M6 sprint 4, journey 1: an Admin creates, edits and deletes organisations in the browser, and the detail
 // page carries the Schema.org block. Each test makes its own organisations (unique names), so a retry never
 // meets what an earlier try left.
-
-const toast = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 
 test.describe('journey 1: an Admin looks after the organisations', () => {
   test('creates a provider with every field and a logo, a consortium with the field errors shown, edits, replaces the logo, deletes; the page block parses', async ({
@@ -207,118 +208,6 @@ test.describe('journey 1: an Admin looks after the organisations', () => {
 // accounts (unique names), because the specs of a run share one database and a retry must not meet what its
 // first try left. Two people act at once in two browser contexts; a direct call from a second session of the
 // same account stands for "the API would answer".
-
-/** The row of a table that names this person or organisation (`scope` is the page, or a part of it). */
-const rowOfTable = (scope: Pick<Page, 'getByRole'>, text: string | RegExp) =>
-  scope.getByRole('row').filter({ hasText: text });
-
-/** The card of the dashboard, and the number it shows (`null` when it is not drawn: nothing is waiting). */
-async function waitingOnCard(page: Page): Promise<number | null> {
-  const card = page.getByRole('region', { name: 'Membership requests' });
-  if ((await card.count()) === 0) return null;
-  return Number((await card.getByText(/^\d+$/).textContent())!);
-}
-
-/** The path under the base path of the first link to an organisation page in a mail. */
-function organisationLink(text: string, id: string): string {
-  const match = new RegExp(`https?://[^\\s]+/organisations/${id}`).exec(text);
-  expect(match, 'a link to the organisation in the mail').not.toBeNull();
-  return new URL(match![0]).pathname;
-}
-
-const prefixOf = (basePath: string) => (basePath === '/' ? '' : basePath);
-
-test.describe('journey 2: a person finds an organisation and joins it', () => {
-  test('searches 5 per page, asks, an Admin approves in a second browser, the mail links under the base path, the person leaves', async ({
-    browser,
-    playwright,
-    baseURL,
-    at,
-    basePath,
-  }) => {
-    test.slow();
-    const api = await adminApi(playwright, baseURL, at);
-    const group = uniqueAbbreviation('SRC');
-    const orgs = [];
-    for (const letter of 'ABCDEF') orgs.push(await makeOrg(api, `${group}${letter}`));
-    const target = orgs[1]!;
-    const who = newPerson('joiner');
-    await activeUser(api, at, who);
-
-    const person = await pageAs(browser, baseURL, at, who);
-    const page = person.page;
-    await page.goto(at('/account/organisations'));
-    await expect(page.getByRole('heading', { name: 'Organisations', level: 1 })).toBeVisible();
-    await expect(page.getByText('You are not a member of any organisation yet.')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'My organisations' })).toHaveCount(0);
-
-    // The search: 5 per page, and a change of the search starts again on the first page.
-    const search = page.getByLabel('Search by abbreviation or name');
-    await search.fill(group);
-    await page.getByRole('button', { name: 'Search' }).click();
-    await expect(page.getByRole('rowheader')).toHaveCount(5);
-    await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page).toHaveURL(/page=1/);
-    await expect(page.getByRole('rowheader')).toHaveCount(1);
-    await search.fill(target.abbreviation);
-    await page.getByRole('button', { name: 'Search' }).click();
-    await expect(page).not.toHaveURL(/page=/);
-    await expect(page.getByRole('rowheader')).toHaveCount(1);
-
-    // Ask: the row says "Pending" at once.
-    await page
-      .getByRole('button', { name: `Ask to become a member of ${target.abbreviation}` })
-      .click();
-    await expect(
-      rowOfTable(page, target.abbreviation).getByText('Pending', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: `Ask to become a member of ${target.abbreviation}` }),
-    ).toHaveCount(0);
-
-    // The Admin decides in a second browser; the card of the dashboard counts down.
-    const boss = await pageAs(browser, baseURL, at, admin);
-    await boss.page.goto(at('/'));
-    await expect.poll(() => waitingOnCard(boss.page)).toBeGreaterThan(0);
-    const before = (await waitingOnCard(boss.page))!;
-    await boss.page.getByRole('region', { name: 'Membership requests' }).getByRole('link').click();
-    await expect(boss.page).toHaveURL(new RegExp(`${prefixOf(basePath)}/admin/memberships$`));
-    await boss.page.getByLabel('Organisation').selectOption({ value: target.id });
-    const request = rowOfTable(boss.page, who.username);
-    await expect(request.getByText('Pending')).toBeVisible();
-    await request.getByRole('button', { name: `Approve the request of ${who.username}` }).click();
-    await expect(boss.page.getByText(`${who.username} was approved.`).first()).toBeVisible();
-    await expect(request).toHaveCount(0);
-    await boss.page.goto(at('/'));
-    await expect.poll(async () => (await waitingOnCard(boss.page)) ?? 0).toBe(before - 1);
-    await boss.close();
-
-    // The requester has the decision mail, with a link under the base path.
-    const mail = await mailTo(
-      basePath,
-      `${who.username}@example.org`,
-      'registry.membership-decided',
-    );
-    expect(mail.text).toContain(target.name);
-    expect(organisationLink(mail.text, target.id)).toBe(
-      `${prefixOf(basePath)}/organisations/${target.id}`,
-    );
-
-    // An approved row says "Member"; the person leaves after the confirm.
-    await page.reload();
-    const own = page.getByRole('listitem').filter({ hasText: target.abbreviation });
-    await expect(own.getByText('Member', { exact: true })).toBeVisible();
-    await page
-      .getByRole('button', { name: `Leave the organisation ${target.abbreviation}` })
-      .click();
-    const dialog = page.getByRole('dialog', { name: `Leave ${target.name}?` });
-    await dialog.getByRole('button', { name: 'Leave the organisation' }).click();
-    await expect(toast(page).getByText('You left the organisation.')).toBeVisible();
-    await expect(own.getByText('Left', { exact: true })).toBeVisible();
-    await person.close();
-    await api.dispose();
-  });
-});
 
 test.describe('journey 3: nobody decides on their own request', () => {
   test('an Admin who asked has no approve button, and a direct decision is refused with 403', async ({

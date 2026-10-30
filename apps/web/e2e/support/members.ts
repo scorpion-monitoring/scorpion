@@ -142,3 +142,27 @@ export async function auditPayloads(
     return rows.map((row) => ({ payload: row.payload, userId: row.user_id }));
   });
 }
+
+/** The row of a table that names this person or organisation (`scope` is the page, or a part of it). */
+export const rowOfTable = (scope: Pick<Page, 'getByRole'>, text: string | RegExp) =>
+  scope.getByRole('row').filter({ hasText: text });
+
+/** The card of the dashboard, and the number it shows (`null` when it is not drawn: nothing is waiting). */
+export async function waitingOnCard(page: Page): Promise<number | null> {
+  const card = page.getByRole('region', { name: 'Membership requests' });
+  if ((await card.count()) === 0) return null;
+  return Number((await card.getByText(/^\d+$/).textContent())!);
+}
+
+/** The path under the base path of the first link to an organisation page in a mail. */
+export function organisationLink(text: string, id: string): string {
+  const match = new RegExp(`https?://[^\\s]+/organisations/${id}`).exec(text);
+  expect(match, 'a link to the organisation in the mail').not.toBeNull();
+  return new URL(match![0]).pathname;
+}
+
+export const prefixOf = (basePath: string) => (basePath === '/' ? '' : basePath);
+
+/** The region of notifications (toasts) of the shell. */
+export const toast = (page: Pick<Page, 'getByRole'>) =>
+  page.getByRole('region', { name: 'Notifications' });

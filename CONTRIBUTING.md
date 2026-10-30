@@ -45,6 +45,19 @@ This file summarises how work gets into `main`.
   bypass. Do not rename a required job without changing the setting in the same step.
 - Public API v1 changes must be additive. A breaking change goes to v2 and needs an ADR.
 
+## Journey specs
+
+The main user journeys of a profile are Playwright specs in `apps/web/e2e/journeys/`, one file per journey of the knowledge base catalogue
+(J01 to J18; only the journeys that have a browser spec today exist: J01 to J10 and J12; J11 is API-only and J13 to J18 need modules that are not released).
+
+- **Name:** `jNN-<slug>.spec.ts`, with the id and the slug of the catalogue (`j06-create-service.spec.ts`), and `test.describe('J06: Create a service with the wizard', ...)`.
+- **Steps:** one `test.step` per thing a person sees or does, titled as the knowledge base shows it: a short imperative sentence that starts with a capital
+  letter and has no full stop (`Open the wizard from the catalogue`). Setup, calls of the API that stand for fixtures, and assertions about what no person sees
+  stay outside a step. A step title is a string literal, never built from a value.
+- **A spec that covers two journeys is split,** and every assertion is kept: the journey's own tests move into its file; the edge cases stay in the feature spec
+  (`services.spec.ts`, `profile.spec.ts`, ...), which are not journeys and keep their names. Shared helpers live in `apps/web/e2e/support/`.
+- `apps/web/src/journeys.test.ts` fails for a spec in the folder that breaks these rules, and the docs export lists the steps.
+
 ## Security assurance
 
 The README badges for ASVS 5.0 (chapters V6, V7, V8 and V10), OpenSSF Best Practices and OpenSSF Scorecard are claims that CI keeps true; see
