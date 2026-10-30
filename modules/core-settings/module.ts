@@ -83,6 +83,19 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
   return defineModule<SettingsInternalsBundle, 'core.authz', never, CoreSettings>({
     id: 'core.settings',
     displayName: 'Settings',
+    env: {
+      SECRETS_KEY: {
+        description:
+          'The key that encrypts the stored secrets: the base64 of exactly 32 random bytes (openssl rand -base64 32). The server does not start without it.',
+        secret: true,
+        required: true,
+      },
+      SECRETS_KEY_NEXT: {
+        description:
+          'The new key while the secrets are being rotated (scorpion rotate-secrets); leave it unset otherwise.',
+        secret: true,
+      },
+    },
     version: '0.1.0',
     // Short on purpose: the module's tables are `settings_setting`, not `core_settings_setting` (ADR 0004).
     tablePrefix: 'settings_',

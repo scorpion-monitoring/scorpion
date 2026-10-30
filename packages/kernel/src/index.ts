@@ -30,6 +30,7 @@ export {
   type CommandIo,
   type DemoSeedContext,
   type DomainEvent,
+  type EnvDef,
   type EventHandler,
   type JobDef,
   type JobRun,
@@ -60,7 +61,7 @@ export {
   type ResolveOptions,
 } from './resolve.ts';
 export { WORKSPACE_MODULES, type ModuleId } from './workspace-modules.ts';
-export { loadConfig, mountPath, type Config } from './config.ts';
+export { ENV_SECRETS, envSchema, loadConfig, mountPath, type Config } from './config.ts';
 export {
   activeTransaction,
   closePool,
