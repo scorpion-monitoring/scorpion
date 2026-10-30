@@ -245,3 +245,16 @@ describe('defineProfile', () => {
     defineProfile({ name: 'x', modules: ['kpi.impact'] });
   });
 });
+
+describe('validateManifest env', () => {
+  it('accepts the variables a module reads, and refuses an entry with no description', () => {
+    const env = { SECRETS_KEY: { description: 'The key.', secret: true, required: true } };
+    expect(validateManifest({ ...valid, env }, 'test').env).toEqual(env);
+    expect(() => validateManifest({ ...valid, env: { X: { description: '' } } }, 'test')).toThrow(
+      KernelStartupError,
+    );
+    expect(() =>
+      validateManifest({ ...valid, env: { X: { description: 'x', extra: 1 } } }, 'test'),
+    ).toThrow(KernelStartupError);
+  });
+});

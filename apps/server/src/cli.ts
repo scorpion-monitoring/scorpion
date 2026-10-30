@@ -10,7 +10,8 @@ import {
 } from '@scorpion/kernel';
 import { terminalIo } from './cli-io.ts';
 import { moduleIds, profileName, sources } from './generated/profile.ts';
-import { seedCommand, SEED_USAGE } from './seed.ts';
+import { SERVER_COMMANDS, usageLines } from './commands.ts';
+import { seedCommand } from './seed.ts';
 import { generateProfile } from './profile-generate.ts';
 import {
   migrate,
@@ -35,14 +36,7 @@ function moduleCommandLines(): string {
 const USAGE = () => `Usage: scorpion <command>
 
 Commands:
-  start                      Run the web server (and, with WORKER_MODE=inline, the workers).
-  worker                     Run jobs and the event dispatcher only, without HTTP.
-  migrate                    Apply pending migrations of every module and exit.
-  ${SEED_USAGE}
-                             Fill the modules of this build with fictional demo data. Idempotent; refuses an instance with real accounts.
-                             Demo passwords: SCORPION_DEMO_PASSWORD, or a random one is shown once.
-  profile:generate <name> [--check] [--profile-file <path>] [--modules-root <dir>]...
-                             Write apps/server/src/generated/profile.ts for a profile (build time).
+${SERVER_COMMANDS.map(usageLines).join('\n')}
 
 ${moduleCommandLines()}
 Environment: DATABASE_URL (required), SECRETS_KEY (required by profiles with core.settings; generate with
@@ -146,6 +140,12 @@ async function main(argv: string[]): Promise<number> {
           : applied.map(([module, count]) => `${module}: ${count} migration(s) applied`).join('\n'),
       );
       return 0;
+    }
+    case 'docs:export': {
+      // A build-time tool of a repository checkout: it reads every module of the workspace, the profile files and the journey specs, none
+      // of which an image holds, so the code is loaded only here.
+      const { docsExportCommand } = await import('./docs-export/run.ts');
+      return docsExportCommand(args, process.cwd());
     }
     case 'seed': {
       const options = runtimeOptions();

@@ -19,8 +19,18 @@ export const RESERVED_COMMANDS: readonly string[] = [
   'migrate',
   'profile:generate',
   'seed',
+  'docs:export',
   'help',
 ];
+
+/** An environment variable a module reads beyond the kernel's (`ModuleManifest.env`). */
+export interface EnvDef {
+  description: string;
+  /** Holds a secret: documented, and never shown with a value. */
+  secret?: boolean;
+  /** The module does not start without it. */
+  required?: boolean;
+}
 
 export interface PermissionDef {
   /** What the permission is checked against; `global` when omitted. */
@@ -134,6 +144,11 @@ export interface ModuleManifest<Services = unknown, C = ModuleContext> {
    * plus `_` (`kpi.ingestion` → `kpi_ingestion_`). See ADR 0004.
    */
   tablePrefix?: string;
+  /**
+   * The environment variables this module reads, beyond the kernel's (`SECRETS_KEY` of core.settings). Documentation only: the module
+   * still validates them itself. `scorpion docs:export` publishes them (ADR-0047).
+   */
+  env?: Record<string, EnvDef>;
   /** Permission ids, each starting with `<id>.`. */
   permissions?: Record<string, PermissionDef>;
   /** Validates the module's settings JSON. */
@@ -185,6 +200,13 @@ const manifestSchema = z.strictObject({
     .string()
     .regex(/^[a-z][a-z0-9]*(_[a-z0-9]+)*_$/, 'must be lower-case snake case ending in "_"')
     .optional(),
+  env: recordOf(
+    z.strictObject({
+      description: z.string().min(1),
+      secret: z.boolean().optional(),
+      required: z.boolean().optional(),
+    }),
+  ).optional(),
   permissions: recordOf(
     z.strictObject({ scope: z.string().min(1).optional(), description: z.string().min(1) }),
   ).optional(),

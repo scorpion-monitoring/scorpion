@@ -500,6 +500,13 @@ commands: [
   history keep it. Never print one either; a command that has to is the exception to explain in its README.
 - A command is an entry point like a route: it calls the module's service and holds no logic of its own.
 
+### Documentation data: `env`, `displayName` and the export
+
+`scorpion docs:export` ([ADR-0047](../../docs/adr/0047-docs-export.md)) reads the manifests and publishes them as JSON. Besides what a manifest already declares, two fields exist for it:
+`displayName` (the name for people) and `env`, `{ NAME: { description, secret?, required? } }`, the environment variables a module reads beyond the kernel's own
+(`core.settings` declares `SECRETS_KEY` and `SECRETS_KEY_NEXT`). The kernel's variables are the Zod `envSchema` of `config.ts`, whose `.describe()` texts are
+the descriptions; `ENV_SECRETS` names the ones that hold a secret.
+
 ### Demo data: `demoSeed`
 
 A manifest may have `demoSeed(ctx, demo)`: fictional, non-personal data written through the module's own services for `scorpion seed --demo`
