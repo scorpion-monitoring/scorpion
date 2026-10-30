@@ -1,4 +1,5 @@
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { profileOf } from '../support/profile.ts';
 
 // J04: create, use and rotate a personal access token. Moved from profile.spec.ts with every assertion.
@@ -27,6 +28,10 @@ test.describe('J04: create, use and rotate a personal access token', () => {
       await tokens.getByRole('button', { name: 'Create the token' }).click();
       first = (await page.getByTestId('token-secret').textContent())!;
       await expect(page.getByText('This is the only time it is shown.')).toBeVisible();
+      await docShot(page, 'j04', 'token-secret', {
+        mask: [page.getByTestId('token-secret')],
+        scrollTo: page.getByTestId('token-secret'),
+      });
     });
 
     const api = async (secret: string) =>

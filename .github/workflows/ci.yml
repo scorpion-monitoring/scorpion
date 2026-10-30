@@ -120,6 +120,48 @@ jobs:
             apps/web/test-results/
           retention-days: 7
 
+  # The pictures of the journeys for the knowledge base (`docShot()`, issue #134): the journey specs run once on the root base path with
+  # DOC_SHOTS=1, and every picture they take (light and dark, 1280 x 800) is kept as the artifact `docs-screenshots`. The docs export
+  # (`docs-export.zip`) puts the same files in its `screenshots/` folder. Not part of the gate: a broken picture fails this job, which
+  # a release waits for (job `docs`, when it exists).
+  docshots:
+    name: Doc screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser
+        run: pnpm --filter @scorpion/web exec playwright install --with-deps chromium
+
+      - name: Take the pictures
+        run: pnpm test:e2e --project=root journeys
+        env:
+          DOC_SHOTS: '1'
+          # One stack (the root base path) is enough: a picture is taken in that project only.
+          E2E_STACKS: root
+      - name: Check the pictures
+        run: node scripts/check-doc-shots.ts reports/doc-shots
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-screenshots
+          path: reports/doc-shots
+          if-no-files-found: error
+          retention-days: 14
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docshots-failure
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+
   # Checks the four ASVS assessments in docs/security/asvs/ against the pinned source and the JUnit
   # reports of the test jobs above, and that the generated reports and the README badge block are what
   # the tool writes (CLAUDE.md, "Security assurance"). CI is strict: a missing report is an error. On a

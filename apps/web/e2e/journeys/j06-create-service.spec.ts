@@ -1,6 +1,7 @@
 import { makePng } from '@scorpion/testing';
 import { adminApi, newPerson, unique } from '../support/admin.ts';
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { makeOrg, memberOf, pageAs, uniqueAbbreviation } from '../support/members.ts';
 import { makeConsortium } from '../support/services.ts';
 
@@ -34,6 +35,7 @@ test.describe('J06: create a service with the wizard', () => {
       await expect(page.getByRole('heading', { name: 'Step 1 of 4: Basics' })).toBeVisible();
       // The intro of the step is above its fields.
       await expect(page.getByText('Give the service a short name')).toBeVisible();
+      await docShot(page, 'j06', 'wizard-basics');
     });
 
     await test.step('Enter the short name and the name', async () => {
@@ -79,6 +81,7 @@ test.describe('J06: create a service with the wizard', () => {
         .getByRole('checkbox', { name: `${consortium.name} (${consortium.abbreviation})` })
         .check();
       await page.getByRole('button', { name: 'Next' }).click();
+      await docShot(page, 'j06', 'wizard-organisation');
     });
 
     await test.step('Enter a contact point', async () => {
@@ -111,6 +114,7 @@ test.describe('J06: create a service with the wizard', () => {
       await page.getByRole('button', { name: 'Create service' }).click();
       await expect(page.getByRole('heading', { name: 'Service created' })).toBeFocused();
       await expect(page.getByText(`${name} was created.`).first()).toBeVisible();
+      await docShot(page, 'j06', 'service-created');
     });
     await test.step('Upload an icon', async () => {
       await page.getByLabel('Upload an icon').setInputFiles({
@@ -131,6 +135,7 @@ test.describe('J06: create a service with the wizard', () => {
       await expect(row).toContainText(provider.name);
       await expect(row).toContainText(consortium.abbreviation);
       await expect(row.getByRole('img', { name: `Icon of ${name}` })).toBeVisible();
+      await docShot(page, 'j06', 'catalogue-with-new-service');
     });
 
     // What the server stored is what was typed, normalised.

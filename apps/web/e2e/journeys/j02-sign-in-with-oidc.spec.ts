@@ -1,4 +1,5 @@
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { approve, providerButton, useStubProvider } from '../support/oidc.ts';
 
 // J02: sign in with your institution (OIDC). The provider is a stub on a local port; no third party is called.
@@ -30,6 +31,7 @@ test.describe('J02: sign in with your institution (OIDC)', () => {
         page.getByRole('heading', { name: 'Your account is waiting for approval' }),
       ).toBeVisible();
       expect((await page.context().cookies()).some((c) => c.name === '__Host-session')).toBe(false);
+      await docShot(page, 'j02', 'account-pending');
     });
 
     // An administrator approves the account (a call of the API, not a step of this person).
@@ -45,6 +47,7 @@ test.describe('J02: sign in with your institution (OIDC)', () => {
       await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
       await page.getByRole('button', { name: 'Account menu' }).click();
       await expect(page.locator('#account-menu').getByText('Signed in as newbie')).toBeVisible();
+      await docShot(page, 'j02', 'signed-in');
     });
   });
 });

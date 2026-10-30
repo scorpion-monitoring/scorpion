@@ -1,5 +1,6 @@
 import { makePng } from '@scorpion/testing';
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { profileOf } from '../support/profile.ts';
 
 // J03: set up your profile. Moved from profile.spec.ts with every assertion: the details and the picture. Linking a
@@ -20,6 +21,7 @@ test.describe('J03: set up your profile', () => {
     await test.step('Save the details', async () => {
       await page.getByRole('button', { name: 'Save' }).first().click();
       await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+      await docShot(page, 'j03', 'profile-details');
     });
     await test.step('Reload the page and find the details as you typed them', async () => {
       await page.reload();
@@ -50,6 +52,7 @@ test.describe('J03: set up your profile', () => {
         new RegExp(`${at('/api/internal/files/')}[0-9a-f]{64}$`),
       );
       expect(await image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+      await docShot(page, 'j03', 'profile-picture');
     });
     await test.step('Remove the picture', async () => {
       await page.getByRole('button', { name: 'Remove the picture' }).click();

@@ -1116,3 +1116,7 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **A notice to the account holder when a provider is linked,** and a list of the linked providers with a way to unlink one, are not there.
 - **The breach counter is per process,** not per server: `scorpion_password_breach_check_failures_total` reads a counter in `packages/integrations`. A kernel metrics API for modules would let each server own its counters.
 - **Verification link of 10 minutes** if the maintainer rejects the reading of ADR-0026 section 3: change `VERIFICATION_TTL_MS`, the mail text and the README.
+
+## Found while taking the documentation screenshots (R3)
+
+- **The "token is ready" alert wraps one word to a line at 1280 px.** On the profile page the alert that shows a new access token (`j04/01-token-secret`) puts its text, the secret and the buttons in one row, so the sentence "This is the only time it is shown" is a column of single words. Give the text the remaining width and let the secret and the buttons wrap below it.

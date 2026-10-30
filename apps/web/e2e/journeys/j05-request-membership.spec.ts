@@ -11,6 +11,7 @@ import {
   waitingOnCard,
 } from '../support/members.ts';
 import { admin, expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 
 // J05: request membership in a provider. Moved from organisations.spec.ts ("journey 2") with every assertion.
 test.describe('J05: request membership in a provider', () => {
@@ -52,6 +53,7 @@ test.describe('J05: request membership in a provider', () => {
       await page.getByRole('button', { name: 'Search' }).click();
       await expect(page).not.toHaveURL(/page=/);
       await expect(page.getByRole('rowheader')).toHaveCount(1);
+      await docShot(page, 'j05', 'organisation-search');
     });
 
     await test.step('Ask to become a member', async () => {
@@ -65,6 +67,7 @@ test.describe('J05: request membership in a provider', () => {
       await expect(
         page.getByRole('button', { name: `Ask to become a member of ${target.abbreviation}` }),
       ).toHaveCount(0);
+      await docShot(page, 'j05', 'membership-pending');
     });
 
     // The Admin decides in a second browser; the card of the dashboard counts down.

@@ -14,6 +14,7 @@ import {
   world,
 } from '../support/dashboard.ts';
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { pageAs } from '../support/members.ts';
 
 // J12: read the dashboard and export the numbers (CSV or XLSX). Moved from dashboard-widgets.spec.ts with every assertion: a person
@@ -74,6 +75,7 @@ test.describe('J12: read the dashboard and export the numbers', () => {
       });
       await expect(charts).toHaveCount(2);
       await expect(charts.first().locator('svg')).toBeVisible();
+      await docShot(page, 'j12', 'two-charts');
     });
     await opened.close();
     await me.dispose();
@@ -115,6 +117,7 @@ test.describe('J12: read the dashboard and export the numbers', () => {
       await expect(share).toContainText('20');
       await expect(share).toContainText('Percent');
       await expect(share).toContainText('down 50 %');
+      await docShot(page, 'j12', 'cards');
     });
     await test.step('Read a text KPI, which shows its text and no change', async () => {
       // A text KPI shows its text and no change, and has no sparkline.
@@ -180,6 +183,7 @@ test.describe('J12: read the dashboard and export the numbers', () => {
       await expect(cards.getByRole('button', { name: 'Export' })).toBeVisible();
       // The widgets that show no table of a service to take away have no menu.
       await expect(tileOf(page, 'Averages').getByRole('button', { name: 'Export' })).toHaveCount(0);
+      await docShot(page, 'j12', 'export-button');
     });
 
     // What the series says for the same window: the file must match it, month by month.

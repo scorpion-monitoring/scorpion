@@ -1,6 +1,7 @@
 import { makePng } from '@scorpion/testing';
 import { adminApi, apiAs, newPerson, unique } from '../support/admin.ts';
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import {
   alsoMemberOf,
   makeOrg,
@@ -70,6 +71,7 @@ test.describe('J07: edit a service and rename its slug', () => {
     await test.step('Open the edit form', async () => {
       await page.getByRole('button', { name: 'Edit', exact: true }).click();
       await expect(page.getByRole('heading', { name: `Edit ${name}`, level: 2 })).toBeVisible();
+      await docShot(page, 'j07', 'edit-form');
     });
 
     await test.step('See that the short name and the owner are fixed, with the reason', async () => {
@@ -142,6 +144,7 @@ test.describe('J07: edit a service and rename its slug', () => {
       await expect(page.getByRole('img', { name: `Icon of ${renamed}` })).toBeVisible();
       await expect(page.getByRole('link', { name: second.name })).toBeVisible();
       await expect(page.getByRole('link', { name: first.name })).toHaveCount(0);
+      await docShot(page, 'j07', 'service-after-edit');
     });
     const stored = await api.get<{
       name: string;

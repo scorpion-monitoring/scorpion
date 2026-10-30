@@ -1,5 +1,6 @@
 import { pageAs } from '../support/members.ts';
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { field, stored, watch, world } from '../support/submission.ts';
 
 // J09: submit a month of KPI values with the form. Moved from data-submission.spec.ts with every assertion. What the browser
@@ -40,6 +41,7 @@ test.describe('J09: submit a month of KPI values with the form', () => {
       await expect(
         page.getByRole('group', { name: 'Mandatory' }).getByLabel(/Downloads/),
       ).toBeVisible();
+      await docShot(page, 'j09', 'form-groups');
     });
 
     await test.step('Enter the values and fix the ones the page rejects', async () => {
@@ -57,6 +59,7 @@ test.describe('J09: submit a month of KPI values with the form', () => {
       await field(page, 'Session length').fill('1:30');
       await field(page, 'Session length').blur();
       await expect(page.getByText('Use the format HH-MM-SS.')).toBeVisible();
+      await docShot(page, 'j09', 'form-with-problem');
     });
     await test.step('Try to save with a value the page rejects', async () => {
       // A save with a field the page rejects sends nothing.
@@ -140,6 +143,7 @@ test.describe('J09: submit a month of KPI values with the form', () => {
       await expect(coverage.getByRole('row')).toHaveCount(13);
       await expect(coverage.getByText('Complete')).toHaveCount(1);
       await expect(coverage.getByText('Mandatory values missing')).toHaveCount(11);
+      await docShot(page, 'j09', 'history-and-coverage');
     });
     await opened.close();
     await w.api.dispose();
