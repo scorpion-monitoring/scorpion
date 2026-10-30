@@ -250,6 +250,7 @@ describe('no hard-coded vocabulary', () => {
 
   it('keeps stage terms out of the code', () => {
     for (const file of [...sourceFiles('service'), 'module.ts', 'routes.ts']) {
+      if (file === 'service/demo-seed.ts') continue; // the fictional services have stages (ADR-0046)
       const text = readFileSync(join(dir, file), 'utf8');
       expect(text, file).not.toMatch(/['"](DEV|DEMO|PROD|TERM)['"]/);
     }
