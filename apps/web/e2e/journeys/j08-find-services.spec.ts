@@ -1,5 +1,6 @@
 import { activeUser, adminApi, newPerson } from '../support/admin.ts';
 import { expect, signInThroughPage, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { choice, params, range, rows, seedCatalogue } from '../support/services.ts';
 
 // J08: find services in the catalogue. Moved from services.spec.ts ("journey 2: the catalogue") with every assertion: the
@@ -57,6 +58,7 @@ test.describe('J08: find services in the catalogue', () => {
       await expect(choice(page, new RegExp(`^${c.consortia[0].name} \\(22\\)`))).toBeVisible();
       await expect(choice(page, /^No consortium \(1\)/)).toBeVisible();
       await expect(choice(page, new RegExp(`^${c.consortia[1].name} `))).toHaveCount(0);
+      await docShot(page, 'j08', 'facet-counts');
     });
 
     await test.step('Remove the filter with its badge', async () => {

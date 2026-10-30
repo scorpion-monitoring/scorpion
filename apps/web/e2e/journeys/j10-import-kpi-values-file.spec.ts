@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import writeExcelFile from 'write-excel-file/node';
 import { expect, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { pageAs } from '../support/members.ts';
 import {
   CSV_TYPE,
@@ -52,6 +53,7 @@ test.describe('J10: import KPI values from a CSV or XLSX file', () => {
         .info()
         .annotations.push({ type: 'file: a file chosen', description: seen.calls.join(' | ') });
       console.log(`[kpi-calls] file, one file chosen: ${seen.calls.join(' | ')}`);
+      await docShot(page, 'j10', 'file-preview');
     });
     await test.step('Check that every column is matched to an indicator', async () => {
       // Every column has its target in a select, in words; nothing is left to map.

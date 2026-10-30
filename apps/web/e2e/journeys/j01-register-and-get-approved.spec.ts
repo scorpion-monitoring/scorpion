@@ -1,4 +1,5 @@
 import { admin, expect, person, signInThroughPage, test } from '../support/fixtures.ts';
+import { docShot } from '../support/doc-shot.ts';
 import { adminApi, newPerson, registerPending } from '../support/admin.ts';
 import { register } from '../support/register.ts';
 
@@ -36,6 +37,7 @@ test.describe('J01: register an account and get approved', () => {
       expect(
         (await page.context().cookies()).some((cookie) => cookie.name === '__Host-session'),
       ).toBe(false);
+      await docShot(page, 'j01', 'account-pending');
     });
 
     await test.step('Get the ordinary refusal for a wrong password', async () => {
@@ -74,6 +76,7 @@ test.describe('J01: register an account and get approved', () => {
       ).toBeVisible();
       await expect(table.getByRole('rowheader', { name: yes.username })).toBeVisible();
       await expect(table.getByRole('rowheader', { name: no.username })).toBeVisible();
+      await docShot(page, 'j01', 'pending-accounts');
     });
 
     await test.step('Approve one account', async () => {
