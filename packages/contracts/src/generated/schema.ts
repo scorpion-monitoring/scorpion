@@ -6810,6 +6810,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ui/about": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The profile, the product version and the loaded modules of this instance. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description The deployment profile this instance was built for. */
+                            profile: string;
+                            /** @description The product version, `unknown` when the build cannot say. */
+                            version: string;
+                            /** @description The modules of the profile, dependencies first. */
+                            modules: {
+                                id: string;
+                                displayName: string;
+                                /** @description The version of the module. */
+                                version: string;
+                                /** @enum {string} */
+                                kind: "core" | "optional";
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ui/dashboard": {
         parameters: {
             query?: never;

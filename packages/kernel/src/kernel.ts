@@ -7,7 +7,7 @@ import { anonymousOnly, AUTHENTICATOR_REGISTRY, type Authenticator } from './aut
 import { AUTHORIZER_REGISTRY, denyByDefault, type Authorizer } from './authz.ts';
 import { buildComposition, KERNEL_OWNER, type Composition } from './composition.ts';
 import type { Config } from './config.ts';
-import type { ModuleContext } from './context.ts';
+import type { InstanceInfo, ModuleContext } from './context.ts';
 import { closePool, createDb, createPool, type Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { childLogger, createLogger, type Logger } from './logger.ts';
@@ -51,6 +51,8 @@ export interface KernelOptions {
   sources: readonly ModuleSource[];
   config: Config;
   log?: Logger;
+  /** The Scorpion product version `ctx.instance` reports. Default `unknown`. */
+  version?: string;
   /** Module id → package name. Default: the workspace's modules. */
   modulePackages?: Readonly<Record<string, string>>;
   /** Tuning for the outbox dispatcher: attempts, backoff, polling. Defaults suit production. */
@@ -212,6 +214,20 @@ export function createKernel(options: KernelOptions): Kernel {
       module.manifest.settings ? [[module.id, module.manifest.settings] as const] : [],
     ),
   );
+  const instance: InstanceInfo = Object.freeze({
+    profile: profile.name,
+    version: options.version ?? 'unknown',
+    modules: Object.freeze(
+      profile.modules.map((module) =>
+        Object.freeze({
+          id: module.id,
+          displayName: module.manifest.displayName ?? module.id,
+          version: module.manifest.version,
+          kind: module.id.startsWith('core.') ? ('core' as const) : ('optional' as const),
+        }),
+      ),
+    ),
+  });
   const storeEntry = composition.registries.get(SETTINGS_STORE_REGISTRY)!.entries[0];
   const settingsStore = storeEntry ? (storeEntry.value as SettingsStore) : undefined;
   const allPermissions = Object.freeze(
@@ -292,6 +308,7 @@ export function createKernel(options: KernelOptions): Kernel {
       }),
       jobs: jobs.apiFor(module.id),
       audit: (entry) => auditSink(entry),
+      instance,
       config,
       deps: dependencyView(module, services),
       permissions: allPermissions,

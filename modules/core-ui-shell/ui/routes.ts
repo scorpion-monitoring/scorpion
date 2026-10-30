@@ -31,6 +31,8 @@ export const SHELL_ROUTES: RouteEntry[] = [
     public: true,
     publicReason: 'Terms, privacy policy and imprint must be readable without signing in.',
   },
+  // Any signed-in person has the permission through the role `user` (ADR-0045).
+  { path: '/about', permission: 'core.ui-shell.about.read' },
   {
     path: '/docs',
     public: true,
@@ -56,6 +58,15 @@ export const SHELL_NAV: NavEntry[] = [
     section: 'main',
     order: 900,
     public: true,
+  },
+  {
+    id: 'about',
+    label: 'nav.about',
+    path: '/about',
+    icon: 'info',
+    section: 'main',
+    order: 950,
+    permission: 'core.ui-shell.about.read',
   },
   {
     id: 'admin.roles',

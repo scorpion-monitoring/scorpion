@@ -55,6 +55,7 @@ export function createAuditModule() {
     AuditSettings
   >({
     id: 'core.audit',
+    displayName: 'Audit log',
     version: '0.1.0',
     // `audit_event`, not `core_audit_event` (ADR 0004).
     tablePrefix: 'audit_',

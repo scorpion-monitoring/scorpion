@@ -410,6 +410,7 @@ These run alongside the milestones and are not tied to a single one.
 | i18n | M5 | All UI strings go through the message catalogue from the start (English first, German second); vocabularies have labels per locale |
 | Accessibility | M5 | Every `ui-kit` component keyboard- and screen-reader-tested |
 | Security assurance | M4a | ASVS chapter assessments and tool, Scorecard, Best Practices, SECURITY.md (§8) |
+| Knowledge-base support | after M11 | The five requests of the Scorpion knowledge base (R1 to R5), so that it documents Scorpion from generated data: the About page (#136, [ADR-0045](adr/0045-about-page-and-instance-info.md)), `scorpion seed --demo` (#135), journey specs (#133), `docShot()` (#134) and `scorpion docs:export` (#132). Each is one pull request and none belongs to a milestone gate |
 
 ---
 

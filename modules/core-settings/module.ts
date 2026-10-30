@@ -82,6 +82,7 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
 
   return defineModule<SettingsInternalsBundle, 'core.authz', never, CoreSettings>({
     id: 'core.settings',
+    displayName: 'Settings',
     version: '0.1.0',
     // Short on purpose: the module's tables are `settings_setting`, not `core_settings_setting` (ADR 0004).
     tablePrefix: 'settings_',

@@ -98,6 +98,7 @@ export function createNotificationsModule(options: NotificationsModuleOptions = 
     NotificationSettings
   >({
     id: 'core.notifications',
+    displayName: 'Notifications',
     version: '0.1.0',
     // Short on purpose: the table is `notify_delivery`, not `core_notifications_delivery` (ADR 0004).
     tablePrefix: 'notify_',

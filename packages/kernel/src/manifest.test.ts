@@ -221,6 +221,20 @@ describe('validateManifest', () => {
   });
 });
 
+describe('validateManifest displayName', () => {
+  it('accepts a short name and refuses an empty or a long one', () => {
+    expect(
+      validateManifest({ ...valid, displayName: 'Service registry' }, 'test').displayName,
+    ).toBe('Service registry');
+    expect(() => validateManifest({ ...valid, displayName: '' }, 'test')).toThrow(
+      KernelStartupError,
+    );
+    expect(() => validateManifest({ ...valid, displayName: 'x'.repeat(61) }, 'test')).toThrow(
+      KernelStartupError,
+    );
+  });
+});
+
 describe('defineProfile', () => {
   it('keeps name and modules', () => {
     expect(defineProfile({ name: 'x', modules: [] })).toEqual({ name: 'x', modules: [] });

@@ -129,6 +129,7 @@ export function createKpiFrameworkModule() {
     KpiFrameworkSettings
   >({
     id: 'kpi.framework',
+    displayName: 'KPI framework',
     version: '0.1.0',
     // `kpif_indicator`, not `kpi_framework_indicator`; `kpi.ingestion` uses `kpii_` (ADR 0004, ADR-0040).
     tablePrefix: 'kpif_',

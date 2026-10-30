@@ -10,6 +10,7 @@ import {
   type DashboardService,
   type DashboardView,
 } from './service/dashboard/service.ts';
+import { PERMISSION_ABOUT_READ, type AboutService } from './service/about.ts';
 import type { NavigationService } from './service/navigation.ts';
 
 const navigationSchema = z.object({
@@ -61,6 +62,35 @@ export const navigationRoute = createRoute({
     200: {
       description: 'The links, pages, dashboard cards and themes the caller may use.',
       content: { 'application/json': { schema: navigationSchema } },
+    },
+  },
+});
+
+// ---- the About page (ADR-0045): the profile, the version and the modules; the same for everyone who may ask ----
+
+const aboutSchema = z.object({
+  profile: z.string().describe('The deployment profile this instance was built for.'),
+  version: z.string().describe('The product version, `unknown` when the build cannot say.'),
+  modules: z
+    .array(
+      z.object({
+        id: z.string(),
+        displayName: z.string(),
+        version: z.string().describe('The version of the module.'),
+        kind: z.enum(['core', 'optional']),
+      }),
+    )
+    .describe('The modules of the profile, dependencies first.'),
+});
+
+export const getAboutRoute = createRoute({
+  method: 'get',
+  path: '/ui/about',
+  permission: PERMISSION_ABOUT_READ,
+  responses: {
+    200: {
+      description: 'The profile, the product version and the loaded modules of this instance.',
+      content: { 'application/json': { schema: aboutSchema } },
     },
   },
 });
@@ -173,12 +203,18 @@ export function registerShellRoutes(
   r: RouteRegistrar,
   shell: NavigationService,
   dashboard: DashboardService,
+  about: AboutService,
 ) {
   r.internal(navigationRoute, (async (c: Context<AppEnv>) => {
     // The answer depends on who asks, so no shared cache may keep it.
     c.header('cache-control', 'no-store');
     return c.json(await shell.navigation(c.get('actor')), 200);
   }) as never);
+
+  r.internal(getAboutRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json(await about.about(c.get('actor')), 200);
+  }) satisfies RouteHandler<typeof getAboutRoute, AppEnv>);
 
   r.internal(getDashboardRoute, (async (c) => {
     c.header('cache-control', 'no-store');

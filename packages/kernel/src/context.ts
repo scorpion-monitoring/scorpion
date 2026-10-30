@@ -20,6 +20,26 @@ import type { z } from 'zod';
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ModuleServices {}
 
+/** One module of the running instance, as the About page lists it. */
+export interface InstanceModule {
+  id: string;
+  /** The manifest's `displayName`, else the id. */
+  displayName: string;
+  /** The module's own version (its manifest). */
+  version: string;
+  /** `core` for the modules whose id starts with `core.`, `optional` for the others. */
+  kind: 'core' | 'optional';
+}
+
+/** What this build is: the profile, the Scorpion version and the modules the profile loaded. Nothing secret. */
+export interface InstanceInfo {
+  readonly profile: string;
+  /** The version of the Scorpion product (the root package), `unknown` when the build cannot say. */
+  readonly version: string;
+  /** In module order (dependencies first). */
+  readonly modules: readonly InstanceModule[];
+}
+
 export interface ModuleContext<
   Required extends keyof ModuleServices = never,
   Optional extends keyof ModuleServices = never,
@@ -42,6 +62,8 @@ export interface ModuleContext<
    * without `core.audit`. Put names and ids in `payload`, never a secret or a mail body.
    */
   readonly audit: (entry: AuditEntry) => Promise<void>;
+  /** The profile, the Scorpion version and the loaded modules. Read-only and open to any module. */
+  readonly instance: InstanceInfo;
   /** The validated environment configuration. Contains no secrets other than `DATABASE_URL`. */
   readonly config: Config;
   /**

@@ -107,6 +107,8 @@ export interface ModuleManifest<Services = unknown, C = ModuleContext> {
   /** Dotted id. The package name is `@scorpion/<id with dots as dashes>`. */
   id: string;
   version: string;
+  /** A short name for people ("Service registry"), shown on the About page and in the docs export. Default: the id. */
+  displayName?: string;
   /**
    * Prefix of the module's table names. Defaults to the id with dots and dashes as underscores
    * plus `_` (`kpi.ingestion` → `kpi_ingestion_`). See ADR 0004.
@@ -151,6 +153,7 @@ const manifestSchema = z.strictObject({
     .string()
     .regex(MODULE_ID, 'must be dot-separated lower-case kebab case, e.g. "kpi.ingestion"'),
   version: z.string().regex(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/, 'must be a semantic version'),
+  displayName: z.string().min(1).max(60).optional(),
   tablePrefix: z
     .string()
     .regex(/^[a-z][a-z0-9]*(_[a-z0-9]+)*_$/, 'must be lower-case snake case ending in "_"')

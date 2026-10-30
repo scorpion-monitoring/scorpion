@@ -16,6 +16,7 @@ import {
 import { createApp } from './app.ts';
 import { corsOriginsOf } from './pipeline/cors.ts';
 import { limitsFromSettings } from './pipeline/rate-limit.ts';
+import { scorpionVersion } from './version.ts';
 import { createMetrics, type Metrics } from './metrics.ts';
 import type { ReadinessResult, SystemProbes } from './system-routes.ts';
 
@@ -55,6 +56,7 @@ function newKernel(options: RuntimeOptions, metrics?: Metrics): Kernel {
     modulePackages: options.modulePackages,
     config: options.config,
     log: options.log,
+    version: scorpionVersion(),
     onJobRun: metrics?.onJobRun,
     ...options.kernelOptions,
   });
