@@ -555,6 +555,14 @@ the default is a stub that knows no password and never calls out.
 the password is looked at, with doubling delays up to a ceiling and no lockout. Re-authentication and password change count on the account alone. The login route passes the
 client address that the pipeline resolved (`c.get('clientIp')`). The settings are `loginThrottle.*` ([Settings](#settings)); the stance and the numbers are in `docs/security/authentication.md`.
 
+## Demo data (`scorpion seed --demo`)
+
+`demoSeed` creates the two accounts every other module's seed acts as: `demo-admin` (an administrator, through `createAdmin`) and `demo-user` (an active
+account with the role `user`), both on `example.org`, and registers them as `demo.actors` (`admin`, `user`). Its password is `SCORPION_DEMO_PASSWORD`; without it a
+random one (24 characters or more) is made and printed once, when the account is created. **It refuses to run** (`DemoSeedRefused`, before it writes anything) when
+the database holds an account whose name does not start with `demo-`, because that is a real instance; `--allow-production` skips the check. A second run finds the accounts
+and adds nothing. See [ADR-0046](../../docs/adr/0046-demo-seed.md).
+
 ## Testing
 
 `pnpm test --filter @scorpion/core-identity` needs Docker (Testcontainers). Use the factories `makeUser`,

@@ -11,7 +11,13 @@ import type { InstanceInfo, ModuleContext } from './context.ts';
 import { closePool, createDb, createPool, type Db } from './db.ts';
 import { KernelStartupError } from './errors.ts';
 import { childLogger, createLogger, type Logger } from './logger.ts';
-import { SYSTEM_READY, type CommandIo, type DomainEvent } from './manifest.ts';
+import {
+  SYSTEM_READY,
+  type CommandIo,
+  type DemoSeedContext,
+  type DomainEvent,
+  type JobResult,
+} from './manifest.ts';
 import {
   createDispatcher,
   createEvents,
@@ -123,6 +129,16 @@ export interface Kernel {
    * and 5), then runs the command. No routes, no `system.ready`, no workers. Returns its exit code.
    */
   runCommand(name: string, args: readonly string[], io: CommandIo): Promise<number>;
+  /**
+   * `scorpion seed --demo` (ADR-0046): applies pending migrations, builds the services, then runs the `demoSeed` hook of
+   * every module that has one, dependencies first, with one shared `DemoSeedContext`. A hook that throws
+   * `DemoSeedRefused` stops the run with its message; the modules before it have already written (each is idempotent).
+   * Returns what each hook reported, by module id.
+   */
+  runDemoSeed(
+    options: { password?: string; allowProduction?: boolean },
+    io: Pick<CommandIo, 'out'>,
+  ): Promise<Record<string, JobResult>>;
   /** Loader step 2 alone: apply pending migrations. */
   migrate(): Promise<MigrationReport>;
   /** Modules whose migrations have not all been applied. Empty when the database is ready. */
@@ -363,6 +379,25 @@ export function createKernel(options: KernelOptions): Kernel {
     (module.manifest.commands ?? []).map((command) => ({ module, command })),
   );
 
+  async function runDemoSeed(
+    seedOptions: { password?: string; allowProduction?: boolean },
+    io: Pick<CommandIo, 'out'>,
+  ): Promise<Record<string, JobResult>> {
+    await build();
+    const demo: DemoSeedContext = {
+      actors: new Map(),
+      password: seedOptions.password,
+      allowProduction: seedOptions.allowProduction === true,
+      out: (text) => io.out(text),
+    };
+    const reported: Record<string, JobResult> = {};
+    for (const module of profile.modules) {
+      if (!module.manifest.demoSeed) continue;
+      reported[module.id] = (await module.manifest.demoSeed(contextFor(module), demo)) ?? {};
+    }
+    return reported;
+  }
+
   async function runCommand(name: string, args: readonly string[], io: CommandIo): Promise<number> {
     const found = commands.find((entry) => entry.command.name === name);
     if (!found) throw new KernelStartupError(`Unknown command "${name}":`, ['no module has it']);
@@ -418,6 +453,7 @@ export function createKernel(options: KernelOptions): Kernel {
       usage: command.usage,
     })),
     runCommand,
+    runDemoSeed,
     rateLimiter: createRateLimiter(db),
     settingsOf(moduleId) {
       if (!moduleById.has(moduleId)) {

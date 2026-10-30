@@ -54,7 +54,7 @@ pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a mod
 pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts and apps/web/src/generated/ui.ts (build time)
 pnpm openapi:generate          # write the typed client's types (packages/contracts/src/generated) and the web app's v1 document; pnpm check fails on a diff
 pnpm scorpion start | worker | migrate   # web server, jobs and events only, migrations only
-                               # (seed arrives with the modules that need it)
+pnpm scorpion seed --demo      # fictional demo data from each module's `demoSeed` (ADR-0046); never real data
 pnpm scorpion create-admin | set-secret <name> | rotate-secrets   # commands of core.identity and core.settings;
                                # profiles with core.settings need SECRETS_KEY (openssl rand -base64 32)
 pnpm modules:sync              # regenerate the module id list that defineProfile() checks against

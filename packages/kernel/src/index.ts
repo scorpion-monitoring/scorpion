@@ -16,7 +16,7 @@ export type {
   RegistryEntry,
 } from './composition.ts';
 export type { InstanceInfo, InstanceModule, ModuleContext, ModuleServices } from './context.ts';
-export { KernelStartupError } from './errors.ts';
+export { DemoSeedRefused, KernelStartupError } from './errors.ts';
 export { resolveOrder, type GraphNode } from './graph.ts';
 export {
   COMMAND_NAME,
@@ -28,6 +28,7 @@ export {
   validateManifest,
   type CommandDef,
   type CommandIo,
+  type DemoSeedContext,
   type DomainEvent,
   type EventHandler,
   type JobDef,

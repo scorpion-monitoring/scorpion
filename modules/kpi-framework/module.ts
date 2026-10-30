@@ -53,6 +53,7 @@ import {
   valueTypeEntrySchema,
   type ValueTypeEntry,
 } from './service/value-types.ts';
+import { createDemoSeed, type FrameworkDemoDeps } from './service/demo-seed.ts';
 import {
   createUsageChecks,
   VOCABULARY_REGISTRY,
@@ -117,6 +118,8 @@ export function createKpiFrameworkModule() {
   let database: Db | undefined;
   let writer: KpisWriter | undefined;
   let isProviderManager: ServicesPublic['isProviderManagerAsSystem'] | undefined;
+  // What the demo seed calls, set when the services are built.
+  let demoParts: FrameworkDemoDeps | undefined;
   const need = <T>(value: T | undefined): T => {
     if (value === undefined) throw new Error('kpi.framework: asked before start');
     return value;
@@ -228,6 +231,9 @@ export function createKpiFrameworkModule() {
       ],
     },
 
+    // `scorpion seed --demo`: example indicators, a KPI set and the set on the demo services (ADR-0046).
+    demoSeed: (ctx, demo) => createDemoSeed(() => need(demoParts))(ctx, demo),
+
     services: (ctx) => {
       usage = createUsageChecks(ctx.db);
       database = ctx.db;
@@ -244,23 +250,27 @@ export function createKpiFrameworkModule() {
       const authz = ctx.deps['core.authz'];
       const settings = ctx.deps['core.settings'];
       const valueTypes = () => all;
+      const indicators = createIndicatorsService(ctx, {
+        authz,
+        settings,
+        valueTypes,
+        usage: () => usageEntries,
+      });
+      const sets = createSetsService(ctx, { authz, settings });
+      const serviceKpis = createServiceKpisService(
+        ctx,
+        { authz, services: ctx.deps['registry.services'] },
+        writer,
+      );
+      demoParts = { indicators, sets, serviceKpis, services: ctx.deps['registry.services'] };
       const usageEntries = ctx.registry(INDICATOR_USAGE_REGISTRY) as IndicatorUsageEntry[];
       return {
-        indicators: createIndicatorsService(ctx, {
-          authz,
-          settings,
-          valueTypes,
-          usage: () => usageEntries,
-        }),
-        sets: createSetsService(ctx, { authz, settings }),
+        indicators,
+        sets,
         evaluation: createEvaluationService(ctx, { authz, settings, valueTypes }),
         v1: createV1Service(ctx, { authz, services: ctx.deps['registry.services'] }),
         rdf: createRdfService(ctx, { authz }),
-        serviceKpis: createServiceKpisService(
-          ctx,
-          { authz, services: ctx.deps['registry.services'] },
-          writer,
-        ),
+        serviceKpis,
         listValueTypes: valueTypes,
         findValueType: (id) => byId.get(id),
         kpisInPeriod: (serviceId, period) => kpisInPeriod(ctx.db, serviceId, period),

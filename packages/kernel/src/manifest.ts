@@ -1,4 +1,4 @@
-import type { AnyHandler, AppRoute } from '@scorpion/contracts';
+import type { AnyHandler, AppRoute, UserActor } from '@scorpion/contracts';
 import { z } from 'zod';
 import { KernelStartupError } from './errors.ts';
 import type { ModuleContext, ModuleServices } from './context.ts';
@@ -18,6 +18,7 @@ export const RESERVED_COMMANDS: readonly string[] = [
   'worker',
   'migrate',
   'profile:generate',
+  'seed',
   'help',
 ];
 
@@ -93,6 +94,25 @@ export interface CommandDef<C = ModuleContext> {
   run: (args: readonly string[], io: CommandIo, ctx: C) => Promise<number | void>;
 }
 
+/**
+ * What a module's demo seed receives (`scorpion seed --demo`, ADR-0046). The hooks run once each, dependencies first,
+ * so a module finds what the modules below it registered.
+ */
+export interface DemoSeedContext {
+  /**
+   * The people the seed acts as, by name. `core.identity` registers `admin` (an administrator) and `user` (a plain
+   * account) before any other hook runs; a module calls its own services as one of them, so a seed passes the same
+   * validation and permission checks as a request.
+   */
+  readonly actors: Map<string, UserActor>;
+  /** The password the operator chose for the demo accounts (`SCORPION_DEMO_PASSWORD`); `undefined`: a random one is made and shown once. */
+  readonly password: string | undefined;
+  /** The operator passed `--allow-production`: skip the check that the database holds no real accounts. */
+  readonly allowProduction: boolean;
+  /** One line for the person at the terminal. Never put a secret in it other than a password made for a demo account. */
+  out(text: string): void;
+}
+
 /** What a module's `routes(r, ctx)` receives. Every route is checked when it is registered. */
 export interface RouteRegistrar {
   /** A route under `/api/internal` for the SvelteKit UI. */
@@ -125,6 +145,13 @@ export interface ModuleManifest<Services = unknown, C = ModuleContext> {
   services?: (ctx: C) => Services | Promise<Services>;
   routes?: (r: RouteRegistrar, ctx: C) => void;
   jobs?: JobDef<C>[];
+  /**
+   * Fictional, non-personal data for `scorpion seed --demo`, written through the module's own services (ADR-0046).
+   * It must be idempotent (a second run adds nothing and does not fail), use reserved domains (`example.org`,
+   * `.invalid`) and refuse before writing anything when it cannot run (throw `DemoSeedRefused`). Returns counts
+   * (`{ created, existing }`) for the summary. Only modules that have released data have one.
+   */
+  demoSeed?: (ctx: C, demo: DemoSeedContext) => Promise<void | JobResult>;
   /** Commands of the `scorpion` CLI. They run with the module's services and no web server. */
   commands?: CommandDef<C>[];
   events?: {
@@ -182,6 +209,7 @@ const manifestSchema = z.strictObject({
       }),
     )
     .optional(),
+  demoSeed: fn.optional(),
   commands: z
     .array(
       z.strictObject({
