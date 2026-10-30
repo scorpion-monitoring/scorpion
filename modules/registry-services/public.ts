@@ -39,6 +39,9 @@ import type { ServicesService } from './service/services.ts';
 // The v1 route definitions, for their contract test (`apps/server/src/services.contract.test.ts`).
 export { getServiceSchemaOrgV1Route, getServiceV1Route, listServicesV1Route } from './routes-v1.ts';
 
+/** The slugs of the services `scorpion seed --demo` creates, for the demo seeds of the modules above (ADR-0046). */
+export { DEMO_SERVICE_SLUGS } from './service/demo-seed.ts';
+
 export type ServicesPublic = Pick<
   ServicesService,
   | 'findByIdsAsSystem'

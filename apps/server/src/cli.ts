@@ -10,6 +10,7 @@ import {
 } from '@scorpion/kernel';
 import { terminalIo } from './cli-io.ts';
 import { moduleIds, profileName, sources } from './generated/profile.ts';
+import { seedCommand, SEED_USAGE } from './seed.ts';
 import { generateProfile } from './profile-generate.ts';
 import {
   migrate,
@@ -37,6 +38,9 @@ Commands:
   start                      Run the web server (and, with WORKER_MODE=inline, the workers).
   worker                     Run jobs and the event dispatcher only, without HTTP.
   migrate                    Apply pending migrations of every module and exit.
+  ${SEED_USAGE}
+                             Fill the modules of this build with fictional demo data. Idempotent; refuses an instance with real accounts.
+                             Demo passwords: SCORPION_DEMO_PASSWORD, or a random one is shown once.
   profile:generate <name> [--check] [--profile-file <path>] [--modules-root <dir>]...
                              Write apps/server/src/generated/profile.ts for a profile (build time).
 
@@ -142,6 +146,15 @@ async function main(argv: string[]): Promise<number> {
           : applied.map(([module, count]) => `${module}: ${count} migration(s) applied`).join('\n'),
       );
       return 0;
+    }
+    case 'seed': {
+      const options = runtimeOptions();
+      const io = terminalIo({
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+      });
+      return seedCommand({ options, args, io });
     }
     default: {
       // A command a module of this build contributes, if there is one by that name.

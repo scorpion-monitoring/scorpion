@@ -99,6 +99,12 @@ extra (it is dropped on write and ignored on read), the set's rows are never rem
 and the order is stable: set rows first, then extras, each by name without case, then name, then id, whatever the order of the input.
 Property tests over generated data prove it ([service/merge.test.ts](service/merge.test.ts)).
 
+## Demo data (`scorpion seed --demo`)
+
+`demoSeed` creates five example indicators (`demo-active-users`, `demo-requests`, `demo-publications`, `demo-uptime`, `demo-satisfaction`), the KPI set `demo-core-kpis`
+with their necessities, and sets that KPI set on each demo service, through `indicators.create`, `sets.create`, `sets.setIndicators` and `serviceKpis.set` as the demo
+administrator. It finds what exists by slug, so a second run adds nothing ([ADR-0046](../../docs/adr/0046-demo-seed.md)).
+
 ## Value types (registry `kpi.valueType`)
 
 An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, schema(config) }`, validated by the loader

@@ -335,6 +335,12 @@ schema and fails on a field that could carry a value (`service/event.test.ts`). 
 - **`authz.resourcePolicy`** for the resource type `service`: the policy above.
 - **`notify.template`** (registry of `core.notifications`): `kpi.reporting-reminder`, which came from `core.notifications`.
 
+## Demo data (`scorpion seed --demo`)
+
+`demoSeed` records six months (2026-01 to 2026-06) of values for every indicator of each demo service's KPI set, through `upsertBatch` with the source `demo-seed`. The values come from
+a fixed formula (`demoValue`), so every instance shows the same numbers, and a second run changes nothing because a measurement is keyed by service, indicator and month
+([ADR-0046](../../docs/adr/0046-demo-seed.md)).
+
 ## Tests
 
 Pure functions are table-driven. `upsertBatch` runs against real Postgres with a denied case per caller class (`service/access.test.ts`, tagged

@@ -220,6 +220,8 @@ describe('no hard-coded vocabulary', () => {
     'service/field-rules.ts',
     'config/fields.ts',
     'config/steps.ts',
+    // The demo seed names the demo providers' types and the stages of its fictional services (ADR-0046).
+    'service/demo-seed.ts',
   ]);
 
   it('keeps the words provider and consortium out of messages and logic outside the seeds and the config', () => {

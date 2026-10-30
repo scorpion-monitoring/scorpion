@@ -439,6 +439,12 @@ checks the payloads). `core.audit` lists this module as an optional peer and hol
 hours through the port in `service/licences.ts`, and falls back to the copy that ships with the code. `NODE_ENV=test` uses the stub.
 An unknown licence id is 422; a deprecated one is accepted and marked. See the package's README.
 
+## Demo data (`scorpion seed --demo`)
+
+`demoSeed` creates four fictional services (SeqFlow, DataVault, MetaCat, CloudLab) of the demo organisations with `create`, and makes the first two public with
+`setPublication`, as the demo administrator. A service that already exists (by slug) is left alone. `public.ts` exports `DEMO_SERVICE_SLUGS` for the seeds of the
+modules above ([ADR-0046](../../docs/adr/0046-demo-seed.md)).
+
 ## Tests
 
 `pnpm test --filter @scorpion/registry-services` (Docker needed): the registries and the fixture module

@@ -94,13 +94,14 @@ what is wrong, and secrets never appear in logs.
 | `SECRETS_KEY_NEXT` | none                                | Only while rotating the key with `scorpion rotate-secrets` ([core.settings](modules/core-settings/README.md#rotating-the-key))                                                                           |
 | `TRUSTED_PROXIES`  | none                                | Comma-separated IPs or CIDR ranges of the reverse proxies in front of the server. Only their `X-Forwarded-For` is believed, for the rate limit; with none set the socket address is used                 |
 
-| Command                     | What it does                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| `scorpion start`            | Migrates, then serves (and runs workers when `WORKER_MODE=inline`)                          |
-| `scorpion worker`           | Migrates, then runs jobs and the event dispatcher only, without HTTP                        |
-| `scorpion migrate`          | Applies pending migrations of every module and exits                                        |
-| `scorpion profile:generate` | Build time: composes the server for a profile                                               |
-| `scorpion <command>`        | A command a module of the build contributes: `create-admin`, `set-secret`, `rotate-secrets` |
+| Command                     | What it does                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scorpion start`            | Migrates, then serves (and runs workers when `WORKER_MODE=inline`)                                                                                |
+| `scorpion worker`           | Migrates, then runs jobs and the event dispatcher only, without HTTP                                                                              |
+| `scorpion migrate`          | Applies pending migrations of every module and exits                                                                                              |
+| `scorpion profile:generate` | Build time: composes the server for a profile                                                                                                     |
+| `scorpion seed --demo`      | Fictional demo data for the modules of the build (idempotent; refuses an instance with real accounts; see [ADR-0046](docs/adr/0046-demo-seed.md)) |
+| `scorpion <command>`        | A command a module of the build contributes: `create-admin`, `set-secret`, `rotate-secrets`                                                       |
 
 `GET /healthz` says the process is alive and never touches the database. `GET /readyz` answers 503
 until the database answers and every migration is applied, and again while shutting down.

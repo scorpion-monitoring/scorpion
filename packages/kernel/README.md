@@ -500,6 +500,13 @@ commands: [
   history keep it. Never print one either; a command that has to is the exception to explain in its README.
 - A command is an entry point like a route: it calls the module's service and holds no logic of its own.
 
+### Demo data: `demoSeed`
+
+A manifest may have `demoSeed(ctx, demo)`: fictional, non-personal data written through the module's own services for `scorpion seed --demo`
+([ADR-0046](../../docs/adr/0046-demo-seed.md)). `kernel.runDemoSeed(options, io)` migrates, builds the services and runs the hooks once each, dependencies first, with one
+`DemoSeedContext`: `actors` (a `Map` of named `UserActor`s; `core.identity` registers `admin` and `user` first), `password`, `allowProduction` and `out`. A hook is idempotent, uses
+reserved domains, returns counts and throws `DemoSeedRefused` when it must not run. `seed` is a reserved command name; the command itself lives in `apps/server/src/seed.ts`.
+
 ## Routes
 
 Define a route with `createRoute()` from `@scorpion/contracts`; it wraps `@hono/zod-openapi`, so the
