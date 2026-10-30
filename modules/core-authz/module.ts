@@ -38,6 +38,7 @@ export function createAuthzModule(options: AuthzModuleOptions = {}) {
 
   return defineModule<AuthzInternals & AuthzService>({
     id: 'core.authz',
+    displayName: 'Authorisation',
     version: '0.1.0',
     // Short on purpose: the module's tables are `authz_role`, not `core_authz_role` (ADR 0004).
     tablePrefix: 'authz_',

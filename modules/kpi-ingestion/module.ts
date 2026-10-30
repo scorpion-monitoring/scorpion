@@ -121,6 +121,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     | 'registry.services'
   >({
     id: 'kpi.ingestion',
+    displayName: 'KPI data submission',
     version: '0.1.0',
     // `kpii_measurement`, not `kpi_ingestion_measurement` (ADR 0004, ADR-0040; `kpi.framework` has `kpif_`).
     tablePrefix: 'kpii_',

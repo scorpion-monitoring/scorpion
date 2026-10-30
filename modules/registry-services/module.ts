@@ -139,6 +139,7 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
     ServicesSettings
   >({
     id: 'registry.services',
+    displayName: 'Services',
     version: '0.1.0',
     // `svc_service`, not `registry_services_service` (ADR 0004, ADR-0035).
     tablePrefix: 'svc_',

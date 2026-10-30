@@ -90,6 +90,7 @@ export function createOrganisationsModule() {
     OrganisationsSettings
   >({
     id: 'registry.organisations',
+    displayName: 'Organisations',
     version: '0.1.0',
     // `org_organisation`, not `registry_organisations_organisation` (ADR 0004, ADR-0033).
     tablePrefix: 'org_',

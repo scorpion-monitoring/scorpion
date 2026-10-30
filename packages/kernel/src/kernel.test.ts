@@ -261,6 +261,30 @@ describe('ctx.settings', () => {
     expect([...seen!.keys()]).toEqual(['reader']);
   });
 
+  it('tells modules the profile, the version and the loaded modules, with display names and kinds', async () => {
+    let seen: unknown;
+    const named = defineModule({
+      id: 'core.named',
+      displayName: 'Named module',
+      version: '2.3.4',
+      services: (ctx) => {
+        seen = ctx.instance;
+        return {};
+      },
+    });
+    const plain = defineModule({ id: 'plain', version: '1.0.0' });
+    await (await inlineKernel([named, plain])).start();
+    expect(seen).toEqual({
+      profile: 'inline',
+      version: 'unknown',
+      modules: [
+        { id: 'core.named', displayName: 'Named module', version: '2.3.4', kind: 'core' },
+        { id: 'plain', displayName: 'plain', version: '1.0.0', kind: 'optional' },
+      ],
+    });
+    expect(Object.isFrozen(seen)).toBe(true);
+  });
+
   it('refuses two stores', async () => {
     const second = defineModule({
       id: 'store2',

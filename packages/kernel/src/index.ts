@@ -15,7 +15,7 @@ export type {
   RegisteredRegistry,
   RegistryEntry,
 } from './composition.ts';
-export type { ModuleContext, ModuleServices } from './context.ts';
+export type { InstanceInfo, InstanceModule, ModuleContext, ModuleServices } from './context.ts';
 export { KernelStartupError } from './errors.ts';
 export { resolveOrder, type GraphNode } from './graph.ts';
 export {

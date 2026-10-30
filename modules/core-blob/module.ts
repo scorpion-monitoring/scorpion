@@ -27,6 +27,7 @@ export function createBlobModule() {
 
   return defineModule<BlobInternalsBundle, 'core.authz' | 'core.settings', never, BlobSettings>({
     id: 'core.blob',
+    displayName: 'Blob store',
     version: '0.1.0',
     // Short on purpose: the module's tables are `blob_blob`, not `core_blob_blob` (ADR 0004).
     tablePrefix: 'blob_',

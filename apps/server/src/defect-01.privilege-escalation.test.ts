@@ -525,6 +525,8 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'DELETE', path: '/preferences/nobody.registered.this' }),
   },
+  // The About page: the same for every signed-in person, no id in the route, the plain permission is held by every User.
+  'GET /ui/about': { kind: 'self', sample: () => ({ method: 'GET', path: '/ui/about' }) },
   // M11 sprint 1: the caller's own dashboard. Neither route names a user; the plain permissions are held by every User.
   'GET /ui/dashboard': { kind: 'self', sample: () => ({ method: 'GET', path: '/ui/dashboard' }) },
   'PUT /ui/dashboard': {

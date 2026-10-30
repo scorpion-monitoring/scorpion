@@ -56,6 +56,7 @@ export function createKpiAnalyticsModule(options: KpiAnalyticsOptions = {}) {
     AnalyticsSettings
   >({
     id: 'kpi.analytics',
+    displayName: 'KPI analytics',
     version: '0.1.0',
     // No table (ADR-0043): the dashboard is a preference of core.settings and everything else is read from other modules.
 

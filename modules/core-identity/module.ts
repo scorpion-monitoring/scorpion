@@ -174,6 +174,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     IdentitySettingsValues
   >({
     id: 'core.identity',
+    displayName: 'Identity',
     version: '0.1.0',
     // Short on purpose: the module's tables are `identity_user`, not `core_identity_user` (ADR 0004).
     tablePrefix: 'identity_',

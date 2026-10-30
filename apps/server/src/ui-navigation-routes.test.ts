@@ -94,6 +94,8 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     expect(body.routes).toEqual(
       sorted(
         ...PUBLIC_PAGES,
+        // The About page (core.ui-shell, ADR-0045): every signed-in person holds its permission.
+        '/about',
         '/fixture/open',
         '/profile',
         '/inbox',
@@ -135,6 +137,7 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
     expect(body.routes).toEqual(
       sorted(
         ...PUBLIC_PAGES,
+        '/about',
         '/fixture/admin',
         '/fixture/admin/:id',
         '/fixture/open',
@@ -174,6 +177,7 @@ describe.each(['/', '/a/b/c'])('GET /ui/navigation under BASE_PATH %s', (basePat
       'home',
       'services',
       'docs',
+      'about',
       'account.profile',
       'account.inbox',
       'account.organisations',

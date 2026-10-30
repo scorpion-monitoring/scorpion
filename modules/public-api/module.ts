@@ -14,6 +14,7 @@ export type PublicApiDependencies = [SettingsService];
 
 export default defineModule<undefined, 'core.settings', never, PublicApiSettings>({
   id: MODULE_ID,
+  displayName: 'Public API',
   version: '0.1.0',
   settings: settingsSchema,
   routes: registerRoutes,

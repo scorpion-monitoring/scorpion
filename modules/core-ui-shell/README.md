@@ -14,21 +14,30 @@ modules are theirs (the sign-in, registration, recovery and profile pages and th
 | id             | `core.ui-shell`                                                                                                                                                                                                                                                                              |
 | table prefix   | none: the module has no table                                                                                                                                                                                                                                                                |
 | dependencies   | `core.authz` (to decide what a caller may see), `core.settings` (the branding every page shows, and the preference that holds the dashboard). The package also lists `@scorpion/ui-kit` as a development dependency, for its pages, and `fast-check` for the tests of the dashboard document |
-| routes         | internal API: `GET /ui/navigation` (public), `GET /ui/dashboard` and `PUT /ui/dashboard` ([the dashboard](#the-dashboard))                                                                                                                                                                   |
+| routes         | internal API: `GET /ui/navigation` (public), `GET /ui/about` ([the About page](#the-about-page)), `GET /ui/dashboard` and `PUT /ui/dashboard` ([the dashboard](#the-dashboard))                                                                                                              |
 | jobs, CLI      | none                                                                                                                                                                                                                                                                                         |
 | events         | emits and subscribes to none (a save emits `settings.preference.changed@1`, which `core.settings` owns)                                                                                                                                                                                      |
 | registries     | declares `ui.routes`, `ui.nav`, `ui.widget` and `ui.theme`; contributes its own pages, two links and the two themes, the user preference `core.ui-shell.dashboard` (`settings.userPreference`) and the two dashboard permissions to the role `user` (`authz.defaultRole`)                    |
 | ui             | package export `./ui`: the browser half of its pages (`ui/index.ts`), imported by the web app only                                                                                                                                                                                           |
-| public service | `ctx.deps['core.ui-shell']`: `navigation(actor)` and `dashboard.get(actor)`, `dashboard.save(actor, items)`. No other module calls it; the entry types are in `public.ts`                                                                                                                    |
+| public service | `ctx.deps['core.ui-shell']`: `navigation(actor)`, `about(actor)` and `dashboard.get(actor)`, `dashboard.save(actor, items)`. No other module calls it; the entry types are in `public.ts`                                                                                                    |
 
-| Permission                      | Allows                                                    | Held by     |
-| ------------------------------- | --------------------------------------------------------- | ----------- |
-| `core.ui-shell.dashboard.read`  | Read your own dashboard (`GET /ui/dashboard`)             | User, Admin |
-| `core.ui-shell.dashboard.write` | Arrange and save your own dashboard (`PUT /ui/dashboard`) | User, Admin |
+| Permission                      | Allows                                                                                 | Held by     |
+| ------------------------------- | -------------------------------------------------------------------------------------- | ----------- |
+| `core.ui-shell.about.read`      | See the profile, version and modules of this instance (`GET /ui/about`, page `/about`) | User, Admin |
+| `core.ui-shell.dashboard.read`  | Read your own dashboard (`GET /ui/dashboard`)                                          | User, Admin |
+| `core.ui-shell.dashboard.write` | Arrange and save your own dashboard (`PUT /ui/dashboard`)                              | User, Admin |
 
 Both are plain (no resource): the owner is always the caller, and the route and the service check them. A save stores through the preference service as the
 caller, so it also needs `core.settings.preference.write`. `GET /ui/navigation` needs none and stays public. A profile that lists the module gets the web
 app in its image; a profile without it runs the API alone.
+
+## The About page
+
+`/about` (link "About", main section) tells a signed-in person which **profile** the instance was built for, the **Scorpion version** and the **modules** it
+runs, in two tables (core and optional) with each module's display name, id and version. It is the answer to "Which modules does my instance have?". The data is `ctx.instance`
+of the kernel (the profile, the product version read from the root `package.json`, and each manifest's `id`, `displayName` and `version`); the response has exactly
+`profile`, `version` and `modules`, and nothing about settings, the environment or dependencies. A visitor who is not signed in gets 401 from the route
+and the sign-in page from the shell. Who may see it and why: [ADR-0045](../../docs/adr/0045-about-page-and-instance-info.md).
 
 ## How a module adds a page
 
