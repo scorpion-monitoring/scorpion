@@ -19,7 +19,7 @@
     "@dnd-kit/dom": "0.5.1",
     "@dnd-kit/svelte": "0.5.1",
     "@scorpion/contracts": "workspace:*",
-    "@snapgridjs/svelte": "0.12.0",
+    "@snapgridjs/svelte": "0.13.0",
     "echarts": "^6.1.0"
   },
   "peerDependencies": {
