@@ -268,6 +268,7 @@ logo hash; the membership reads answer from ids and name nobody. M7's `service.m
 | `findByAbbreviationAsSystem(type, abbreviation)`   | one record or `undefined`; case-insensitive, within the type                                                    |
 | `existsAsSystem(id)`                               | `boolean`                                                                                                       |
 | `listTypesAsSystem()`                              | the registered types, labels in English                                                                         |
+| `listConsortiaAsSystem()`                          | `{ id, name, abbreviation }` of the organisations of type `consortium`, by name without case then id, at most 500 (M12, for `kpi.impact`) |
 | `toSchemaOrgAsSystem(id, { includeContact? })`     | the profile or `undefined`; `includeContact` defaults to `false`                                                |
 | `isApprovedMemberAsSystem(userId, organisationId)` | `boolean`: an approved membership (a manager is a member)                                                       |
 | `listApprovedOrganisationIdsAsSystem(userId)`      | the ids of the organisations the person is an approved member of                                                |

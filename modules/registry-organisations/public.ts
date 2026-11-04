@@ -56,6 +56,7 @@ export type OrganisationsPublic = Pick<
   | 'findByAbbreviationAsSystem'
   | 'existsAsSystem'
   | 'listTypesAsSystem'
+  | 'listConsortiaAsSystem'
   | 'toSchemaOrgAsSystem'
 > &
   Pick<

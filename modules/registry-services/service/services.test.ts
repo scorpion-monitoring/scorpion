@@ -586,6 +586,83 @@ describe('the trusted reads', () => {
     expect(await services.listByOrganisationAsSystem('x')).toEqual([]);
   });
 
+  it('list the impact rows of a consortium: once each, published or not, by name, and none for a service with no link', async () => {
+    const { services, pool, provider, consortium } = await setup();
+    const other = await makeOrganisation(pool, { type: 'consortium' });
+    const both = await makeService(pool, {
+      name: uniq('Bravo'),
+      stage: 'PROD',
+      license: 'MIT',
+      public: true,
+      provider: provider.id,
+      consortia: [consortium.id, other.id],
+    });
+    const hidden = await makeService(pool, {
+      name: uniq('alpha'),
+      stage: 'DEV',
+      consortia: [consortium.id],
+    });
+    const none = await makeService(pool, { provider: provider.id });
+    const rows = await services.listImpactRowsAsSystem(consortium.id);
+    expect(rows.map((r) => r.id)).toEqual([hidden.id, both.id]);
+    expect(rows[0]).toEqual({
+      id: hidden.id,
+      name: hidden.name,
+      slug: hidden.slug,
+      stage: 'DEV',
+      license: null,
+      published: false,
+    });
+    expect(rows[1]).toMatchObject({ license: 'MIT', published: true, stage: 'PROD' });
+    expect(Object.keys(rows[0]!).sort()).toEqual(
+      ['id', 'license', 'name', 'published', 'slug', 'stage'].sort(),
+    );
+    // The same service is counted once in each of its two consortia.
+    expect((await services.listImpactRowsAsSystem(other.id)).map((r) => r.id)).toEqual([both.id]);
+    // A provider link is no consortium link, a service with none is in no consortium, a bad id is empty.
+    expect(await services.listImpactRowsAsSystem(provider.id)).toEqual([]);
+    expect((await services.listImpactRowsAsSystem(consortium.id)).map((r) => r.id)).not.toContain(
+      none.id,
+    );
+    expect(await services.listImpactRowsAsSystem('x')).toEqual([]);
+    expect(await services.listImpactRowsAsSystem('0198f9c0-1234-7abc-8def-0123456789ab')).toEqual(
+      [],
+    );
+  });
+
+  it('refuse a consortium of more than 2,000 services with a 422 naming consortium, and serve exactly 2,000', async () => {
+    const { services, pool, consortium } = await setup();
+    const make = async (count: number) => {
+      for (let done = 0; done < count; done += 50)
+        await Promise.all(
+          Array.from({ length: Math.min(50, count - done) }, () =>
+            makeService(pool, { consortia: [consortium.id] }),
+          ),
+        );
+    };
+    await make(2000);
+    expect(await services.listImpactRowsAsSystem(consortium.id)).toHaveLength(2000);
+    await make(1);
+    const error = await rejection(services.listImpactRowsAsSystem(consortium.id));
+    expect(error).toBeInstanceOf(Invalid);
+    expect(error.errors?.map((e) => e.path)).toEqual(['consortium']);
+  }, 120_000);
+
+  it('answer the SPDX facts of licence ids from the list: any case, a deprecated id flagged, an unknown id missing', async () => {
+    const { services } = await setup();
+    const found = await services.findLicencesAsSystem([
+      'mit',
+      'MIT',
+      'GPL-2.0',
+      'Proprietary-Nope',
+      '',
+    ]);
+    expect(Object.keys(found).sort()).toEqual(['gpl-2.0', 'mit']);
+    expect(found.mit).toEqual({ id: 'MIT', osiApproved: true, deprecated: false });
+    expect(found['gpl-2.0']).toMatchObject({ osiApproved: true, deprecated: true });
+    expect(await services.findLicencesAsSystem([])).toEqual({});
+  });
+
   it('list the providers of services, once each, and never a consortium', async () => {
     const { services, pool, provider, consortium } = await setup();
     const other = await makeOrganisation(pool, { type: 'provider' });

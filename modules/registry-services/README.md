@@ -117,6 +117,11 @@ never the contact point or the audit columns. `isProviderManagerAsSystem` and `i
 (for a module's scoped permission), and `listForPickerAsSystem({ q?, memberOf?, limit })` (M10 sprint 4) lists `{ id, slug, name }` of the services of a search by name or
 abbreviation, or, with `memberOf`, of the providers that user is an approved member of: a module's picker uses it and then asks its **own** scoped permission for each row it keeps.
 
+Two more for `kpi.impact` (M12 sprint 1): `listImpactRowsAsSystem(consortiumId)` returns `{ id, name, slug, stage, license, published }` of **every** service linked to the consortium
+with the role `consortium`, published or not (the caller filters on `published`), once each, by name without case then id; at most **2,000** (`MAX_IMPACT_ROWS`): a larger consortium is
+an `Invalid` naming `consortium` (422 at the caller), never a silent cut; an id that is no UUID gives `[]`. `findLicencesAsSystem(ids)` answers `{ id, osiApproved, deprecated }` per
+SPDX id (any case; key lower-cased; an unknown id is missing) from the same cached list and bundled fallback as the licence field.
+
 ## The Schema.org profile and the public reads (sprint 3)
 
 `service/schema-org.ts` is **pure**: `toSchemaOrg(service, { origin, basePath, organisations, contributors, fields })` builds a Schema.org

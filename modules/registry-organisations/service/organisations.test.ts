@@ -484,6 +484,22 @@ describe('listTypes', () => {
   });
 });
 
+describe('listConsortiaAsSystem', () => {
+  it('lists only the consortia, by name without case then id, with the three fields and nothing else', async () => {
+    const { organisations, pool } = await setup();
+    const tag = Math.random().toString(36).slice(2, 8);
+    const b = await makeOrganisation(pool, { type: 'consortium', name: `bravo ${tag}` });
+    const a = await makeOrganisation(pool, { type: 'consortium', name: `Alpha ${tag}` });
+    const provider = await makeOrganisation(pool, { type: 'provider', name: `Aaa ${tag}` });
+    const listed = await organisations.listConsortiaAsSystem();
+    const mine = listed.filter((row) => row.name.endsWith(tag));
+    expect(mine.map((row) => row.id)).toEqual([a.id, b.id]);
+    expect(listed.map((row) => row.id)).not.toContain(provider.id);
+    expect(Object.keys(mine[0]!).sort()).toEqual(['abbreviation', 'id', 'name']);
+    expect(mine[0]).toEqual({ id: a.id, name: a.name, abbreviation: a.abbreviation });
+  });
+});
+
 describe('the table', () => {
   it('refuses at the database what the service refuses, so a second entry point cannot bypass it', async () => {
     const { pool } = await setup();

@@ -362,6 +362,34 @@ export interface ServicesService {
     memberOf?: string | undefined;
     limit: number;
   }) => Promise<{ id: string; slug: string; name: string }[]>;
+  /**
+   * The minimal rows `kpi.impact` counts (M12 sprint 1): `{ id, name, slug, stage, license, published }` of **every** service linked to the
+   * consortium with the role `consortium`, published or not (the caller filters on `published`), once each however many consortia it has,
+   * by name without case then id. At most {@link MAX_IMPACT_ROWS}: a larger consortium is an `Invalid` (422) naming `consortium`, never a
+   * silent cut. An id that is no UUID or names no consortium gives an empty list. It names no person, no contact point and no audit column.
+   */
+  listImpactRowsAsSystem: (consortiumId: string) => Promise<ImpactRow[]>;
+  /**
+   * The SPDX facts of licence ids (any case), for a caller that counts open source: the key is the id as asked, lower-cased; a licence
+   * the list does not know is missing from the answer. It answers from the cached list with the bundled fallback (the adapter of this
+   * module); the live fetch is the adapter's own business, at most once a day.
+   */
+  findLicencesAsSystem: (
+    ids: readonly string[],
+  ) => Promise<Record<string, { id: string; osiApproved: boolean; deprecated: boolean }>>;
+}
+
+/** The most services {@link ServicesService.listImpactRowsAsSystem} returns. */
+export const MAX_IMPACT_ROWS = 2000;
+
+/** One row of {@link ServicesService.listImpactRowsAsSystem}. */
+export interface ImpactRow {
+  id: string;
+  name: string;
+  slug: string;
+  stage: string;
+  license: string | null;
+  published: boolean;
 }
 
 const CONSTRAINT_ERRORS = new Set(['svc_service_slug_idx', 'svc_slug_history_slug_idx']);
@@ -1572,6 +1600,53 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         )
         .orderBy(asc(service.id));
       return records(rows.map((r) => r.row));
+    },
+
+    async listImpactRowsAsSystem(consortiumId) {
+      if (!z.uuid().safeParse(consortiumId).success) return [];
+      const rows = await db
+        .select({
+          id: service.id,
+          name: service.name,
+          slug: service.slug,
+          stage: service.stage,
+          license: service.license,
+          published: service.public,
+        })
+        .from(service)
+        .innerJoin(serviceOrganisation, eq(serviceOrganisation.serviceId, service.id))
+        // The unique key (service, organisation, role) makes a service appear once.
+        .where(
+          and(
+            eq(serviceOrganisation.organisationId, consortiumId),
+            eq(serviceOrganisation.role, BRAND_ROLE),
+          ),
+        )
+        .orderBy(asc(sql`lower(${service.name})`), asc(service.id))
+        .limit(MAX_IMPACT_ROWS + 1);
+      if (rows.length > MAX_IMPACT_ROWS)
+        throw new Invalid('The request is not valid.', [
+          {
+            in: 'query',
+            path: 'consortium',
+            message: `The consortium has more than ${MAX_IMPACT_ROWS} services.`,
+          },
+        ]);
+      return rows;
+    },
+
+    async findLicencesAsSystem(wanted) {
+      const out: Record<string, { id: string; osiApproved: boolean; deprecated: boolean }> = {};
+      for (const id of new Set(wanted.map((w) => w.trim().toLowerCase()))) {
+        const licence = id ? await deps.spdx.find(id) : undefined;
+        if (licence)
+          out[id] = {
+            id: licence.id,
+            osiApproved: licence.osiApproved,
+            deprecated: licence.deprecated,
+          };
+      }
+      return out;
     },
 
     async isProviderManagerAsSystem(userId, serviceId) {
