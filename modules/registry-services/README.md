@@ -119,7 +119,7 @@ abbreviation, or, with `memberOf`, of the providers that user is an approved mem
 
 Two more for `kpi.impact` (M12 sprint 1): `listImpactRowsAsSystem(consortiumId)` returns `{ id, name, slug, stage, license, published }` of **every** service linked to the consortium
 with the role `consortium`, published or not (the caller filters on `published`), once each, by name without case then id; at most **2,000** (`MAX_IMPACT_ROWS`): a larger consortium is
-an `Invalid` naming `consortium` (422 at the caller), never a silent cut; an id that is no UUID gives `[]`. `findLicencesAsSystem(ids)` answers `{ id, osiApproved, deprecated }` per
+an `Invalid` naming `organisation` (the caller answers 422 naming its own parameter), never a silent cut; an id that is no UUID gives `[]`. `findLicencesAsSystem(ids)` answers `{ id, osiApproved, deprecated }` per
 SPDX id (any case; key lower-cased; an unknown id is missing) from the same cached list and bundled fallback as the licence field.
 
 ## The Schema.org profile and the public reads (sprint 3)

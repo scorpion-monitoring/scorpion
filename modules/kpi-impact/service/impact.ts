@@ -57,7 +57,13 @@ export function createImpactService(deps: ImpactDeps): ImpactService {
       const [found] = await deps.organisations.findByIdsAsSystem([consortium]);
       if (found?.type !== CONSORTIUM_TYPE) throw notAConsortium;
 
-      const rows = await deps.services.listImpactRowsAsSystem(consortium);
+      // The read names its own parameter; this caller's is `consortium`.
+      const rows = await deps.services
+        .listImpactRowsAsSystem(consortium)
+        .catch((error: unknown) => {
+          if (error instanceof Invalid) throw new Invalid(error.message, notAConsortium.errors);
+          throw error;
+        });
       const terms = await deps.settings.listTerms(STAGE_VOCABULARY, {
         includeInactive: true,
         locale,

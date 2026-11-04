@@ -365,8 +365,8 @@ export interface ServicesService {
   /**
    * The minimal rows `kpi.impact` counts (M12 sprint 1): `{ id, name, slug, stage, license, published }` of **every** service linked to the
    * consortium with the role `consortium`, published or not (the caller filters on `published`), once each however many consortia it has,
-   * by name without case then id. At most {@link MAX_IMPACT_ROWS}: a larger consortium is an `Invalid` (422) naming `consortium`, never a
-   * silent cut. An id that is no UUID or names no consortium gives an empty list. It names no person, no contact point and no audit column.
+   * by name without case then id. At most {@link MAX_IMPACT_ROWS}: a larger consortium is an `Invalid` (422) naming `organisation` (the caller
+   * names its own parameter), never a silent cut. An id that is no UUID or names no consortium gives an empty list. It names no person, no contact point and no audit column.
    */
   listImpactRowsAsSystem: (consortiumId: string) => Promise<ImpactRow[]>;
   /**
@@ -1628,8 +1628,8 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         throw new Invalid('The request is not valid.', [
           {
             in: 'query',
-            path: 'consortium',
-            message: `The consortium has more than ${MAX_IMPACT_ROWS} services.`,
+            path: 'organisation',
+            message: `The organisation links more than ${MAX_IMPACT_ROWS} services.`,
           },
         ]);
       return rows;

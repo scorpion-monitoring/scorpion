@@ -630,7 +630,7 @@ describe('the trusted reads', () => {
     );
   });
 
-  it('refuse a consortium of more than 2,000 services with a 422 naming consortium, and serve exactly 2,000', async () => {
+  it('refuse a consortium of more than 2,000 services with a 422 naming organisation, and serve exactly 2,000', async () => {
     const { services, pool, consortium } = await setup();
     const make = async (count: number) => {
       for (let done = 0; done < count; done += 50)
@@ -645,7 +645,7 @@ describe('the trusted reads', () => {
     await make(1);
     const error = await rejection(services.listImpactRowsAsSystem(consortium.id));
     expect(error).toBeInstanceOf(Invalid);
-    expect(error.errors?.map((e) => e.path)).toEqual(['consortium']);
+    expect(error.errors?.map((e) => e.path)).toEqual(['organisation']);
   }, 120_000);
 
   it('answer the SPDX facts of licence ids from the list: any case, a deprecated id flagged, an unknown id missing', async () => {
