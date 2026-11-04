@@ -14188,6 +14188,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/kpi/impact/consortia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The consortia the impact picker offers
+         * @description The organisations of the type `consortium`, by name without case then id, at most 500, as one page of the list envelope. `Cache-Control: no-store`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The consortia. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                name: string;
+                                abbreviation: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/impact/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The impact tiles of a consortium
+         * @description Counted live on every request: the services of the consortium (once each, however many consortia they have), how many are open source and the number per stage of the vocabulary. By default only published services are counted; `includeUnpublished=true` counts every linked service. A consortium that is not an id, names no organisation or names one that is not a consortium is 422 naming `consortium`. `Cache-Control: no-store`. The answer names no person and no contact point.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the consortium. */
+                    consortium: string;
+                    /** @description Count the unpublished services too. Default `false`. */
+                    includeUnpublished?: "true" | "false";
+                    /** @description The language of the stage labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The tiles. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description The services counted: the published ones, or all with `includeUnpublished`. */
+                            total: number;
+                            /** @description An OSI-approved licence that is not deprecated. */
+                            openSource: number;
+                            /** @description A deprecated SPDX id: not open source. */
+                            licenceDeprecated: number;
+                            /** @description No licence, or an id the SPDX list does not know: not open source. */
+                            licenceUnknown: number;
+                            /** @description A current licence that is not OSI-approved. `total` is the sum of these four counts. */
+                            otherLicence: number;
+                            /** @description One line per term of the vocabulary `stage`, deactivated terms included, in the vocabulary’s order; zero counts are listed. */
+                            stages: {
+                                /** @description A term of the vocabulary `stage`. */
+                                key: string;
+                                /** @description The vocabulary’s label in the requested language. */
+                                label: string;
+                                /** @description `false` for a term that was deactivated; services may still hold it. */
+                                active: boolean;
+                                count: number;
+                            }[];
+                            /** @description A stage key that services hold and the vocabulary does not list, by key; never dropped. */
+                            otherStages: {
+                                key: string;
+                                count: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

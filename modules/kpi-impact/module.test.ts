@@ -1,8 +1,5 @@
 // The manifest of kpi.impact: no table yet, the one plain permission and who holds it, and the module in the profiles it belongs to.
 import { describe, expect, it } from 'vitest';
-import full from '../../profiles/full.ts';
-import coreOnly from '../../profiles/core-only.ts';
-import registry from '../../profiles/registry.ts';
 import manifest from './module.ts';
 import { useImpact } from './test/harness.ts';
 
@@ -39,11 +36,5 @@ describe('the manifest', () => {
     expect(await authz.can(await s.actor('admin'), 'kpi.impact.read')).toBe(true);
     expect(await authz.can(await s.actor('reviewer'), 'kpi.impact.read')).toBe(true);
     expect(await authz.can(await s.actor('user'), 'kpi.impact.read')).toBe(false);
-  });
-
-  it('is in the profile full and in no other', () => {
-    expect(full.modules).toContain('kpi.impact');
-    expect(coreOnly.modules).not.toContain('kpi.impact');
-    expect(registry.modules).not.toContain('kpi.impact');
   });
 });

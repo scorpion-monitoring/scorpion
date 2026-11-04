@@ -162,3 +162,17 @@ describe('the surface', () => {
     expect((await started.getV1('/kpi/impact/summary')).status).toBe(404);
   });
 });
+
+describe('the profiles', () => {
+  it('has kpi.impact in the profile full and in no other', async () => {
+    const modules = async (name: string) =>
+      (
+        (await import(new URL(`../../../profiles/${name}.ts`, import.meta.url).href)) as {
+          default: { modules: string[] };
+        }
+      ).default.modules;
+    expect(await modules('full')).toContain('kpi.impact');
+    expect(await modules('core-only')).not.toContain('kpi.impact');
+    expect(await modules('registry')).not.toContain('kpi.impact');
+  });
+});
