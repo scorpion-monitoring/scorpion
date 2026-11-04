@@ -20,6 +20,13 @@ import {
   type Kernel,
   type ModuleManifest,
 } from '@scorpion/kernel';
+import { createKpiAnalyticsModule } from '@scorpion/kpi-analytics/module';
+import kpiAnalyticsPackage from '@scorpion/kpi-analytics/package.json' with { type: 'json' };
+import { createKpiFrameworkModule } from '@scorpion/kpi-framework/module';
+import kpiFrameworkPackage from '@scorpion/kpi-framework/package.json' with { type: 'json' };
+import type { KpiFrameworkPublic } from '@scorpion/kpi-framework/public';
+import { createKpiIngestionModule, type KpiIngestionService } from '@scorpion/kpi-ingestion/module';
+import ingestionPackage from '@scorpion/kpi-ingestion/package.json' with { type: 'json' };
 import { createOrganisationsModule } from '@scorpion/registry-organisations/module';
 import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
@@ -32,7 +39,7 @@ import {
   type StartedPostgres,
 } from '@scorpion/testing';
 import { afterAll, afterEach, beforeAll } from 'vitest';
-import impactModule, { type KpiImpactService } from '../module.ts';
+import { createKpiImpactModule, type KpiImpactService } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
 
 /** A module that sits next to kpi.impact in a test profile. */
@@ -46,6 +53,8 @@ export interface ImpactStartOptions {
   extra?: FixtureModule[];
   /** Collects every log line the kernel writes (trace level). */
   logLines?: string[];
+  /** The module's "now" at start; default 2026-06-15T12:00:00Z. `s.clock.set` moves it. */
+  now?: Date;
 }
 
 export interface ImpactStarted {
@@ -53,6 +62,11 @@ export interface ImpactStarted {
   pool: Kernel['pool'];
   /** The service of kpi.impact. */
   impact: KpiImpactService;
+  /** The framework's public surface and the measurements service, to build a KPI world. */
+  kpi: KpiFrameworkPublic;
+  ingestion: KpiIngestionService;
+  /** The clock of kpi.impact (and of the measurements): `set` moves "now". */
+  clock: { now: () => Date; set: (date: Date | string) => void };
   settings: SettingsInternalsBundle;
   /** A signed-in-looking actor for a new user who holds the given roles. */
   actor: (...roles: string[]) => Promise<UserActor>;
@@ -71,8 +85,13 @@ const CORE = [
   'core.identity',
   'registry.organisations',
   'registry.services',
+  'kpi.framework',
+  'kpi.ingestion',
+  'kpi.analytics',
   'kpi.impact',
 ] as const;
+
+const DEFAULT_NOW = new Date('2026-06-15T12:00:00Z');
 
 export function useImpact(): ImpactHarness {
   let server: StartedPostgres;
@@ -91,6 +110,8 @@ export function useImpact(): ImpactHarness {
     server: () => server,
     async start(options = {}) {
       const extra = options.extra ?? [];
+      let now = options.now ?? DEFAULT_NOW;
+      const clock = () => now;
       const kernel = createKernel({
         profile: {
           name: 'impact-test',
@@ -113,7 +134,10 @@ export function useImpact(): ImpactHarness {
           { manifest: createIdentityModule(), packageJson: identityPackage },
           { manifest: createOrganisationsModule(), packageJson: organisationsPackage },
           { manifest: servicesModule, packageJson: servicesPackage },
-          { manifest: impactModule, packageJson },
+          { manifest: createKpiFrameworkModule(), packageJson: kpiFrameworkPackage },
+          { manifest: createKpiIngestionModule({ clock }), packageJson: ingestionPackage },
+          { manifest: createKpiAnalyticsModule({ clock }), packageJson: kpiAnalyticsPackage },
+          { manifest: createKpiImpactModule({ clock }), packageJson },
           ...extra.map((module) => ({
             manifest: module.manifest as never,
             packageJson: module.packageJson as never,
@@ -130,6 +154,9 @@ export function useImpact(): ImpactHarness {
           'core.audit': '@scorpion/core-audit',
           'registry.organisations': '@scorpion/registry-organisations',
           'registry.services': '@scorpion/registry-services',
+          'kpi.framework': '@scorpion/kpi-framework',
+          'kpi.ingestion': '@scorpion/kpi-ingestion',
+          'kpi.analytics': '@scorpion/kpi-analytics',
           'kpi.impact': '@scorpion/kpi-impact',
           ...Object.fromEntries(
             extra.map((module) => [module.manifest.id, String(module.packageJson.name)]),
@@ -157,6 +184,14 @@ export function useImpact(): ImpactHarness {
         kernel,
         pool: kernel.pool,
         impact: kernel.services.get('kpi.impact') as KpiImpactService,
+        kpi: kernel.services.get('kpi.framework') as KpiFrameworkPublic,
+        ingestion: kernel.services.get('kpi.ingestion') as KpiIngestionService,
+        clock: {
+          now: clock,
+          set(date) {
+            now = new Date(date);
+          },
+        },
         settings: kernel.services.get('core.settings') as SettingsInternalsBundle,
         async actor(...roles) {
           const user = await makeUser(kernel.pool);

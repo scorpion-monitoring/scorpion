@@ -645,6 +645,15 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/kpi-analytics':
+        specifier: workspace:*
+        version: link:../kpi-analytics
+      '@scorpion/kpi-framework':
+        specifier: workspace:*
+        version: link:../kpi-framework
+      '@scorpion/kpi-ingestion':
+        specifier: workspace:*
+        version: link:../kpi-ingestion
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations
@@ -667,6 +676,9 @@ importers:
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
 
   modules/kpi-ingestion:
     dependencies:

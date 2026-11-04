@@ -10,8 +10,19 @@ export {
   type TileRow,
   type Tiles,
 } from './service/tiles.ts';
-export type { ConsortiumView, ImpactService, SummaryQuery } from './service/impact.ts';
-export { getConsortiaRoute, getSummaryRoute } from './routes.ts';
+export {
+  DEFAULT_TABLE_PAGE_SIZE,
+  MAX_TABLE_PAGE_SIZE,
+  YEARS_OFFERED,
+  type ConsortiumView,
+  type ImpactService,
+  type SummaryQuery,
+  type TableQuery,
+  type TableView,
+} from './service/impact.ts';
+export type { ImpactRow, RowHeadline, RowReason, RowState } from './service/rows.ts';
+export { monthEnds, yearFigure, type AggregateFn, type YearFigure } from './service/year.ts';
+export { getConsortiaRoute, getSummaryRoute, getTableRoute } from './routes.ts';
 
 import type { KpiImpactService } from './module.ts';
 
