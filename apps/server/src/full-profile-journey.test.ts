@@ -135,6 +135,7 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
       'kpi.framework',
       'kpi.ingestion',
       'kpi.analytics',
+      'kpi.impact',
       'public-api',
     ]);
 

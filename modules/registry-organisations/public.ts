@@ -7,6 +7,7 @@
 // the caller asks for it. The membership reads answer from ids and name nobody: M7's `service.member`
 // asks `isApprovedMemberAsSystem` and `listApprovedOrganisationIdsAsSystem`.
 export {
+  CONSORTIUM_TYPE,
   ORG_TYPE_REGISTRY,
   ORG_PUBLIC_REFERENCE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -56,6 +57,7 @@ export type OrganisationsPublic = Pick<
   | 'findByAbbreviationAsSystem'
   | 'existsAsSystem'
   | 'listTypesAsSystem'
+  | 'listConsortiaAsSystem'
   | 'toSchemaOrgAsSystem'
 > &
   Pick<

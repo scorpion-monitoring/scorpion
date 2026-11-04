@@ -1120,3 +1120,9 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 ## Found while taking the documentation screenshots (R3)
 
 - **The "token is ready" alert wraps one word to a line at 1280 px.** On the profile page the alert that shows a new access token (`j04/01-token-secret`) puts its text, the secret and the buttons in one row, so the sentence "This is the only time it is shown" is a column of single words. Give the text the remaining width and let the secret and the buttons wrap below it.
+
+## `kpi.impact` follow-ups (M12 sprint 1)
+
+- **`licencesAsOf` and `bundled` on the summary.** The plan's summary names the time the licence list was fetched and whether the bundled copy answered. The `Spdx` adapter of `packages/integrations` does not expose either (`find` returns a licence, nothing about the list), so sprint 1 leaves both out. Add a `meta()` to the adapter (version, `fetchedAt`, `bundled`) and a read on `registry.services`, then the two fields, when the page (sprint 4) needs to say "licence list as of ...".
+- **`otherLicence`.** The plan's tiles name `licenceUnknown` and `licenceDeprecated`; a current licence that is not OSI-approved is neither, so sprint 1 counts it as `otherLicence` and the four counts add up to `total`. Sprint 4 words it on the page ("other licence").
+- **More than 500 consortia.** `listConsortiaAsSystem` stops at 500, as the plan says, without a signal. A picker with a search box would replace it; no instance is near the number.

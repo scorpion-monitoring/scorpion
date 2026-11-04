@@ -72,6 +72,9 @@ export const orgPublicReferenceEntrySchema = z.strictObject({
 });
 export type OrgPublicReferenceEntry = z.output<typeof orgPublicReferenceEntrySchema>;
 
+/** The id of the type whose organisations are consortia (an entry of `org.type`). */
+export const CONSORTIUM_TYPE = 'consortium';
+
 /** The types this module contributes itself. A second module adds `funder` and the like. */
 export const SEED_TYPES: OrgTypeEntry[] = [
   {
@@ -82,7 +85,7 @@ export const SEED_TYPES: OrgTypeEntry[] = [
     order: 10,
   },
   {
-    id: 'consortium',
+    id: CONSORTIUM_TYPE,
     labels: { en: 'Consortium', de: 'Konsortium' },
     membership: true,
     schemaType: 'Organization',

@@ -40,6 +40,7 @@ import {
 import { settingsSchema } from '../settings-schema.ts';
 import { toSchemaOrg, type SchemaOrgProfile } from './schema-org.ts';
 import {
+  CONSORTIUM_TYPE,
   ORG_TYPE_REGISTRY,
   ORG_PUBLIC_REFERENCE_REGISTRY,
   ORG_USAGE_REGISTRY,
@@ -174,6 +175,9 @@ export interface ListFilter {
   type?: string | undefined;
 }
 
+/** The most consortia {@link OrganisationsService.listConsortiaAsSystem} returns. */
+export const MAX_CONSORTIA = 500;
+
 export interface OrganisationsService {
   list: (
     actor: Actor,
@@ -226,6 +230,11 @@ export interface OrganisationsService {
   ) => Promise<OrganisationRecord | undefined>;
   existsAsSystem: (id: string) => Promise<boolean>;
   listTypesAsSystem: () => Promise<TypeView[]>;
+  /**
+   * The organisations of the type `consortium`, for the picker of `kpi.impact` (M12 sprint 1): `{ id, name, abbreviation }`, by name without
+   * case then id, at most {@link MAX_CONSORTIA}. Nothing else of the record: no contact point, no member, no audit column.
+   */
+  listConsortiaAsSystem: () => Promise<{ id: string; name: string; abbreviation: string }[]>;
   /** `undefined` for an unknown id. `includeContact` defaults to `false`: a trusted caller leaks nothing. */
   toSchemaOrgAsSystem: (
     id: string,
@@ -815,6 +824,19 @@ export function createOrganisationsService(
         );
       if (!row) return undefined;
       return record(row, (await approvedCounts(db, [row.id])).get(row.id) ?? 0);
+    },
+
+    async listConsortiaAsSystem() {
+      return db
+        .select({
+          id: organisation.id,
+          name: organisation.name,
+          abbreviation: organisation.abbreviation,
+        })
+        .from(organisation)
+        .where(eq(organisation.type, CONSORTIUM_TYPE))
+        .orderBy(asc(sql`lower(${organisation.name})`), asc(organisation.id))
+        .limit(MAX_CONSORTIA);
     },
 
     async existsAsSystem(id) {

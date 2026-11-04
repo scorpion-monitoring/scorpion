@@ -1,0 +1,30 @@
+{
+  "name": "@scorpion/kpi-impact",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./module": "./module.ts",
+    "./public": "./public.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@scorpion/contracts": "workspace:*",
+    "@scorpion/core-authz": "workspace:*",
+    "@scorpion/core-settings": "workspace:*",
+    "@scorpion/kernel": "workspace:*",
+    "@scorpion/registry-organisations": "workspace:*",
+    "@scorpion/registry-services": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@scorpion/core-blob": "workspace:*",
+    "@scorpion/core-identity": "workspace:*",
+    "@scorpion/core-notifications": "workspace:*",
+    "@scorpion/testing": "workspace:*"
+  }
+}

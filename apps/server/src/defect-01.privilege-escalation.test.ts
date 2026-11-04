@@ -1482,6 +1482,78 @@ describe('defect 1: the ingestion routes', () => {
   });
 });
 
+// M12 sprint 1: the routes of kpi.impact (the consortia and the tiles). A decision for every route and a walker that fails for one added later
+// without a row. The plain `kpi.impact.read` is held by the role `reviewer` and Admin and not by `user` (decision 20 of the plan), so the matrix is
+// 401 anonymous, 403 for a user without roles and for a plain User, 200 for a Reviewer; there is no write.
+describe('defect 1: the impact routes', () => {
+  const IMPACT_SAMPLES: Record<string, { sample: (consortium: string) => Sample }> = {
+    'GET /kpi/impact/consortia': {
+      sample: () => ({ method: 'GET', path: '/kpi/impact/consortia' }),
+    },
+    'GET /kpi/impact/summary': {
+      sample: (consortium) => ({
+        method: 'GET',
+        path: `/kpi/impact/summary?consortium=${consortium}`,
+      }),
+    },
+  };
+  const start = () => app.start({ tokenCacheTtlMs: 0, impact: true });
+
+  it('has a decision for every route of kpi.impact, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
+    const { kernel } = await start();
+    const live = kernel.routes
+      .filter((entry) => entry.route.path.startsWith('/kpi/impact'))
+      .map((entry) => {
+        expect(entry.route.public, `${entry.route.path} is not public`).toBeFalsy();
+        expect(entry.route.permission, `${entry.route.path} names a permission`).toBe(
+          'kpi.impact.read',
+        );
+        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+      })
+      .sort();
+    expect(live).toEqual(Object.keys(IMPACT_SAMPLES).sort());
+  });
+
+  it('answers 401 to an anonymous caller and 403 to a user without roles and to a plain User, with an id that exists nowhere [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const roleless = await s.signedIn('norole-impact', { roles: [] });
+    const plain = await s.signedIn('plain-impact');
+    for (const [key, row] of Object.entries(IMPACT_SAMPLES)) {
+      const sample = row.sample(FOREIGN);
+      const anonymous = await s.call(sample.method, sample.path, {});
+      expect(anonymous.status, `${key}: anonymous`).toBe(401);
+      expect(problem(anonymous), key).toContain('application/problem+json');
+      for (const [who, caller] of [
+        ['a user without roles', roleless],
+        ['a plain User', plain],
+      ] as const) {
+        const refused = await s.call(sample.method, sample.path, session(caller));
+        expect(refused.status, `${key}: ${who}`).toBe(403);
+        expect(problem(refused), key).toContain('application/problem+json');
+      }
+    }
+  });
+
+  it('lets a Reviewer and Admin read, and writes nothing [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await start();
+    const reviewer = await s.signedIn('reviewer-impact', { roles: ['reviewer'] });
+    const admin = await s.signedIn('admin-impact', { roles: ['admin'] });
+    const consortium = await makeOrganisation(s.kernel.pool, { type: 'consortium' });
+    for (const [key, row] of Object.entries(IMPACT_SAMPLES)) {
+      const sample = row.sample(consortium.id);
+      for (const caller of [reviewer, admin])
+        expect((await s.call(sample.method, sample.path, session(caller))).status, key).toBe(200);
+    }
+    expect(
+      (
+        await s.kernel.pool.query('select 1 from kernel_outbox where name like $1', [
+          'kpi.impact.%',
+        ])
+      ).rows,
+    ).toEqual([]);
+  });
+});
+
 // M11 sprint 3: the routes of kpi.analytics (the series and the summary). Same idea as the measurement block: a decision for every route and
 // a walker that fails for one added later without a row. The role `user` holds the plain permission and reads every service (decision 13 of the
 // plan), so the matrix is 401 for nobody, 403 for a user without roles, 200 for a plain User; there is no write.

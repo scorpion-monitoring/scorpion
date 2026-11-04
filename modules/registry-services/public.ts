@@ -30,7 +30,8 @@ export {
   type WizardStepEntry,
 } from './service/registries.ts';
 export { fieldValueFacet } from './service/facets.ts';
-export type { ServiceRecord } from './service/services.ts';
+export type { ImpactRow, ServiceRecord } from './service/services.ts';
+export { MAX_IMPACT_ROWS } from './service/services.ts';
 // The role id of a service's provider (a key of the registry `service.orgRole`), for `listByOrganisationAsSystem(id, PROVIDER_ROLE)`.
 export { OWNER_ROLE as PROVIDER_ROLE } from './service/permissions.ts';
 
@@ -52,6 +53,8 @@ export type ServicesPublic = Pick<
   | 'isProviderManagerAsSystem'
   | 'isProviderMemberAsSystem'
   | 'listForPickerAsSystem'
+  | 'listImpactRowsAsSystem'
+  | 'findLicencesAsSystem'
 >;
 
 declare module '@scorpion/kernel' {
