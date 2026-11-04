@@ -14,7 +14,7 @@
   "dependencies": {
     "@scorpion/contracts": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "pg": "^8.23.1",
     "pg-boss": "^12.38.0",
     "pino": "^10.4.0",

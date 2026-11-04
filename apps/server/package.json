@@ -28,7 +28,7 @@
     "@scorpion/public-api": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "prom-client": "^15.1.3",
     "zod": "^4.6.7"
   },
@@ -36,6 +36,6 @@
     "@scorpion/testing": "workspace:*",
     "@types/pg": "^8.23.1",
     "pg": "^8.23.1",
-    "read-excel-file": "9.3.12"
+    "read-excel-file": "9.3.14"
   }
 }
