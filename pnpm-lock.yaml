@@ -112,6 +112,9 @@ importers:
       '@scorpion/kpi-framework':
         specifier: workspace:*
         version: link:../../modules/kpi-framework
+      '@scorpion/kpi-impact':
+        specifier: workspace:*
+        version: link:../../modules/kpi-impact
       '@scorpion/kpi-ingestion':
         specifier: workspace:*
         version: link:../../modules/kpi-ingestion
@@ -627,6 +630,43 @@ importers:
       pg:
         specifier: ^8.23.1
         version: 8.23.1
+
+  modules/kpi-impact:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-authz':
+        specifier: workspace:*
+        version: link:../core-authz
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../registry-organisations
+      '@scorpion/registry-services':
+        specifier: workspace:*
+        version: link:../registry-services
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@scorpion/core-blob':
+        specifier: workspace:*
+        version: link:../core-blob
+      '@scorpion/core-identity':
+        specifier: workspace:*
+        version: link:../core-identity
+      '@scorpion/core-notifications':
+        specifier: workspace:*
+        version: link:../core-notifications
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
 
   modules/kpi-ingestion:
     dependencies:
