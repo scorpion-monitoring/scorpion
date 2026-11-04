@@ -35,9 +35,9 @@ export async function headlineSet(
   pool: Queryable,
   {
     valueType = 'integer',
-    aggregate = 'sum' as string | null,
-    unit = 'count' as string | null,
-  } = {},
+    aggregate = 'sum',
+    unit = 'count',
+  }: { valueType?: string; aggregate?: string | null; unit?: string | null } = {},
 ) {
   const head = await makeIndicator(pool, { name: uniq('Head'), valueType, unit });
   const set = await makeKpiSet(pool, {

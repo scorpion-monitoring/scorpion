@@ -35,7 +35,8 @@ function deps(over: Partial<RowDeps> & { found?: EvaluationOfService | null } = 
       return Promise.resolve([] as SeriesPoint[]);
     },
   };
-  const { found: _found, ...rest } = over;
+  const rest: Partial<RowDeps> = { ...over };
+  delete (rest as { found?: unknown }).found;
   return { deps: { ...base, ...rest }, calls };
 }
 const point = (period: string, valueNumber: number | null): SeriesPoint => ({

@@ -431,7 +431,7 @@ describe('the order, the paging and the sets of services', () => {
     const s = await setup();
     const other = await makeOrganisation(s.pool, { type: 'consortium', name: uniq('Other') });
     const { head, set } = await headlineSet(s.pool);
-    const shared = await serviceWith(s.pool, s.consortium.id, {
+    await serviceWith(s.pool, s.consortium.id, {
       set,
       headId: head.id,
       values: { '2026-06-30': 5 },
