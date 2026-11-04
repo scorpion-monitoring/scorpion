@@ -99,9 +99,9 @@ describe('the counts', () => {
     await makeService(s.pool, { public: false, consortia: [s.consortium.id], license: 'MIT' });
     const query = { consortium: s.consortium.id };
     expect((await s.impact.summary(s.reviewer, query)).total).toBe(1);
-    expect((await s.impact.summary(s.reviewer, { ...query, includeUnpublished: false })).total).toBe(
-      1,
-    );
+    expect(
+      (await s.impact.summary(s.reviewer, { ...query, includeUnpublished: false })).total,
+    ).toBe(1);
     const all = await s.impact.summary(s.reviewer, { ...query, includeUnpublished: true });
     expect(all.total).toBe(2);
     expect(all.openSource).toBe(2);

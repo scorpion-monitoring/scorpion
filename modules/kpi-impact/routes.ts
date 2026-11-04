@@ -37,22 +37,39 @@ export const getConsortiaRoute = createRoute({
 const stageLine = z.object({
   key: z.string().describe('A term of the vocabulary `stage`.'),
   label: z.string().describe('The vocabulary’s label in the requested language.'),
-  active: z.boolean().describe('`false` for a term that was deactivated; services may still hold it.'),
+  active: z
+    .boolean()
+    .describe('`false` for a term that was deactivated; services may still hold it.'),
   count: z.number().int(),
 });
 
 export const summarySchema = z.object({
-  total: z.number().int().describe('The services counted: the published ones, or all with `includeUnpublished`.'),
+  total: z
+    .number()
+    .int()
+    .describe('The services counted: the published ones, or all with `includeUnpublished`.'),
   openSource: z.number().int().describe('An OSI-approved licence that is not deprecated.'),
   licenceDeprecated: z.number().int().describe('A deprecated SPDX id: not open source.'),
-  licenceUnknown: z.number().int().describe('No licence, or an id the SPDX list does not know: not open source.'),
-  otherLicence: z.number().int().describe('A current licence that is not OSI-approved. `total` is the sum of these four counts.'),
+  licenceUnknown: z
+    .number()
+    .int()
+    .describe('No licence, or an id the SPDX list does not know: not open source.'),
+  otherLicence: z
+    .number()
+    .int()
+    .describe(
+      'A current licence that is not OSI-approved. `total` is the sum of these four counts.',
+    ),
   stages: z
     .array(stageLine)
-    .describe('One line per term of the vocabulary `stage`, deactivated terms included, in the vocabulary’s order; zero counts are listed.'),
+    .describe(
+      'One line per term of the vocabulary `stage`, deactivated terms included, in the vocabulary’s order; zero counts are listed.',
+    ),
   otherStages: z
     .array(z.object({ key: z.string(), count: z.number().int() }))
-    .describe('A stage key that services hold and the vocabulary does not list, by key; never dropped.'),
+    .describe(
+      'A stage key that services hold and the vocabulary does not list, by key; never dropped.',
+    ),
 });
 
 export const getSummaryRoute = createRoute({
@@ -69,7 +86,11 @@ export const getSummaryRoute = createRoute({
         .enum(['true', 'false'])
         .optional()
         .describe('Count the unpublished services too. Default `false`.'),
-      locale: z.string().max(35).optional().describe('The language of the stage labels. Default `en`.'),
+      locale: z
+        .string()
+        .max(35)
+        .optional()
+        .describe('The language of the stage labels. Default `en`.'),
     }),
   },
   responses: {
@@ -109,7 +130,12 @@ export function registerRoutes(r: RouteRegistrar, impact: ImpactService) {
         licenceDeprecated: tiles.licenceDeprecated,
         licenceUnknown: tiles.licenceUnknown,
         otherLicence: tiles.otherLicence,
-        stages: tiles.stages.map(({ key, label, active, count }) => ({ key, label, active, count })),
+        stages: tiles.stages.map(({ key, label, active, count }) => ({
+          key,
+          label,
+          active,
+          count,
+        })),
         otherStages: tiles.otherStages.map(({ key, count }) => ({ key, count })),
       },
       200,

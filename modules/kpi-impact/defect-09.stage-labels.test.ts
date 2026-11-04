@@ -24,7 +24,10 @@ async function setup() {
   return { ...s, reviewer, admin, consortium, stage, summary };
 }
 
-const key = () => uniq('S').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const key = () =>
+  uniq('S')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 
 describe('defect 9: the stage counts and their labels come from the vocabulary', () => {
   it('defect-09: counts a service of a deactivated term under that term, with the vocabulary label and active false', async () => {
