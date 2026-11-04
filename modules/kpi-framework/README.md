@@ -84,6 +84,13 @@ no indicator is left out), because the reads of measurements show a value of an 
 them **after** its own scoped check, so a token needs the scopes of that module and none of this one's reads (ADR-0041, "Amended in sprint 2"). Tests:
 `service/trusted.test.ts`.
 
+**Two trusted reads for `kpi.impact`** (M12 sprint 2, additive; on the service and so on `public.ts`; no permission check, descriptive fields and ids only).
+`evaluationOfServiceAsSystem(serviceId)` returns `{ setId, headline }` for the set a service has **now**, with `headline` `{ indicatorId, name, valueType, unit,
+aggregate }` or `null` when the set has no evaluation; `null` when the service has no set or the id is no service. It is the **current** evaluation, whatever
+year the caller asks about. An evaluation never names an indicator that left the set (a composite key refuses it, and `sets.setIndicators` removes the
+evaluation with the indicator), so that case reads as no headline. `servicesOfSetAsSystem(setId)` returns the ids of the services that have a set, by id, at most
+5 000 (`MAX_SERVICES_OF_SET`). Tests: `service/trusted.test.ts`.
+
 **The in-use hook.** `kpi.framework` declares the registry `kpi.indicatorUsage`; an entry is `{ module, what, count(indicatorId) }` (a module id, a
 plural noun, and a function that counts that module's rows about the indicator). `indicators.delete` asks every entry after its own checks, and an
 indicator that something uses is **409 naming each module and the count** (`kpi.ingestion (12 measurements)`), the sets first and then each
