@@ -6,9 +6,9 @@
 // migration tool and old clients need no mapping. `TERM` is a proper stage (defect 9).
 import type { VocabularyEntry } from './vocabularies.ts';
 
-const term = (key: string, en: string, sortOrder: number) => ({
+const term = (key: string, en: string, sortOrder: number, de?: string) => ({
   key,
-  labels: { en },
+  labels: { en, ...(de === undefined ? {} : { de }) } as Record<string, string>,
   sortOrder,
 });
 
@@ -51,10 +51,10 @@ export const BUILTIN_VOCABULARIES: VocabularyEntry[] = [
     id: 'aggregate',
     description: 'How the values of a period are combined into one',
     terms: [
-      term('sum', 'Sum', 10),
-      term('avg', 'Average', 20),
-      term('min', 'Minimum', 30),
-      term('max', 'Maximum', 40),
+      term('sum', 'Sum', 10, 'Summe'),
+      term('avg', 'Average', 20, 'Durchschnitt'),
+      term('min', 'Minimum', 30, 'Minimum'),
+      term('max', 'Maximum', 40, 'Maximum'),
     ],
   },
 ];

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   boundsProblem,
+  displayDuration,
   formatDuration,
   parseDuration,
   parseFloatValue,
@@ -204,6 +205,23 @@ describe('duration', () => {
 
   it.each([-1, 1.5, NaN, Infinity, '60', null])('does not format %j', (value) => {
     expect(() => formatDuration(value)).toThrow(RangeError);
+  });
+
+  it.each<[number, string]>([
+    [0, '00:00:00'],
+    [3723, '01:02:03'],
+    [3723.4, '01:02:03'],
+    [3723.5, '01:02:04'],
+    [360000, '100:00:00'],
+  ])('displays %f seconds as %s, rounded to the second, for reading', (seconds, text) => {
+    expect(displayDuration(seconds)).toBe(text);
+    expect(type('duration').display?.(seconds, 'en')).toBe(text);
+  });
+
+  it('gives only the duration a display of its own; the others fall back to a number in the language', () => {
+    expect(SEED_VALUE_TYPES.filter((entry) => entry.display).map((entry) => entry.id)).toEqual([
+      'duration',
+    ]);
   });
 });
 
