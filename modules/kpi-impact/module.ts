@@ -10,6 +10,7 @@ import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { registerRoutes } from './routes.ts';
 import { createImpactService, type ImpactService } from './service/impact.ts';
 import { PERMISSION_READ } from './service/permissions.ts';
+import { IMPACT_NAV, IMPACT_ROUTES } from './ui/routes.ts';
 
 /** What the module registers as its service. */
 export type KpiImpactService = ImpactService;
@@ -45,7 +46,7 @@ export function createKpiImpactModule(options: KpiImpactOptions = {}) {
     id: 'kpi.impact',
     displayName: 'KPI impact',
     version: '0.1.0',
-    // No table before sprint 3 (the read model of the yearly table), so no table prefix yet; no `demoSeed` (ADR-0046): the module owns no data.
+    // No table (the stored model was dropped, ADR-0048), so no table prefix; no `demoSeed` (ADR-0046): the module owns no data.
 
     permissions: {
       [PERMISSION_READ]: {
@@ -57,6 +58,10 @@ export function createKpiImpactModule(options: KpiImpactOptions = {}) {
     contributes: {
       // Reviewers and Admin, not the role `user` (FEATURES §3.9, decision 20 of the M12 plan). Admin holds all declared permissions.
       'authz.defaultRole': [{ role: 'reviewer', permissions: [PERMISSION_READ] }],
+      // The impact page and its link, at the path of the legacy page; entries for registries of core.ui-shell, an optional peer: a profile without
+      // it skips them. The link has the permission of the page, so nobody who cannot open it sees it.
+      'ui.routes': IMPACT_ROUTES,
+      'ui.nav': IMPACT_NAV,
     },
 
     services: (ctx) =>
@@ -82,6 +87,9 @@ export function createKpiImpactModule(options: KpiImpactOptions = {}) {
     routes: (r) => {
       registerRoutes(r, r.service<KpiImpactService>());
     },
+
+    // The page (Svelte) is loaded by the web app only; the manifest names the part a server can read (the route and texts, ui/pages.ts).
+    ui: () => import('./ui/pages.ts'),
   });
 }
 
