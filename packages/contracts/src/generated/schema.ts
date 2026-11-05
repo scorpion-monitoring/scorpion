@@ -14452,6 +14452,11 @@ export interface paths {
                                 yearly: number | null;
                                 /** @description The months `yearly` is over: "n of 12". */
                                 monthsWithValue: number;
+                                /** @description The same figures written for reading in the requested language by the value type of the headline (a duration is `HH:MM:SS`, another number has at most two decimals); `null` where the number is `null`. The numbers stay the data. */
+                                shown: {
+                                    months: (string | null)[];
+                                    yearly: string | null;
+                                };
                             }[];
                             year: number;
                             /** @description The years offered: the current year and the nine before it, newest first. */

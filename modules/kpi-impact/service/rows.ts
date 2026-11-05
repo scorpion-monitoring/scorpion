@@ -9,16 +9,18 @@ import { monthEnds, yearFigure, type AggregateFn } from './year.ts';
 export type RowState = 'ok' | 'no-data' | 'no-evaluation' | 'error';
 
 /** Why a row is in its state: a stable code for a page to translate; `advice` is the same in English. */
-export type RowReason =
-  | 'ok'
-  | 'no-values'
-  | 'no-set'
-  | 'no-headline'
-  | 'not-numeric'
-  | 'value-type-unknown'
-  | 'aggregate-not-allowed'
-  | 'aggregate-unknown'
-  | 'read-failed';
+export const ROW_REASONS = [
+  'ok',
+  'no-values',
+  'no-set',
+  'no-headline',
+  'not-numeric',
+  'value-type-unknown',
+  'aggregate-not-allowed',
+  'aggregate-unknown',
+  'read-failed',
+] as const;
+export type RowReason = (typeof ROW_REASONS)[number];
 
 const ADVICE: Record<RowReason, string> = {
   ok: '',
@@ -61,6 +63,11 @@ export interface ImpactRow {
   months: (number | null)[];
   yearly: number | null;
   monthsWithValue: number;
+  /**
+   * The same figures as a person reads them in the caller's language, by the value type of the headline (a duration is `HH:MM:SS`, another
+   * number has at most two decimals): `null` where the number is `null`. The numbers above stay the data; these are only for reading.
+   */
+  shown: { months: (string | null)[]; yearly: string | null };
 }
 
 export interface RowDeps {
@@ -68,6 +75,8 @@ export interface RowDeps {
   valueType(id: string): ValueTypeEntry | undefined;
   aggregate(id: string): AggregateFn | undefined;
   aggregateLabel(id: string): string;
+  /** The language the figures are written in. Default `en`. */
+  locale?: string | undefined;
   series(
     serviceId: string,
     indicatorIds: readonly string[],
@@ -86,12 +95,23 @@ export interface ServiceRef {
 
 const empty = (): (number | null)[] => Array.from({ length: 12 }, () => null);
 
+/** A figure for reading: the value type's own `display` when it has one, else a number in the language with at most two decimals. */
+function writer(
+  type: Pick<ValueTypeEntry, 'display'> | undefined,
+  locale: string,
+): (value: number | null) => string | null {
+  const plain = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+  return (value) =>
+    value === null ? null : type?.display ? type.display(value, locale) : plain.format(value);
+}
+
 /** The row of one service for a year. Never throws: a failure of this service is its `error` row and the page goes on. */
 export async function computeRow(
   deps: RowDeps,
   service: ServiceRef,
   year: number,
 ): Promise<ImpactRow> {
+  let show: (value: number | null) => string | null = writer(undefined, deps.locale ?? 'en');
   const row = (
     state: RowState,
     reason: RowReason,
@@ -108,6 +128,10 @@ export async function computeRow(
     headline,
     months,
     ...figure,
+    shown: {
+      months: months.map(show),
+      yearly: show(figure.yearly),
+    },
   });
 
   try {
@@ -124,6 +148,7 @@ export async function computeRow(
     };
 
     const type = deps.valueType(valueType);
+    show = writer(type, deps.locale ?? 'en');
     if (!type) return row('error', 'value-type-unknown', headline);
     if (!type.numeric) return row('error', 'not-numeric', headline);
     if (!type.aggregates.includes(aggregate))

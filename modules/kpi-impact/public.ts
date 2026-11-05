@@ -20,7 +20,13 @@ export {
   type TableQuery,
   type TableView,
 } from './service/impact.ts';
-export type { ImpactRow, RowHeadline, RowReason, RowState } from './service/rows.ts';
+export {
+  ROW_REASONS,
+  type ImpactRow,
+  type RowHeadline,
+  type RowReason,
+  type RowState,
+} from './service/rows.ts';
 export { monthEnds, yearFigure, type AggregateFn, type YearFigure } from './service/year.ts';
 export { getConsortiaRoute, getSummaryRoute, getTableRoute } from './routes.ts';
 

@@ -98,6 +98,33 @@ describe('computeRow', () => {
     expect(row).toMatchObject({ yearly: 12, monthsWithValue: 2 });
   });
 
+  it('writes the figures for reading by the value type: its own display, else a number in the language, and nothing for a gap', async () => {
+    const series = () =>
+      Promise.resolve([point('2024-02-29', 3723), point('2024-03-31', 1234.567)]);
+    const plain = await computeRow(deps({ series }).deps, SERVICE, 2024);
+    expect(plain.shown.months[0]).toBeNull();
+    expect(plain.shown.months.slice(1, 3)).toEqual(['3,723', '1,234.57']);
+    expect(plain.shown.yearly).toBe('4,957.57');
+    const german = await computeRow(deps({ series, locale: 'de' }).deps, SERVICE, 2024);
+    expect(german.shown.months.slice(1, 3)).toEqual(['3.723', '1.234,57']);
+
+    const display = (seconds: number) => `d${Math.round(seconds)}`;
+    const timed = await computeRow(
+      deps({
+        series,
+        valueType: () =>
+          ({ numeric: true, aggregates: ['sum'], display }) as unknown as ValueTypeEntry,
+      }).deps,
+      SERVICE,
+      2024,
+    );
+    expect(timed.shown).toEqual({
+      months: [null, 'd3723', 'd1235', ...Array.from({ length: 9 }, () => null)],
+      yearly: 'd4958',
+    });
+    expect(timed.months[1]).toBe(3723);
+  });
+
   it('is no-data, with its headline and empty months, when the year has no value', async () => {
     const row = await computeRow(deps().deps, SERVICE, 2024);
     expect(row).toMatchObject({

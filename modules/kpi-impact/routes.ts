@@ -18,6 +18,7 @@ import {
   type ImpactService,
 } from './service/impact.ts';
 import { PERMISSION_READ } from './service/permissions.ts';
+import { ROW_REASONS } from './service/rows.ts';
 
 const consortiumSchema = z.object({
   id: z.string(),
@@ -117,17 +118,7 @@ const rowSchema = z.object({
       '`ok`: the year has a value. `no-data`: the service has a headline and no value in the year. `no-evaluation`: it has no KPI set, or its set has no headline. `error`: the headline cannot be read. Exclusive.',
     ),
   reason: z
-    .enum([
-      'ok',
-      'no-values',
-      'no-set',
-      'no-headline',
-      'not-numeric',
-      'value-type-unknown',
-      'aggregate-not-allowed',
-      'aggregate-unknown',
-      'read-failed',
-    ])
+    .enum(ROW_REASONS)
     .describe('Why the row is in its state, as a code a page can translate.'),
   advice: z
     .string()
@@ -161,6 +152,14 @@ const rowSchema = z.object({
       'The aggregate of the headline over the months that have a value; `null` when none has.',
     ),
   monthsWithValue: z.int().min(0).max(12).describe('The months `yearly` is over: "n of 12".'),
+  shown: z
+    .object({
+      months: z.array(z.string().nullable()).length(12),
+      yearly: z.string().nullable(),
+    })
+    .describe(
+      'The same figures written for reading in the requested language by the value type of the headline (a duration is `HH:MM:SS`, another number has at most two decimals); `null` where the number is `null`. The numbers stay the data.',
+    ),
 });
 
 export const tableSchema = z.object({
@@ -279,6 +278,7 @@ export function registerRoutes(r: RouteRegistrar, impact: ImpactService) {
             months: row.months,
             yearly: row.yearly,
             monthsWithValue: row.monthsWithValue,
+            shown: { months: row.shown.months, yearly: row.shown.yearly },
           })),
         ),
         year: view.year,
