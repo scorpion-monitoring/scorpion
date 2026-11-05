@@ -1,6 +1,6 @@
-# ADR-0048: `kpi.impact`: live tiles, a stored yearly table, plain tables instead of views
+# ADR-0048: `kpi.impact`: live tiles, a yearly table (computed live; the stored model dropped), plain tables instead of views
 
-- Status: Accepted (decisions 15 to 21 answered by the maintainer on 2026-10-22; plan: [m12-sprint-plan.md](../m12-sprint-plan.md))
+- Status: Accepted; **the stored model (decisions 1 and 2, sprint 3) was dropped on 2026-11-05, see "Amended: the model is dropped"** (decisions 15 to 21 answered by the maintainer on 2026-10-22; plan: [m12-sprint-plan.md](../m12-sprint-plan.md))
 - Date: 2026-11-04
 
 ## Context
@@ -57,3 +57,10 @@ consortium, refreshed on events". The module is new, in the `full` profile only,
 - **Consequence for sprint 3 (a recommendation; the maintainer decides).** The stored model is not needed as a speed-up, and a stored table can only be as right as the
   live one, at the price of two handlers, a nightly job and a repair. Recommended: do not build it for now; if a page of 200 must be faster, add the two batched trusted
   reads named in the backlog. Decision 1 above (plain tables instead of views) stays as the form the model would take; dropping the model needs this ADR to say so.
+
+## Amended: the model is dropped (2026-11-05)
+
+- **Decision.** The maintainer accepted the recommendation of sprint 2: **no stored model.** The yearly table is computed live on every request (`service/rows.ts`, `service/year.ts`), as are the tiles. The module owns **no table, no job, no setting and no event handler**; it needs no table prefix, no migration and no `demoSeed`. The `figuresAsOf` field of the plan does not exist.
+- **Why.** A page of 50 services takes 140 to 220 ms and a page of 200 about 0.5 s whatever the size of the consortium (4 statements per service, none per month); a stored table could only be as right as the live one and adds two handlers, a nightly job and a repair, with the risk that it disagrees with its inputs (the legacy view's failure, defect 9's cousin).
+- **What this changes above.** Decision 1 (plain tables instead of views) now applies only if a model is ever built; decision 2 reads "live tiles and a live table". The architecture's "materialised yearly and monthly aggregates … refreshed on events" and the nightly refresh are **not implemented**; `implementation.md` says so.
+- **Reversible.** If a page of 200 must be faster, first add the batched trusted reads (`kpi.ingestion`, `kpi.framework`; backlog); a stored model comes only after that, with a new ADR that supersedes this paragraph.

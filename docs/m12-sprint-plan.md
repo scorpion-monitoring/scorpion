@@ -1,6 +1,6 @@
 # M12 Sprint Plan: `kpi.impact`, consortium impact tiles and the yearly table
 
-Status: **draft; decisions 15 to 21 answered by the maintainer on 2026-10-22** (§12); updated on 2026-11-04 for the `0.14.0` release (version `0.15.0`, ADR-0048, the rules of ADR-0046 and ADR-0047). Nothing here has been built. The plan still needs the maintainer's approval as a whole before sprint 1 starts.
+Status: **sprint 1 and 2 merged; sprint 3 dropped (decision 22); sprint 4 next.** Earlier: **draft; decisions 15 to 21 answered by the maintainer on 2026-10-22** (§12); updated on 2026-11-04 for the `0.14.0` release (version `0.15.0`, ADR-0048, the rules of ADR-0046 and ADR-0047). Nothing here has been built. The plan still needs the maintainer's approval as a whole before sprint 1 starts.
 Scope source: [implementation.md](implementation.md) §5, M12, [architecture.md](architecture.md) (the `kpi.impact` row: "none (read model)", listens to `measurement.recorded`, "materialised yearly and monthly aggregates per consortium, refreshed on events", nightly refresh), FEATURES §3.9 (impact evaluation) and defect 9 ([FEATURES.md](FEATURES.md) §5: `TERM` is counted but is not in the enum, and stage labels differ between screens), and what M9, M10 and M11 hand over (the evaluation of a KPI set, the measurements and their series read, the calculation library and the registry `analytics.aggregate`, the `stage` vocabulary, the SPDX adapter).
 
 M12 is size M in `implementation.md`: **four sprints (about four to five weeks for one developer)**. It adds **one module** (`modules/kpi-impact`, package `@scorpion/kpi-impact`, `full` profile only), **no runtime dependency**, **no public v1 route**, and a few additive trusted reads on modules that exist. It releases as `0.15.0`. M13 (the legacy migration tool) follows; Gate 3 follows M13.
@@ -109,12 +109,12 @@ The job and the handlers are idempotent (a row is replaced, not appended) and bo
 
 ## 4. Sprint overview
 
-| Sprint | Branch                     | Theme                                                                                                                                  | Closes                      |
-| ------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| 1      | `feature/m12-impact-tiles` | ADR-0048, the module, the additive reads, the live tiles with the SPDX check and the `stage` vocabulary, `GET` consortia and summary   | defect 9 (the stage counts) |
-| 2      | `feature/m12-impact-table` | The per-service yearly table computed live, the row states, the aggregate from the registry, `GET /kpi/impact/table`, the measurements | none                        |
-| 3      | `feature/m12-impact-model` | `kpi_impact_year`, the refresh on events, the nightly job, the table served from the model, staleness and repair tests                 | none                        |
-| 4      | `feature/m12-impact-page`  | The page `/services/evaluate`, the nav entry, accessibility, e2e, documents and gate, the backlog close-out, release `0.15.0`          | none                        |
+| Sprint | Branch                         | Theme                                                                                                                                   | Closes                      |
+| ------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 1      | `feature/m12-impact-tiles`     | ADR-0048, the module, the additive reads, the live tiles with the SPDX check and the `stage` vocabulary, `GET` consortia and summary    | defect 9 (the stage counts) |
+| 2      | `feature/m12-impact-table`     | The per-service yearly table computed live, the row states, the aggregate from the registry, `GET /kpi/impact/table`, the measurements  | none                        |
+| 3      | ~~`feature/m12-impact-model`~~ | **Dropped on 2026-11-05 (decision 22).** ~~`kpi_impact_year`, the refresh on events, the nightly job, the table served from the model~~ | none                        |
+| 4      | `feature/m12-impact-page`      | The page `/services/evaluate`, the nav entry, accessibility, e2e, documents and gate, the backlog close-out, release `0.15.0`           | none                        |
 
 ## 5. Sprint 1: the module, the additive reads and the tiles
 
@@ -155,6 +155,8 @@ Definition of done: as sprint 1.
 
 ## 7. Sprint 3: the read model, the refresh and the nightly repair
 
+> **DROPPED (decision 22, 2026-11-05).** Sprint 2 measured the live table (a page of 50 services: 140 to 220 ms; a page of 200: about 0.5 s; the cost follows the page, not the consortium; 4 statements per service, none per month), and the maintainer accepted the recommendation not to build the stored model. **Nothing below is built:** no `kpi_impact_year`, no `kpi_impact_refresh`, no handlers, no nightly job, no settings, no `figuresAsOf`, no migration. The table stays computed live (sprint 2's code is the one implementation) and is always current. The text is kept as the design to return to if a measured need appears; the trigger and the two batched reads that come first are in `docs/backlog.md` ("`kpi.impact` follow-ups (M12 sprint 2)"). Its risks (§9, first and second rows) are closed by this decision.
+
 **Branch:** `feature/m12-impact-model`. **Goal:** the table is served from stored rows that follow every input within the transaction's reach, and a missed event is repaired by the night.
 
 Work items
@@ -173,6 +175,8 @@ ASVS impact (sprint 3): V8 unchanged in substance (no new route) unless the job 
 Definition of done: as sprint 1, plus the full `pnpm test` includes the migration test and the image module-set check includes `kpi-impact` in `full` only.
 
 ## 8. Sprint 4: the page, accessibility, the gate and the release
+
+> **Amended 2026-11-05 (decision 22), read with the items below:** there is **no stored model**, so (a) the "figures as of" line is **not built**; the page says "figures are computed when you open the page" instead; (b) the e2e "figures change after a measurement is reported (the event ran)" is simply a reload after the report, no event is involved; (c) the backlog close-out measures **the page's calls and the live table**, not refresh costs; (d) the release notes say the module has **no tables and no job**; (e) the sprint also settles the leftovers of sprint 2: German labels of the `aggregate` terms (seed or page), the ASVS 7.4.4 flake check before the release, and the word "with today's headline" on the page.
 
 **Branch:** `feature/m12-impact-page`. **Goal:** a Reviewer or an Admin opens `/services/evaluate`, picks a consortium and a year, and reads the tiles and the table; `0.15.0` is released.
 
@@ -214,13 +218,15 @@ Definition of done: `pnpm check`, the full `pnpm test`, `pnpm test:contract` (no
 
 ## 11. Additions to M12's scope in `implementation.md` (to approve with this plan)
 
-- **Two tables** (`kpi_impact_year`, `kpi_impact_refresh`) where the architecture says "none (read model)", with the reason of decision 15, and **one job** (`kpi.impact.system.nightly`) with two settings.
+- ~~**Two tables** and **one job** with two settings~~ **not added (decision 22):** the module stays table-free, as the architecture says ("none (read model)"); the read model is the live computation.
 - **One permission** `kpi.impact.read` (plain; Reviewer and Admin) and **three internal routes**.
 - **Additive trusted reads** on `registry.services`, `registry.organisations` and `kpi.framework` (§3). No change to `kpi.ingestion`.
 - **No new runtime dependency; no public v1 change.**
-- Version `0.15.0`, four sprints.
+- Version `0.15.0`, **three sprints** (sprint 3 dropped).
 
 ## 12. Decisions
+
+22. **Sprint 3 (the stored model) is dropped** (answered 2026-11-05: as recommended after sprint 2's measurement). The live table is fast enough (a page of 200 about 0.5 s, the default page of 50 under 0.25 s) and cannot disagree with its inputs. M12 keeps **no table, no job, no setting and no event handler**; the module owns no data and so has no `demoSeed`. Consequences for the rest of the plan: §11's two tables and the job are not added; `figuresAsOf` is not in the table answer; sprint 4 is the page and the release, and `0.15.0` still releases; the architecture's "materialised yearly and monthly aggregates … refreshed on events" is **not** met, and `implementation.md` and ADR-0048 say so. Reversible: if a page of 200 must be faster, the first step is the two batched trusted reads (`kpi.ingestion`, `kpi.framework`) named in the backlog, and a stored model only after that, with its own ADR.
 
 Answered by the maintainer on 2026-10-22 (the recommendation was taken for 15, 17, 18, 20 and 21; 16 and 19 were changed). Each stays reversible without a migration until sprint 3 writes the tables.
 

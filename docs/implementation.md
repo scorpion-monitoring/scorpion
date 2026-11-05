@@ -332,7 +332,7 @@ Additions agreed in [m11-sprint-plan.md](m11-sprint-plan.md) §13 (six sprints; 
 
 - Consortium summary tiles: total, open source (OSI-approved via the cached SPDX adapter), counts per stage from the vocabulary, including TERM (defect 9).
 - A per-service monthly table for the selected year using the evaluation configuration, with the states no-data, no-evaluation and error.
-- Monthly and yearly aggregates as a read model refreshed on `measurement.recorded` and nightly.
+- Monthly and yearly aggregates, **computed live** per request (one series read per service). The stored read model refreshed on `measurement.recorded` and nightly was planned as sprint 3 and **dropped on 2026-11-05** after the sprint-2 measurement (ADR-0048, decision 22 of the M12 plan); the module has no tables and no job.
 - Stage labels come only from the vocabulary, so they match on every screen (defect 9).
 
 ### M13: Legacy data migration (M)
