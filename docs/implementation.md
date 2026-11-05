@@ -334,6 +334,7 @@ Additions agreed in [m11-sprint-plan.md](m11-sprint-plan.md) §13 (six sprints; 
 - A per-service monthly table for the selected year using the evaluation configuration, with the states no-data, no-evaluation and error.
 - Monthly and yearly aggregates, **computed live** per request (one series read per service). The stored read model refreshed on `measurement.recorded` and nightly was planned as sprint 3 and **dropped on 2026-11-05** after the sprint-2 measurement (ADR-0048, decision 22 of the M12 plan); the module has no tables and no job.
 - Stage labels come only from the vocabulary, so they match on every screen (defect 9).
+- **The page** `/services/evaluate` (sprint 4, built): a consortium picker, a year select, the switch for unpublished services, the tiles (total, four licence lines, one line per stage term) and the paged yearly table, in English and German, accessible by keyboard and screen reader, axe-clean in both themes; the nav entry "Impact" for holders of `kpi.impact.read`. **Status:** sprints 1, 2 and 4 are built (sprint 3 dropped); the release `0.15.0` waits for the maintainer. Additions: the field `shown` on the table row, an optional `display` on the `kpi.valueType` entries (the duration shows `HH:MM:SS`), German labels for the `aggregate` terms of a new instance.
 
 ### M13: Legacy data migration (M)
 

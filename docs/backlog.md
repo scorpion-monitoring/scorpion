@@ -1143,4 +1143,27 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 
 - **`error` for a removed headline indicator cannot happen with real data.** The plan lists it as an `error` case. A composite key (`kpif_evaluation_set_indicator_fk`) refuses an evaluation that names an indicator outside its set, and `sets.setIndicators` removes the evaluation with the indicator, so a removed headline reads as `no-evaluation` ("the set has no headline"), which says the right thing to do. The `error` states that remain are a text headline, an unknown value type, an aggregate the value type does not allow, an aggregate with no function in the registry, and a failed read; the last three are proved with faked reads (`service/rows.test.ts`), because the keys of the database refuse them in real data.
 - **A history of evaluations.** The current evaluation applies to every year (decision 17), so a year in which a service used another headline shows today's headline on that year's values of it. A history of evaluations (M9 keeps one of KPI sets, not of evaluations) would show the headline of the time.
-- **Aggregate labels in German.** The seeded terms of the vocabulary `aggregate` carry an English label only, so `locale=de` falls back to English until an administrator adds a German label; the page of sprint 4 should offer them or the seed should carry them.
+- ~~**Aggregate labels in German.**~~ **Done in sprint 4:** the seed carries them (`Summe`, `Durchschnitt`, `Minimum`, `Maximum`) for a new instance; a database that exists keeps its English labels (seeds only add), so an instance adds the German ones in the vocabulary editor until then (the page shows the English label, visibly).
+
+## `kpi.impact` follow-ups (M12 sprint 4)
+
+- **Measured: the page's routes at 1,000 services** (the sprint-2 setup through the whole pipeline with `useIdentityApp`, local Postgres 16 in Testcontainers, a warm-up request, the median of five; 1,000 published/unpublished services of one consortium, 90 % with a KPI set, 80 % of those with a value in each of the twelve months, one shared set; a throw-away spec, not committed). Seeding took 7.6 s.
+
+  | Route (as a Reviewer)                         | Median (range)      |
+  | --------------------------------------------- | ------------------- |
+  | `GET /kpi/impact/consortia`                   | 2 ms (2 to 4)       |
+  | `GET /kpi/impact/summary` (published)         | 25 ms (23 to 34)    |
+  | `GET /kpi/impact/summary` (all services)      | 22 ms (18 to 33)    |
+  | `GET /kpi/impact/table`, page of 25           | 82 ms (70 to 91)    |
+  | `GET /kpi/impact/table`, page of 50 (default) | 139 ms (109 to 180) |
+  | `GET /kpi/impact/table`, page of 200          | 410 ms (384 to 455) |
+  | page of 200, all services                     | 402 ms (396 to 441) |
+  | the two reads of a choice, started together   | 144 ms              |
+
+  The tiles are cheap (25 ms at 1,000 services); the table costs the page, as in sprint 2 (`shown` added nothing measurable). The page's default of 50 stays well under the 500 ms line of the plan. The batched trusted reads stay the first step if a page of 200 must be faster.
+
+- **Measured: the calls of the page** (`apps/web/e2e/impact.spec.ts`, `[impact-calls]` lines, identical under both base paths): arrival 0 browser requests (the loader read the consortia and the unit labels on the server); choosing a consortium `summary` + `table` (2); changing the year `table` (1); changing the page size or the page `table` (1); the switch for unpublished services `summary` + `table` (2); arrival on a link that names a consortium `summary` + `table` (2).
+- **Image size against `0.14.0-full`:** the `full` image built from `v0.14.0` is 508,810,706 bytes and the one built from this branch 509,103,969: **+0.29 MB** for the whole of M12 (the module, its reads, the page and its texts; no dependency was added). `check-image-modules.ts` passes for `full`; `kpi.impact` is in `profiles/full.ts` only, so the `core-only` and `registry` images do not carry it.
+- **Sprint-2 leftovers settled.** The e2e flake `navigation.spec.ts` `[ASVS-7.4.4]` (Admin) was a **timeout**: the test opens every page of the navigation (more than thirty) and took 36 s against the 30 s default; it has `test.slow()` now and passed alone, and nothing is relaxed. **Not fixed:** `dashboard.spec.ts:223` ("no request while dragging, one save afterwards") and `components/dashboard-grid.spec.ts:176` (moves and resizes by pointer). Run alone four times each, in a clean `dev` worktree (`9cc05c5`) and on this branch, they fail about every other run on both (clean `dev`: 4 of 8 failed; this branch: 6 of 8): the passing runs take 2 s and the failing ones 6 s, the failures are "a drag sends nothing" / "two saves instead of one" and "the item did not move", which points at the pointer drag of `@dnd-kit` (the first mouse-down after the page loads is taken as a drag or not) and not at the test timing alone. Next step: record a trace of a failing run and look at the pointer events; the fix is probably in `packages/ui-kit/src/dashboard-grid` (an activation constraint) and needs a look at the library, so it is a task of its own. These two make `CI=true pnpm test:e2e:parallel` exit 1 on `dev` and on this branch.
+- **A sparkline per service, a comparison of two years, an export of the table** stay as listed in the plan's §10; `licencesAsOf` and a search box for more than 500 consortia stay as above.
+- **The select's years come from the loader's clock**; if the server's clock and the loader's differ across a New Year's midnight the first read can be a 422 until the page is reloaded. Reading the years from the consortia route would remove it.
