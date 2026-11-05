@@ -1,6 +1,6 @@
 <script lang="ts">
   // The KPI cards (FEATURES §3.8): per KPI of the service, the latest value with its unit, the change over the window as an arrow **and in words**
-  // (colour is never the only signal), and a sparkline with a text alternative. A text KPI shows its text and no change. The list scrolls inside
+  // (colour is never the only signal), and a sparkline with a text alternative. A text KPI shows its text and no change. The cards sit side by side when the tile is wide and the list scrolls inside
   // the tile, and the number of KPIs is said in a status line.
   import type { UiWidgetProps } from '@scorpion/contracts';
   import { getShell } from '@scorpion/ui-kit';
@@ -35,7 +35,8 @@
       aria-label={t('analytics.cards.title')}
       tabindex="0"
     >
-      <ul class="flex flex-col gap-2">
+      <!-- As many columns as the tile is wide enough for (16 rem each): one in a narrow tile, a row of cards in a wide one. -->
+      <ul class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
         {#each rows as row (row.indicatorId)}
           {@const change = changeView(row.change, locale())}
           <li class="border-base-300 flex items-center justify-between gap-3 rounded border p-2">
