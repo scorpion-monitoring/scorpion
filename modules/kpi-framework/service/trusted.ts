@@ -4,8 +4,8 @@
 // permission and not those of every read on the way. It is the same set `serviceKpis.get` answers with, read through the same
 // function, so there is one rule.
 import type { Db } from '@scorpion/kernel';
-import { inArray } from 'drizzle-orm';
-import { indicator } from '../db/schema.ts';
+import { asc, eq, inArray } from 'drizzle-orm';
+import { evaluation, indicator, serviceSet } from '../db/schema.ts';
 import { effectiveSet } from './effective.ts';
 import { iriFor } from './iri.ts';
 
@@ -109,3 +109,78 @@ export async function indicatorsByIdAsSystem(
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The most services `servicesOfSetAsSystem` returns. */
+export const MAX_SERVICES_OF_SET = 5000;
+
+/** The KPI set a service has and, when the set has one, its headline with what a reader needs to use it (M12 sprint 2). */
+export interface EvaluationOfService {
+  setId: string;
+  /** The headline of the set, `null` when the set has none (an administrator has not set it, or removed its indicator from the set). */
+  headline: {
+    indicatorId: string;
+    name: string;
+    valueType: string;
+    unit: string | null;
+    /** A term of the vocabulary `aggregate`. */
+    aggregate: string;
+  } | null;
+}
+
+/**
+ * The set a service has now and the evaluation of that set (the current one, not the one of an earlier year), or `null` when the service has no
+ * set. A set with no evaluation gives `headline: null`; an evaluation never names an indicator that left the set (the key refuses it, and
+ * `sets.setIndicators` removes the evaluation with it), so that case reads as no headline. A trusted read: it checks no permission and names no
+ * caller; the caller checks its own and that the service exists. Descriptive fields only.
+ */
+export async function evaluationOfServiceAsSystem(
+  db: Pick<Db, 'select'>,
+  serviceId: string,
+): Promise<EvaluationOfService | null> {
+  if (!UUID.test(serviceId)) return null;
+  const [row] = await db
+    .select({
+      setId: serviceSet.setId,
+      indicatorId: evaluation.indicatorId,
+      aggregate: evaluation.aggregate,
+      name: indicator.name,
+      valueType: indicator.valueType,
+      unit: indicator.unit,
+    })
+    .from(serviceSet)
+    .leftJoin(evaluation, eq(evaluation.setId, serviceSet.setId))
+    .leftJoin(indicator, eq(indicator.id, evaluation.indicatorId))
+    .where(eq(serviceSet.serviceId, serviceId));
+  if (!row) return null;
+  return {
+    setId: row.setId,
+    headline:
+      row.indicatorId === null || row.aggregate === null || row.name === null
+        ? null
+        : {
+            indicatorId: row.indicatorId,
+            name: row.name,
+            valueType: row.valueType!,
+            unit: row.unit,
+            aggregate: row.aggregate,
+          },
+  };
+}
+
+/**
+ * The ids of the services that have the set, sorted by id, at most 5 000 (the caller that needs more asks again from the last id). `[]` for a set
+ * no service has, one that does not exist and an id that is no id. A trusted read: no permission, ids only.
+ */
+export async function servicesOfSetAsSystem(
+  db: Pick<Db, 'select'>,
+  setId: string,
+): Promise<string[]> {
+  if (!UUID.test(setId)) return [];
+  const rows = await db
+    .select({ serviceId: serviceSet.serviceId })
+    .from(serviceSet)
+    .where(eq(serviceSet.setId, setId))
+    .orderBy(asc(serviceSet.serviceId))
+    .limit(MAX_SERVICES_OF_SET);
+  return rows.map((row) => row.serviceId);
+}

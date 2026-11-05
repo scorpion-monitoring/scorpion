@@ -4,13 +4,19 @@
 import {
   createRoute,
   listEnvelope,
+  pageMetadataSchema,
   paginate,
+  paginationQuery,
   z,
   type AppEnv,
   type RouteHandler,
 } from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
-import type { ImpactService } from './service/impact.ts';
+import {
+  DEFAULT_TABLE_PAGE_SIZE,
+  MAX_TABLE_PAGE_SIZE,
+  type ImpactService,
+} from './service/impact.ts';
 import { PERMISSION_READ } from './service/permissions.ts';
 
 const consortiumSchema = z.object({
@@ -101,6 +107,104 @@ export const getSummaryRoute = createRoute({
   },
 });
 
+const rowSchema = z.object({
+  serviceId: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  state: z
+    .enum(['ok', 'no-data', 'no-evaluation', 'error'])
+    .describe(
+      '`ok`: the year has a value. `no-data`: the service has a headline and no value in the year. `no-evaluation`: it has no KPI set, or its set has no headline. `error`: the headline cannot be read. Exclusive.',
+    ),
+  reason: z
+    .enum([
+      'ok',
+      'no-values',
+      'no-set',
+      'no-headline',
+      'not-numeric',
+      'value-type-unknown',
+      'aggregate-not-allowed',
+      'aggregate-unknown',
+      'read-failed',
+    ])
+    .describe('Why the row is in its state, as a code a page can translate.'),
+  advice: z
+    .string()
+    .describe(
+      'What to do about the state, in English; empty for `ok`. Never a person, never a value.',
+    ),
+  headline: z
+    .object({
+      indicatorId: z.string(),
+      name: z.string(),
+      unit: z.string().nullable(),
+      aggregate: z.string().describe('A term of the vocabulary `aggregate`.'),
+      label: z
+        .string()
+        .describe('The vocabulary’s label of the aggregate in the requested language.'),
+    })
+    .nullable()
+    .describe(
+      'The headline of the set the service has now (the current evaluation applies to every year); `null` when there is none.',
+    ),
+  months: z
+    .array(z.number().nullable())
+    .length(12)
+    .describe(
+      'January first: the stored value of the month, `null` for a month with no value (never zero). A duration is in seconds.',
+    ),
+  yearly: z
+    .number()
+    .nullable()
+    .describe(
+      'The aggregate of the headline over the months that have a value; `null` when none has.',
+    ),
+  monthsWithValue: z.int().min(0).max(12).describe('The months `yearly` is over: "n of 12".'),
+});
+
+export const tableSchema = z.object({
+  metadata: pageMetadataSchema,
+  result: z.array(rowSchema),
+  year: z.int(),
+  years: z
+    .array(z.int())
+    .describe('The years offered: the current year and the nine before it, newest first.'),
+});
+
+export const getTableRoute = createRoute({
+  method: 'get',
+  path: '/kpi/impact/table',
+  permission: PERMISSION_READ,
+  summary: 'The yearly impact table of a consortium',
+  description:
+    'One row per service of the consortium for one calendar year, computed live from the evaluation of its KPI set and its measurements: a page of services by name without case, then id (default 50, at most 200). By default only published services; `includeUnpublished=true` adds the others. The current evaluation applies to every year. A `consortium` that is not a consortium and a `year` outside the years offered are 422 naming the parameter; a consortium with no services is an empty list. `Cache-Control: no-store`. The answer names no person.',
+  request: {
+    query: paginationQuery({
+      defaultPageSize: DEFAULT_TABLE_PAGE_SIZE,
+      maxPageSize: MAX_TABLE_PAGE_SIZE,
+    }).extend({
+      consortium: z.string().min(1).max(64).describe('The id of the consortium.'),
+      year: z.string().min(1).max(8).describe('A calendar year of the years offered.'),
+      includeUnpublished: z
+        .enum(['true', 'false'])
+        .optional()
+        .describe('Include the unpublished services. Default `false`.'),
+      locale: z
+        .string()
+        .max(35)
+        .optional()
+        .describe('The language of the aggregate labels. Default `en`.'),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'The table.',
+      content: { 'application/json': { schema: tableSchema } },
+    },
+  },
+});
+
 export function registerRoutes(r: RouteRegistrar, impact: ImpactService) {
   r.internal(getConsortiaRoute, (async (c) => {
     c.header('cache-control', 'no-store');
@@ -141,4 +245,46 @@ export function registerRoutes(r: RouteRegistrar, impact: ImpactService) {
       200,
     );
   }) satisfies RouteHandler<typeof getSummaryRoute, AppEnv>);
+
+  r.internal(getTableRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    const { consortium, year, includeUnpublished, locale, page, pageSize } = c.req.valid('query');
+    const view = await impact.table(c.get('actor'), {
+      consortium,
+      year,
+      includeUnpublished: includeUnpublished === 'true',
+      locale,
+      page,
+      pageSize,
+    });
+    return c.json(
+      {
+        ...paginate(
+          { page: view.page, pageSize: view.pageSize },
+          view.totalCount,
+          view.rows.map((row) => ({
+            serviceId: row.serviceId,
+            name: row.name,
+            slug: row.slug,
+            state: row.state,
+            reason: row.reason,
+            advice: row.advice,
+            headline: row.headline && {
+              indicatorId: row.headline.indicatorId,
+              name: row.headline.name,
+              unit: row.headline.unit,
+              aggregate: row.headline.aggregate,
+              label: row.headline.label,
+            },
+            months: row.months,
+            yearly: row.yearly,
+            monthsWithValue: row.monthsWithValue,
+          })),
+        ),
+        year: view.year,
+        years: view.years,
+      },
+      200,
+    );
+  }) satisfies RouteHandler<typeof getTableRoute, AppEnv>);
 }

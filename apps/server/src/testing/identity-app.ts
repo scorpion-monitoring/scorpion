@@ -106,7 +106,7 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   ingestion?: boolean | { clock?: () => Date };
   /** Loads kpi.analytics (needs `kpi` and `ingestion`). `clock` is the "now" its windows end with. */
   analytics?: boolean | { clock?: () => Date };
-  /** Loads kpi.impact (needs the registry modules, which are on by default). */
+  /** Loads kpi.impact and the three modules it depends on (needs the registry modules, which are on by default). */
   impact?: boolean;
   /** Fixture modules that depend on core.settings, for example one that registers user preferences. */
   extraModules?: {
@@ -188,7 +188,16 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
   if (options.shared) afterAll(stopKernels);
 
   return {
-    async start(options: AppOptionsForTest = {}) {
+    async start(given: AppOptionsForTest = {}) {
+      // kpi.impact reads the evaluation, the measurements and the aggregates, so it brings the three modules it depends on.
+      const options: AppOptionsForTest = given.impact
+        ? {
+            ...given,
+            kpi: true,
+            ingestion: given.ingestion ?? true,
+            analytics: given.analytics ?? true,
+          }
+        : given;
       const lines: string[] = [];
       const secretsKey = options.secretsKey ?? makeSecretsKey();
       const databaseUrl = options.databaseUrl ?? (await server.createDatabase());

@@ -18,6 +18,13 @@ const make = (failure: Error) =>
       listImpactRowsAsSystem: () => Promise.reject(failure),
       findLicencesAsSystem: () => Promise.resolve({}),
     },
+    kpi: {
+      evaluationOfServiceAsSystem: () => Promise.resolve(null),
+      findValueType: () => undefined,
+    },
+    reads: { seriesAsSystem: () => Promise.resolve([]) },
+    aggregates: new Map(),
+    clock: () => new Date('2026-06-15T12:00:00Z'),
   });
 
 describe('a consortium of too many services', () => {
@@ -31,6 +38,14 @@ describe('a consortium of too many services', () => {
     ]);
     const error = await rejection(make(tooMany).summary(actor, { consortium: ID }));
     expect(error.status).toBe(422);
+    expect(paths(error)).toEqual(['query:consortium']);
+  });
+
+  it('is the same 422 for the table', async () => {
+    const tooMany = new Invalid('The request is not valid.', [
+      { in: 'query', path: 'organisation', message: 'Too many.' },
+    ]);
+    const error = await rejection(make(tooMany).table(actor, { consortium: ID, year: '2026' }));
     expect(paths(error)).toEqual(['query:consortium']);
   });
 

@@ -1482,7 +1482,7 @@ describe('defect 1: the ingestion routes', () => {
   });
 });
 
-// M12 sprint 1: the routes of kpi.impact (the consortia and the tiles). A decision for every route and a walker that fails for one added later
+// M12 sprints 1 and 2: the routes of kpi.impact (the consortia, the tiles and the yearly table). A decision for every route and a walker that fails for one added later
 // without a row. The plain `kpi.impact.read` is held by the role `reviewer` and Admin and not by `user` (decision 20 of the plan), so the matrix is
 // 401 anonymous, 403 for a user without roles and for a plain User, 200 for a Reviewer; there is no write.
 describe('defect 1: the impact routes', () => {
@@ -1494,6 +1494,13 @@ describe('defect 1: the impact routes', () => {
       sample: (consortium) => ({
         method: 'GET',
         path: `/kpi/impact/summary?consortium=${consortium}`,
+      }),
+    },
+    // Sprint 2: the yearly table of the same consortium; the year is this one, which the page always offers.
+    'GET /kpi/impact/table': {
+      sample: (consortium) => ({
+        method: 'GET',
+        path: `/kpi/impact/table?consortium=${consortium}&year=${new Date().getUTCFullYear()}`,
       }),
     },
   };

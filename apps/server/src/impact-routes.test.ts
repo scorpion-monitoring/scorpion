@@ -1,7 +1,14 @@
-// The internal reads of kpi.impact through the whole pipeline (M12 sprint 1): the consortia and the tiles of one. Session auth, the plain
+// The internal reads of kpi.impact through the whole pipeline (M12 sprints 1 and 2): the consortia, the tiles and the yearly table of one. Session auth, the plain
 // permission `kpi.impact.read` held by the role `reviewer` and Admin and not by `user`, the list envelope, `Cache-Control: no-store`, and a 4xx
 // (never a 500) for every bad input.
-import { makeOrganisation, makeService } from '@scorpion/testing';
+import {
+  makeIndicator,
+  makeKpiSet,
+  makeMeasurement,
+  makeOrganisation,
+  makeService,
+  makeServiceKpis,
+} from '@scorpion/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { useIdentityApp } from './testing/identity-app.ts';
 
@@ -58,14 +65,20 @@ type Summary = {
   otherStages: { key: string; count: number }[];
 };
 
-describe('who may call', () => {
-  const paths = () => ['/kpi/impact/consortia', `/kpi/impact/summary?consortium=${consortium.id}`];
+const THIS_YEAR = new Date().getUTCFullYear();
 
-  it('answers an anonymous caller 401 on both routes [ASVS-8.2.1]', async () => {
+describe('who may call', () => {
+  const paths = () => [
+    '/kpi/impact/consortia',
+    `/kpi/impact/summary?consortium=${consortium.id}`,
+    `/kpi/impact/table?consortium=${consortium.id}&year=${THIS_YEAR}`,
+  ];
+
+  it('answers an anonymous caller 401 on every route [ASVS-8.2.1]', async () => {
     for (const path of paths()) expect((await started.get(path)).status, path).toBe(401);
   });
 
-  it('answers a signed-in user 403 on both routes [ASVS-8.2.1]', async () => {
+  it('answers a signed-in user 403 on every route [ASVS-8.2.1]', async () => {
     for (const path of paths()) expect((await started.get(path, as(plain))).status, path).toBe(403);
   });
 
@@ -157,9 +170,153 @@ describe('GET /kpi/impact/summary', () => {
   });
 });
 
+type Table = {
+  metadata: { currentPage: number; pageSize: number; totalCount: number; totalPages: number };
+  result: {
+    serviceId: string;
+    name: string;
+    state: string;
+    reason: string;
+    advice: string;
+    headline: { name: string; aggregate: string; label: string; unit: string | null } | null;
+    months: (number | null)[];
+    yearly: number | null;
+    monthsWithValue: number;
+  }[];
+  year: number;
+  years: number[];
+};
+
+describe('GET /kpi/impact/table', () => {
+  const get = (query: string, who: Who = reviewer) =>
+    started.get(`/kpi/impact/table?${query}`, as(who));
+  const base = () => `consortium=${tableConsortium.id}&year=${THIS_YEAR - 1}`;
+  let tableConsortium: { id: string };
+
+  beforeAll(async () => {
+    const pool = started.kernel.pool;
+    tableConsortium = await makeOrganisation(pool, {
+      type: 'consortium',
+      name: 'Impact table consortium',
+    });
+    const head = await makeIndicator(pool, {
+      name: 'Impact table users',
+      valueType: 'integer',
+      unit: 'count',
+    });
+    const set = await makeKpiSet(pool, {
+      name: 'Impact table set',
+      indicators: [{ indicatorId: head.id, necessity: 'mandatory' }],
+      evaluation: { indicatorId: head.id, aggregate: 'sum' },
+    });
+    const withValues = await makeService(pool, {
+      name: 'Table a measured',
+      public: true,
+      consortia: [tableConsortium.id],
+    });
+    await makeServiceKpis(pool, { serviceId: withValues.id, setId: set.id });
+    for (const [month, value] of [
+      ['01-31', 3],
+      ['12-31', 4],
+    ] as const)
+      await makeMeasurement(pool, {
+        serviceId: withValues.id,
+        indicatorId: head.id,
+        period: `${THIS_YEAR - 1}-${month}`,
+        valueNumeric: value,
+      });
+    await makeService(pool, {
+      name: 'Table b no set',
+      public: true,
+      consortia: [tableConsortium.id],
+    });
+    await makeService(pool, {
+      name: 'Table c hidden',
+      public: false,
+      consortia: [tableConsortium.id],
+    });
+  }, 120_000);
+
+  it('answers the list envelope with the year and the years offered, never cached, and the rows in words [ASVS-8.2.1]', async () => {
+    const reply = await get(base());
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
+    const body = reply.body as Table;
+    expect(Object.keys(body).sort()).toEqual(['metadata', 'result', 'year', 'years']);
+    expect(body.year).toBe(THIS_YEAR - 1);
+    expect(body.years).toHaveLength(10);
+    expect(body.years[0]).toBe(THIS_YEAR);
+    expect(body.metadata).toEqual({ currentPage: 0, pageSize: 50, totalCount: 2, totalPages: 1 });
+    expect(body.result.map((row) => [row.name, row.state, row.reason])).toEqual([
+      ['Table a measured', 'ok', 'ok'],
+      ['Table b no set', 'no-evaluation', 'no-set'],
+    ]);
+    const [measured, bare] = body.result;
+    expect(measured).toMatchObject({ yearly: 7, monthsWithValue: 2, advice: '' });
+    expect(measured!.months[0]).toBe(3);
+    expect(measured!.months[11]).toBe(4);
+    expect(measured!.headline).toEqual(
+      expect.objectContaining({
+        name: 'Impact table users',
+        aggregate: 'sum',
+        label: 'Sum',
+        unit: 'count',
+      }),
+    );
+    expect(bare!.advice.length).toBeGreaterThan(20);
+    expect(bare!.headline).toBeNull();
+  });
+
+  it('adds the unpublished services only for includeUnpublished=true', async () => {
+    expect(
+      ((await get(`${base()}&includeUnpublished=true`)).body as Table).metadata.totalCount,
+    ).toBe(3);
+    expect(
+      ((await get(`${base()}&includeUnpublished=false`)).body as Table).metadata.totalCount,
+    ).toBe(2);
+    expect((await get(`${base()}&includeUnpublished=yes`)).status).toBe(422);
+  });
+
+  it('pages with page and pageSize, counted from 0, and refuses a size over 200', async () => {
+    const second = (await get(`${base()}&pageSize=1&page=1`)).body as Table;
+    expect(second.metadata).toEqual({ currentPage: 1, pageSize: 1, totalCount: 2, totalPages: 2 });
+    expect(second.result.map((row) => row.name)).toEqual(['Table b no set']);
+    for (const query of ['pageSize=201', 'pageSize=0', 'page=-1', 'page=x'])
+      expect((await get(`${base()}&${query}`)).status, query).toBe(422);
+  });
+
+  it('is 422 naming consortium or year for each bad parameter, and never a 500', async () => {
+    const year = THIS_YEAR - 1;
+    const cases: [string, string][] = [
+      ['', 'query:consortium|query:year'],
+      [`year=${year}`, 'query:consortium'],
+      [`consortium=x&year=${year}`, 'query:consortium'],
+      [`consortium=${ABSENT}&year=${year}`, 'query:consortium'],
+      [`consortium=${provider.id}&year=${year}`, 'query:consortium'],
+      [`consortium=${tableConsortium.id}`, 'query:year'],
+      [`consortium=${tableConsortium.id}&year=abc`, 'query:year'],
+      [`consortium=${tableConsortium.id}&year=${THIS_YEAR - 10}`, 'query:year'],
+      [`consortium=${tableConsortium.id}&year=${THIS_YEAR + 1}`, 'query:year'],
+    ];
+    for (const [query, expected] of cases) {
+      const reply = await get(query);
+      expect(reply.status, query).toBe(422);
+      expect(problemPaths(reply.body).sort().join('|'), query).toBe(expected);
+    }
+    expect((await get(`${base()}&x=1`)).status).toBe(422);
+  });
+
+  it('has no figuresAsOf and no stored model yet, and no person, run or file in the body [ASVS-8.2.1]', async () => {
+    const text = JSON.stringify((await get(`${base()}&includeUnpublished=true`)).body);
+    for (const word of ['figuresAsOf', 'email', 'contact', 'userId', 'runId', 'source'])
+      expect(text, word).not.toContain(word);
+  });
+});
+
 describe('the surface', () => {
   it('has no public v1 route for the impact figures', async () => {
     expect((await started.getV1('/kpi/impact/summary')).status).toBe(404);
+    expect((await started.getV1('/kpi/impact/table')).status).toBe(404);
   });
 });
 

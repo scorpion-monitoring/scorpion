@@ -40,3 +40,20 @@ consortium, refreshed on events". The module is new, in the `full` profile only,
 - The summary leaves out `licencesAsOf`: the `Spdx` adapter does not say when its list was fetched (backlog).
 - Sprint 3 may drop the stored table if sprint 2's measurement shows the live table is trivially fast; the decision stays reversible without a migration until then.
 - `docs/security/authorization.md` gains the route rows and the field table of the summary; ASVS V8 carries the evidence.
+
+## Amended in sprint 2: the table computed live, and what it costs
+
+- **The table is computed live first** (`GET /kpi/impact/table`, `service/rows.ts`, `service/year.ts`): one read of the evaluation (`kpi.framework`'s new trusted
+  `evaluationOfServiceAsSystem`, which returns the set and its headline, `null` for a service with no set) and **one `seriesAsSystem` call** for the twelve months of
+  a year, per service. The yearly figure is the aggregate of the registry `analytics.aggregate` over the months that have a value, with the count ("n of 12"); the
+  arithmetic is the calculation library of `kpi.analytics`. The current evaluation applies to every year. A row is in one of four exclusive states and says in words
+  what to do; an `error` of one service never fails the page. `kpi.framework`, `kpi.ingestion` and `kpi.analytics` become dependencies of the module.
+- **A removed headline indicator is `no-evaluation`, not `error`.** The key of the evaluation refuses an indicator outside the set and `sets.setIndicators` removes the
+  evaluation with it, so the case the plan listed under `error` reads as "the set has no headline".
+- **Measured** (local Postgres in Testcontainers, a warm run, the median of five; the details and the method are in [docs/backlog.md](../backlog.md), "`kpi.impact`
+  follow-ups (M12 sprint 2)"): a page of 50 services takes 138 ms at 50 services in the consortium and 222 ms at 1,000; a page of 200 takes 157 ms at 50 services,
+  480 ms at 200 and 511 ms at 1,000; the statements are 4 per service with a headline and none per month (189 for a page of 50, 744 for a page of 200). The cost is the
+  page, not the consortium, because the page is cut before the rows are computed.
+- **Consequence for sprint 3 (a recommendation; the maintainer decides).** The stored model is not needed as a speed-up, and a stored table can only be as right as the
+  live one, at the price of two handlers, a nightly job and a repair. Recommended: do not build it for now; if a page of 200 must be faster, add the two batched trusted
+  reads named in the backlog. Decision 1 above (plain tables instead of views) stays as the form the model would take; dropping the model needs this ADR to say so.

@@ -52,7 +52,12 @@ export {
 } from './service/indicator-usage.ts';
 export { monthEndBoundary, type KpisInPeriod } from './service/history.ts';
 export type { EffectiveIndicator } from './service/effective.ts';
-export type { EffectiveIndicatorRow, IndicatorRowAsSystem } from './service/trusted.ts';
+export type {
+  EffectiveIndicatorRow,
+  EvaluationOfService,
+  IndicatorRowAsSystem,
+} from './service/trusted.ts';
+export { MAX_SERVICES_OF_SET } from './service/trusted.ts';
 export type { EffectiveRow } from './service/merge.ts';
 
 import type { KpiFrameworkService } from './module.ts';
