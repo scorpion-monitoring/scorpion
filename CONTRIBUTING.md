@@ -95,6 +95,15 @@ The README badges for ASVS 5.0 (chapters V6, V7, V8 and V10), OpenSSF Best Pract
 - Tag a test that proves a requirement with `[ASVS-<chapter>.<section>.<requirement>]` in its title. The fields `assessor`, `assessed_commit`, `assessed_on`,
   `second_pass`, `reviewer` and `assessment_type` belong to the maintainer.
 
+## Drizzle Studio
+
+`pnpm db:studio` opens [Drizzle Studio](https://orm.drizzle.team/drizzle-studio/overview) on the development database (`DATABASE_URL` from `.env`, default
+the one `pnpm dev` starts) with the tables of the kernel and of every module, at `https://local.drizzle.studio`. It listens on `127.0.0.1` only (port 4983, or
+`STUDIO_PORT`) and refuses `NODE_ENV=production`. **Studio can write to the database**: an edit there bypasses the service layer, the outbox, the audit
+log and every validation. Use it to look, not to change data you could change through the app. It is a development tool: `drizzle.config.ts` is in no profile and
+in no image, and migrations are still written per module with `pnpm db:generate`. `scripts/drizzle-config.test.ts` fails when a module with a `db/schema.ts` is
+not covered by the config.
+
 ## Commits
 
 - Small, reviewable commits.

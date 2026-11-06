@@ -23,6 +23,7 @@
     "test:e2e:parallel": "node scripts/e2e-parallel.ts",
     "test:all": "node scripts/test-all.ts",
     "db:generate": "node scripts/db-generate.ts",
+    "db:studio": "node scripts/db-studio.ts",
     "scorpion": "node apps/server/src/cli.ts",
     "changeset:check": "node scripts/changeset-check.ts",
     "audit:check": "node scripts/audit-check.ts",
