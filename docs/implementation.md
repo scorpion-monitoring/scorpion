@@ -47,7 +47,7 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | M10 | `kpi.ingestion`: form, CSV/TSV/XLSX, API write | 3 KPIs | L | M9 | 6 |
 | M11 | `kpi.analytics`: dashboard, scores, exports | 3 KPIs | L | M10 | 10 |
 | M12 | `kpi.impact` | 3 KPIs | M | M11 | 9 |
-| M12a | Polish: eight maintainer fixes and a slice of the backlog ([m12a-plan.md](m12a-plan.md)) | 3 KPIs | S | M12 | none |
+| M12a | Polish: eight maintainer fixes, a slice of the backlog, the faceted search redesign and admin-editable theme colours ([m12a-plan.md](m12a-plan.md)) | 3 KPIs | S | M12 | none |
 | M13 | Legacy data migration tool | 3 KPIs | M | M12 | none |
 | **G3** | **Gate 3: migration dry run clean, KPI profile live** | | | M9–M13 | |
 | M14 | `maturity` | 4 Parity | M | G3 | 7 |

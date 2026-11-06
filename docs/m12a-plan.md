@@ -1,7 +1,7 @@
 # M12a Plan: polish and backlog (between M12 and M13)
 
 Status: **decisions answered on 2026-11-06 (§3); ready for approval.** Nothing here is built. The release version is decided after the scope is (a `minor` if anything is visible, so most likely `0.16.0`; M13 then follows).
-Why a milestone of its own: eight small, unrelated fixes asked for on 2026-11-06 plus a slice of `docs/backlog.md` (397 open lines). It adds **no module**, no runtime dependency (`drizzle-kit` is already a dev dependency) and no public v1 change unless §2 item 3 says so. Size S: **three sprints**, one pull request each (CLAUDE.md: batch).
+Why a milestone of its own: eight small, unrelated fixes asked for on 2026-11-06 plus a slice of `docs/backlog.md` (397 open lines). It adds **no module**, no runtime dependency (`drizzle-kit` is already a dev dependency) and no public v1 change unless §2 item 3 says so (sprint 4 adds a stylesheet route on the internal surface and settings, no new module). Size S to M: **four sprints**, one pull request each (CLAUDE.md: batch).
 
 ## 1. What was found in the source (checked 2026-11-06 on `dev`)
 
@@ -38,6 +38,16 @@ Why a milestone of its own: eight small, unrelated fixes asked for on 2026-11-06
 
 The behaviour of today's faceted search (checkbox logic, counts, the URL state) is liked and stays; the look is old-school. The sprint **starts with an interactive brainstorm with the maintainer** (the directions considered: filter chips with a side drawer, a horizontal filter bar with popovers, a refreshed sidebar), then builds the chosen one or two alternatives behind a switch for comparison, applies it to both catalogues (`/services` and `/catalog/services`), keeps the keyboard and axe results, and removes the loser. The e2e journeys of the catalogue (j08) are updated, not weakened.
 
+**Sprint 4: admin-editable theme colours** (`feature/m12a-theme-colours`; added 2026-11-06, decision: **full control**, not only a primary and an accent colour)
+
+An administrator changes the colours of both themes (light and dark) in the Branding screen of the admin area. Size: about one sprint (the estimate given was 2 to 3 days for the full set).
+
+1. **Settings.** A `colors` group in the branding settings of `core.settings`, one value per daisyUI colour token for each of the two themes (`primary`, `secondary`, `accent`, `neutral`, `base-100`, `base-200`, `base-300`, `info`, `success`, `warning`, `error`, and the `*-content` pairs), each optional; an unset token keeps the built-in value. The values are `#rrggbb` only, never free CSS. The screen is generated from the schema like the rest of the branding screen; a "reset to default" per theme and a preview of the two themes.
+2. **Delivery under the CSP.** The policy allows no inline style, so the overrides are a **stylesheet route** (for example `GET /theme.css` on the web app, built from the branding read) linked from the layout, with a version in its address so a change is seen at once and a short cache. It writes only the variables of the known tokens, with values that passed validation, nothing else. The built-in themes stay in `app.css`; the route only overrides.
+3. **Contrast.** A pure function checks every text/background pair of the tokens (content on its colour, base-content on the three base colours) against WCAG AA (4.5:1; 3:1 for large text and borders) for each theme; a failing set is refused on save with the pair named, and the content colours may be left to be derived (the best of black and white). Table-driven unit tests, a rollback test (nothing is half-saved), a denied-permission test.
+4. **Everything that draws colour follows the tokens.** The charts (palette), the badges, the sparkline and the logos' theme switch read the variables, not fixed colours; a test fails for a hard-coded colour in `modules/**/ui` and `packages/ui-kit` outside the palette definition. The e2e suite runs axe in both themes with a custom set applied, under both base paths.
+5. **Docs.** README of `core.settings` and `core.ui-shell`, an ADR for the stylesheet route (a decision about the CSP and the cache), the docs export, and an ASVS note if a scoped path changes. The documentation screenshots keep the default colours (the custom set is applied only inside the tests).
+
 ## 3. Decisions (answered 2026-11-06)
 
 - **A. Landing page:** a public searchable list of published services (item 3).
@@ -46,6 +56,7 @@ The behaviour of today's faceted search (checkbox logic, counts, the URL state) 
 - **Icons:** generated from Tabler at build time, a dev dependency only (item 8).
 - **Copyright:** the footer keeps `© year instanceName` and gains the fixed "Powered by Scorpion" attribution; no `copyrightHolder` setting (the maintainer's final decision; rule 9 is amended by an ADR for the attribution, item 7).
 - **Redesign:** its own sprint, decided in a brainstorm at its start.
+- **Theme colours:** a sprint of its own (sprint 4), with **full control** of the colour tokens of both themes, not only a primary and an accent colour (the maintainer's decision, 2026-11-06).
 
 ## 4. Rules for the milestone
 
