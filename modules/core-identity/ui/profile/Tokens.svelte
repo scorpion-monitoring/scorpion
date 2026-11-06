@@ -101,11 +101,13 @@
     <p>{t('profile.tokens.lead')}</p>
 
     {#if shown}
-      <div class="alert alert-warning flex-col items-start" role="status">
+      <!-- daisyUI's alert is a grid with one column per child, which squeezed the token into a narrow column that
+           wrapped it letter by letter on a phone. A flex column keeps every part at the full width. -->
+      <div class="alert alert-warning flex flex-col items-stretch gap-2 text-start" role="status">
         <p class="font-medium">{t('profile.tokens.secretTitle', { name: shown.name })}</p>
         <p>{t('profile.tokens.secretWarning')}</p>
         <code
-          class="bg-base-100 text-base-content w-full rounded p-2 break-all"
+          class="bg-base-100 text-base-content block w-full min-w-0 rounded p-2 text-sm break-all select-all"
           data-testid="token-secret">{shown.secret}</code
         >
         <div class="flex flex-wrap items-center gap-2">
