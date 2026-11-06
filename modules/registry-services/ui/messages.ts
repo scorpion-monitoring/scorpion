@@ -190,6 +190,10 @@ export const messages: UiMessages = {
     'services.filters.active': 'Gewählte Filter',
     'services.filters.remove': 'Filter entfernen: {facet}: {value}',
 
+    'catalog.title': 'Dienstekatalog',
+    'catalog.lead': 'Die Dienste, die ihre Betreiber veröffentlicht haben.',
+    'catalog.empty': 'Kein veröffentlichter Dienst passt.',
+
     'services.new.intro':
       'Beantworten Sie die Fragen Schritt für Schritt. Erst mit „Dienst anlegen“ wird etwas gespeichert.',
 

@@ -237,6 +237,7 @@ returns the page of rows and the total, `facets(actor, query, locale)` the facet
 - **Facets count over the filtered set.** Each facet counts over the services that the search and _all the other_ facets leave: OR within a
   facet, AND across facets. A value with no service in that set is shown with count 0 only when it is chosen. The services with no value
   are the value `:none`, labelled by the entry's `emptyLabel` (`Unknown` for a licence); a facet without one has no such value.
+  A facet with `public: true` (`consortium` and `stage`) is also offered by the public list `GET /catalog/services`, counted over the published services only.
 - **A filter that names nothing is 422**: a facet nobody registered, an organisation that does not exist, a stage term nobody declared, a
   licence SPDX does not list, `:none` for a facet without an `emptyLabel`, a value over 100 characters or more than 50 values.
 - **Labels** come with the answer: the organisation's name, the stage term's label for the `locale` asked for, the licence id. The screen
@@ -374,7 +375,7 @@ module that declares `registry.services` as a dependency may contribute.
 | `service.orgRole`            | `{ id, labels, orgTypes, min, max, order }`                                                                                          | `provider` (1..1, type `provider`), `consortium` (0..20, type `consortium`) |
 | `service.fieldType`          | `{ id, labels, widget, storages, configSchema, schema(config), jsonSchema(config), choices?, check?, store?, toValue?, schemaOrg? }` | `text`, `select`, `multi-select`, `license`, `organisation`, `image`        |
 | `service.wizardStep`         | `{ id, order, title, intro, fields, component?, applies?, showIf? }`                                                                 | none (its own steps are `config/steps.ts`)                                  |
-| `service.facet`              | `{ id, labels, order, emptyLabel?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf?, v1? }`                  | `consortium`, `stage`, `license`, `provider`                                |
+| `service.facet`              | `{ id, labels, order, emptyLabel?, public?, where(selection, serviceId), values(matching, db), unknownOf?, labelsOf?, v1? }`         | `consortium`, `stage`, `license`, `provider`                                |
 | `service.profileContributor` | `{ id, contribute(service, ctx) }`                                                                                                   | none (the Schema.org builder enforces the allow-list)                       |
 
 It also contributes `org.publicReference` (the public services an organisation is named by; see the public reads), `notify.template`, and `org.usage` (an organisation with `svc_service_organisation` rows cannot be deleted and its type cannot change,

@@ -26,6 +26,7 @@ describe('the pages of registry.services', () => {
   it('offer every page since sprint 6: the catalogue, the wizard, the service page and the public page', () => {
     expect(NOT_OFFERED).toEqual([]);
     expect(routes.map((route) => route.path).sort()).toEqual([
+      '/catalog/services',
       '/catalog/services/:slug',
       '/services',
       '/services/:slug',
@@ -45,11 +46,15 @@ describe('the pages of registry.services', () => {
     expect(typeof manifest.ui).toBe('function');
   });
 
-  it('need a permission the module declares, except the one public page, which says why it is public', () => {
+  it('need a permission the module declares, except the public pages, which say why they are public', () => {
     const declared = new Set(Object.keys(manifest.permissions ?? {}));
     const open = SERVICE_ROUTES.filter((route) => route.public === true);
-    expect(open.map((route) => route.path)).toEqual(['/catalog/services/:slug']);
-    expect(open[0]!.publicReason).toMatch(/draws nothing from a session or a role/);
+    expect(open.map((route) => route.path)).toEqual([
+      '/catalog/services',
+      '/catalog/services/:slug',
+    ]);
+    for (const route of open)
+      expect(route.publicReason).toMatch(/draws nothing from a session or a role/);
     for (const route of SERVICE_ROUTES.filter((entry) => entry.public !== true)) {
       expect(declared.has(route.permission!), route.path).toBe(true);
     }
@@ -63,6 +68,7 @@ describe('the pages of registry.services', () => {
       '/services': 'registry.services.service.read',
       '/services/new': 'registry.services.service.create',
       '/services/:slug': 'registry.services.service.read',
+      '/catalog/services': undefined,
       '/catalog/services/:slug': undefined,
     });
   });

@@ -286,6 +286,8 @@ export const facetEntrySchema = z.strictObject({
   order,
   /** The label of the services that have no value (`Unknown`, `Uncategorized`). */
   emptyLabel: labels.optional(),
+  /** Whether a visitor of the public list (`GET /catalog/services`) may filter by this facet; the facet then counts over the published services. */
+  public: z.boolean().optional(),
   where: fn<(selection: FacetSelection, serviceId: SQL) => SQL>(),
   values: fn<(matching: SQL, db: Db) => Promise<FacetValue[]>>(),
   unknownOf: fn<(keys: readonly string[], env: FacetEnv, db: Db) => Promise<string[]>>().optional(),

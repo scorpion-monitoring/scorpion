@@ -665,10 +665,9 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
   });
 
   // The public list: the same read model, narrowed to what a Reviewer made public and to the two facets a visitor may use.
-  const PUBLIC_FACETS = ['stage', 'consortium'];
   const publicCatalogue = createCatalogue({
     db,
-    facets: (deps.facets ?? []).filter((facet) => PUBLIC_FACETS.includes(facet.id)),
+    facets: (deps.facets ?? []).filter((facet) => facet.public === true),
     organisationsOf,
     iconPath,
     env: catalogueEnv,
