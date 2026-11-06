@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { getShell } from '@scorpion/ui-kit';
   import Icon from './Icon.svelte';
+  import { currentId, rowsOf } from '../nav-tree.ts';
 
   let {
     collapsed,
@@ -24,11 +25,11 @@
   });
   let closed = $state<Record<string, boolean>>({});
   // The page the catch-all route shows is known by its registered pattern (`/admin/users/:id`), which
-  // does not depend on how the address is written or under which base path (defect 11). A link is
-  // current on its own page and on the pages below it, at a segment boundary.
+  // does not depend on how the address is written or under which base path (defect 11). Exactly one entry is
+  // current: the one whose path is the page or the longest path above it, so `Users` is not lit on
+  // `/admin/users/pending` when `Pending approvals` has its own entry.
   const shown = $derived((page.data as { pattern?: string }).pattern);
-  const current = (path: string) =>
-    shown !== undefined && (shown === path || (path !== '/' && shown.startsWith(`${path}/`)));
+  const currentEntry = $derived(currentId(navigation().nav, shown));
 </script>
 
 {#if open}
@@ -79,15 +80,19 @@
           class="menu w-full gap-1 p-0"
           hidden={!collapsed && closed[section.id]}
         >
-          {#each section.items as item (item.id)}
+          {#each rowsOf(section.items) as { item, depth } (item.id)}
             <li>
               <a
                 href={href(item.path)}
-                class="{current(item.path) ? 'menu-active' : ''} {collapsed
+                class="{currentEntry === item.id ? 'menu-active' : ''} {collapsed
                   ? 'tooltip tooltip-right justify-center'
                   : ''}"
+                style:margin-inline-start={!collapsed && depth > 0
+                  ? `${depth * 1.25}rem`
+                  : undefined}
+                data-depth={depth}
                 data-tip={collapsed ? t(item.label) : undefined}
-                aria-current={current(item.path) ? 'page' : undefined}
+                aria-current={currentEntry === item.id ? 'page' : undefined}
                 onclick={onclose}
               >
                 <Icon name={item.icon ?? 'dot'} />
