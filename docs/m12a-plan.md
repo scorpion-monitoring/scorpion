@@ -1,7 +1,7 @@
 # M12a Plan: polish and backlog (between M12 and M13)
 
-Status: **draft, for the maintainer's decisions in §3.** Nothing here is built. The release version is decided after the scope is (a `minor` if anything is visible, so most likely `0.16.0`; M13 then follows).
-Why a milestone of its own: eight small, unrelated fixes asked for on 2026-11-06 plus a slice of `docs/backlog.md` (397 open lines). It adds **no module**, no runtime dependency (`drizzle-kit` is already a dev dependency) and no public v1 change unless §2 item 3 says so. Size S: about two sprints, **batched in as few pull requests as CLAUDE.md allows** (one per sprint).
+Status: **decisions answered on 2026-11-06 (§3); ready for approval.** Nothing here is built. The release version is decided after the scope is (a `minor` if anything is visible, so most likely `0.16.0`; M13 then follows).
+Why a milestone of its own: eight small, unrelated fixes asked for on 2026-11-06 plus a slice of `docs/backlog.md` (397 open lines). It adds **no module**, no runtime dependency (`drizzle-kit` is already a dev dependency) and no public v1 change unless §2 item 3 says so. Size S: **three sprints**, one pull request each (CLAUDE.md: batch).
 
 ## 1. What was found in the source (checked 2026-11-06 on `dev`)
 
@@ -16,30 +16,36 @@ Why a milestone of its own: eight small, unrelated fixes asked for on 2026-11-06
 | 7   | Default logos, copyright                     | `Footer.svelte` already prints `© {year} {instanceName}` from branding settings, so **the copyright already follows the instance name**; the remaining part is the logos: branding takes uploaded logos (light and dark) through the blob store and shows none when none is set. Shipping a default needs the Scorpion mark as a static asset in the web app, used as the fallback of the two `logo-light`/`logo-dark` slots.                                                                                                                                                                                                |
 | 8   | Widget settings icon                         | The icon named `cog` in `packages/contracts/src/icons.ts` is a **circle with eight rays, which is a sun** (the same idea as `sun`), so every settings button looks like a brightness control. Redraw `cog` as a gear (the name is used by the widget tile, the dashboard settings and others) and check `settings` (sliders) is used only where sliders fit.                                                                                                                                                                                                                                                                 |
 
-## 2. Scope proposed
+## 2. Scope
 
 **Sprint 1: the eight fixes** (`feature/m12a-polish`)
 
-1. **Drizzle studio.** `drizzle.config.ts` at the root (all module schemas, `DATABASE_URL`), `pnpm db:studio`. Dev only: bound to `127.0.0.1`, never in a profile or image, documented in CONTRIBUTING and `docs/` with the warning that it can write to the database. Test: the config lists every module that has a `db/schema.ts` (a drift test).
-2. **Hierarchical token permissions.** A tree built from the dotted ids (`registry` > `services` > `service` > `read`); a parent node is a tri-state checkbox (checked, partly, unchecked) that selects or clears every leaf below it; each node says how many it covers; keyboard (arrows, space) and axe; the stored value stays the flat list of ids, so the API is unchanged. Pure tree-building and selection logic in a unit-tested file.
-3. **`catalog/services/*`.** Move the **public pages** to `/catalog/services/:slug`, `/catalog/organisations/:id` and add a landing page `/catalog/services` (a public, searchable list of published services, the public twin of the catalogue; needs a public list route or reuses the existing public read, **decision A**). Old `/public/...` addresses answer a permanent redirect for pages; the API routes `GET /public/services/{ref}` stay or move under `/catalog` (**decision B**). Schema.org `url`, sitemap-like links, `PUBLIC_PAGES`, the docs and the e2e specs follow; `/services` stays the signed-in catalogue.
-4. **Facets full width** (a layout change) and **a backlog entry "redesign the faceted search"** with what the maintainer likes (the behaviour) and dislikes (the look), to be opened as its own design task with two or three alternatives to try.
-5. **Sidebar: one active entry.** The most specific registered nav path that matches the page wins; the others are not current. Unit test over the real navigation of the `full` profile (every entry current on its own page and on no other entry's page) and an e2e check for `/admin/users/pending` and `/services/evaluate`.
-6. **Token copy dialog.** Reproduce, fix, add a screenshot-based layout check at narrow and wide widths.
-7. **Default logos.** The Scorpion mark in a light and a dark version as built-in assets of the web app; used when no logo is uploaded, replaced as soon as one is (the branding rule "no hard-coded branding" holds: the default is a fallback for the **product** logo, not the instance name, and a setting can switch it off). Footer: already the instance name; add a test that pins it.
-8. **Settings icon.** A real gear for `cog`; a test that every icon of the closed table is distinct enough is not possible, so a snapshot of the path plus the visual check in the dashboard e2e.
+1. **Drizzle studio.** `drizzle.config.ts` at the root (all module schemas, `DATABASE_URL`), `pnpm db:studio`. Dev only: bound to `127.0.0.1`, never in a profile or an image, documented in CONTRIBUTING with the warning that studio can write to the database. A drift test: the config lists every module that has a `db/schema.ts`.
+2. **Hierarchical token permissions.** A tree built from the dotted ids (`registry` > `services` > `service` > `read`); a parent is a tri-state checkbox (checked, partly, unchecked) that selects or clears every leaf below it and says how many it covers; keyboard (arrows, space) and axe; the stored value stays the flat list of ids, so the API is unchanged. Tree-building and selection are pure and unit-tested.
+3. **`/catalog/*`** (decisions A and B). The public pages become `/catalog/services/:slug` and `/catalog/organisations/:id`; the new landing page `/catalog/services` is a **public, searchable, paged list of published services** (name search, stage and consortium facets; a new public list route on the internal surface, rate-limited, never v1). The public records move with them (`GET /catalog/services/{ref}`, `/schema-org`, `/catalog/organisations/{id}`, `/catalog/kpi/rimo.ttl` and `.jsonld`). **No redirects from `/public/...`** (the pages were never shown to users). Schema.org `url`, `PUBLIC_PAGES`, the docs, the contract and e2e tests and the ASVS V8 note follow; a test keeps "an unpublished service is the same 404 at the new address". `/services` stays the signed-in catalogue. Public v1 stays unchanged (`pnpm openapi:diff`).
+4. **Facets full width** now (layout only); the redesign is sprint 3.
+5. **Sidebar: the most specific entry wins**, and the **sidebar shows the hierarchy**: an entry whose path lies below another entry's path is drawn indented under it (`Pending approvals` under `Users`, `Impact` under `Services`), so the order is no longer a flat list of lookalikes. The nesting is derived from the registered `ui.nav` paths (no new field), and a unit test runs over the navigation of the `full` profile: on every page exactly one entry is current. E2E for `/admin/users/pending` and `/services/evaluate`.
+6. **Token copy dialog.** The created-token view has a very large token container; reproduce it in a browser first (probably an alignment or overflow rule), fix it, and check it at narrow and wide widths and with the long and the short token.
+7. **Default logos and the footer** (decision on the copyright, below). The Scorpion mark ships as built-in light and dark assets of the web app (**supplied by the maintainer**; sanitised like any SVG) and is the fallback of the two logo slots until an operator uploads one. The footer always carries a fixed software attribution ("Powered by Scorpion", version, link to the licence) and, **only when the new setting `copyrightHolder` is set**, a `© year holder` line. `instanceName` is no longer used for a copyright. **CLAUDE.md rule 9 ("no hard-coded branding: product name ... from settings") gets an ADR and an amendment:** the attribution of the software is the software's own identity, not instance branding; instance name, sender, URLs, contact and legal texts stay settings.
+8. **Icons from Tabler, at build time** (decision on icons). `@tabler/icons` is added as a **dev dependency only**; a script (`pnpm icons:generate`) copies the icons the app uses into `packages/contracts/src/icons.ts` (the table stays closed; MIT notice added to the licence file), and `pnpm check` fails if the generated file differs. This replaces the hand-drawn paths, fixes the `cog` that is a sun, and makes every settings button a gear.
 
-**Sprint 2: backlog slice.** Candidates, to be picked in §3 (each already has its lines in `docs/backlog.md`):
+**Sprint 2: backlog** (`feature/m12a-backlog`)
 
-- the two pointer-drag e2e flakes (`dashboard.spec.ts:223`, `components/dashboard-grid.spec.ts:176`; they fail about half of the runs on `dev` and make the e2e command exit 1);
-- `kpi.impact`: the loader-clock edge case (years from the consortia route), `licencesAsOf` and `bundled`, a search for more than 500 consortia;
-- whatever the maintainer marks from the 397 lines (a first pass can sort them by "breaks something", "annoying", "nice to have").
+- **The two pointer-drag e2e flakes** (`dashboard.spec.ts:223`, `components/dashboard-grid.spec.ts:176`): a trace of a failing run, the cause (the finding is in the backlog under "`kpi.impact` follow-ups (M12 sprint 4)"), a fix without weakening an assertion, a loop of repeats to show it holds.
+- **A triage of the 397 open backlog lines**: one table (`docs/backlog-triage.md`) with each line sorted as "breaks something", "annoying" or "nice to have", with the module and a size; **no code in this step**. The maintainer picks from it; the picks are a plan of their own.
 
-## 3. Decisions needed
+**Sprint 3: the faceted search redesign** (`feature/m12a-facets`)
 
-A. **The catalogue landing page** `/catalog/services/`: a public list of published services (new public list route with the facets of the signed-in catalogue, rate-limited), or only a short landing page that links to the published services of a few consortia and to the signed-in catalogue?
-B. **The API paths** `GET /public/services/{ref}`, `/schema-org`, `/public/organisations/{id}`, `/public/kpi/rimo.*`: keep (they are internal-surface routes, not v1) or move to `/catalog/...` too for consistency? Moving costs a redirect period and a change in the records' Schema.org `url`.
-C. **Which backlog items** go into sprint 2 (§2), and whether the default logos may be shipped as the project's own mark (licence of the artwork).
+The behaviour of today's faceted search (checkbox logic, counts, the URL state) is liked and stays; the look is old-school. The sprint **starts with an interactive brainstorm with the maintainer** (the directions considered: filter chips with a side drawer, a horizontal filter bar with popovers, a refreshed sidebar), then builds the chosen one or two alternatives behind a switch for comparison, applies it to both catalogues (`/services` and `/catalog/services`), keeps the keyboard and axe results, and removes the loser. The e2e journeys of the catalogue (j08) are updated, not weakened.
+
+## 3. Decisions (answered 2026-11-06)
+
+- **A. Landing page:** a public searchable list of published services (item 3).
+- **B. API paths:** all public records move under `/catalog`, without redirects (item 3).
+- **C. Backlog:** the two drag flakes and a triage table (sprint 2). The logo artwork is supplied by the maintainer.
+- **Icons:** generated from Tabler at build time, a dev dependency only (item 8).
+- **Copyright:** a fixed software attribution plus an optional `copyrightHolder` setting; rule 9 is amended by an ADR (item 7). The maintainer's wish was "always Scorpion"; the reason for the optional operator line is that a copyright line names the holder of the site's content, which is the operator.
+- **Redesign:** its own sprint, decided in a brainstorm at its start.
 
 ## 4. Rules for the milestone
 
