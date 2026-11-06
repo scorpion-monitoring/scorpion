@@ -50,6 +50,40 @@ describe('who may read the table', () => {
       expect(await rejection(s.impact.table(s.user, query))).toBeInstanceOf(Forbidden);
   });
 
+  it('writes the figures for reading by the value type of the headline: a duration as HH:MM:SS, a number in the language', async () => {
+    const s = await setup();
+    const seconds = await headlineSet(s.pool, {
+      valueType: 'duration',
+      aggregate: 'avg',
+      unit: null,
+    });
+    await serviceWith(s.pool, s.consortium.id, {
+      name: uniq('Dur'),
+      set: seconds.set,
+      headId: seconds.head.id,
+      values: { '2026-01-31': 3600, '2026-02-28': 7200, '2026-03-31': 3601 },
+    });
+    const duration = only((await s.table(2026)).rows);
+    expect(duration.shown.months.slice(0, 4)).toEqual(['01:00:00', '02:00:00', '01:00:01', null]);
+    // the average of 3600, 7200 and 3601 seconds is 4800.33…, written to the second
+    expect(duration.shown.yearly).toBe('01:20:00');
+    expect(duration.yearly).toBeCloseTo(4800.33, 1);
+    expect(duration.months[0]).toBe(3600);
+
+    const second = await makeOrganisation(s.pool, { type: 'consortium', name: uniq('Cons') });
+    const tableOf = (query: object) =>
+      s.impact.table(s.reviewer, { consortium: second.id, year: '2026', ...query });
+    const numbers = await headlineSet(s.pool);
+    await serviceWith(s.pool, second.id, {
+      name: uniq('Num'),
+      set: numbers.set,
+      headId: numbers.head.id,
+      values: { '2026-01-31': 1234567 },
+    });
+    expect(only((await tableOf({})).rows).shown.yearly).toBe('1,234,567');
+    expect(only((await tableOf({ locale: 'de' })).rows).shown.yearly).toBe('1.234.567');
+  }, 60_000);
+
   it('shows names, units and values and no person [ASVS-8.2.1]', async () => {
     const s = await setup();
     const { head, set } = await headlineSet(s.pool);
@@ -69,11 +103,16 @@ describe('who may read the table', () => {
         'name',
         'reason',
         'serviceId',
+        'shown',
         'slug',
         'state',
         'yearly',
       ].sort(),
     );
+    expect(row.shown).toEqual({
+      months: ['3', ...Array.from({ length: 11 }, () => null)],
+      yearly: '3',
+    });
     expect(Object.keys(row.headline!).sort()).toEqual([
       'aggregate',
       'indicatorId',
@@ -157,8 +196,9 @@ describe('the row states', () => {
       values: { '2026-03-31': 2, '2026-09-30': 6 },
     });
     expect(only((await s.table(2026)).rows)).toMatchObject({ yearly: 4, monthsWithValue: 2 });
-    // the label is the vocabulary's; a language it has no label for falls back to the English one
-    expect(only((await s.table(2026, { locale: 'de' })).rows).headline?.label).toBe('Average');
+    // the label is the vocabulary's in the language (the seed has German ones, sprint 4); a language it has no label for falls back to the English one
+    expect(only((await s.table(2026, { locale: 'de' })).rows).headline?.label).toBe('Durchschnitt');
+    expect(only((await s.table(2026, { locale: 'fr' })).rows).headline?.label).toBe('Average');
   });
 
   it('ok: a zero is a value and not a gap', async () => {

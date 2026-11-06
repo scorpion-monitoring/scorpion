@@ -35,6 +35,9 @@ test.describe('the navigation of a signed-in user', () => {
       page,
       at,
     }) => {
+      // It opens every page of the navigation and every page without a parameter (more than thirty), one after the other: that is more than the
+      // default 30 s on a loaded machine, and a page more (the navigation grows with every milestone) must not turn it red. Nothing is relaxed.
+      test.slow();
       if (credentials === plain) await createUser(page.request, at, plain);
       await signIn(page.request, at, credentials);
 

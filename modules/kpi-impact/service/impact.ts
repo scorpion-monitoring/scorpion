@@ -170,6 +170,7 @@ export function createImpactService(deps: ImpactDeps): ImpactService {
         valueType: (id: string) => deps.kpi.findValueType(id),
         aggregate: (id: string) => deps.aggregates.get(id)?.apply,
         aggregateLabel: (id: string) => labels.get(id) ?? id,
+        locale,
         series: deps.reads.seriesAsSystem,
         onError: deps.onRowError,
       };

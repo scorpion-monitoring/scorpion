@@ -232,13 +232,13 @@ contributes: {
 }
 ```
 
-| Vocabulary          | Terms (key: English label)                                                   |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `stage`             | `DEV` Development, `DEMO` Demonstrator, `PROD` Production, `TERM` Terminated |
-| `thematic-category` | `Bibliographic`, `Usage`, `Technical`, `Satisfaction`                        |
-| `necessity`         | `mandatory`, `recommended`, `optional`                                       |
-| `sender-type`       | `System`, `Reviewer`                                                         |
-| `aggregate`         | `sum`, `avg`, `min`, `max`                                                   |
+| Vocabulary          | Terms (key: English label)                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stage`             | `DEV` Development, `DEMO` Demonstrator, `PROD` Production, `TERM` Terminated                                                                                                                   |
+| `thematic-category` | `Bibliographic`, `Usage`, `Technical`, `Satisfaction`                                                                                                                                          |
+| `necessity`         | `mandatory`, `recommended`, `optional`                                                                                                                                                         |
+| `sender-type`       | `System`, `Reviewer`                                                                                                                                                                           |
+| `aggregate`         | `sum`, `avg`, `min`, `max` (with German labels `Summe`, `Durchschnitt`, `Minimum`, `Maximum` since M12 sprint 4; a database seeded before keeps its labels, as seeds only add what is missing) |
 
 - **Terms.** `key` (letters, digits, `_`, `-`, starting with a letter; case sensitive; never changes), `labels` (locale →
   text, `en` required), `sortOrder`, `active`. Order is `sortOrder`, then key as bytes. At most 500 terms per vocabulary.

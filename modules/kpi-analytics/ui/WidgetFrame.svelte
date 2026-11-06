@@ -193,7 +193,9 @@
     {:else if hasNoValues}
       <p class="text-sm" role="status">{t('analytics.state.noValues')}</p>
     {:else if shown}
-      <div class="flex min-h-0 flex-1 flex-col gap-2">
+      <!-- daisyUI gives every paragraph of a card body `flex-grow: 1`, which stretched the "N KPIs" line over the free height and squeezed the list into a
+           small scroller; the body's paragraphs keep their own height (`[&_p]:grow-0` is more specific than `.card-body p`). -->
+      <div class="flex min-h-0 flex-1 flex-col gap-2 [&_p]:grow-0">
         {@render body(shown)}
         {#if shown.total > shown.rows.length}
           <p class="text-base-content/70 text-sm">

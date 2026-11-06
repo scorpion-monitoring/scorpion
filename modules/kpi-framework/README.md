@@ -114,7 +114,7 @@ administrator. It finds what exists by slug, so a second run adds nothing ([ADR-
 
 ## Value types (registry `kpi.valueType`)
 
-An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, schema(config) }`, validated by the loader
+An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, display?, schema(config) }`, validated by the loader
 (`valueTypeEntrySchema`). Nothing in the module branches on a type's id.
 
 | Id           | Canonical value          | Accepts                                                               | `numeric`              | Aggregates                 |
@@ -129,6 +129,8 @@ An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, s
 indicator's `min` and `max`; `format(value)` writes the canonical value (a duration as `HH-MM-SS`); `aggregates` are keys of the
 `aggregate` vocabulary that make sense for the type. A **qualitative** indicator must have the value type `text`; a `text` indicator may
 or may not be qualitative; only a `numeric` type may have `min` and `max` (`boundsProblem(type, { min, max })`).
+
+**How a person reads a number (`display`, M12 sprint 4).** An optional `display(value, locale)` writes a number of the type for reading, calculated figures included (the average of durations is not a whole number of seconds); the impact table of `kpi.impact` uses it. Only `duration` has one (`displayDuration`: `HH:MM:SS`, rounded to the second, hours not capped); a type without it is written as a number in the language with at most two decimals. It never replaces `format`, which writes the stored value (`HH-MM-SS`) for CSV and forms.
 
 **How a form asks for a value (`input`, M10 sprint 4).** An optional descriptor `{ kind: 'number' | 'text', step?: number | 'any', pattern?: string, hint?: string }`
 that the Data Submission page draws its input from (`GET /kpi/value-types` answers it), so no page names a type: `integer` is a number input with `step` 1, `float` and

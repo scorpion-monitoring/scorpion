@@ -55,6 +55,11 @@ export const valueTypeEntrySchema = z.strictObject({
   aggregates: z.array(z.string().min(1).max(64)).max(20),
   parse: fn<(input: unknown) => ParseResult>(),
   format: fn<(value: unknown) => string>(),
+  /**
+   * Optional: how a page writes a number of this type for a person in `locale` (M12): a figure that was calculated (an average of durations is
+   * not a whole number of seconds) as well as one that was reported. Absent: a number in the person's language, at most two decimals.
+   */
+  display: fn<(value: number, locale: string) => string>().optional(),
   schema: fn<(config?: ValueTypeConfig) => z.ZodType>(),
 });
 export type ValueTypeEntry = z.output<typeof valueTypeEntrySchema>;
@@ -138,6 +143,14 @@ export function formatDuration(seconds: unknown): string {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return `${String(h).padStart(2, '0')}-${String(m).padStart(2, '0')}-${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Seconds as `HH:MM:SS` for reading (the stored and typed form is `HH-MM-SS`). A calculated figure may have a fraction: it is rounded to the
+ * second. Hours are not capped.
+ */
+export function displayDuration(seconds: number): string {
+  return formatDuration(Math.round(seconds)).replaceAll('-', ':');
 }
 
 const formatNumber = (value: unknown): string => {
@@ -265,6 +278,7 @@ export const SEED_VALUE_TYPES: ValueTypeEntry[] = [
     aggregates: ALL_AGGREGATES,
     parse: parseDuration,
     format: formatDuration,
+    display: displayDuration,
     schema: (config) => numericSchema(parseDuration, config),
   },
   {

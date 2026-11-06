@@ -3,6 +3,7 @@
 // use the same entries), the IRI builder, and the names of the vocabularies.
 export {
   boundsProblem,
+  displayDuration,
   formatDuration,
   parseDuration,
   parseFloatValue,

@@ -192,6 +192,9 @@ importers:
       '@scorpion/kpi-framework':
         specifier: workspace:*
         version: link:../../modules/kpi-framework
+      '@scorpion/kpi-impact':
+        specifier: workspace:*
+        version: link:../../modules/kpi-impact
       '@scorpion/kpi-ingestion':
         specifier: workspace:*
         version: link:../../modules/kpi-ingestion
@@ -673,9 +676,15 @@ importers:
       '@scorpion/core-notifications':
         specifier: workspace:*
         version: link:../core-notifications
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       fast-check:
         specifier: 4.10.2
         version: 4.10.2
