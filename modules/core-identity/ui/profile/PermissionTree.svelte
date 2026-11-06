@@ -94,7 +94,7 @@
     {@const tally = count(node, selected)}
     {@const isOpen = expanded.has(node.key)}
     <li>
-      <div class="flex items-start gap-1" style:padding-inline-start="{node.depth * 1.25}rem">
+      <div class="flex items-start gap-1" style:padding-inline-start={`${node.depth * 1.25}rem`}>
         {#if node.children.length > 0}
           <button
             type="button"

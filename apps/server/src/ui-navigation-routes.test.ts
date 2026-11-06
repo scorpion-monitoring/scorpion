@@ -47,6 +47,7 @@ const PUBLIC_PAGES = [
   '/login',
   // M7 sprint 6: what a Reviewer made public (registry.services, registry.organisations); anyone may open them.
   '/catalog/organisations/:id',
+  '/catalog/services',
   '/catalog/services/:slug',
   '/register',
   '/reset-password',
