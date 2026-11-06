@@ -60,7 +60,7 @@ const output = join(root, 'packages/contracts/src/icons.ts');
 export function pathData(svg: string, name: string): string {
   const shapes = svg.match(/<(circle|rect|ellipse|line|polyline|polygon)\b/g);
   if (shapes)
-    throw new Error(`${name}: the icon has a ${shapes[0]!.slice(1)}; convert it to a path first`);
+    throw new Error(`${name}: the icon has a ${shapes[0].slice(1)}; convert it to a path first`);
   const data = [...svg.matchAll(/<path\b([^>]*)>/g)]
     .filter(([, attributes]) => !/stroke="none"/.test(attributes!))
     .map(([, attributes]) => /\bd="([^"]+)"/.exec(attributes!)?.[1]?.trim())

@@ -23,7 +23,7 @@
   import Widget from '#lib/components/Widget.svelte';
   import Widgets from '#lib/components/Widgets.svelte';
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
-  import { builtInLogos } from '#lib/builtin-logos.ts';
+  import { builtInFavicon, builtInLogos } from '#lib/builtin-logos.ts';
   import { logoSources } from '#lib/logos.ts';
   import { shellMessages } from '#lib/messages.ts';
   import { forwardWizardExtensions } from '#lib/wizard-extensions.ts';
@@ -181,6 +181,7 @@
 
 <svelte:head>
   <title>{brand.instanceName}</title>
+  <link rel="icon" type="image/png" href={assetHref(builtInFavicon)} />
 </svelte:head>
 
 <a

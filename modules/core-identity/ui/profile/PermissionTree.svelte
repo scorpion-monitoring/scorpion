@@ -55,10 +55,7 @@
   };
 
   function open(key: string, on: boolean) {
-    const next = new Set(expanded);
-    if (on) next.add(key);
-    else next.delete(key);
-    expanded = next;
+    expanded = new Set(on ? [...expanded, key] : [...expanded].filter((entry) => entry !== key));
   }
 
   async function focusKey(key: string) {

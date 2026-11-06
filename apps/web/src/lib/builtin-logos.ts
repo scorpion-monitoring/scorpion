@@ -6,5 +6,9 @@
 // the two imports here); nothing else refers to them.
 import light from './assets/scorpion-light.png';
 import dark from './assets/scorpion.dark.png';
+import favicon from './assets/scorpion-favicon.png';
 
 export const builtInLogos = { light, dark };
+
+/** The mark alone (cropped, without the "Powered by Scorpion" text), square: the icon of the browser tab. */
+export const builtInFavicon = favicon;
