@@ -23,6 +23,8 @@
   import Widget from '#lib/components/Widget.svelte';
   import Widgets from '#lib/components/Widgets.svelte';
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
+  import { builtInLogos } from '#lib/builtin-logos.ts';
+  import { logoSources } from '#lib/logos.ts';
   import { shellMessages } from '#lib/messages.ts';
   import { forwardWizardExtensions } from '#lib/wizard-extensions.ts';
   import { uiModules } from '../generated/ui.ts';
@@ -164,6 +166,17 @@
   }
 
   const brand = $derived(data.branding);
+  // A built asset's address comes from the build as `/_app/...` (or relative to the app root); it is served below the base path like every page.
+  // A small file is inlined by the build as a `data:` address (the CSP allows it for images).
+  const assetHref = (file: string) =>
+    file.startsWith('data:') ? file : href(`/${file.replace(/^(\.?\/)+/, '')}`);
+  const logos = $derived(
+    logoSources(
+      brand.logos,
+      { light: assetHref(builtInLogos.light), dark: assetHref(builtInLogos.dark) },
+      (hash) => href(`/api/internal/files/${hash}`),
+    ),
+  );
 </script>
 
 <svelte:head>
@@ -197,20 +210,9 @@
         <Icon name="menu" />
       </button>
       <a href={href('/')} class="flex items-center gap-2 text-lg font-bold">
-        {#if brand.logos.light}
-          <img
-            class="logo-light h-8 w-auto"
-            src={href(`/api/internal/files/${brand.logos.light}`)}
-            alt=""
-          />
-        {/if}
-        {#if brand.logos.dark ?? brand.logos.light}
-          <img
-            class="logo-dark h-8 w-auto"
-            src={href(`/api/internal/files/${brand.logos.dark ?? brand.logos.light}`)}
-            alt=""
-          />
-        {/if}
+        <!-- An uploaded logo, or the built-in ones of the software until there is one. -->
+        <img class="logo-light h-8 w-auto" src={logos.light} alt="" />
+        <img class="logo-dark h-8 w-auto" src={logos.dark} alt="" />
         <span>{brand.instanceName}</span>
       </a>
       <div class="flex-1"></div>
