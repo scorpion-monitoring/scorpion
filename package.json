@@ -30,9 +30,10 @@
     "pinned:check": "node scripts/pinned-dependencies.ts",
     "security:asvs": "node tools/asvs-report/cli.ts",
     "modules:sync": "node scripts/sync-workspace-modules.ts",
-    "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check && node apps/server/src/openapi-generate.ts --check",
+    "generated:check": "node scripts/sync-workspace-modules.ts --check && node apps/server/src/cli.ts profile:generate full --check && node apps/server/src/openapi-generate.ts --check && node scripts/icons-generate.ts --check",
     "openapi:generate": "node apps/server/src/openapi-generate.ts",
-    "openapi:diff": "node scripts/openapi-diff.ts"
+    "openapi:diff": "node scripts/openapi-diff.ts",
+    "icons:generate": "node scripts/icons-generate.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
@@ -40,6 +41,7 @@
     "@scorpion/contracts": "workspace:*",
     "@scorpion/eslint-plugin": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "@tabler/icons": "^3.50.0",
     "@types/node": "^24.19.2",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.14.0",

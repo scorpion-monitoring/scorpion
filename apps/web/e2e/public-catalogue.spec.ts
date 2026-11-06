@@ -7,7 +7,7 @@ import { choice, params, range, rows, seedCatalogue } from './support/services.t
 // services that were made public, and never sees a private one. The page lives at `/catalog/services`, the pages
 // of one service and of one organisation below it; there is no redirect from `/public/...`.
 test.describe('the public service catalogue', () => {
-  test('lists only the published services, searches, filters by stage, pages and links to the public pages', async ({
+  test('lists only the published services [ASVS-8.2.1], searches, filters by stage, pages and links to the public pages', async ({
     browser,
     playwright,
     baseURL,
