@@ -4,7 +4,7 @@
   import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
-  import { isLocalPath, url } from '@scorpion/contracts';
+  import { isLocalPath, stripBase, url } from '@scorpion/contracts';
   import {
     createReauthController,
     createToaster,
@@ -176,7 +176,8 @@
   const assetHref = (file: string) => {
     if (file.startsWith('data:')) return file;
     const { pathname, search } = new URL(file, 'http://localhost');
-    return href(pathname + search);
+    // Under a base path the build's address may already carry it (the server saw it in the request); it is never added twice.
+    return href((stripBase(basePath, pathname) ?? pathname) + search);
   };
   const logos = $derived(
     logoSources(

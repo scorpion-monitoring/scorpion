@@ -23,6 +23,8 @@
 </svelte:head>
 
 {#if who}
+  <!-- The page's one level-1 heading is the name of the instance; the dashboard has its own level-2 heading. -->
+  <h1 class="sr-only">{branding().instanceName}</h1>
   {#if data.dashboard}
     <Dashboard initial={data.dashboard} />
   {/if}
