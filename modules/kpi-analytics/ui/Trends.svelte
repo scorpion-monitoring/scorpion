@@ -50,7 +50,7 @@
   {setConfig}
   units
   exportable
-  chartImage={(format) => chart?.toImage(format)}
+  chartImage={(format: 'svg' | 'png') => chart?.toImage(format)}
   imageName="trends"
 >
   {#snippet body(data: Body)}

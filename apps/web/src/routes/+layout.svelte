@@ -170,10 +170,14 @@
   // The start page and the two catalogues (tables with filters) use the full width; every other page keeps a readable column.
   const WIDE_PAGES = ['/', '/services', '/catalog/services'];
   const wide = $derived(WIDE_PAGES.includes((page.data as { pattern?: string }).pattern ?? ''));
-  // A built asset's address comes from the build as `/_app/...` (or relative to the app root); it is served below the base path like every page.
-  // A small file is inlined by the build as a `data:` address (the CSP allows it for images).
-  const assetHref = (file: string) =>
-    file.startsWith('data:') ? file : href(`/${file.replace(/^(\.?\/)+/, '')}`);
+  // A built asset's address comes from the build in one of three forms: a `data:` address (a small file, inlined; the CSP allows it for
+  // images), a path (`/_app/...`), or a full address with the origin the server saw. Only the path is kept and put below the base
+  // path like every page: the origin of a build is not the one a visitor reaches the instance by.
+  const assetHref = (file: string) => {
+    if (file.startsWith('data:')) return file;
+    const { pathname, search } = new URL(file, 'http://localhost');
+    return href(pathname + search);
+  };
   const logos = $derived(
     logoSources(
       brand.logos,

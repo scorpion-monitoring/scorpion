@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { permissionBox } from './support/profile.ts';
 import { violations } from './support/a11y.ts';
 import { adminApi, unique } from './support/admin.ts';
 import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
@@ -579,11 +580,11 @@ test.describe('the calls the KPI parts add', () => {
 async function makeToken(page: Page, name: string, scope: string): Promise<string> {
   const tokens = page.getByRole('region', { name: 'Access tokens' });
   await tokens.getByLabel('Name', { exact: true }).fill(name);
-  await tokens.getByRole('checkbox', { name: scope }).check();
+  await (await permissionBox(tokens, scope)).check();
   await tokens.getByRole('button', { name: 'Create the token' }).click();
   const secret = (await page.getByTestId('token-secret').textContent())!;
   await page.getByRole('button', { name: 'I have copied it' }).click();
-  await tokens.getByRole('checkbox', { name: scope }).uncheck();
+  await (await permissionBox(tokens, scope)).uncheck();
   return secret;
 }
 

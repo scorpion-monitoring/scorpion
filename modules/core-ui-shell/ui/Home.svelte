@@ -23,7 +23,6 @@
 </svelte:head>
 
 {#if who}
-  <h1 class="sr-only">{t('home.dashboard')}</h1>
   {#if data.dashboard}
     <Dashboard initial={data.dashboard} />
   {/if}

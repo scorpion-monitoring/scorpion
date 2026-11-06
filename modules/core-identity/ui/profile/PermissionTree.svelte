@@ -25,6 +25,10 @@
   }: { permissions: readonly PermissionLike[]; value: string[]; name?: string } = $props();
   const { t } = getShell();
 
+  // The indent is a class, not a `style` attribute: the page's policy allows no inline style.
+  const INDENT = ['ps-0', 'ps-5', 'ps-10', 'ps-14', 'ps-[4.5rem]', 'ps-24'];
+  const indent = (depth: number) => INDENT[Math.min(depth, INDENT.length - 1)];
+
   const roots = $derived(buildTree(permissions));
   const allIds = $derived(roots.flatMap((node) => node.ids).sort());
   const selected = $derived(new Set(value));
@@ -94,7 +98,7 @@
     {@const tally = count(node, selected)}
     {@const isOpen = expanded.has(node.key)}
     <li>
-      <div class="flex items-start gap-1" style:padding-inline-start={`${node.depth * 1.25}rem`}>
+      <div class="flex items-start gap-1 {indent(node.depth)}">
         {#if node.children.length > 0}
           <button
             type="button"

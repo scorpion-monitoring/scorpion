@@ -29,6 +29,9 @@
   // current: the one whose path is the page or the longest path above it, so `Users` is not lit on
   // `/admin/users/pending` when `Pending approvals` has its own entry.
   const shown = $derived((page.data as { pattern?: string }).pattern);
+  // Nested entries are indented by a class: the page's policy allows no inline style.
+  const INDENT = ['', 'ms-5', 'ms-10', 'ms-14'];
+  const indent = (depth: number) => INDENT[Math.min(depth, INDENT.length - 1)];
   const currentEntry = $derived(currentId(navigation().nav, shown));
 </script>
 
@@ -85,11 +88,8 @@
               <a
                 href={href(item.path)}
                 class="{currentEntry === item.id ? 'menu-active' : ''} {collapsed
-                  ? 'tooltip tooltip-right justify-center'
-                  : ''}"
-                style:margin-inline-start={!collapsed && depth > 0
-                  ? `${depth * 1.25}rem`
-                  : undefined}
+                  ? ''
+                  : indent(depth)} {collapsed ? 'tooltip tooltip-right justify-center' : ''}"
                 data-depth={depth}
                 data-tip={collapsed ? t(item.label) : undefined}
                 aria-current={currentEntry === item.id ? 'page' : undefined}
