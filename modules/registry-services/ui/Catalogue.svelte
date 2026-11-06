@@ -131,9 +131,8 @@
     </section>
   {/if}
 
-  <div class="flex flex-col gap-6">
-    <!-- The filters span the full width of the page, above the table: a narrow side column squeezed them. -->
-    <aside class="bg-base-100 border-base-300 rounded-box border p-4">
+  <div class="grid gap-6 lg:grid-cols-[16rem_1fr]">
+    <aside>
       <Facets {definitions} state={data.query.filters as FacetState} {path} />
     </aside>
 

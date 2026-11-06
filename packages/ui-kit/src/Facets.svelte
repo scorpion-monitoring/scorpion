@@ -45,10 +45,7 @@
   const number = (text: string) => (text.trim() === '' ? undefined : Number(text));
 </script>
 
-<section
-  aria-label={t('kit.facets.label')}
-  class="grid items-start gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
->
+<section aria-label={t('kit.facets.label')} class="flex flex-col gap-4">
   {#each definitions as definition (definition.id)}
     {@const selected = state[definition.id]}
     <fieldset class="flex flex-col gap-1">

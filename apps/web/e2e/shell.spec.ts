@@ -31,8 +31,9 @@ test.describe('the shell', () => {
     await page.goto(at('/'));
     await expect(page.getByRole('banner').getByText('Test Registry')).toBeVisible();
     await expect(page).toHaveTitle('Test Registry');
+    // A visitor gets the introduction: "What is <product>?".
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      await productName(request, at),
+      `What is ${await productName(request, at)}?`,
     );
     await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
     await page.screenshot({ path: `test-results/shell-${test.info().project.name}.png` });
@@ -208,8 +209,9 @@ test.describe('the shell', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('This page does not exist.');
     await page.getByRole('link', { name: 'Go home' }).click();
     await expect(page).toHaveURL(new RegExp(`${at('/')}$`));
+    // A visitor gets the introduction: "What is <product>?".
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      await productName(request, at),
+      `What is ${await productName(request, at)}?`,
     );
   });
 

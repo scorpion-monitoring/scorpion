@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../app.css';
+  import { page } from '$app/state';
   import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
@@ -166,6 +167,9 @@
   }
 
   const brand = $derived(data.branding);
+  // The start page and the two catalogues (tables with filters) use the full width; every other page keeps a readable column.
+  const WIDE_PAGES = ['/', '/services', '/catalog/services'];
+  const wide = $derived(WIDE_PAGES.includes((page.data as { pattern?: string }).pattern ?? ''));
   // A built asset's address comes from the build as `/_app/...` (or relative to the app root); it is served below the base path like every page.
   // A small file is inlined by the build as a `data:` address (the CSP allows it for images).
   const assetHref = (file: string) =>
@@ -223,7 +227,11 @@
         <AccountMenu />
       {/if}
     </header>
-    <main id="main" tabindex="-1" class="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">
+    <main
+      id="main"
+      tabindex="-1"
+      class="mx-auto w-full flex-1 p-4 sm:p-6 {wide ? '' : 'max-w-6xl'}"
+    >
       {@render children()}
     </main>
     <Footer branding={brand} />

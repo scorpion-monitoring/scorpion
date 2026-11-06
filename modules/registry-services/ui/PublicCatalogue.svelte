@@ -111,8 +111,8 @@
     </section>
   {/if}
 
-  <div class="flex flex-col gap-6">
-    <aside class="bg-base-100 border-base-300 rounded-box border p-4">
+  <div class="grid gap-6 lg:grid-cols-[16rem_1fr]">
+    <aside>
       <Facets {definitions} state={data.query.filters as FacetState} {path} />
     </aside>
 

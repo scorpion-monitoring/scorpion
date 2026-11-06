@@ -25,6 +25,8 @@
     setConfig,
     units = false,
     exportable = false,
+    chartImage,
+    imageName = 'chart',
     body,
   }: {
     /** The widget's name, as the heading and the tile's accessible name. */
@@ -36,6 +38,10 @@
     units?: boolean;
     /** The widget offers the Export menu (CSV, XLSX) of what it shows. */
     exportable?: boolean;
+    /** The widget's chart as a picture (`svg` or `png`); the Export menu then offers it beside the files of the numbers. */
+    chartImage?: (format: 'svg' | 'png') => Promise<Blob | undefined> | undefined;
+    /** The word in the name of the picture's file (`<service>-<imageName>-<range>.png`). */
+    imageName?: string;
     body: Snippet<[Body]>;
   } = $props();
 
@@ -162,7 +168,14 @@
       </div>
       <!-- Only when there is something to export; the file is the window the tile shows, in every category the tile shows. -->
       {#if exportable && shown && service !== null}
-        <ExportMenu {service} {range} {category} slug={named?.slug ?? 'service'} />
+        <ExportMenu
+          {service}
+          {range}
+          {category}
+          slug={named?.slug ?? 'service'}
+          image={chartImage}
+          {imageName}
+        />
       {/if}
     </div>
 

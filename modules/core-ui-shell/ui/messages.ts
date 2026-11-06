@@ -8,9 +8,37 @@ const shellMessages: UiMessages = {
     'nav.docs': 'API documentation',
     'nav.about': 'About',
     'nav.section.main': 'Main',
-    'home.lead': 'The service registry and KPI tracker of {name}.',
-    'home.signedIn': 'You are signed in as {name}.',
     'home.dashboard': 'What needs your attention',
+    'home.about.kicker': 'For the research community of {name}',
+    'home.about.title': 'What is {product}?',
+    'home.about.lead':
+      '{product} is the service registry and KPI tracker of a research infrastructure: one place that says which services exist, who runs them and how well they are doing.',
+    'home.about.browse': 'Browse the service catalogue',
+    'home.about.docs': 'API documentation',
+    'home.about.offers': 'What it offers',
+    'home.about.registry.title': 'A registry of services',
+    'home.about.registry.text':
+      'Providers describe their services once, with stage, licence and the consortia they belong to. Anyone can search what has been made public.',
+    'home.about.kpi.title': 'Key performance indicators',
+    'home.about.kpi.text':
+      'Operators report measurements against a shared set of indicators, and the trends show where a service stands and what needs attention.',
+    'home.about.api.title': 'Open data and an API',
+    'home.about.api.text':
+      'The catalogue and the figures are available through a documented API and as linked data, so other systems can use them.',
+    'home.about.how': 'How it works',
+    'home.about.step.collect.title': 'Describe',
+    'home.about.step.collect.text':
+      'A provider registers its services and who is responsible for them.',
+    'home.about.step.report.title': 'Report',
+    'home.about.step.report.text':
+      'Members submit the indicators for each period, by hand or from a file.',
+    'home.about.step.share.title': 'Share',
+    'home.about.step.share.text':
+      'Reviewers publish what is ready, and the consortium sees the whole picture.',
+    'home.about.cta.title': 'Run a service in this community?',
+    'home.about.cta.text':
+      'Create an account, ask to join your organisation, and add your services.',
+    'home.about.cta.register': 'Create an account',
     'dashboard.customise': 'Customise dashboard',
     'dashboard.menu': 'Add a widget',
     'dashboard.addWidget': 'Add {name}',
@@ -85,9 +113,37 @@ const shellMessages: UiMessages = {
     'nav.docs': 'API-Dokumentation',
     'nav.about': 'Über diese Instanz',
     'nav.section.main': 'Allgemein',
-    'home.lead': 'Das Dienstregister und der KPI-Tracker von {name}.',
-    'home.signedIn': 'Sie sind angemeldet als {name}.',
     'home.dashboard': 'Was Ihre Aufmerksamkeit braucht',
+    'home.about.kicker': 'Für die Forschungsgemeinschaft von {name}',
+    'home.about.title': 'Was ist {product}?',
+    'home.about.lead':
+      '{product} ist das Dienstregister und der KPI-Tracker einer Forschungsinfrastruktur: ein Ort, der sagt, welche Dienste es gibt, wer sie betreibt und wie gut sie laufen.',
+    'home.about.browse': 'Dienstekatalog durchsuchen',
+    'home.about.docs': 'API-Dokumentation',
+    'home.about.offers': 'Was es bietet',
+    'home.about.registry.title': 'Ein Register der Dienste',
+    'home.about.registry.text':
+      'Anbieter beschreiben ihre Dienste einmal, mit Stufe, Lizenz und den Konsortien, zu denen sie gehören. Alle können durchsuchen, was veröffentlicht wurde.',
+    'home.about.kpi.title': 'Leistungskennzahlen',
+    'home.about.kpi.text':
+      'Betreiber melden Messwerte zu gemeinsamen Kennzahlen, und die Verläufe zeigen, wo ein Dienst steht und was Aufmerksamkeit braucht.',
+    'home.about.api.title': 'Offene Daten und eine API',
+    'home.about.api.text':
+      'Der Katalog und die Zahlen stehen über eine dokumentierte API und als Linked Data bereit, damit andere Systeme sie nutzen können.',
+    'home.about.how': 'So funktioniert es',
+    'home.about.step.collect.title': 'Beschreiben',
+    'home.about.step.collect.text':
+      'Ein Anbieter erfasst seine Dienste und wer dafür verantwortlich ist.',
+    'home.about.step.report.title': 'Melden',
+    'home.about.step.report.text':
+      'Mitglieder reichen die Kennzahlen je Zeitraum ein, von Hand oder aus einer Datei.',
+    'home.about.step.share.title': 'Teilen',
+    'home.about.step.share.text':
+      'Prüfende veröffentlichen, was bereit ist, und das Konsortium sieht das Gesamtbild.',
+    'home.about.cta.title': 'Sie betreiben einen Dienst in dieser Gemeinschaft?',
+    'home.about.cta.text':
+      'Legen Sie ein Konto an, bitten Sie um Aufnahme in Ihre Organisation und erfassen Sie Ihre Dienste.',
+    'home.about.cta.register': 'Konto anlegen',
     'dashboard.customise': 'Dashboard anpassen',
     'dashboard.menu': 'Widget hinzufügen',
     'dashboard.addWidget': '{name} hinzufügen',
