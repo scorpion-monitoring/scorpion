@@ -77,10 +77,10 @@ function stub(options: {
       switch (path) {
         case '/services/by-slug/{slug}':
         case '/services/{id}':
-        case '/public/services/{ref}':
+        case '/catalog/services/{ref}':
           return json(200, options.record ?? record());
         case '/services/{id}/schema-org':
-        case '/public/services/{ref}/schema-org':
+        case '/catalog/services/{ref}/schema-org':
           return json(200, { '@type': 'Service' });
         case '/services/schema':
           return json(200, schema);
@@ -220,7 +220,7 @@ describe('the loader of the public service page', () => {
   it('asks only the two public routes, in parallel, and returns what they answered', async () => {
     const { api, calls } = stub({ record: record({ slug: 'blast-tool' }) });
     const data = await loadPublicService(context(api, 'blast-tool'));
-    expect(calls.sort()).toEqual(['/public/services/{ref}', '/public/services/{ref}/schema-org']);
+    expect(calls.sort()).toEqual(['/catalog/services/{ref}', '/catalog/services/{ref}/schema-org']);
     expect(data.service.slug).toBe('blast-tool');
   });
 
@@ -228,7 +228,7 @@ describe('the loader of the public service page', () => {
     for (const asked of [ID, 'old-name']) {
       const { api } = stub({ record: record() });
       await expect(loadPublicService(context(api, asked)), asked).rejects.toMatchObject({
-        path: '/public/services/blast-tool',
+        path: '/catalog/services/blast-tool',
       });
     }
   });

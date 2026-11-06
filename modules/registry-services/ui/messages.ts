@@ -21,6 +21,10 @@ export const messages: UiMessages = {
     'services.filters.active': 'Chosen filters',
     'services.filters.remove': 'Remove the filter {facet}: {value}',
 
+    'catalog.title': 'Service catalogue',
+    'catalog.lead': 'The services that their operators have made public.',
+    'catalog.empty': 'No published service matches.',
+
     'services.new.intro':
       'Answer the questions step by step. Nothing is saved until you create the service.',
 

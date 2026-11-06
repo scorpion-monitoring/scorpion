@@ -1,5 +1,5 @@
 // The RDF reads of kpi.framework (M9 sprint 4) through the whole pipeline over real Postgres: the public pair
-// (`/public/kpi/rimo.ttl` and `.jsonld`, no token, a short max-age, an ETag and 304), what neither pair may ever say (a
+// (`/catalog/kpi/rimo.ttl` and `.jsonld`, no token, a short max-age, an ETag and 304), what neither pair may ever say (a
 // service, a person, a token, a value: checked on a database full of them), and who is refused on the token-bearing pair.
 // The shape of the answers and the harness cases for the token-bearing pair are in kpi.contract.test.ts.
 import {
@@ -16,8 +16,8 @@ const app = useIdentityApp();
 type Started = Awaited<ReturnType<typeof app.start>>;
 const SCOPE = 'kpi.framework.v1.read';
 const PUBLIC = [
-  { path: '/public/kpi/rimo.ttl', type: 'text/turtle; charset=utf-8' },
-  { path: '/public/kpi/rimo.jsonld', type: 'application/ld+json; charset=utf-8' },
+  { path: '/catalog/kpi/rimo.ttl', type: 'text/turtle; charset=utf-8' },
+  { path: '/catalog/kpi/rimo.jsonld', type: 'application/ld+json; charset=utf-8' },
 ] as const;
 const V1 = ['/kpi/rimo.ttl', '/kpi/rimo.jsonld'] as const;
 

@@ -157,8 +157,8 @@ describe('the service page', () => {
     const { body } = draw(Service, data({}, { public: true }));
     expect(body).toContain('Public');
     expect(body).toContain('Anyone, signed in or not, can read this service.');
-    expect(body).toContain('href="/public/services/blast-tool"');
-    expect(draw(Service, data()).body).not.toContain('/public/services/');
+    expect(body).toContain('href="/catalog/services/blast-tool"');
+    expect(draw(Service, data()).body).not.toContain('/catalog/services/');
   });
 
   it('shows the contact point only when the API returned it', () => {
@@ -413,8 +413,8 @@ describe('the public pages: nothing is drawn from a role or a session', () => {
     expect(body).toContain('Blast Tool');
     expect(body).toContain('src="/a/b/api/internal/files/abc"');
     expect(body).toContain('alt="Icon of Blast Tool"');
-    expect(body).toContain(`href="/public/organisations/${A}"`);
-    expect(body).toContain(`href="/public/organisations/${B}"`);
+    expect(body).toContain(`href="/catalog/organisations/${A}"`);
+    expect(body).toContain(`href="/catalog/organisations/${B}"`);
     expect(body).toContain('href="https://spdx.org/licenses/Apache-2.0"');
     expect(body).toMatch(/href="https:\/\/blast.example.org"[^>]*rel="noopener noreferrer"/);
     expect(head).toContain('<script type="application/ld+json">');
@@ -432,7 +432,7 @@ describe('the public pages: nothing is drawn from a role or a session', () => {
       },
     });
     expect(body).toContain('Leibniz IPK');
-    expect(body).toContain('href="/public/services/blast-tool"');
+    expect(body).toContain('href="/catalog/services/blast-tool"');
     expect(body).toMatch(/href="https:\/\/ror.org\/02skbsp27"[^>]*rel="noopener noreferrer"/);
   });
 

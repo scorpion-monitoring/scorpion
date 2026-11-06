@@ -1,7 +1,13 @@
 // The browser half of the pages of registry.services. Only the web app imports this file (ADR-0027); the
 // server half (who may open them) is `./routes.ts`, and `ui.test.ts` checks that the two agree.
 import type { UiRoute, UiWidgets } from '@scorpion/contracts';
-import { loadCatalogue, loadNewService, loadPublicService, loadService } from './loaders.ts';
+import {
+  loadCatalogue,
+  loadNewService,
+  loadPublicCatalogue,
+  loadPublicService,
+  loadService,
+} from './loaders.ts';
 import { NOT_OFFERED } from './offered.ts';
 
 export { messages } from './messages.ts';
@@ -28,7 +34,12 @@ const routes: UiRoute[] = [
     component: () => import('./Service.svelte'),
   },
   {
-    path: '/public/services/:slug',
+    path: '/catalog/services',
+    load: loadPublicCatalogue,
+    component: () => import('./PublicCatalogue.svelte'),
+  },
+  {
+    path: '/catalog/services/:slug',
     load: loadPublicService,
     component: () => import('./PublicService.svelte'),
   },

@@ -29,6 +29,36 @@ const PUBLIC_SERVICE = [
   'stage',
   'url',
 ];
+/** The properties of the public list (`GET /catalog/services`), by path, and nothing else. */
+const PUBLIC_SERVICE_LIST = [
+  'facets',
+  'facets[].id',
+  'facets[].label',
+  'facets[].options',
+  'facets[].options[].count',
+  'facets[].options[].key',
+  'facets[].options[].label',
+  'facets[].options[].selected',
+  'metadata',
+  'metadata.currentPage',
+  'metadata.pageSize',
+  'metadata.totalCount',
+  'metadata.totalPages',
+  'result',
+  'result[].consortia',
+  'result[].consortia[].id',
+  'result[].consortia[].name',
+  'result[].consortia[].public',
+  'result[].id',
+  'result[].logoUrl',
+  'result[].name',
+  'result[].provider',
+  'result[].provider.id',
+  'result[].provider.name',
+  'result[].provider.public',
+  'result[].slug',
+  'result[].stage',
+];
 /** The properties of the public organisation record, by path, and nothing else. */
 const PUBLIC_ORGANISATION = [
   'abbreviation',
@@ -118,19 +148,24 @@ const schemaOf = (
 
 describe('the public records name exactly the pinned fields [ASVS-8.2.3]', () => {
   it('holds for the public service record', async () => {
-    const schema = schemaOf(await routes(), '/public/services/{ref}');
+    const schema = schemaOf(await routes(), '/catalog/services/{ref}');
     expect(paths(schema).sort()).toEqual([...PUBLIC_SERVICE].sort());
   });
 
+  it('holds for the public list of services', async () => {
+    const schema = schemaOf(await routes(), '/catalog/services');
+    expect(paths(schema).sort()).toEqual([...PUBLIC_SERVICE_LIST].sort());
+  });
+
   it('holds for the public organisation record', async () => {
-    const schema = schemaOf(await routes(), '/public/organisations/{id}');
+    const schema = schemaOf(await routes(), '/catalog/organisations/{id}');
     expect(paths(schema).sort()).toEqual([...PUBLIC_ORGANISATION].sort());
   });
 
   it('holds for the public profile of an organisation: the organisation profile without its contact point', async () => {
     const schema = schemaOf(
       await routes(),
-      '/public/organisations/{id}/schema-org',
+      '/catalog/organisations/{id}/schema-org',
       'application/ld+json',
     );
     expect(paths(schema).sort()).toEqual([...PUBLIC_PROFILE_ORGANISATION].sort());
@@ -138,12 +173,13 @@ describe('the public records name exactly the pinned fields [ASVS-8.2.3]', () =>
 
   it('names no private field anywhere in a public route’s answer, at any depth', async () => {
     const list = await routes();
-    const publicRoutes = list.filter((route) => route.path.startsWith('/public/'));
+    const publicRoutes = list.filter((route) => route.path.startsWith('/catalog/'));
     expect(publicRoutes.map((r) => r.path).sort()).toEqual([
-      '/public/organisations/{id}',
-      '/public/organisations/{id}/schema-org',
-      '/public/services/{ref}',
-      '/public/services/{ref}/schema-org',
+      '/catalog/organisations/{id}',
+      '/catalog/organisations/{id}/schema-org',
+      '/catalog/services',
+      '/catalog/services/{ref}',
+      '/catalog/services/{ref}/schema-org',
     ]);
     for (const route of publicRoutes) {
       for (const [status, response] of Object.entries(route.responses)) {
@@ -177,21 +213,22 @@ describe('the public records name exactly the pinned fields [ASVS-8.2.3]', () =>
 });
 
 describe('the public routes of the live registry are the ones the ADR names', () => {
-  it('lists exactly the four public routes under /public, each with a reason, and none writes [ASVS-8.2.1]', async () => {
+  it('lists exactly the five public routes under /catalog, each with a reason, and none writes [ASVS-8.2.1]', async () => {
     const list = await routes();
-    const under = list.filter((route) => route.path.startsWith('/public/'));
+    const under = list.filter((route) => route.path.startsWith('/catalog/'));
     expect(under.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
-      'get /public/organisations/{id}',
-      'get /public/organisations/{id}/schema-org',
-      'get /public/services/{ref}',
-      'get /public/services/{ref}/schema-org',
+      'get /catalog/organisations/{id}',
+      'get /catalog/organisations/{id}/schema-org',
+      'get /catalog/services',
+      'get /catalog/services/{ref}',
+      'get /catalog/services/{ref}/schema-org',
     ]);
     for (const route of under) {
       expect(route.public, route.path).toBe(true);
       expect(route.publicReason!.length, route.path).toBeGreaterThan(60);
       expect(route.publicReason, route.path).toMatch(/404/);
     }
-    // No route under /public changes anything, and no route outside it serves a record of the same kind anonymously.
+    // No route under /catalog changes anything, and no route outside it serves a record of the same kind anonymously.
     expect(under.every((route) => route.method === 'get')).toBe(true);
   });
 });

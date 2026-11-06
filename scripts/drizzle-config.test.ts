@@ -1,34 +1,48 @@
+import { matchesGlob } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import config, { SCHEMA_FILES } from '../drizzle.config.ts';
 
 const root = resolve(import.meta.dirname, '..');
+const config = readFileSync(join(root, 'drizzle.config.ts'), 'utf8');
+
+/** The quoted entries of `SCHEMA_FILES` in the config. */
+const listed = (() => {
+  const body = /SCHEMA_FILES = \[([^\]]*)\]/.exec(config)?.[1] ?? '';
+  return [...body.matchAll(/'([^']+)'/g)].map((match) => match[1]!);
+})();
+
+const schemas = (dir: string, file: string) =>
+  readdirSync(join(root, dir), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `${dir}/${entry.name}/${file}`)
+    .filter((path) => {
+      try {
+        readFileSync(join(root, path));
+        return true;
+      } catch {
+        return false;
+      }
+    });
 
 describe('drizzle.config.ts (Drizzle Studio)', () => {
-  it('lists the kernel schema and the modules glob, so every module with a db/schema.ts is covered', () => {
-    const modules = readdirSync(join(root, 'modules'), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .filter((name) => {
-        try {
-          readFileSync(join(root, 'modules', name, 'db/schema.ts'));
-          return true;
-        } catch {
-          return false;
-        }
-      });
-    expect(modules.length).toBeGreaterThan(0);
-    const patterns = SCHEMA_FILES.filter((entry) => entry.includes('*'));
-    // The only wildcard is `modules/*/db/schema.ts`: it matches every module that has a schema file.
-    expect(patterns).toEqual(['modules/*/db/schema.ts']);
-    expect(SCHEMA_FILES).toContain('packages/kernel/src/db/schema.ts');
-    expect(config.schema).toEqual(SCHEMA_FILES);
+  it('lists the schema of the kernel and every module that has a db/schema.ts', () => {
+    const expected = [...schemas('modules', 'db/schema.ts'), 'packages/kernel/src/db/schema.ts'];
+    expect(expected.length).toBeGreaterThan(5);
+    for (const file of expected) {
+      expect(
+        listed.some((pattern) => matchesGlob(file, pattern)),
+        file,
+      ).toBe(true);
+    }
   });
 
-  it('keeps a schema file under every listed literal path', () => {
-    for (const file of SCHEMA_FILES.filter((entry) => !entry.includes('*'))) {
-      expect(() => readFileSync(join(root, file))).not.toThrow();
+  it('lists nothing that is not a schema file of a module or of the kernel', () => {
+    for (const pattern of listed) {
+      expect(
+        pattern === 'packages/kernel/src/db/schema.ts' || pattern === 'modules/*/db/schema.ts',
+        pattern,
+      ).toBe(true);
     }
   });
 
@@ -37,13 +51,7 @@ describe('drizzle.config.ts (Drizzle Studio)', () => {
     expect(script).toContain("'127.0.0.1'");
     expect(script).not.toContain("'0.0.0.0'");
     for (const file of ['docker/Dockerfile', 'scripts/build.ts']) {
-      let text = '';
-      try {
-        text = readFileSync(join(root, file), 'utf8');
-      } catch {
-        continue;
-      }
-      expect(text).not.toContain('drizzle.config');
+      expect(readFileSync(join(root, file), 'utf8')).not.toContain('drizzle.config');
     }
   });
 });

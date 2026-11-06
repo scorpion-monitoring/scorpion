@@ -7806,7 +7806,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/organisations/{id}": {
+    "/catalog/organisations/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -7885,7 +7885,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/organisations/{id}/schema-org": {
+    "/catalog/organisations/{id}/schema-org": {
         parameters: {
             query?: never;
             header?: never;
@@ -10344,7 +10344,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/services/{ref}": {
+    "/catalog/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 50. */
+                    pageSize?: string;
+                    /** @description Matches the slug or the name, without case. */
+                    q?: string;
+                    /** @description Organisation ids; repeat to choose several (OR). */
+                    consortium?: string | string[];
+                    /** @description Terms of the `stage` vocabulary; repeat to choose several (OR). */
+                    stage?: string | string[];
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The published services by name, then id, one page, with the facets `stage` and `consortium` counted over the published services that the search and the other facet leave. `Cache-Control: public, max-age=60`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @description Below the base path. Absent without an icon. */
+                                logoUrl?: string;
+                                /** @description A term of the `stage` vocabulary; the facet gives its label. */
+                                stage: string;
+                                provider: {
+                                    id: string;
+                                    name: string;
+                                    /**
+                                     * @description An organisation of a public service is public.
+                                     * @enum {boolean}
+                                     */
+                                    public: true;
+                                };
+                                consortia: {
+                                    id: string;
+                                    name: string;
+                                    /**
+                                     * @description An organisation of a public service is public.
+                                     * @enum {boolean}
+                                     */
+                                    public: true;
+                                }[];
+                            }[];
+                            facets: {
+                                /** @description `stage` or `consortium`; also the name of its filter. */
+                                id: string;
+                                label: string;
+                                options: {
+                                    /** @description What to send as the filter. */
+                                    key: string;
+                                    label: string;
+                                    count: number;
+                                    selected: boolean;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Public reads are switched off (`service.allowPublic`): the same 404 as for a service that is not public. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description A filter that is not `stage` or `consortium`, or a value that names nothing. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog/services/{ref}": {
         parameters: {
             query?: never;
             header?: never;
@@ -10438,7 +10555,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/services/{ref}/schema-org": {
+    "/catalog/services/{ref}/schema-org": {
         parameters: {
             query?: never;
             header?: never;
@@ -12585,7 +12702,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/kpi/rimo.ttl": {
+    "/catalog/kpi/rimo.ttl": {
         parameters: {
             query?: never;
             header?: never;
@@ -12649,7 +12766,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/kpi/rimo.jsonld": {
+    "/catalog/kpi/rimo.jsonld": {
         parameters: {
             query?: never;
             header?: never;

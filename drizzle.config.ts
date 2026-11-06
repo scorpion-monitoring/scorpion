@@ -4,7 +4,7 @@
 // `scripts/drizzle-config.test.ts` fails when a module with a `db/schema.ts` is missing from it.
 import { defineConfig } from 'drizzle-kit';
 
-export const SCHEMA_FILES = ['packages/kernel/src/db/schema.ts', 'modules/*/db/schema.ts'];
+const SCHEMA_FILES = ['packages/kernel/src/db/schema.ts', 'modules/*/db/schema.ts'];
 
 export default defineConfig({
   dialect: 'postgresql',

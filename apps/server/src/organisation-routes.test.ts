@@ -658,8 +658,8 @@ describe('the OpenAPI document', () => {
       '/api/internal/organisations/{id}/membership',
       '/api/internal/organisations/{id}/schema-org',
       // M7 sprint 3: the two anonymous reads (ADR-0036 part 2).
-      '/api/internal/public/organisations/{id}',
-      '/api/internal/public/organisations/{id}/schema-org',
+      '/api/internal/catalog/organisations/{id}',
+      '/api/internal/catalog/organisations/{id}/schema-org',
       // M8 sprint 2: the v1 read of the providers (ADR-0037).
       '/api/v1/providers',
       '/api/v1/providers/{id}',

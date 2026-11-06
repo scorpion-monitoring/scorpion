@@ -159,8 +159,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /kpi/sets/{id}`                            | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
 | `GET /kpi/sets/{id}/evaluation`                 | kpi.framework          | `kpi.framework.set.read`                     | default    | no             |
 | `GET /kpi/value-types`                          | kpi.framework          | `kpi.framework.indicator.read`               | default    | no             |
-| `GET /public/kpi/rimo.jsonld`                   | kpi.framework          | **public**                                   | default    | no             |
-| `GET /public/kpi/rimo.ttl`                      | kpi.framework          | **public**                                   | default    | no             |
+| `GET /catalog/kpi/rimo.jsonld`                   | kpi.framework          | **public**                                   | default    | no             |
+| `GET /catalog/kpi/rimo.ttl`                      | kpi.framework          | **public**                                   | default    | no             |
 | `POST /kpi/indicators`                          | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
 | `POST /kpi/sets`                                | kpi.framework          | `kpi.framework.set.manage`                   | default    | yes            |
 | `PUT /kpi/indicators/{id}`                      | kpi.framework          | `kpi.framework.indicator.manage`             | default    | yes            |
@@ -196,8 +196,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /organisations/{id}`                       | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /organisations/{id}/members`               | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
 | `GET /organisations/{id}/schema-org`            | registry.organisations | `registry.organisations.organisation.read`   | default    | no             |
-| `GET /public/organisations/{id}`                | registry.organisations | **public**                                   | default    | no             |
-| `GET /public/organisations/{id}/schema-org`     | registry.organisations | **public**                                   | default    | no             |
+| `GET /catalog/organisations/{id}`                | registry.organisations | **public**                                   | default    | no             |
+| `GET /catalog/organisations/{id}/schema-org`     | registry.organisations | **public**                                   | default    | no             |
 | `PATCH /organisations/{id}`                     | registry.organisations | `registry.organisations.organisation.read`   | default    | yes            |
 | `POST /memberships/{id}/decision`               | registry.organisations | `registry.organisations.organisation.read`   | default    | yes            |
 | `POST /memberships/{id}/remove`                 | registry.organisations | `registry.organisations.organisation.read`   | default    | yes            |
@@ -210,8 +210,8 @@ the same file answers 401 and 403 on every non-public route.
 | `GET /api/v1/services/{id}`                     | registry.services      | `registry.services.v1.read`                  | default    | yes            |
 | `GET /api/v1/services/{id}/schema-org`          | registry.services      | `registry.services.v1.read`                  | default    | yes            |
 | `GET /licenses`                                 | registry.services      | `registry.services.service.read`             | default    | no             |
-| `GET /public/services/{ref}`                    | registry.services      | **public**                                   | default    | no             |
-| `GET /public/services/{ref}/schema-org`         | registry.services      | **public**                                   | default    | no             |
+| `GET /catalog/services/{ref}`                    | registry.services      | **public**                                   | default    | no             |
+| `GET /catalog/services/{ref}/schema-org`         | registry.services      | **public**                                   | default    | no             |
 | `GET /service-roles`                            | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /services`                                 | registry.services      | `registry.services.service.read`             | default    | no             |
 | `GET /services/{id}`                            | registry.services      | `registry.services.service.read`             | default    | no             |
@@ -261,9 +261,9 @@ button needs; `GET /branding` and `GET /legal/{page}` are what the sign-in page 
 and avatars to the sign-in page, and a file is named by the SHA-256 of its content.
 
 **The anonymous reads of M7 (ADR-0036 part 2).** Four more public routes exist, all `GET`, all in the `default` rate-limit group, none
-changing anything, and each says in its `publicReason` why it is open: `GET /public/services/{ref}` and `GET /public/services/{ref}/schema-org`
-answer for a service that a Reviewer or an administrator made public (`ref` is an id, a slug or an old slug); `GET /public/organisations/{id}`
-and `GET /public/organisations/{id}/schema-org` answer for an organisation that is the provider or a consortium of at least one **public**
+changing anything, and each says in its `publicReason` why it is open: `GET /catalog/services/{ref}` and `GET /catalog/services/{ref}/schema-org`
+answer for a service that a Reviewer or an administrator made public (`ref` is an id, a slug or an old slug); `GET /catalog/organisations/{id}`
+and `GET /catalog/organisations/{id}/schema-org` answer for an organisation that is the provider or a consortium of at least one **public**
 service. For everything else (a private service, an unpublished one, an unknown id or slug, an organisation whose services are all private, an
 id that is no UUID, and **every** address while `service.allowPublic` is off) the answer is the **same 404 with the same body as an unknown
 id**, never a 403, so existence is not revealed; the flag is read in the same statement as the record. A 200 carries `Cache-Control: public,
@@ -733,13 +733,13 @@ What an anonymous reader gets, and nothing else (ADR-0036 part 2). Both are sepa
 routes with fields removed; `public-records.test.ts` compares their property names, at any depth, with the lists below and fails on a
 field that is added or that names a private thing.
 
-| Public service record (`GET /public/services/{ref}`)                                | Who reads it                        | Notes                                                                                                                                                                                 |
+| Public service record (`GET /catalog/services/{ref}`)                                | Who reads it                        | Notes                                                                                                                                                                                 |
 | ----------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`, `slug`, `name`, `description`, `url`, `sameAs`, `license`, `stage`, `logoUrl` | anyone, while the service is public | `logoUrl` is below the base path, the file public by its hash. `stage` is the term of the vocabulary, the one thing the JSON-LD leaves out.                                           |
 | `provider`, `consortia` as `{ id, name, public }`                                   | anyone, while the service is public | `public` is always true: an organisation of a public service is public (Decision 8), so a page may link to its public profile.                                                        |
 | not in it                                                                           | nobody anonymous                    | the contact point, `editableFields`, `allowedActions`, `public`, the configured values, a member, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`, `published_at`, `published_by`. |
 
-| Public organisation record (`GET /public/organisations/{id}`)                        | Who reads it                                          | Notes                                                                                                                   |
+| Public organisation record (`GET /catalog/organisations/{id}`)                        | Who reads it                                          | Notes                                                                                                                   |
 | ------------------------------------------------------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `id`, `name`, `abbreviation`, `description`, `website`, `rorId`, `sameAs`, `logoUrl` | anyone, while a public service names the organisation | The descriptive fields the signed-in record already shows every signed-in person.                                       |
 | `services` as `{ id, slug, name }`                                                   | anyone, while a public service names the organisation | The public services that name it as provider or consortium, by name; none means there is no public record at all (404). |
@@ -806,7 +806,7 @@ marker of any appears in a body or a header of the four answers.
 | Route                                                                   | Who reads it                                                         | Notes                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld`            | `kpi.framework.v1.read` (a token whose scopes name it, or a session) | The family's one permission, held by the role `user`, checked in the pipeline and again in the service. Audited like the other v1 reads. `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`, no ETag. A query string is 422.                                                        |
-| `GET /public/kpi/rimo.ttl` and `GET /public/kpi/rimo.jsonld` (internal) | anyone, with no token and no session                                 | **public**, with the reason in the route: the definitions are the shared vocabulary of the instance, meant for systems and people without an account. `Cache-Control: public, max-age=300` and a strong ETag; `If-None-Match` gets 304. A query string is 422, so junk cannot fragment a shared cache. |
+| `GET /catalog/kpi/rimo.ttl` and `GET /catalog/kpi/rimo.jsonld` (internal) | anyone, with no token and no session                                 | **public**, with the reason in the route: the definitions are the shared vocabulary of the instance, meant for systems and people without an account. `Cache-Control: public, max-age=300` and a strong ETag; `If-None-Match` gets 304. A query string is 422, so junk cannot fragment a shared cache. |
 
 **Why a token on the v1 pair.** The v1 pair is a read of the public API like `/categories` and `/indicators`: a program that holds a token reads the whole
 family with one scope, and the call is in the audit trail with the token's id. **Why a public pair as well.** Decision 9 of the M9 plan: an IRI of an

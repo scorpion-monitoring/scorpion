@@ -1761,7 +1761,7 @@
         "permission": "kpi.framework.v1.read",
         "audit": true,
         "summary": "Read the indicators and KPI sets as RDF (Turtle)",
-        "description": "The indicators and KPI sets as RDF (Turtle) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /public/kpi/rimo.ttl` and `/public/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "description": "The indicators and KPI sets as RDF (Turtle) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /catalog/kpi/rimo.ttl` and `/catalog/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
         "responses": {
           "200": {
             "description": "The model as Turtle.",
@@ -1831,7 +1831,7 @@
         "permission": "kpi.framework.v1.read",
         "audit": true,
         "summary": "Read the indicators and KPI sets as RDF (JSON-LD)",
-        "description": "The indicators and KPI sets as RDF (JSON-LD) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /public/kpi/rimo.ttl` and `/public/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
+        "description": "The indicators and KPI sets as RDF (JSON-LD) following RIMO 0.2.0: each indicator is a `rimo:KPI` with its name, description, example, `rimo:isQualitativeIndicator`, one `rimo:KPIValue` node that carries the unit, `rimo:measuredBy` and `rimo:canBeAutomatedBy`, and `rimo:mandatoryFor`, `rimo:recommendedFor` or `rimo:appliedTo` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. `Cache-Control: private, no-cache`. The same document without a token is `GET /catalog/kpi/rimo.ttl` and `/catalog/kpi/rimo.jsonld` of the internal surface.\n\nNeeds the scope `kpi.framework.v1.read`.",
         "responses": {
           "200": {
             "description": "The model as JSON-LD.",

@@ -210,6 +210,44 @@ export type ServiceData = Awaited<ReturnType<typeof loadService>>;
 
 // ----- the public pages -----------------------------------------------------------------------------------
 
+/** The two filters of the public list; any other `f.<id>` in the address is dropped, never sent (it would be a 422). */
+const PUBLIC_FILTERS = ['stage', 'consortium'] as const;
+
+/**
+ * The public list of services (`/catalog/services`): the search, the two facets and the page, asked of the one public
+ * route with no more than the request itself. With public reads switched off the API answers its 404, which the shell
+ * shows as the page of an address nobody has.
+ */
+export async function loadPublicCatalogue({ api, url, locale }: UiLoadContext) {
+  const query = parseCatalogueQuery(url.searchParams);
+  query.filters = Object.fromEntries(
+    Object.entries(query.filters).filter(([id]) =>
+      (PUBLIC_FILTERS as readonly string[]).includes(id),
+    ),
+  );
+  const answer = await unwrap(
+    api.GET('/catalog/services', {
+      params: {
+        query: {
+          page: String(query.page),
+          pageSize: String(query.pageSize),
+          locale,
+          ...(query.q && { q: query.q }),
+          ...query.filters,
+        },
+      },
+    }),
+  );
+  return {
+    query,
+    services: answer.result,
+    total: answer.metadata.totalCount,
+    facets: answer.facets,
+  };
+}
+
+export type PublicCatalogueData = Awaited<ReturnType<typeof loadPublicCatalogue>>;
+
 /**
  * The public page of a service: the public record and its profile, asked of the public routes with no more
  * than the request itself. A service that is not public, an unknown one and a switched-off instance all come
@@ -220,10 +258,10 @@ export async function loadPublicService({ api, params, redirect }: UiLoadContext
   const ref = params.slug!;
   const path = { ref };
   const [service, profile] = await Promise.all([
-    unwrap(api.GET('/public/services/{ref}', { params: { path } })),
-    unwrap(api.GET('/public/services/{ref}/schema-org', { params: { path } })),
+    unwrap(api.GET('/catalog/services/{ref}', { params: { path } })),
+    unwrap(api.GET('/catalog/services/{ref}/schema-org', { params: { path } })),
   ]);
-  if (service.slug !== ref) redirect(`/public/services/${encodeURIComponent(service.slug)}`);
+  if (service.slug !== ref) redirect(`/catalog/services/${encodeURIComponent(service.slug)}`);
   return { service, profile };
 }
 

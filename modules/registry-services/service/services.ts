@@ -65,6 +65,7 @@ import {
   type Choice,
   type ChoiceEnv,
   type FacetEntry,
+  type FacetEnv,
   type FieldEnv,
   type FieldSchemaOrgProperty,
   type OrgRoleEntry,
@@ -179,6 +180,27 @@ export interface PublicServiceRecord {
   stage: string;
   provider: PublicOrganisationRef;
   consortia: PublicOrganisationRef[];
+}
+
+/** A row of the public list: the public record without the description, the links and the licence. */
+export interface PublicServiceRow {
+  id: string;
+  slug: string;
+  name: string;
+  /** Below the base path; absent without an icon. */
+  logoUrl?: string;
+  stage: string;
+  provider: PublicOrganisationRef;
+  consortia: PublicOrganisationRef[];
+}
+
+/** What the public list needs to know of the request: the search, the two facets and the page. */
+export interface PublicListQuery {
+  q?: string | undefined;
+  filters?: Readonly<Record<string, readonly string[]>> | undefined;
+  page: number;
+  pageSize: number;
+  locale?: string | undefined;
 }
 
 /** A public service as another module's public page lists it. */
@@ -311,6 +333,19 @@ export interface ServicesService {
   getPublicAsSystem: (ref: string) => Promise<PublicServiceRecord | undefined>;
   /** The profile of a public service; `undefined` exactly when {@link getPublicAsSystem} is. */
   schemaOrgPublicAsSystem: (ref: string) => Promise<ServiceProfile | undefined>;
+  /**
+   * The public list (`GET /catalog/services`): published services only, by name then id, with the facets `stage` and `consortium` counted over
+   * the published services. `undefined` exactly when public reads are switched off (`allowPublic`), so the route answers the one 404. A filter
+   * that is not one of the two facets, or a value that names nothing, is an `Invalid` (422).
+   */
+  listPublicAsSystem: (query: PublicListQuery) => Promise<
+    | {
+        services: PublicServiceRow[];
+        total: number;
+        facets: CatalogueFacet[];
+      }
+    | undefined
+  >;
   /** The public services an organisation is the provider or a consortium of, by name; empty with `allowPublic` off. */
   listPublicByOrganisationAsSystem: (organisationId: string) => Promise<PublicServiceLink[]>;
   /** The SPDX search for the licence field; needs `…service.read`. */
@@ -609,24 +644,38 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     organisations,
   });
 
+  const catalogueEnv = (locale: string): FacetEnv => ({
+    locale,
+    async organisationNames(wanted) {
+      const found = await deps.organisations.findByIdsAsSystem([...wanted]);
+      return new Map(found.map((organisation) => [organisation.id, organisation.name]));
+    },
+    async termLabels(vocabulary) {
+      const terms = await deps.settings.listTerms(vocabulary, { includeInactive: true, locale });
+      return new Map(terms.map((term) => [term.key, term.label]));
+    },
+    findLicence: (id) => fieldEnv.findLicence(id),
+  });
   const catalogue = createCatalogue({
     db,
     facets: deps.facets ?? [],
     organisationsOf,
     iconPath,
-    env: (locale) => ({
-      locale,
-      async organisationNames(wanted) {
-        const found = await deps.organisations.findByIdsAsSystem([...wanted]);
-        return new Map(found.map((organisation) => [organisation.id, organisation.name]));
-      },
-      async termLabels(vocabulary) {
-        const terms = await deps.settings.listTerms(vocabulary, { includeInactive: true, locale });
-        return new Map(terms.map((term) => [term.key, term.label]));
-      },
-      findLicence: (id) => fieldEnv.findLicence(id),
-    }),
+    env: catalogueEnv,
   });
+
+  // The public list: the same read model, narrowed to what a Reviewer made public and to the two facets a visitor may use.
+  const PUBLIC_FACETS = ['stage', 'consortium'];
+  const publicCatalogue = createCatalogue({
+    db,
+    facets: (deps.facets ?? []).filter((facet) => PUBLIC_FACETS.includes(facet.id)),
+    organisationsOf,
+    iconPath,
+    env: catalogueEnv,
+  });
+  /** Published, and with the owner a public record needs (`getPublicAsSystem` shows nothing without one). */
+  // The table is named outright: Drizzle leaves it off a column of a single-table query, and an unqualified `id` in the subselect would be its own.
+  const publishedOnly = sql`(svc_service.public = true and exists (select 1 from svc_service_organisation so where so.service_id = svc_service.id and so.role = ${OWNER_ROLE}))`;
 
   async function views(actor: Actor, rows: readonly Row[]): Promise<ServiceView[]> {
     const wanted = rows.map((row) => row.id);
@@ -1500,6 +1549,40 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     async schemaOrgPublicAsSystem(ref) {
       const hit = await publicRow(ref);
       return hit && profileOf(hit.row, hit.links, hit.values);
+    },
+
+    async listPublicAsSystem(query) {
+      if (!(await settingsNow()).allowPublic) return undefined;
+      const locale = query.locale ?? 'en';
+      const request = { q: query.q, filters: query.filters, restrict: publishedOnly };
+      const [{ rows, total }, facets] = await Promise.all([
+        publicCatalogue.rows(request, { page: query.page, pageSize: query.pageSize }, locale),
+        publicCatalogue.facets(request, locale),
+      ]);
+      const reference = (organisation: { id: string; name: string }): PublicOrganisationRef => ({
+        id: organisation.id,
+        name: organisation.name,
+        public: true,
+      });
+      return {
+        services: rows.flatMap((row) =>
+          row.provider
+            ? [
+                {
+                  id: row.id,
+                  slug: row.slug,
+                  name: row.name,
+                  ...(row.iconUrl !== undefined && { logoUrl: row.iconUrl }),
+                  stage: row.stage,
+                  provider: reference(row.provider),
+                  consortia: row.consortia.map(reference),
+                },
+              ]
+            : [],
+        ),
+        total,
+        facets,
+      };
     },
 
     async listPublicByOrganisationAsSystem(organisationId) {

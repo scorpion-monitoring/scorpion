@@ -124,6 +124,52 @@ describe('getPublicAsSystem', () => {
   });
 });
 
+describe('listPublicAsSystem', () => {
+  it('lists only the published services, by name then id, with the two public facets [ASVS-8.2.1]', async () => {
+    const w = await publicWorld();
+    const hidden = await makeService(w.pool, {
+      provider: w.provider.id,
+      consortia: [w.consortium.id],
+      name: 'Hidden Behind Review',
+    });
+    const found = await w.services.listPublicAsSystem({ page: 0, pageSize: 20 });
+    expect(found?.services.map((row) => row.id)).toEqual([w.svc.id]);
+    expect(found?.services.map((row) => row.id)).not.toContain(hidden.id);
+    expect(found?.total).toBe(1);
+    expect(found?.facets.map((facet) => facet.id).sort()).toEqual(['consortium', 'stage']);
+    expect(found?.services[0]).toMatchObject({
+      provider: { id: w.provider.id, public: true },
+      consortia: [{ id: w.consortium.id, public: true }],
+    });
+  });
+
+  it('is undefined while public reads are switched off, and back after [ASVS-8.3.1]', async () => {
+    const w = await publicWorld();
+    await w.configure({ exposeContactPoint: true, allowPublic: false });
+    expect(await w.services.listPublicAsSystem({ page: 0, pageSize: 20 })).toBeUndefined();
+    await w.configure({ exposeContactPoint: true, allowPublic: true });
+    expect(await w.services.listPublicAsSystem({ page: 0, pageSize: 20 })).toBeDefined();
+  });
+
+  it('refuses a facet that is not public and a value that names nothing, and counts no unpublished service', async () => {
+    const w = await publicWorld();
+    await expect(
+      w.services.listPublicAsSystem({
+        page: 0,
+        pageSize: 20,
+        filters: { provider: [w.provider.id] },
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      w.services.listPublicAsSystem({ page: 0, pageSize: 20, filters: { stage: ['NOT-A-STAGE'] } }),
+    ).rejects.toMatchObject({ status: 422 });
+    await makeService(w.pool, { provider: w.provider.id, stage: 'DEV' });
+    const found = await w.services.listPublicAsSystem({ page: 0, pageSize: 20 });
+    const stages = found!.facets.find((facet) => facet.id === 'stage')!.values;
+    expect(stages.map((value) => value.key)).not.toContain('DEV');
+  });
+});
+
 describe('getPublicAsSystem racing a publication', () => {
   it('gives a whole record or nothing while a service is switched back and forth, never a partial one [ASVS-8.2.1]', async () => {
     const w = await world(h);

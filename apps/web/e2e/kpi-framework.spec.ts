@@ -708,17 +708,17 @@ test.describe('journey: from the indicator form to the RDF read', () => {
     expect((await anonymous.get(at('/api/v1/kpi/rimo.ttl'))).status()).toBe(401);
 
     // Without a token: the public definitions are the same document, with an ETag that gets 304.
-    const open = await anonymous.get(at('/api/internal/public/kpi/rimo.ttl'));
+    const open = await anonymous.get(at('/api/internal/catalog/kpi/rimo.ttl'));
     expect(open.status()).toBe(200);
     expect(await open.text()).toBe(body);
     expect(open.headers()['cache-control']).toBe('public, max-age=300');
     const etag = open.headers().etag!;
     expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
-    const again = await anonymous.get(at('/api/internal/public/kpi/rimo.ttl'), {
+    const again = await anonymous.get(at('/api/internal/catalog/kpi/rimo.ttl'), {
       headers: { 'if-none-match': etag },
     });
     expect(again.status()).toBe(304);
-    const openJson = await anonymous.get(at('/api/internal/public/kpi/rimo.jsonld'));
+    const openJson = await anonymous.get(at('/api/internal/catalog/kpi/rimo.jsonld'));
     expect(openJson.status()).toBe(200);
     expect(openJson.headers()['content-type']).toBe('application/ld+json; charset=utf-8');
 
