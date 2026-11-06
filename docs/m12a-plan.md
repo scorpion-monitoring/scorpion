@@ -50,3 +50,14 @@ The behaviour of today's faceted search (checkbox logic, counts, the URL state) 
 ## 4. Rules for the milestone
 
 Every change keeps the module rules and the security rules of CLAUDE.md; `docs/security/**`-scoped paths get their ASVS notes (item 3 touches public pages: V8 note and a test that an unpublished service is still a 404 at the new address); one changeset per pull request; READMEs follow manifest changes; the e2e specs run under both base paths.
+
+## 5. Found differently / Amended in sprint 1
+
+Checked against the source while building sprint 1 (2026-11-06):
+
+- **Item 1.** Studio needs `drizzle-kit studio --host 127.0.0.1`; `pnpm db:studio` wraps it (`scripts/db-studio.ts`, reads `.env`, refuses `NODE_ENV=production`). The kernel's `packages/kernel/src/db/schema.ts` is listed too, not only the modules.
+- **Item 3.** No Schema.org `url` or `@id` ever named `/public/`: they name the signed-in pages (`/services/{id}`, `/organisations/{id}`), so nothing there changed (ADR-0049; backlog: should a public profile identify itself by the public page?). `/public/kpi/rimo.*` moved too (ADR-0040 names it). The list returns its facets in the same answer (a second route `/catalog/services/facets` would shadow a service whose slug is `facets`), and the facet values are named `options` because the pinned-field test forbids a property called `values` in any public schema. A `sort` parameter is ignored, not refused (it is one of the shared non-filter names).
+- **Item 5.** The sidebar rule also nests `Notifications` under `Profile` (`/profile/notifications`), which the plan did not name; it follows from "derived from the paths". A nested entry is drawn right after its parent, within the same section.
+- **Item 6.** Reproduced: daisyUI's `.alert` is a grid with one column per child, so `flex-col` did nothing and the token sat in a 33 px column at 360 px (576 px tall). The fix is `flex flex-col items-stretch`. The token has one length; the long case is a long token name. The shell header itself is wider than a 360 px screen (backlog).
+- **Item 7.** The maintainer supplied the logos as PNG with the "Powered By Scorpion" text in the image, and asked for cropped favicons. The files have not reached the repository (see the report); placeholders named `scorpion-light.png` and `scorpion.dark.png` (as written in the request) and `scorpion-favicon.png` stand in. Vite inlines files under 4 KiB as `data:` addresses; the layout handles both. Showing the product version to visitors departs from ADR-0045, which keeps module versions from them (ADR-0050 says so).
+- **Item 8.** `Bell.svelte` had its own copy of the bell path; it uses `Icon` now. Tabler is stroke width 2, so both `Icon` components moved from 1.75 to 2. `dot` is Tabler's `point`. The licence notice lives in `THIRD_PARTY_NOTICES.md` (the repo kept none; `LICENSE` stays plain ISC so licence detection is not disturbed).

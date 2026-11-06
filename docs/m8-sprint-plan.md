@@ -1,5 +1,7 @@
 # M8 Sprint Plan: `public-api` v1 read and the documentation
 
+> **Note (M12a, 2026-11-06):** the public addresses named below (`/public/services`, `/public/organisations`) moved to `/catalog/...` without a redirect; see ADR-0049.
+
 Status: **decided**, 2026-10-13. The maintainer answered the eight questions of §10 (the answers are recorded there). **Amended 2026-10-14:** sprints 1 and 2 are merged (PRs #93 and #94); the maintainer asked for the documentation to be served with **Scalar**, which replaces Decision 4 (§10, Decision 9) and rewrites sprint 3 (§6). Decisions the plan took itself are marked "proposed".
 Scope source: [implementation.md](implementation.md) §4, M8, [architecture.md](architecture.md) (the `public-api` row of the module table, the API surfaces table, "One route definition"), FEATURES §3.16 and defect 15 ([FEATURES.md](FEATURES.md) §5).
 
