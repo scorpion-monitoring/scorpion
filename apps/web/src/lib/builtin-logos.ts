@@ -5,7 +5,7 @@
 // The files are the maintainer's artwork. To change them, replace the two files below (keep the names, or change
 // the two imports here); nothing else refers to them.
 import light from './assets/scorpion-light.png';
-import dark from './assets/scorpion.dark.png';
+import dark from './assets/scorpion-dark.png';
 import favicon from './assets/scorpion-favicon.png';
 
 export const builtInLogos = { light, dark };

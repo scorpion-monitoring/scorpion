@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { logoSources, type LogoSettings } from './lib/logos.ts';
 
-const BUILT_IN = { light: '/_app/scorpion-light.png', dark: '/_app/scorpion.dark.png' };
+const BUILT_IN = { light: '/_app/scorpion-light.png', dark: '/_app/scorpion-dark.png' };
 const file = (hash: string) => `/api/internal/files/${hash}`;
 
 describe('logoSources', () => {
