@@ -51,6 +51,8 @@ pnpm test:e2e                  # Playwright
 pnpm test:e2e:parallel         # the same in two runs at once, one per base path (needs the cores)
 pnpm test:all                  # pnpm test and the parallel e2e at the same time
 pnpm db:generate --filter @scorpion/<package>  # new Drizzle migration for a module (from db/schema.ts)
+pnpm db:studio                 # Drizzle Studio on the dev database, 127.0.0.1 only, dev only; it can write (CONTRIBUTING.md)
+pnpm icons:generate            # copy the icons the app uses from Tabler into packages/contracts/src/icons.ts (build time; pnpm check fails on a diff)
 pnpm scorpion profile:generate <name>   # write apps/server/src/generated/profile.ts and apps/web/src/generated/ui.ts (build time)
 pnpm openapi:generate          # write the typed client's types (packages/contracts/src/generated) and the web app's v1 document; pnpm check fails on a diff
 pnpm scorpion start | worker | migrate   # web server, jobs and events only, migrations only
@@ -76,7 +78,7 @@ Run `pnpm check` and the tests of every module you touched before you say a task
 6. **Transactions:** every write that touches more than one row runs inside `ctx.db.tx()`. Emit domain events through the outbox inside the same transaction.
 7. **Extension through registries.** New field types, value types, ingestion adapters, exporters, widgets and transports are registry contributions, not `if` branches in the owning module.
 8. **Vocabularies are data.** Stages, thematic categories, necessity levels, sender types and aggregates come from `core.settings` vocabularies. Never add a pg enum or a hard-coded list of these.
-9. **No hard-coded branding.** Instance name, product name, sender address, URLs, contact email and legal texts come from settings.
+9. **No hard-coded branding.** Instance name, product name, sender address, URLs, contact email and legal texts come from settings. The software's own attribution (the footer's "Powered by Scorpion" with version and licence link, and the default logos that fill an empty logo slot) is not instance branding and is fixed in the code (ADR-0050).
 10. **UI routes go through the registry.** Modules never add SvelteKit filesystem routes; they register `ui.routes` entries that the shell's catch-all route renders. Build every link and fetch with the `url()` helper (base path).
 
 ## API rules

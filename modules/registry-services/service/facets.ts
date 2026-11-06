@@ -8,7 +8,7 @@ import { fieldValue, service, serviceOrganisation } from '../db/schema.ts';
 import { BRAND_ROLE, OWNER_ROLE } from './permissions.ts';
 import type { FacetEntry, FacetSelection, FacetValue } from './registries.ts';
 
-type Described = Pick<FacetEntry, 'labels' | 'order' | 'emptyLabel'>;
+type Described = Pick<FacetEntry, 'labels' | 'order' | 'emptyLabel' | 'public'>;
 
 /** Orders values by key, the services with none last; the catalogue sorts by count where it wants to. */
 const byKey = (a: FacetValue, b: FacetValue) =>
@@ -147,6 +147,7 @@ export const SEED_FACETS: FacetEntry[] = [
     labels: { en: 'Consortium', de: 'Konsortium' },
     order: 10,
     emptyLabel: { en: 'No consortium', de: 'Kein Konsortium' },
+    public: true,
   }),
   columnFacet(
     'stage',
@@ -154,6 +155,7 @@ export const SEED_FACETS: FacetEntry[] = [
     {
       labels: { en: 'Stage', de: 'Stufe' },
       order: 20,
+      public: true,
     },
     'stage',
   ),

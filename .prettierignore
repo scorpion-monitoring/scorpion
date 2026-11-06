@@ -20,3 +20,4 @@ packages/contracts/src/generated/
 
 # Written by `pnpm security:asvs --write`; CI fails if they differ from what the tool generates.
 docs/security/asvs/*.md
+packages/contracts/src/icons.ts

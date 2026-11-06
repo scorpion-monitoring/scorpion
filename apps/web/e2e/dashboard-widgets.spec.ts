@@ -462,3 +462,52 @@ test.describe('accessibility: the widgets have no serious violation', () => {
     });
   }
 });
+
+test.describe('journey: the trends chart, its table and its picture', () => {
+  test('shows the whole table under the chart, and exports the chart as a PNG and an SVG', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    test.slow();
+    const w = await world(playwright, baseURL, at);
+    const me = await apiAs(playwright, baseURL, at, w.person);
+    await store(me, [tile('trendsa', W.trends, { x: 0, y: 0, w: 12, h: 8 }, filter(w.a.id))]);
+    const opened = await pageAs(browser, baseURL, at, w.person);
+    const page = opened.page;
+    await page.goto(at('/'));
+    const box = tileOf(page, 'Trends');
+    await expect(box.getByRole('img', { name: /Trends of the KPIs/ })).toBeVisible();
+
+    // The table opens in full: every row is visible and none is cut off by the tile or covered by the options below it.
+    await box.getByRole('button', { name: 'Show the data as a table' }).click();
+    const table = box.getByRole('table', { name: /Trends of the KPIs/ });
+    await expect(table).toBeVisible();
+    const rows = table.getByRole('row');
+    const last = rows.last();
+    await last.scrollIntoViewIfNeeded();
+    const options = box.getByText('Series options');
+    const [lastBox, optionsBox] = [await last.boundingBox(), await options.boundingBox()];
+    expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(optionsBox!.y + 1);
+
+    // The Export menu offers the chart as a picture beside the files of the numbers.
+    for (const [item, extension, type] of [
+      ['Chart as PNG image', 'png', 'image/png'],
+      ['Chart as SVG image', 'svg', 'image/svg+xml'],
+    ] as const) {
+      await box.getByRole('button', { name: 'Export' }).click();
+      const download = page.waitForEvent('download');
+      await box.getByRole('button', { name: item }).click();
+      const file = await download;
+      expect(file.suggestedFilename()).toMatch(new RegExp(`-trends-.+\\.${extension}$`));
+      const path = await file.path();
+      const { readFileSync } = await import('node:fs');
+      const bytes = readFileSync(path);
+      if (type === 'image/png') expect(bytes.subarray(1, 4).toString()).toBe('PNG');
+      else expect(bytes.toString('utf8')).toContain('<svg');
+    }
+    await opened.close();
+    await w.api.dispose();
+  });
+});

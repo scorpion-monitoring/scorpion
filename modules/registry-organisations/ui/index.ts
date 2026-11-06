@@ -45,7 +45,7 @@ const routes: UiRoute[] = [
     component: () => import('./AccountOrganisations.svelte'),
   },
   {
-    path: '/public/organisations/:id',
+    path: '/catalog/organisations/:id',
     load: loadPublicOrganisation,
     component: () => import('./PublicOrganisation.svelte'),
   },

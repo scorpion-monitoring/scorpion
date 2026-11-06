@@ -160,8 +160,8 @@ export type ManagedRow = AdminMembershipsData['rows'][number];
 export async function loadPublicOrganisation({ api, params }: UiLoadContext) {
   const path = { id: params.id! };
   const [organisation, profile] = await Promise.all([
-    unwrap(api.GET('/public/organisations/{id}', { params: { path } })),
-    unwrap(api.GET('/public/organisations/{id}/schema-org', { params: { path } })),
+    unwrap(api.GET('/catalog/organisations/{id}', { params: { path } })),
+    unwrap(api.GET('/catalog/organisations/{id}/schema-org', { params: { path } })),
   ]);
   return { organisation, profile };
 }

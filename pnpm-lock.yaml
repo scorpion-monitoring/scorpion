@@ -28,6 +28,9 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:packages/kernel
+      '@tabler/icons':
+        specifier: ^3.50.0
+        version: 3.50.0
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2
@@ -2542,6 +2545,9 @@ packages:
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
+
+  '@tabler/icons@3.50.0':
+    resolution: {integrity: sha512-HflLxyrH1cqC7s7jzQGSjpsTAVIoaf7+/yHjbdM59rJQBMjliibp+LYhDPFxOMcwa1M8DNpOk6ENzQiWn9a1Dg==}
 
   '@tailwindcss/node@4.3.3':
     resolution: {integrity: sha512-/T8IKEsf9VTU6tLjgC7+sv2mOPtQxzE2jMw7u4Tt40Tx+QSZxpzh95/H6cMKoja9XuW7iMdLJYBB0o9G1CaAgg==}
@@ -7016,6 +7022,8 @@ snapshots:
   '@swc/helpers@0.5.23':
     dependencies:
       tslib: 2.9.1
+
+  '@tabler/icons@3.50.0': {}
 
   '@tailwindcss/node@4.3.3':
     dependencies:

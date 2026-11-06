@@ -149,7 +149,7 @@ const PUBLIC_REASON =
 
 export const getPublicOrganisationRoute = createRoute({
   method: 'get',
-  path: '/public/organisations/{id}',
+  path: '/catalog/organisations/{id}',
   public: true,
   publicReason: PUBLIC_REASON,
   request: { params: publicIdParam },
@@ -167,7 +167,7 @@ export const getPublicOrganisationRoute = createRoute({
 
 export const getPublicSchemaOrgRoute = createRoute({
   method: 'get',
-  path: '/public/organisations/{id}/schema-org',
+  path: '/catalog/organisations/{id}/schema-org',
   public: true,
   publicReason: PUBLIC_REASON,
   request: { params: publicIdParam },

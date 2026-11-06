@@ -1,6 +1,6 @@
 import { expect, test } from '../support/fixtures.ts';
 import { docShot } from '../support/doc-shot.ts';
-import { profileOf } from '../support/profile.ts';
+import { permissionBox, profileOf } from '../support/profile.ts';
 
 // J04: create, use and rotate a personal access token. Moved from profile.spec.ts with every assertion.
 test.describe('J04: create, use and rotate a personal access token', () => {
@@ -24,7 +24,7 @@ test.describe('J04: create, use and rotate a personal access token', () => {
 
     let first = '';
     await test.step('Tick a permission and create the token', async () => {
-      await tokens.getByRole('checkbox', { name: 'core.identity.me.read' }).check();
+      await (await permissionBox(tokens, 'core.identity.me.read')).check();
       await tokens.getByRole('button', { name: 'Create the token' }).click();
       first = (await page.getByTestId('token-secret').textContent())!;
       await expect(page.getByText('This is the only time it is shown.')).toBeVisible();

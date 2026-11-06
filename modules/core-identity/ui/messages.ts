@@ -224,6 +224,11 @@ const accountMessages: UiMessages = {
     'profile.tokens.scopes': 'Permissions',
     'profile.tokens.scopesHint':
       'A token can do only what you tick here, and only what you may do.',
+    'profile.tokens.scopesTreeHint':
+      'Tick a group to select everything in it. Arrow keys move between the entries; right and left open and close a group; space ticks.',
+    'profile.tokens.expand': 'Show the permissions of {name}',
+    'profile.tokens.collapse': 'Hide the permissions of {name}',
+    'profile.tokens.count': '{selected} of {total}',
     'profile.tokens.expires': 'Expires',
     'profile.tokens.expiresOn': 'Expires on (optional)',
     'profile.tokens.expiresHint':
@@ -502,6 +507,11 @@ const accountMessages: UiMessages = {
     'profile.tokens.scopes': 'Berechtigungen',
     'profile.tokens.scopesHint':
       'Ein Token kann nur tun, was Sie hier ankreuzen und was Sie selbst dürfen.',
+    'profile.tokens.scopesTreeHint':
+      'Eine Gruppe anzukreuzen wählt alles darin. Die Pfeiltasten wechseln zwischen den Einträgen; rechts und links öffnen und schließen eine Gruppe; die Leertaste kreuzt an.',
+    'profile.tokens.expand': 'Die Berechtigungen von {name} anzeigen',
+    'profile.tokens.collapse': 'Die Berechtigungen von {name} ausblenden',
+    'profile.tokens.count': '{selected} von {total}',
     'profile.tokens.expires': 'Läuft ab',
     'profile.tokens.expiresOn': 'Läuft ab am (optional)',
     'profile.tokens.expiresHint':

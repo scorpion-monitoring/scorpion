@@ -1,9 +1,10 @@
 <script lang="ts">
   import '../app.css';
+  import { page } from '$app/state';
   import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
-  import { isLocalPath, url } from '@scorpion/contracts';
+  import { isLocalPath, stripBase, url } from '@scorpion/contracts';
   import {
     createReauthController,
     createToaster,
@@ -23,6 +24,8 @@
   import Widget from '#lib/components/Widget.svelte';
   import Widgets from '#lib/components/Widgets.svelte';
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
+  import { builtInFavicon, builtInLogos } from '#lib/builtin-logos.ts';
+  import { logoSources } from '#lib/logos.ts';
   import { shellMessages } from '#lib/messages.ts';
   import { forwardWizardExtensions } from '#lib/wizard-extensions.ts';
   import { uiModules } from '../generated/ui.ts';
@@ -164,10 +167,30 @@
   }
 
   const brand = $derived(data.branding);
+  // The start page and the two catalogues (tables with filters) use the full width; every other page keeps a readable column.
+  const WIDE_PAGES = ['/', '/services', '/catalog/services'];
+  const wide = $derived(WIDE_PAGES.includes((page.data as { pattern?: string }).pattern ?? ''));
+  // A built asset's address comes from the build in one of three forms: a `data:` address (a small file, inlined; the CSP allows it for
+  // images), a path (`/_app/...`), or a full address with the origin the server saw. Only the path is kept and put below the base
+  // path like every page: the origin of a build is not the one a visitor reaches the instance by.
+  const assetHref = (file: string) => {
+    if (file.startsWith('data:')) return file;
+    const { pathname, search } = new URL(file, 'http://localhost');
+    // Under a base path the build's address may already carry it (the server saw it in the request); it is never added twice.
+    return href((stripBase(basePath, pathname) ?? pathname) + search);
+  };
+  const logos = $derived(
+    logoSources(
+      brand.logos,
+      { light: assetHref(builtInLogos.light), dark: assetHref(builtInLogos.dark) },
+      (hash) => href(`/api/internal/files/${hash}`),
+    ),
+  );
 </script>
 
 <svelte:head>
   <title>{brand.instanceName}</title>
+  <link rel="icon" type="image/png" href={assetHref(builtInFavicon)} />
 </svelte:head>
 
 <a
@@ -197,20 +220,9 @@
         <Icon name="menu" />
       </button>
       <a href={href('/')} class="flex items-center gap-2 text-lg font-bold">
-        {#if brand.logos.light}
-          <img
-            class="logo-light h-8 w-auto"
-            src={href(`/api/internal/files/${brand.logos.light}`)}
-            alt=""
-          />
-        {/if}
-        {#if brand.logos.dark ?? brand.logos.light}
-          <img
-            class="logo-dark h-8 w-auto"
-            src={href(`/api/internal/files/${brand.logos.dark ?? brand.logos.light}`)}
-            alt=""
-          />
-        {/if}
+        <!-- An uploaded logo, or the built-in ones of the software until there is one. -->
+        <img class="logo-light h-8 w-auto" src={logos.light} alt="" />
+        <img class="logo-dark h-8 w-auto" src={logos.dark} alt="" />
         <span>{brand.instanceName}</span>
       </a>
       <div class="flex-1"></div>
@@ -220,7 +232,11 @@
         <AccountMenu />
       {/if}
     </header>
-    <main id="main" tabindex="-1" class="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">
+    <main
+      id="main"
+      tabindex="-1"
+      class="mx-auto w-full flex-1 p-4 sm:p-6 {wide ? '' : 'max-w-6xl'}"
+    >
       {@render children()}
     </main>
     <Footer branding={brand} />

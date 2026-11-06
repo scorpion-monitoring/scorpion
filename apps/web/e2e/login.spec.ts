@@ -110,7 +110,7 @@ test.describe('the sign-in page', () => {
   test('says a signed-in visitor is signed in', async ({ page, at }) => {
     await signIn(page.request, at, admin);
     await page.goto(at('/login'));
-    await expect(page.getByText('You are signed in as root.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
     await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
   });
 

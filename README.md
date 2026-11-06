@@ -147,4 +147,4 @@ branches from `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and r
 
 ## Licence
 
-This project is licensed under the ISC License. See [LICENSE](LICENSE).
+This project is licensed under the ISC License. See [LICENSE](LICENSE). Third-party work that is part of the source (the Tabler icons) is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

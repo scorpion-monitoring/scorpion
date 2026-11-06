@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { makeSessionsStale } from './support/db.ts';
 import { createUser, expect, person, signInThroughPage, test } from './support/fixtures.ts';
+import { permissionBox } from './support/profile.ts';
 
 // No serious or critical accessibility violation (axe, WCAG 2.1 A and AA) on the sign-in, registration,
 // recovery and profile pages, in both themes, with the re-authentication dialog open, and the forms work
@@ -91,7 +92,7 @@ test.describe('the pages of a signed-in person', () => {
       // With a token shown, and with the confirmation dialog open.
       const tokens = page.getByRole('region', { name: 'Access tokens' });
       await tokens.getByLabel('Name').fill('a11y token');
-      await tokens.getByRole('checkbox', { name: 'core.identity.me.read' }).check();
+      await (await permissionBox(tokens, 'core.identity.me.read')).check();
       await tokens.getByRole('button', { name: 'Create the token' }).click();
       await expect(page.getByTestId('token-secret')).toBeVisible();
       expect(await violations(page), '/profile with a secret shown').toEqual([]);

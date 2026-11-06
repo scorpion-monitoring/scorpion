@@ -21,6 +21,10 @@ export const messages: UiMessages = {
     'services.filters.active': 'Chosen filters',
     'services.filters.remove': 'Remove the filter {facet}: {value}',
 
+    'catalog.title': 'Service catalogue',
+    'catalog.lead': 'The services that their operators have made public.',
+    'catalog.empty': 'No published service matches.',
+
     'services.new.intro':
       'Answer the questions step by step. Nothing is saved until you create the service.',
 
@@ -185,6 +189,10 @@ export const messages: UiMessages = {
     'services.icon.alt': 'Symbol von {name}',
     'services.filters.active': 'Gewählte Filter',
     'services.filters.remove': 'Filter entfernen: {facet}: {value}',
+
+    'catalog.title': 'Dienstekatalog',
+    'catalog.lead': 'Die Dienste, die ihre Betreiber veröffentlicht haben.',
+    'catalog.empty': 'Kein veröffentlichter Dienst passt.',
 
     'services.new.intro':
       'Beantworten Sie die Fragen Schritt für Schritt. Erst mit „Dienst anlegen“ wird etwas gespeichert.',

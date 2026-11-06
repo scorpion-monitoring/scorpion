@@ -1,4 +1,5 @@
 import { admin, expect, person, signInThroughPage, test } from './support/fixtures.ts';
+import { permissionBox } from './support/profile.ts';
 
 // The acceptance journey of M5 (implementation.md): register → pending → an administrator approves →
 // the person signs in → creates an access token → the token works against the API. Then they log out and
@@ -75,7 +76,7 @@ test('register → pending → approved → sign in → access token → the tok
   // 5. Creates an access token that may read the account; the secret is shown once.
   const tokens = page.getByRole('region', { name: 'Access tokens' });
   await tokens.getByLabel('Name').fill('journey token');
-  await tokens.getByRole('checkbox', { name: 'core.identity.me.read' }).check();
+  await (await permissionBox(tokens, 'core.identity.me.read')).check();
   await tokens.getByRole('button', { name: 'Create the token' }).click();
   const secret = (await page.getByTestId('token-secret').textContent())!;
   expect(secret).toMatch(/^scp_/);
