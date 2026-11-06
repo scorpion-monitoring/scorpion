@@ -151,7 +151,7 @@ The `CI` workflow runs its work as parallel jobs, so a run takes as long as its 
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Static checks`              | branch policy, changeset check, `pnpm check`, `pnpm openapi:diff` (v1 compatibility)                                                                   |
 | `Unit tests (n/4)`           | `pnpm test --shard=n/4`, one JUnit file per shard                                                                                                      |
-| `End-to-end tests (n/3)`     | Playwright, one JUnit file per shard (the browser download is cached)                                                                                  |
+| `End-to-end tests (n/4)`     | Playwright, one JUnit file per shard (the browser download is cached)                                                                                  |
 | `ASVS assessments`           | `pnpm security:asvs` over the joined JUnit reports                                                                                                     |
 | **`Lint, type check, test`** | the gate: succeeds only when the four jobs above did; this is the required check                                                                       |
 | `Docs export`                | `scorpion docs:export` with the pictures of the job above; keeps `docs-export` (folder and zip); a release tag attaches the zip (job `Release assets`) |

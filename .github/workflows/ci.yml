@@ -79,15 +79,15 @@ jobs:
           retention-days: 1
 
   # Playwright specs, split over a fixed number of runners; each shard builds the web app and starts its own
-  # stacks and database. To add a shard, add its number here and change `/3` in the command.
+  # stacks and database. To add a shard, add its number here and change `/4` in the command.
   e2e:
-    name: End-to-end tests (${{ matrix.shard }}/3)
+    name: End-to-end tests (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -101,7 +101,7 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @scorpion/web exec playwright install --with-deps chromium
 
-      - run: pnpm test:e2e --shard=${{ matrix.shard }}/3
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/4
         env:
           # One report per shard; the ASVS job puts them together. Relative to apps/web, where Playwright runs.
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: ../../reports/playwright-junit-${{ matrix.shard }}.xml
