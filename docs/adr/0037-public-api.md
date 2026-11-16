@@ -187,3 +187,7 @@ second query that could drift from the screen. A service that is not public is r
 `GET /api/v1/services` gains `category` and a `category` filter. All additions: the OpenAPI diff against `v0.10.0` shows additions only. The
 shapes, the meaning of `category` and `service` on `/indicators` (`category` filters, `service` marks) and the `totalCount` that follows the
 filters (defect 15) are in the README of `kpi.framework`.
+
+## Addendum (M12a sprint 5): a filter may be repeated
+
+Decision 9's comma list stays. The five filters of `GET /services` (`service`, `provider`, `stage`, `license`, `category`) also take the **repeated** parameter: `provider=A&provider=B`. Given once, the value is a comma list as before; given more than once, each occurrence is one value **as it is** (no comma split, trimmed, duplicates removed, at most 50 values of at most 64 characters, 422 for an empty one), so an abbreviation that contains a comma is reachable. A single such value is given twice (`provider=Org,Inc&provider=Org,Inc`). The parameter's schema now allows a string or an array: a widening of a request type, which `pnpm openapi:diff` reports as additive. `consortia` is not a filter of v1 (it is a field of the answer), so the maintainer's "provider and consortia" is `provider` and its four siblings that share the parser; the `indicator` filter of the KPI reads names a comma-free route already (an id) and is unchanged.

@@ -179,6 +179,8 @@ service and the new state and carries the link `<origin><base path>/services/<id
 | `GET /licenses`                          | `registry.services.service.read`    | the SPDX search for the licence field; deprecated ids are marked                                                                                                                                                                                                                                                                                                            |
 | `GET /service-roles`                     | `registry.services.service.read`    | the `service.orgRole` entries, for the form                                                                                                                                                                                                                                                                                                                                 |
 
+The v1 list `GET /api/v1/services` takes its five filters (`service`, `provider`, `stage`, `license`, `category`) as a comma list (`provider=A,B`) or repeated (`provider=A&provider=B`); a repeated value is taken as it is, so an abbreviation with a comma is given that way (ADR-0037, M12a addendum).
+
 ### The v1 routes for services (M8 sprint 2, ADR-0037)
 
 Permission `registry.services.v1.read` (granted to `user` by default) for all three routes. A service that is not public is returned like any other

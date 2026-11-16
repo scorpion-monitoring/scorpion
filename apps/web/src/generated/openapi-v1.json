@@ -455,7 +455,7 @@
         "permission": "registry.services.v1.read",
         "audit": true,
         "summary": "List the services",
-        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
+        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values); a filter may also be repeated (`provider=A&provider=B`), and then each occurrence is one value as it is, so an abbreviation with a comma is given that way. An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -483,56 +483,121 @@
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Abbreviations of services, comma-separated."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Abbreviations of services, comma-separated or repeated."
             },
             "required": false,
-            "description": "Abbreviations of services, comma-separated.",
+            "description": "Abbreviations of services, comma-separated or repeated.",
             "name": "service",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Abbreviations of providers, comma-separated: the services they provide."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Abbreviations of providers, comma-separated or repeated: the services they provide."
             },
             "required": false,
-            "description": "Abbreviations of providers, comma-separated: the services they provide.",
+            "description": "Abbreviations of providers, comma-separated or repeated: the services they provide.",
             "name": "provider",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Keys of the `stage` vocabulary, comma-separated."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Keys of the `stage` vocabulary, comma-separated or repeated."
             },
             "required": false,
-            "description": "Keys of the `stage` vocabulary, comma-separated.",
+            "description": "Keys of the `stage` vocabulary, comma-separated or repeated.",
             "name": "stage",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "SPDX licence ids, comma-separated."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "SPDX licence ids, comma-separated or repeated."
             },
             "required": false,
-            "description": "SPDX licence ids, comma-separated.",
+            "description": "SPDX licence ids, comma-separated or repeated.",
             "name": "license",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Names of KPI sets, comma-separated: the services that use one of them."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Names of KPI sets, comma-separated or repeated: the services that use one of them."
             },
             "required": false,
-            "description": "Names of KPI sets, comma-separated: the services that use one of them.",
+            "description": "Names of KPI sets, comma-separated or repeated: the services that use one of them.",
             "name": "category",
             "in": "query"
           }
