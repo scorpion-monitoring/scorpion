@@ -92,7 +92,7 @@ the same file answers 401 and 403 on every non-public route.
 | `POST /account/reauthenticate`                  | core.identity          | `core.identity.session.manage`               | strict     | yes            |
 | `POST /account/reauthenticate/oidc/{provider}`  | core.identity          | `core.identity.session.manage`               | strict     | yes            |
 | `POST /auth/login`                              | core.identity          | **public**                                   | strict     | no             |
-| `POST /auth/logout`                             | core.identity          | `core.identity.session.manage`               | default    | no             |
+| `POST /auth/logout`                             | core.identity          | `core.identity.session.manage`               | default    | yes            |
 | `POST /auth/logout-all`                         | core.identity          | `core.identity.session.manage`               | default    | no             |
 | `POST /auth/oidc/{provider}/link`               | core.identity          | `core.identity.auth-method.link`             | strict     | no             |
 | `POST /auth/oidc/{provider}/start`              | core.identity          | **public**                                   | strict     | no             |
