@@ -5,7 +5,13 @@
 import type { UiLoadContext } from '@scorpion/contracts';
 import { ApiError, unwrap } from '@scorpion/contracts/client';
 import type { OrganisationChoices, WizardData, WizardSchema } from './wizard-types.ts';
-import { catalogueApiQuery, facetsApiQuery, parseCatalogueQuery } from './query.ts';
+import type { FacetLook } from '@scorpion/ui-kit';
+import {
+  catalogueApiQuery,
+  facetsApiQuery,
+  parseCatalogueQuery,
+  type CatalogueQuery,
+} from './query.ts';
 
 const CREATE = 'registry.services.service.create';
 /** Held by an administrator only: the wizard then lists every organisation, not only the caller's own. */
@@ -33,25 +39,33 @@ export async function loadCatalogue({ api, url, locale }: UiLoadContext) {
   const query = parseCatalogueQuery(url.searchParams);
   // The filters are the facets' ids, which the module's own registry decides: the typed query names the four
   // seeded ones and the API takes the rest, hence the cast.
-  const [answer, facets, canCreate] = await Promise.all([
+  const facetsOf = (asked: CatalogueQuery) =>
+    unwrap(
+      api.GET('/services/facets', {
+        params: { query: facetsApiQuery(asked, locale) as never },
+      }),
+    );
+  // `unfiltered`: the facets counted without the text, for the values the search offers for typed text and the
+  // hint when the text matches no name (decision Q2). One more read, only while there is a text.
+  const [answer, facets, unfiltered, canCreate] = await Promise.all([
     unwrap(
       api.GET('/services', {
         params: { query: catalogueApiQuery(query, locale) as never },
       }),
     ),
-    unwrap(
-      api.GET('/services/facets', {
-        params: { query: facetsApiQuery(query, locale) as never },
-      }),
-    ),
+    facetsOf(query),
+    query.q ? facetsOf({ ...query, q: undefined }) : undefined,
     mayCreate(api),
   ]);
+  const suggestions = (unfiltered ?? facets).result;
   return {
     query,
     services: answer.result,
     total: answer.metadata.totalCount,
     facets: facets.result,
+    suggestions,
     canCreate,
+    filterStyle: 'sidebar' as FacetLook,
   };
 }
 
@@ -225,24 +239,34 @@ export async function loadPublicCatalogue({ api, url, locale }: UiLoadContext) {
       (PUBLIC_FILTERS as readonly string[]).includes(id),
     ),
   );
-  const answer = await unwrap(
-    api.GET('/catalog/services', {
-      params: {
-        query: {
-          page: String(query.page),
-          pageSize: String(query.pageSize),
-          locale,
-          ...(query.q && { q: query.q }),
-          ...query.filters,
+  const list = (q: string | undefined, page: number, pageSize: number) =>
+    unwrap(
+      api.GET('/catalog/services', {
+        params: {
+          query: {
+            page: String(page),
+            pageSize: String(pageSize),
+            locale,
+            ...(q && { q }),
+            ...query.filters,
+          },
         },
-      },
-    }),
-  );
+      }),
+    );
+  // The facets counted without the text, as on the signed-in page (decision Q2): one smallest page, only while
+  // there is a text.
+  const [answer, unfiltered] = await Promise.all([
+    list(query.q, query.page, query.pageSize),
+    query.q ? list(undefined, 0, 1) : undefined,
+  ]);
+  const suggestions = (unfiltered ?? answer).facets;
   return {
     query,
     services: answer.result,
     total: answer.metadata.totalCount,
     facets: answer.facets,
+    suggestions,
+    filterStyle: 'sidebar' as FacetLook,
   };
 }
 

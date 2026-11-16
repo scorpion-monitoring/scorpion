@@ -129,7 +129,7 @@ test.describe('J06: create a service with the wizard', () => {
       // The catalogue shows it, with its provider, its consortium and its icon.
       await page.getByRole('link', { name: 'Back to the services' }).click();
       await page.getByLabel('Search by name or short name').fill(tag);
-      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`q=${tag}`));
       const row = page.getByRole('row').filter({ hasText: name });
       await expect(row).toHaveCount(1);
       await expect(row).toContainText(provider.name);

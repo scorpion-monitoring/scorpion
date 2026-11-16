@@ -41,7 +41,7 @@ test.describe('journey 2: the catalogue', () => {
     await expect(rows(page).first()).toContainText(c.providers[1].name);
     // Nothing matches a search for something else: the empty state, and a way back.
     await page.getByLabel('Search by name or short name').fill(`${c.tag}-no-such-service`);
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page).toHaveURL(/no-such-service/);
     await expect(page.getByText('No service matches.')).toBeVisible();
     await api.dispose();
   });

@@ -53,8 +53,9 @@ test.describe('the public service catalogue', () => {
     });
 
     await test.step('Search by name', async () => {
+      // The search runs as one types (sprint 3 of M12a): no button.
       await page.getByLabel('Search by name or short name').fill(`${c.tag} Alpha`);
-      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await expect(page).toHaveURL(/q=/);
       await expect(rows(page)).toHaveCount(1);
       await expect(rows(page).first()).toContainText(c.alpha.name);
     });
