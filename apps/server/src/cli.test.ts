@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
 import pg from 'pg';
@@ -45,16 +46,41 @@ function launch(args: string[], env: Record<string, string>) {
   return { child, output: () => output, exited };
 }
 
-async function waitFor(check: () => Promise<boolean>, what: string, timeoutMs = 30_000) {
+async function waitFor(
+  check: () => Promise<boolean>,
+  what: string,
+  timeoutMs = 30_000,
+  /** The process the check depends on: when it has already exited, waiting is pointless. */
+  process?: ReturnType<typeof launch>,
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await check().catch(() => false)) return;
+    if (process?.child.exitCode !== undefined && process.child.exitCode !== null) {
+      throw new Error(
+        `the process exited with ${process.child.exitCode} while waiting for ${what}:\n${process.output()}`,
+      );
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`timed out waiting for ${what}`);
+  throw new Error(`timed out waiting for ${what}${process ? `:\n${process.output()}` : ''}`);
 }
 
-const freePort = () => 20_000 + Math.floor(Math.random() * 20_000);
+/**
+ * A port the operating system has just handed out: bind port 0 and read it back. The old draw from
+ * 20000-40000 overlapped the ephemeral range (32768 and up) that outgoing connections use, so a
+ * server could meet a taken port, die with EADDRINUSE and leave the test polling it until the
+ * deadline.
+ */
+const freePort = () =>
+  new Promise<number>((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address() as { port: number };
+      probe.close(() => resolve(port));
+    });
+  });
 
 describe('scorpion migrate', () => {
   it('applies the migrations, says so, and does nothing the second time', async () => {
@@ -104,12 +130,22 @@ describe('scorpion migrate', () => {
 describe('scorpion start', () => {
   it('migrates, becomes ready, serves the probes, and shuts down on SIGTERM with exit code 0', async () => {
     const url = await server.createDatabase();
-    const port = freePort();
+    const port = await freePort();
     const proc = launch(['start'], { DATABASE_URL: url, PORT: String(port), LOG_LEVEL: 'info' });
     const base = `http://127.0.0.1:${port}`;
 
-    await waitFor(async () => (await fetch(`${base}/healthz`)).status === 200, '/healthz');
-    await waitFor(async () => (await fetch(`${base}/readyz`)).status === 200, '/readyz');
+    await waitFor(
+      async () => (await fetch(`${base}/healthz`)).status === 200,
+      '/healthz',
+      30_000,
+      proc,
+    );
+    await waitFor(
+      async () => (await fetch(`${base}/readyz`)).status === 200,
+      '/readyz',
+      30_000,
+      proc,
+    );
     expect(await (await fetch(`${base}/healthz`)).json()).toEqual({
       status: 'ok',
       profile: 'full',
@@ -127,10 +163,15 @@ describe('scorpion start', () => {
 
   it('logs in JSON, one line per request, with the request id', async () => {
     const url = await server.createDatabase();
-    const port = freePort();
+    const port = await freePort();
     const proc = launch(['start'], { DATABASE_URL: url, PORT: String(port) });
     const base = `http://127.0.0.1:${port}`;
-    await waitFor(async () => (await fetch(`${base}/readyz`)).status === 200, '/readyz');
+    await waitFor(
+      async () => (await fetch(`${base}/readyz`)).status === 200,
+      '/readyz',
+      30_000,
+      proc,
+    );
     await fetch(`${base}/healthz`, { headers: { 'x-request-id': 'cli-test-request-1' } });
     proc.child.kill('SIGTERM');
     await proc.exited;
@@ -152,7 +193,7 @@ describe('scorpion start', () => {
 
   it('serves under a multi-segment BASE_PATH', async () => {
     const url = await server.createDatabase();
-    const port = freePort();
+    const port = await freePort();
     const proc = launch(['start'], {
       DATABASE_URL: url,
       PORT: String(port),
@@ -160,14 +201,19 @@ describe('scorpion start', () => {
       LOG_LEVEL: 'silent',
     });
     const base = `http://127.0.0.1:${port}/a/b`;
-    await waitFor(async () => (await fetch(`${base}/readyz`)).status === 200, '/readyz under /a/b');
+    await waitFor(
+      async () => (await fetch(`${base}/readyz`)).status === 200,
+      '/readyz under /a/b',
+      30_000,
+      proc,
+    );
     expect((await fetch(`http://127.0.0.1:${port}/readyz`)).status).toBe(404);
     proc.child.kill('SIGTERM');
     expect(await proc.exited).toBe(0);
   }, 90_000);
 
   it('exits 1 and says why when the database cannot be reached, without printing the password', async () => {
-    const port = freePort();
+    const port = await freePort();
     const proc = launch(['start'], {
       DATABASE_URL: 'postgres://scorpion:pw-secret-123@127.0.0.1:1/none',
       PORT: String(port),
@@ -214,11 +260,13 @@ describe('scorpion worker', () => {
     const proc = launch(['worker'], {
       DATABASE_URL: url,
       LOG_LEVEL: 'info',
-      PORT: String(freePort()),
+      PORT: String(await freePort()),
     });
     await waitFor(
       () => Promise.resolve(proc.output().includes('worker ready')),
       'the worker to be ready',
+      30_000,
+      proc,
     );
     proc.child.kill('SIGTERM');
     expect(await proc.exited).toBe(0);
@@ -369,12 +417,17 @@ describe('the first-run token of a fresh install', () => {
 
   it('is shown once on the console, redeemed over HTTP, never logged, and not shown again', async () => {
     const url = await server.createDatabase();
-    const port = freePort();
+    const port = await freePort();
     const base = `http://127.0.0.1:${port}`;
     const env = { DATABASE_URL: url, PORT: String(port), LOG_LEVEL: 'trace' };
 
     const first = launch(['start'], env);
-    await waitFor(async () => (await fetch(`${base}/readyz`)).status === 200, '/readyz');
+    await waitFor(
+      async () => (await fetch(`${base}/readyz`)).status === 200,
+      '/readyz',
+      30_000,
+      first,
+    );
     const token = first.output().match(TOKEN)?.[0];
     expect(token).toBeDefined();
     expect(first.output().match(TOKEN)).toHaveLength(1);
@@ -406,8 +459,13 @@ describe('the first-run token of a fresh install', () => {
     }
 
     // A restart finds an administrator and shows nothing.
-    const second = launch(['start'], { ...env, PORT: String(freePort()) });
-    await waitFor(() => Promise.resolve(/ready/.test(second.output())), 'the second start');
+    const second = launch(['start'], { ...env, PORT: String(await freePort()) });
+    await waitFor(
+      () => Promise.resolve(/ready/.test(second.output())),
+      'the second start',
+      30_000,
+      second,
+    );
     second.child.kill('SIGTERM');
     expect(await second.exited).toBe(0);
     expect(second.output()).not.toMatch(TOKEN);
@@ -423,7 +481,7 @@ describe('SECRETS_KEY', () => {
     for (const key of ['', 'short-and-invalid-key-text']) {
       const proc = launch(['start'], {
         DATABASE_URL: url,
-        PORT: String(freePort()),
+        PORT: String(await freePort()),
         SECRETS_KEY: key,
       });
       expect(await proc.exited).toBe(1);
@@ -447,11 +505,13 @@ describe('SECRETS_KEY', () => {
 
   it('never appears in the log of a running server', async () => {
     const url = await server.createDatabase();
-    const port = freePort();
+    const port = await freePort();
     const proc = launch(['start'], { DATABASE_URL: url, PORT: String(port), LOG_LEVEL: 'trace' });
     await waitFor(
       async () => (await fetch(`http://127.0.0.1:${port}/readyz`)).status === 200,
       '/readyz',
+      30_000,
+      proc,
     );
     proc.child.kill('SIGTERM');
     expect(await proc.exited).toBe(0);
