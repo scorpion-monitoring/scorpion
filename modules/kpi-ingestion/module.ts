@@ -167,7 +167,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
 
     jobs: [
       {
-        // Daily at 06:00 UTC; the handler returns at once unless today is the setting's day (default the 6th). The job page's "run now"
+        // Daily at 06:00 UTC; the handler returns at once before the setting's day (default the 6th) and acts on it and every day after it in the month. The job page's "run now"
         // is the manual trigger, and `kpii_reminder_sent` makes it safe: a provider and month are mailed once.
         name: REMINDER_JOB,
         schedule: '0 6 * * *',

@@ -75,13 +75,14 @@ async function configure(s: KpiStarted, values: unknown) {
 }
 
 describe('the day and the switch', () => {
-  it('does nothing unless today is the day (default the 6th, UTC, from the injected clock), and then once', async () => {
+  it('does nothing before the day (default the 6th, UTC, from the injected clock), and sends from the day on', async () => {
     const s = await h.start({ now: new Date('2026-10-05T23:59:59Z') });
     const w: World = await world(s);
     await w.member();
-    expect(await s.ingestion.reminder.run()).toMatchObject({ skipped: 'not-the-day', reminded: 0 });
-    s.clock.set('2026-10-07T00:00:00Z');
-    expect(await s.ingestion.reminder.run()).toMatchObject({ skipped: 'not-the-day' });
+    expect(await s.ingestion.reminder.run()).toMatchObject({
+      skipped: 'before-the-day',
+      reminded: 0,
+    });
     expect(await mails(s)).toEqual([]);
     expect(await count(s.pool, 'kpii_reminder_sent')).toBe(0);
     s.clock.set(SEPTEMBER_6);
@@ -110,7 +111,7 @@ describe('the day and the switch', () => {
     const w = await world(s);
     await w.member();
     await configure(s, { reminders: { dayOfMonth: 10 } });
-    expect(await s.ingestion.reminder.run()).toMatchObject({ skipped: 'not-the-day' });
+    expect(await s.ingestion.reminder.run()).toMatchObject({ skipped: 'before-the-day' });
     s.clock.set('2026-10-10T06:00:00Z');
     expect(await s.ingestion.reminder.run()).toMatchObject({ reminded: 1 });
   });
@@ -386,6 +387,50 @@ describe('what is missing', () => {
     expect(mail!.subject).toContain('2026-12');
     expect(mail!.text_body).toContain('period=2026-12');
     expect(await sentRows(s)).toMatchObject([{ period: '2026-12-31' }]);
+  });
+});
+
+describe('a run after the day', () => {
+  it('a node that was down on the day sends on its next run, and only once', async () => {
+    // Down on the 6th: the first run of the month is on the 8th.
+    const s = await h.start({ now: new Date('2026-10-08T06:00:00Z') });
+    const w = await world(s);
+    await w.member();
+    await w.member();
+    expect(await s.ingestion.reminder.run()).toMatchObject({
+      month: '2026-09',
+      reminded: 1,
+      people: 2,
+    });
+    // The daily runs that follow find the row and send nothing.
+    s.clock.set('2026-10-09T06:00:00Z');
+    expect(await s.ingestion.reminder.run()).toMatchObject({ reminded: 0, alreadySent: 1 });
+    s.clock.set('2026-10-31T06:00:00Z');
+    expect(await s.ingestion.reminder.run()).toMatchObject({ reminded: 0, alreadySent: 1 });
+    expect(await mails(s)).toHaveLength(2);
+    expect(await count(s.pool, 'kpii_reminder_sent')).toBe(1);
+  });
+
+  it('stops asking a provider that reported after the day, and asks the next month again', async () => {
+    const s = await h.start({ now: new Date('2026-10-08T06:00:00Z') });
+    const w = await world(s);
+    await w.member();
+    await w.measure(w.m1);
+    await w.measure(w.m2);
+    expect(await s.ingestion.reminder.run()).toMatchObject({ reminded: 0, providers: 0 });
+    expect(await mails(s)).toEqual([]);
+    expect(await count(s.pool, 'kpii_reminder_sent')).toBe(0);
+    s.clock.set('2026-11-20T06:00:00Z');
+    expect(await s.ingestion.reminder.run()).toMatchObject({ month: '2026-10', reminded: 1 });
+  });
+
+  it('a member who joins after the day but before the provider reported is reminded when the first run found nobody', async () => {
+    const s = await h.start({ now: new Date('2026-10-08T06:00:00Z') });
+    const w = await world(s);
+    expect(await s.ingestion.reminder.run()).toMatchObject({ reminded: 0, withoutRecipients: 1 });
+    await w.member();
+    s.clock.set('2026-10-09T06:00:00Z');
+    expect(await s.ingestion.reminder.run()).toMatchObject({ reminded: 1, people: 1 });
   });
 });
 

@@ -492,3 +492,7 @@ module over real Postgres without HTTP unless said; times are medians of 5 runs 
 What the numbers say: the write is about 0.13 ms per row (a 500-row API call is 74 ms, a 5 000-row file 0.66 s), and the unchanged case costs nearly as much as an insert, so the time is in building and running the statement,
 not in the writes (not profiled); no limit needs to change. The read at 50 000 rows is fast enough for a series, and a deep page costs about twice the first. A thousand measurements are under 0.3 MB with their indexes. The call counts
 of the page are in sprint 4's addendum and were measured again (see the backlog).
+
+## Amended in M12a sprint 5
+
+- **The reminder runs on the day or after it** (the maintainer's decision of 2026-11-16, which replaces the exact day check of item 10 above). The job is due when the UTC day is `reminders.dayOfMonth` or later in the same month (`reminderDue`); `kpii_reminder_sent` still keeps a provider from a second mail, so the daily runs after the first send nothing for it. A node that was down on the day now sends on its next run. The cost named in sprint 5 stays: a provider that was complete on the day and lost a mandatory value later in the month is asked on the 20th. The `skipped` value `not-the-day` is now `before-the-day`.

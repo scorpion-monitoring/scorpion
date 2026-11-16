@@ -253,10 +253,10 @@ Once a month the approved members of a provider are mailed the services of that 
 previous month. Plan [§9](../../docs/m10-sprint-plan.md), items 1 to 3; the decisions are in [ADR-0041](../../docs/adr/0041-measurement-model.md), "Amended in sprint 5".
 
 **The job** `kpi.ingestion.reporting-reminder` runs **daily at 06:00 UTC** (`0 6 * * *`; retry 3 times, 10 minutes apart; timeout 15 minutes) and returns at once
-unless `reminders.enabled` is on **and** today is `reminders.dayOfMonth`. "Today" is the UTC day of the module's injected clock, so the cron and the day check
+unless `reminders.enabled` is on **and** today is `reminders.dayOfMonth` **or later in the same month**. "Today" is the UTC day of the module's injected clock, so the cron and the day check
 are both UTC; a test moves the clock with `s.clock.set(date)` and none depends on the date it runs on. The job runs as the system: it takes no actor, and no
 route reaches it. Its result in the job-run history of the admin page is counts only: `providers`, `reminded`, `people`, `alreadySent`, `withoutRecipients`, `month`,
-or `skipped` (`disabled` or `not-the-day`).
+or `skipped` (`disabled` or `before-the-day`).
 
 | Setting                | Default | Meaning                                                                                                                                                                              |
 | ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -279,6 +279,8 @@ members are not). A member is mailed only if their account is **active** (a deac
 caller does), has an address, and **may submit now**: the module's own policy is asked (`isProviderMemberAsSystem`, the rule behind `kpi.ingestion.measurement.submit`) for each service, so
 the mail names only the services the person may report for. An administrator who is not a member is not mailed (the reminder goes to the provider's own people). A person who switched the
 `reminders` category off is not mailed: `core.notifications` decides (this module reads no preference; it reads the person's language, `notifications.locale`).
+
+**On the day or after it.** The run is due when the UTC day is the setting's day or any day after it (`reminderDue`, pure and table-tested; a stored day the month does not have counts as its last day). A node that was down on the day sends on its next run, and a provider that reports before that run is not asked. The daily runs after the first one read the candidates again and find every reminded provider in the sent table. A provider whose month was complete on the day but lost a mandatory value later in the month is asked on the next run (ADR-0041, M12a sprint 5).
 
 **Once per provider and month.** `kpii_reminder_sent` has the primary key `(provider_id, period)`. In **one transaction per provider** the job inserts the row (`on conflict do nothing`)
 and, only if the row is new, queues the mails with `enqueueTemplate`. So a second run on the same day, a retry after a failed run and a second node send nothing twice, and a crash
