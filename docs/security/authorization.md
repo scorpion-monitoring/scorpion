@@ -92,7 +92,7 @@ the same file answers 401 and 403 on every non-public route.
 | `POST /account/reauthenticate`                  | core.identity          | `core.identity.session.manage`               | strict     | yes            |
 | `POST /account/reauthenticate/oidc/{provider}`  | core.identity          | `core.identity.session.manage`               | strict     | yes            |
 | `POST /auth/login`                              | core.identity          | **public**                                   | strict     | no             |
-| `POST /auth/logout`                             | core.identity          | `core.identity.session.manage`               | default    | no             |
+| `POST /auth/logout`                             | core.identity          | `core.identity.session.manage`               | default    | yes            |
 | `POST /auth/logout-all`                         | core.identity          | `core.identity.session.manage`               | default    | no             |
 | `POST /auth/oidc/{provider}/link`               | core.identity          | `core.identity.auth-method.link`             | strict     | no             |
 | `POST /auth/oidc/{provider}/start`              | core.identity          | **public**                                   | strict     | no             |
@@ -300,7 +300,7 @@ Routes under `/api/v1` are the ones programs call ([ADR-0037](../adr/0037-public
   header is the caller's own origin and never `*`, and `/api/internal` never carries a CORS header. The answer to a preflight names **the methods of the path asked about** (`GET, POST, OPTIONS` for `/api/v1/measurements`, `GET, OPTIONS` for the
   read-only paths), so a path never claims a method it does not have (`preflight.ts`, `preflight.test.ts`, `measurements.contract.test.ts`).
 - **The first v1 write is `POST /api/v1/measurements`** (M10 sprint 2, [ADR-0041](../adr/0041-measurement-model.md)). A token needs the scope of the route,
-  `kpi.ingestion.v1.write`; the service checks the scoped permission `kpi.ingestion.measurement.submit` for the token's owner, and **a token that names the route scope is taken to name that one as well** (M12a sprint 5, ADR-0015: a member cannot list a scoped permission in the token form, so the two scopes could never be made by one); the owner must be
+  `kpi.ingestion.v1.write`; the service checks the scoped permission `kpi.ingestion.measurement.submit` for the token's owner, and **`submit` is declared `impliedBy` the route scope, so a token that names the route scope passes the scope gate of that one as well** (M12a sprint 5, ADR-0015: a member cannot list a scoped permission in the token form, so the two scopes could never be made by one; the findings of that sprint moved the rule from the service into the manifest, where `core.authz` applies it, and gave `registry.services` the same shape: `…service.write` implies `…service.edit` and `…service.edit-identity`); the owner must be
   an Admin or an approved member of the service's provider (ADR-0015: a token never does more than its owner). The scopes of `kpi.framework`'s reads are **not**
   needed: the service reads the KPIs and their bounds through trusted reads after its own scoped check. A session cookie on this route is refused without
   `X-CSRF-Token` (401, the check is in the authenticator for every method that is not safe, tagged `[ASVS-7.2.1]` in `measurements.contract.test.ts`); a token request

@@ -84,7 +84,12 @@ describe('the first login (provisioning)', () => {
       // The sign-in itself, in the transaction that made the session (M12a sprint 5); no provider token, subject or session id.
       {
         name: 'identity.session.created@1',
-        payload: { userId: expect.any(String) as string, username: 'quick', method: 'oidc' },
+        payload: {
+          userId: expect.any(String) as string,
+          username: 'quick',
+          method: 'oidc',
+          ip: null,
+        },
       },
     ]);
     expect(
@@ -93,6 +98,34 @@ describe('the first login (provisioning)', () => {
         `select r.key from authz_role_assignment a join authz_role r on r.id = a.role_id`,
       ),
     ).toEqual([{ key: 'user' }]);
+  });
+
+  it('puts the client address the pipeline resolved on the sign-in event, and nothing of the provider [ASVS-6.3.1]', async () => {
+    const policy = {
+      id: 'test.auto',
+      version: '1.0.0',
+      contributes: {
+        'auth.approvalPolicy': [{ id: 'auto', decide: () => ({ status: 'active' }) }],
+      },
+    };
+    const { kernel, identity: id } = await start({
+      settings: settingsWith({ approvalPolicy: 'auto' }),
+      extraModule: { id: 'test.auto', manifest: policy },
+    });
+    const input = await flow(id, fresh({ preferredUsername: 'wherefrom', email: 'w@example.org' }));
+    await id.oidc.complete({ ...input, clientIp: '203.0.113.9' });
+    const [event] = (
+      await rows(
+        kernel,
+        "select payload from kernel_outbox where name = 'identity.session.created@1'",
+      )
+    ).map((row) => row.payload);
+    expect(event).toEqual({
+      userId: expect.any(String) as string,
+      username: 'wherefrom',
+      method: 'oidc',
+      ip: '203.0.113.9',
+    });
   });
 
   it('keeps no address, and trusts no claim, when the provider does not vouch for the email', async () => {

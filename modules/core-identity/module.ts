@@ -307,8 +307,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.password.changed@1': userEvent,
         // The caller proved who they are again in their session; `method` is how (never a credential).
         // A sign-in succeeded and a session was made; `method` is how (never a credential, never the session id).
+        // `ip` is the client address as the pipeline resolved it, for the trail's `ip` column (cut after `ipTruncateAfterDays`);
+        // optional and additive, so it stays @1: an entry from before has none.
         'identity.session.created@1': userEvent.extend({
           method: z.enum(['password', 'oidc']),
+          ip: z.string().nullable().optional(),
         }),
         // The failed sign-ins of one name in one window, counted: one event per name and window, however many attempts
         // (ADR 0026, M12a). `userId` is the account the name belonged to, else null; `nameKey` is the start of the name's
@@ -316,6 +319,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.login.failed@1': z.strictObject({
           userId: z.string().nullable(),
           nameKey: z.string(),
+          // What was refused (`sign-in` when absent, as in an event from before): additive, so it stays @1.
+          context: z.enum(['sign-in', 're-authentication', 'password-change']).optional(),
           count: z.number().int().min(1),
           windowStart: z.string(),
           windowSeconds: z.number().int().min(1),

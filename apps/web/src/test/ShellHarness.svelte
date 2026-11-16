@@ -67,6 +67,7 @@
     localPath: (candidate) => (typeof candidate === 'string' ? candidate : null),
     refresh: () => Promise.resolve(),
     goto: () => Promise.resolve(),
+    navigating: () => false,
     replaceUrl: () => {},
     withReauth: (action) => action(),
     takeIntent: () => undefined,

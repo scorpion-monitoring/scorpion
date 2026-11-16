@@ -26,6 +26,11 @@ export interface Shell {
   refresh: () => Promise<void>;
   /** Goes to an address built with `href()`. */
   goto: (address: string, options?: { replace?: boolean }) => Promise<void>;
+  /**
+   * True while a navigation is pending (a search or a page button was pressed and the next page is still loading). A control
+   * that builds its next address from the data of the page on screen is disabled meanwhile, or it asks for the old query.
+   */
+  navigating: () => boolean;
   /** Replaces the address in the address bar without leaving the page, which also drops a `#fragment`. */
   replaceUrl: (address: string) => void;
   /**

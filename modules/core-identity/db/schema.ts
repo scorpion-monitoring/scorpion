@@ -314,12 +314,14 @@ export const loginFailure = pgTable(
     windowStart: timestamptz('window_start').notNull(),
     /** The length of the window in seconds when it was opened: a later change of the setting does not move it. */
     windowSeconds: integer('window_seconds').notNull(),
+    /** What was refused: `sign-in`, `re-authentication` or `password-change` (a failed password check of a signed-in session). */
+    context: text().notNull().default('sign-in'),
     failures: integer().notNull(),
     /** The account the name belonged to, when it was one (no foreign key: the row is transient). */
     userId: uuid('user_id'),
   },
   (table) => [
-    primaryKey({ columns: [table.keyHash, table.windowStart] }),
+    primaryKey({ columns: [table.keyHash, table.windowStart, table.context] }),
     index('identity_login_failure_window_start_idx').on(table.windowStart),
     check('identity_login_failure_count_positive', sql`${table.failures} >= 1`),
     check('identity_login_failure_window_positive', sql`${table.windowSeconds} >= 1`),

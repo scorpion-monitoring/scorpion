@@ -207,6 +207,82 @@ describe('the subscriber: one row per event, with the actor that caused it', () 
     expect(JSON.stringify(row)).not.toContain('secret-person');
   });
 
+  it('keeps the client address of a sign-in in the ip column, which the retention cuts, and never in the payload [ASVS-6.3.1]', async () => {
+    const s = await audit.startShared();
+    const userId = randomUUID();
+    const old = new Date(Date.now() - 40 * 86_400_000);
+    await s.audit.store.recordEvent({
+      id: randomUUID(),
+      name: 'identity.session.created@1',
+      payload: { userId, username: 'x', method: 'password', ip: '203.0.113.77' },
+      occurredAt: old,
+    });
+    const [row] = await s.rows('subject_id = $1', [userId]);
+    expect(row!.ip).toBe('203.0.113.77');
+    expect(row!.payload).toEqual({ userId, method: 'password' });
+    expect(JSON.stringify(row!.payload)).not.toContain('203.0.113');
+    await s.audit.retention.run();
+    const [cut] = await s.rows('subject_id = $1', [userId]);
+    expect(cut!.ip).toBe('203.0.113.0/24');
+  });
+
+  it('takes an address only from an event that declares it, and only when it is one', async () => {
+    const s = await audit.startShared();
+    const userId = randomUUID();
+    const record = (name: string, ip: unknown) =>
+      s.audit.store.recordEvent({
+        id: randomUUID(),
+        name,
+        payload: { userId, username: 'x', method: 'password', ip },
+        occurredAt: new Date(),
+      });
+    await record('identity.session.created@1', 'not an address');
+    await record('identity.session.created@1', null);
+    await record('identity.session.created@1', 'x'.repeat(100));
+    await record('identity.password.changed@1', '203.0.113.5'); // no `address` in its decision
+    const rows = await s.rows('subject_id = $1', [userId]);
+    expect(rows).toHaveLength(4);
+    for (const row of rows) {
+      expect(row.ip).toBeNull();
+      expect(JSON.stringify(row.payload)).not.toMatch(/203\.0\.113|not an address/);
+    }
+  });
+
+  it('records the failed password checks of a signed-in session with the account as the actor, and a sign-in failure as anonymous', async () => {
+    const s = await audit.startShared();
+    const userId = randomUUID();
+    const failed = (context: string | undefined, id: string | null, nameKey: string) =>
+      s.audit.store.recordEvent({
+        id: randomUUID(),
+        name: 'identity.login.failed@1',
+        payload: {
+          userId: id,
+          nameKey,
+          ...(context ? { context } : {}),
+          count: 2,
+          windowStart: new Date().toISOString(),
+          windowSeconds: 3600,
+        },
+        occurredAt: new Date(),
+      });
+    await failed('password-change', userId, 'abc');
+    await failed('re-authentication', userId, 'abc');
+    await failed('sign-in', null, 'unknown-key-1');
+    await failed(undefined, null, 'unknown-key-2');
+    const mine = await s.rows('subject_id = $1', [userId]);
+    expect(mine).toHaveLength(2);
+    for (const row of mine) expect(row).toMatchObject({ actor_kind: 'user', user_id: userId });
+    const unknown = await s.rows(
+      "subject_type = 'sign-in name' and subject_id like 'unknown-key-%'",
+    );
+    expect(unknown.map((row) => [row.subject_id, row.actor_kind, row.user_id])).toEqual(
+      expect.arrayContaining([
+        ['unknown-key-1', 'anonymous', null],
+        ['unknown-key-2', 'anonymous', null],
+      ]),
+    );
+  });
+
   it('uses the time of the event, not the time of the delivery', async () => {
     const s = await audit.startShared();
     const at = new Date('2026-01-02T03:04:05.000Z');

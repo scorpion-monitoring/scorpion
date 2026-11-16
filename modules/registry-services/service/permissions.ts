@@ -14,6 +14,13 @@ export const PERMISSION_MANAGE = 'registry.services.service.manage';
 /** Switch a service between private and public: Reviewers and Admin. */
 export const PERMISSION_PUBLISH = 'registry.services.service.publish';
 
+/**
+ * Change services with a token (ADR-0015, "implied by"): a person offers it in the token form, and it passes the scope gate of
+ * `edit` and `edit-identity`, which members and managers hold only through the policy. It grants nothing alone: the owner
+ * must be allowed to edit that service (the identity fields: a manager of its provider, or Admin).
+ */
+export const PERMISSION_WRITE = 'registry.services.service.write';
+
 /** Change every field but the slug and the provider, and the icon: the provider's approved members. */
 export const PERMISSION_EDIT = 'registry.services.service.edit';
 /** Change the slug and the provider: the managers of the provider. */

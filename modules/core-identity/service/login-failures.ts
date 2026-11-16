@@ -3,8 +3,8 @@
 // a closed window into **one** `identity.login.failed@1` event and deletes the row, in one transaction. A thousand failures
 // against one name in one window are one row and one audit entry with `count: 1000`; there is no lockout and no row per attempt.
 //
-// The event holds the count and the window, never the name: a user id when the name was an account, else the first sixteen
-// characters of the name's hash (so the same unknown name can be told from another in the trail, and not read).
+// The event holds the count, the window and what was refused, never the name: a user id when the name was an account, else the first
+// sixteen characters of the name's hash (or `overflow`, the names beyond the cap of the window counted together) (so the same unknown name can be told from another in the trail, and not read).
 import { and, asc, sql } from 'drizzle-orm';
 import type { ModuleContext } from '@scorpion/kernel';
 import { loginFailure } from '../db/schema.ts';
@@ -33,7 +33,11 @@ export function createLoginFailureAudit(ctx: ModuleContext): LoginFailureAudit {
             sql`${loginFailure.windowStart} + ${loginFailure.windowSeconds} * interval '1 second' <= ${now}`,
           ),
         )
-        .orderBy(asc(loginFailure.windowStart), asc(loginFailure.keyHash))
+        .orderBy(
+          asc(loginFailure.windowStart),
+          asc(loginFailure.keyHash),
+          asc(loginFailure.context),
+        )
         .limit(FLUSH_BATCH)
         .for('update', { skipLocked: true });
       let failures = 0;
@@ -41,6 +45,7 @@ export function createLoginFailureAudit(ctx: ModuleContext): LoginFailureAudit {
         await ctx.events.emit('identity.login.failed@1', {
           userId: row.userId,
           nameKey: row.keyHash.slice(0, NAME_KEY_LENGTH),
+          context: row.context,
           count: row.failures,
           windowStart: row.windowStart.toISOString(),
           windowSeconds: row.windowSeconds,
@@ -51,6 +56,7 @@ export function createLoginFailureAudit(ctx: ModuleContext): LoginFailureAudit {
             and(
               sql`${loginFailure.keyHash} = ${row.keyHash}`,
               sql`${loginFailure.windowStart} = ${row.windowStart}`,
+              sql`${loginFailure.context} = ${row.context}`,
             ),
           );
         failures += row.failures;

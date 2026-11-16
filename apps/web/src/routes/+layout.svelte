@@ -1,6 +1,6 @@
 <script lang="ts">
   import '../app.css';
-  import { page } from '$app/state';
+  import { navigating, page } from '$app/state';
   import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
@@ -121,6 +121,7 @@
     localPath,
     refresh: () => invalidateAll(),
     goto: (address, options) => goto(address, { replaceState: options?.replace }),
+    navigating: () => navigating.to !== null,
     replaceUrl: (address) => void replaceState(address, {}),
     withReauth: (action, intent) => reauth.run(action, intent),
     toaster,

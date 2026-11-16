@@ -48,6 +48,7 @@
       history.replaceState(null, '', address);
       return Promise.resolve();
     },
+    navigating: () => false,
     replaceUrl: (address) => history.replaceState(null, '', address),
     withReauth: (action) => action(),
     takeIntent: () => undefined,

@@ -733,6 +733,7 @@ describe('defect 1: the route table', () => {
       'registry.services.service.read-contact',
       'registry.services.service.manage',
       'registry.services.service.publish',
+      'registry.services.service.write',
     ];
     // A token holds at most 20 scopes, so the widest the owner can make is a few tokens.
     const rest = permissions.slice(10);

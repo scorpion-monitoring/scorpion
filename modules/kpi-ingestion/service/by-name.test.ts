@@ -285,15 +285,14 @@ describe('upsertByName: who may use it', () => {
         await expect(call(token(w.people[who], scopes), 4), who).rejects.toBeInstanceOf(Forbidden);
       }
     }
-    // the token is not given more than the owner has: a permission of the scoped kind is not taken from the scope of another
+    // `impliedBy` is declared on the permission (ADR-0015, M12a sprint 5 findings), so the scope of the route stands for `submit` wherever
+    // it is asked, not only in this write: the owner still decides, and a token never does more than its owner
     await expect(
       w.ingestion.measurements.upsertBatch(
-        token(w.people.member, [PERMISSION_V1_WRITE]),
+        token(w.people.plain, [PERMISSION_V1_WRITE]),
         w.svc.id,
         [],
-        {
-          source: 'test',
-        },
+        { source: 'test' },
       ),
     ).rejects.toBeInstanceOf(Forbidden);
     expect(await count(w.pool, 'kpii_measurement')).toBe(3);

@@ -32,6 +32,12 @@ export interface StoreDeps {
 
 const MAX = { action: 200, path: 500, text: 200, ip: 64 } as const;
 
+/** The client address of an event payload, or `null` when it carries none or what is not one. */
+function addressOf(payload: Record<string, unknown>): string | null {
+  const ip = payload['ip'];
+  return typeof ip === 'string' && ip.length <= MAX.ip && isIP(ip) !== 0 ? ip : null;
+}
+
 function toRow(entry: AuditEntry): Row {
   const query = prepare(entry.query, entry.redact);
   const body = prepare(entry.body, entry.redact);
@@ -101,6 +107,8 @@ export function createStore({ db, settings }: StoreDeps): Store {
           actorKind: actor.kind,
           userId: cleanText(actor.userId, MAX.text),
           tokenId: cleanText(actor.tokenId, MAX.text),
+          // Only an event that declares it, and only a real address: the column is what the retention job cuts.
+          ip: decision.address ? addressOf(payload) : null,
           truncated: stored.truncated,
           subjectType: cleanText(subject?.type, MAX.text),
           subjectId: cleanText(subject?.id, MAX.text),

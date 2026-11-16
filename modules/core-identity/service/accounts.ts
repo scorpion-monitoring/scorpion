@@ -348,6 +348,7 @@ export function createAccountService(
           userId: found.id,
           username: found.username,
           method: 'password',
+          ip: clientIp ?? null,
         });
         return created;
       });
@@ -414,7 +415,10 @@ export function createAccountService(
       // Guessing the password through a stolen session is throttled like guessing it at login.
       await throttle.assertOpen(caller.username, undefined);
       if (!(await verifyPassword(method.passwordHash, parsed.data.password))) {
-        await throttle.recordFailure(caller.username, undefined);
+        await throttle.recordFailure(caller.username, undefined, undefined, undefined, {
+          userId: caller.userId,
+          context: 're-authentication',
+        });
         throw new Invalid('The password is wrong.', [
           { path: 'password', message: 'is not your current password' },
         ]);

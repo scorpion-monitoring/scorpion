@@ -32,6 +32,7 @@ import {
   PERMISSION_EDIT_IDENTITY,
   PERMISSION_MANAGE,
   PERMISSION_PUBLISH,
+  PERMISSION_WRITE,
   PERMISSION_READ,
   PERMISSION_V1_READ,
   PERMISSION_READ_CONTACT,
@@ -163,6 +164,10 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         description:
           'Read the services through the public API (`GET /api/v1/services`, one service and its Schema.org profile), with a token that holds this scope',
       },
+      [PERMISSION_WRITE]: {
+        description:
+          'Change services with a token that holds this scope: it stands for `edit` and `edit-identity` of the token, and its owner must still be allowed to change that service (a member: not the slug or owner; a manager of the provider: both; Admin: all)',
+      },
       [PERMISSION_PUBLISH]: {
         description: 'Make a service public, or private again (Reviewers and administrators)',
       },
@@ -171,11 +176,13 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       // service checks them (`ctx.authz.require` with the service).
       [PERMISSION_EDIT]: {
         scope: RESOURCE_TYPE,
+        impliedBy: [PERMISSION_WRITE],
         description:
           'Change the name, licence, stage, description, links, contact point, icon, further organisations and configured fields of a service (not its slug or owning organisation)',
       },
       [PERMISSION_EDIT_IDENTITY]: {
         scope: RESOURCE_TYPE,
+        impliedBy: [PERMISSION_WRITE],
         description: 'Change the slug and the owning organisation of a service',
       },
       [PERMISSION_READ_CONTACT]: {
@@ -261,7 +268,10 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       // Every signed-in person may read services and ask to create one (the service checks the provider);
       // Reviewers publish. `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [
-        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_CREATE, PERMISSION_V1_READ] },
+        {
+          role: 'user',
+          permissions: [PERMISSION_READ, PERMISSION_CREATE, PERMISSION_V1_READ, PERMISSION_WRITE],
+        },
         { role: 'reviewer', permissions: [PERMISSION_READ, PERMISSION_PUBLISH] },
       ],
       // The policy `service.member` (ADR-0036): members and managers of the service's provider.
