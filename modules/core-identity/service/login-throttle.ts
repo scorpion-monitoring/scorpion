@@ -9,7 +9,7 @@
 // The username need not exist: an unknown name is counted exactly like a known one, so nothing here
 // tells them apart, and the table holds neither a name nor an address.
 import { createHash } from 'node:crypto';
-import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { DbTx, ModuleContext } from '@scorpion/kernel';
 import { loginFailure, loginThrottle } from '../db/schema.ts';
 import { TooManyRequests } from './errors.ts';
@@ -30,6 +30,11 @@ export function throttleKeys(username: string, address?: string): string[] {
 /** The key of the account alone, the one the audit counts by: the hash of the lower-case username. */
 export const accountKey = (username: string): string =>
   sha256(`account:${username.trim().toLowerCase()}`);
+
+/** What a counted failure was: a sign-in, or a password check of a signed-in session. */
+export type FailureContext = 'sign-in' | 're-authentication' | 'password-change';
+/** The key that counts the failures of names beyond the cap of a window together. Not a hash, so it cannot be a name's. */
+export const OVERFLOW_KEY = 'overflow';
 
 /** The start of the window `now` is in: windows are aligned to the epoch, so they need no state of their own. */
 export function windowStart(now: Date, windowSeconds: number): Date {
@@ -53,14 +58,15 @@ export interface LoginThrottle {
   /**
    * Counts one failed attempt on both keys, in the caller's transaction or its own. With `counted` the
    * failure is also added to the count of its audit window in the same transaction (a failed sign-in,
-   * not a wrong current password): `userId` is the account the name belongs to, or `null`.
+   * of a signed-in session's password check counts too): `userId` is the account the name belongs to, or `null`,
+   * and `context` says what was refused (`sign-in` when left out).
    */
   recordFailure(
     username: string,
     address: string | undefined,
     now?: Date,
     tx?: DbTx,
-    counted?: { userId: string | null },
+    counted?: { userId: string | null; context?: FailureContext },
   ): Promise<void>;
   /** Forgets the keys of a successful login. Run it in the transaction that starts the session. */
   reset(tx: Pick<DbTx, 'delete'>, username: string, address: string | undefined): Promise<void>;
@@ -94,20 +100,46 @@ export function createLoginThrottle(
     tx: DbTx,
     username: string,
     userId: string | null,
+    context: FailureContext,
     now: Date,
     throttle: Throttle,
   ) {
+    const start = windowStart(now, throttle.auditWindowSeconds);
+    let keyHash = accountKey(username);
+    if (userId === null) {
+      // A spray of unique names that are no account would make a row each. Past the cap of the window a new name is
+      // counted under the one row `overflow`; a name that has its row already, and every account, keeps counting alone.
+      const here = and(
+        eq(loginFailure.windowStart, start),
+        eq(loginFailure.context, context),
+        isNull(loginFailure.userId),
+      );
+      const [own] = await tx
+        .select({ one: sql`1` })
+        .from(loginFailure)
+        .where(and(here, eq(loginFailure.keyHash, keyHash)))
+        .limit(1);
+      if (!own) {
+        const named = await tx
+          .select({ one: sql`1` })
+          .from(loginFailure)
+          .where(and(here, ne(loginFailure.keyHash, OVERFLOW_KEY)))
+          .limit(throttle.auditMaxUnknownNames);
+        if (named.length >= throttle.auditMaxUnknownNames) keyHash = OVERFLOW_KEY;
+      }
+    }
     await tx
       .insert(loginFailure)
       .values({
-        keyHash: accountKey(username),
-        windowStart: windowStart(now, throttle.auditWindowSeconds),
+        keyHash,
+        windowStart: start,
         windowSeconds: throttle.auditWindowSeconds,
+        context,
         failures: 1,
         userId,
       })
       .onConflictDoUpdate({
-        target: [loginFailure.keyHash, loginFailure.windowStart],
+        target: [loginFailure.keyHash, loginFailure.windowStart, loginFailure.context],
         set: { failures: sql`least(${loginFailure.failures} + 1, 1000000)` },
       });
   }
@@ -149,7 +181,15 @@ export function createLoginThrottle(
       const keys = throttleKeys(username, address);
       const write = async (inside: DbTx) => {
         await count(inside, keys, now, throttle);
-        if (counted) await countForAudit(inside, username, counted.userId, now, throttle);
+        if (counted)
+          await countForAudit(
+            inside,
+            username,
+            counted.userId,
+            counted.context ?? 'sign-in',
+            now,
+            throttle,
+          );
       };
       if (tx) return write(tx);
       await ctx.db.tx(write);

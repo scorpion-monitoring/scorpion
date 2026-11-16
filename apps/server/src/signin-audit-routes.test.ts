@@ -51,6 +51,54 @@ describe('[ASVS-6.3.1] sign-ins on the audit trail', () => {
     for (const { id } of sessionRows.rows) expect(JSON.stringify(mine[0])).not.toContain(id);
   });
 
+  it('keeps the client address in the ip column of the sign-in entry and never in its payload', async () => {
+    const s = await app.start();
+    const ann = await s.signedIn('ann-address');
+    await dispatch(s);
+    const [row] = (await entries(s, 'identity.session.created@1')).filter(
+      (entry) => entry.user_id === ann.user.id,
+    );
+    expect(row!.ip).toBe('203.0.113.7');
+    expect(JSON.stringify(row!.payload)).not.toContain('203.0.113');
+    expect(row!.payload).toEqual({ userId: ann.user.id, method: 'password' });
+  });
+
+  it('puts a sign-out on the trail with the person, the address and the outcome, and no cookie or session id, and the session is over [ASVS-6.3.1] [ASVS-7.4.1]', async () => {
+    const s = await app.start();
+    const ann = await s.signedIn('ann-signout');
+    const sessionIds = (
+      await s.kernel.pool.query<{ id: string }>('select id from identity_session')
+    ).rows.map((row) => row.id);
+    expect((await s.post('/auth/logout', session(ann))).status).toBe(204);
+    const rows = (
+      (
+        await s.kernel.pool.query(
+          "select * from audit_event where path like '%/auth/logout' order by occurred_at, id",
+        )
+      ).rows as Record<string, unknown>[]
+    ).filter((row) => row.user_id === ann.user.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      source: 'api',
+      method: 'POST',
+      status: 204,
+      outcome: 'ok',
+      actor_kind: 'user',
+      ip: '203.0.113.7',
+    });
+    const dump = JSON.stringify(rows[0]);
+    for (const id of sessionIds) expect(dump).not.toContain(id);
+    expect(dump).not.toContain(ann.cookie.split('=')[1]!);
+    // The same call again has no session: it is refused and the refusal is on the trail too, as for every audited route.
+    expect((await s.post('/auth/logout', session(ann))).status).toBe(401);
+    const refused = (
+      await s.kernel.pool.query(
+        "select outcome, actor_kind, status from audit_event where path like '%/auth/logout' and status = 401",
+      )
+    ).rows;
+    expect(refused.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('shows the failures of one name as one anonymous entry with a count, however many attempts, and still locks nobody out', async () => {
     const s = await app.start();
     const ann = await s.signedIn('ann-failing');

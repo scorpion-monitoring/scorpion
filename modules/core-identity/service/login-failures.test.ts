@@ -19,7 +19,7 @@ const WINDOW = 600;
 const T0 = new Date('2026-10-06T12:00:00Z'); // the start of a 10-minute window
 const at = (seconds: number) => new Date(T0.getTime() + seconds * 1000);
 
-const settings: IdentitySettings = {
+const settingsWith = (extra: { auditMaxUnknownNames?: number } = {}): IdentitySettings => ({
   get: () =>
     Promise.resolve(
       settingsSchema.parse({
@@ -28,10 +28,11 @@ const settings: IdentitySettings = {
           freeAttempts: 1000,
           freeAttemptsPerAccount: 10_000,
           auditWindowSeconds: WINDOW,
+          ...extra,
         },
       }),
     ),
-};
+});
 
 type Pool = { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }> };
 const rows = async (kernel: { pool: Pool }, sql: string, values?: unknown[]) =>
@@ -41,8 +42,8 @@ const events = (kernel: { pool: Pool }, name: string) =>
     name,
   ]).then((found) => found.map((row) => row.payload as Record<string, unknown>));
 
-async function start() {
-  const started = await identity.start({ settings });
+async function start(extra: { auditMaxUnknownNames?: number } = {}) {
+  const started = await identity.start({ settings: settingsWith(extra) });
   const alice = await makeUser(started.kernel.pool, {
     username: 'alice',
     email: 'alice@example.org',
@@ -86,7 +87,7 @@ describe('a successful sign-in is on the trail [ASVS-6.3.1]', () => {
     const session = await login('alice', PASSWORD);
     const [event, ...more] = await events(kernel, 'identity.session.created@1');
     expect(more).toEqual([]);
-    expect(event).toEqual({ userId: alice.id, username: 'alice', method: 'password' });
+    expect(event).toEqual({ userId: alice.id, username: 'alice', method: 'password', ip: IP });
     expect(JSON.stringify(event)).not.toContain(session.sessionId);
     expect(await rows(kernel, 'select 1 from identity_session')).toHaveLength(1);
   });
@@ -130,6 +131,7 @@ describe('failed sign-ins are counted, not listed [ASVS-6.3.1]', () => {
       {
         userId: alice.id,
         nameKey: accountKey('alice').slice(0, NAME_KEY_LENGTH),
+        context: 'sign-in',
         count: 1000,
         windowStart: T0.toISOString(),
         windowSeconds: WINDOW,
@@ -185,16 +187,120 @@ describe('failed sign-ins are counted, not listed [ASVS-6.3.1]', () => {
     ]);
   });
 
-  it('is not counted for a wrong current password (not a sign-in) and not for a good sign-in', async () => {
-    const { kernel, login, alice, identity: id } = await start();
+  it('is not counted for a good sign-in', async () => {
+    const { kernel, login } = await start();
     await login('alice', PASSWORD);
-    await expect(
-      id.recovery.changePassword(
-        { kind: 'user', userId: alice.id, username: 'alice', roles: [], via: 'session' },
-        { currentPassword: WRONG, newPassword: 'another long passphrase 42' },
-      ),
-    ).rejects.toThrow();
     expect(await rows(kernel, 'select 1 from identity_login_failure')).toEqual([]);
+  });
+
+  // M12a sprint 5 findings. The test that stood here said a wrong current password is not counted; that was the gap, not a rule.
+  it('counts a wrong current password of a signed-in session as its own context, with the account as the actor, and keeps the throttle', async () => {
+    const { kernel, alice, actorOf, identity: id } = await start();
+    const actor = await actorOf(alice);
+    for (let i = 0; i < 3; i++)
+      await expect(
+        id.recovery.changePassword(actor, {
+          currentPassword: WRONG,
+          newPassword: 'another long passphrase 42',
+        }),
+      ).rejects.toMatchObject({ status: 422 });
+    expect(
+      await rows(kernel, 'select context, failures, user_id from identity_login_failure'),
+    ).toEqual([{ context: 'password-change', failures: 3, user_id: alice.id }]);
+    // The same failures are in the throttle, written in the same transaction.
+    expect(await rows(kernel, 'select 1 from identity_login_throttle')).not.toEqual([]);
+    const windowOf = windowStart(new Date(), WINDOW);
+    expect(await id.loginFailures.flush(new Date(windowOf.getTime() + WINDOW * 1000))).toEqual({
+      windows: 1,
+      failures: 3,
+    });
+    const [event, ...more] = await events(kernel, 'identity.login.failed@1');
+    expect(more).toEqual([]);
+    expect(event).toEqual({
+      userId: alice.id,
+      nameKey: accountKey('alice').slice(0, NAME_KEY_LENGTH),
+      context: 'password-change',
+      count: 3,
+      windowStart: windowOf.toISOString(),
+      windowSeconds: WINDOW,
+    });
+  });
+
+  it('counts a wrong password at a re-authentication in a row of its own, apart from the sign-ins of the same name', async () => {
+    const { kernel, fail, alice, actorOf, identity: id } = await start();
+    const actor = await actorOf(alice);
+    await fail('alice', { now: new Date() });
+    await expect(id.accounts.reauthenticate(actor, { password: WRONG })).rejects.toMatchObject({
+      status: 422,
+    });
+    expect(
+      await rows(kernel, 'select context, failures from identity_login_failure order by context'),
+    ).toEqual([
+      { context: 're-authentication', failures: 1 },
+      { context: 'sign-in', failures: 1 },
+    ]);
+    // A right password counts nothing.
+    await id.accounts.reauthenticate(actor, { password: PASSWORD });
+    expect(await rows(kernel, 'select 1 from identity_login_failure')).toHaveLength(2);
+  });
+
+  it('caps the rows of names that are no account per window: past the cap the rest is counted together as one row, with no failure lost', async () => {
+    const { kernel, fail, identity: id } = await start({ auditMaxUnknownNames: 10 });
+    for (let i = 0; i < 60; i++) await fail(`spray-${i}`);
+    // A name that has its row keeps counting alone, also after the cap is reached.
+    await fail('spray-0');
+    const found = await rows(
+      kernel,
+      'select key_hash, failures from identity_login_failure order by failures desc, key_hash',
+    );
+    expect(found).toHaveLength(11);
+    expect(found.filter((row) => row.key_hash === 'overflow')).toEqual([
+      { key_hash: 'overflow', failures: 50 },
+    ]);
+    expect(found.reduce((total, row) => total + Number(row.failures), 0)).toBe(61);
+    expect(await id.loginFailures.flush(at(WINDOW))).toEqual({ windows: 11, failures: 61 });
+    const written = await events(kernel, 'identity.login.failed@1');
+    expect(written).toHaveLength(11);
+    expect(written.find((event) => event.nameKey === 'overflow')).toMatchObject({
+      userId: null,
+      count: 50,
+      context: 'sign-in',
+    });
+    expect(JSON.stringify(written)).not.toMatch(/spray-|203\.0\.113/);
+  });
+
+  it('does not let a spray of unknown names crowd out an account, and starts again in the next window', async () => {
+    const { kernel, fail } = await start({ auditMaxUnknownNames: 10 });
+    for (let i = 0; i < 30; i++) await fail(`spray-${i}`);
+    await fail('alice');
+    await fail('nobody-new', { now: at(WINDOW + 1) });
+    const byWindow = await rows(
+      kernel,
+      'select window_start, key_hash, user_id from identity_login_failure order by window_start, key_hash',
+    );
+    expect(byWindow.filter((row) => row.user_id !== null)).toHaveLength(1);
+    expect(byWindow.filter((row) => row.key_hash === accountKey('nobody-new'))).toHaveLength(1);
+    expect(byWindow.filter((row) => row.key_hash === 'overflow')).toHaveLength(1);
+  });
+
+  it('rolls the whole counted failure back, the overflow row too, when the throttle cannot be written (rollback)', async () => {
+    const { kernel, fail } = await start({ auditMaxUnknownNames: 10 });
+    for (let i = 0; i < 12; i++) await fail(`spray-${i}`);
+    const before = await rows(
+      kernel,
+      'select key_hash, failures from identity_login_failure order by key_hash',
+    );
+    await kernel.pool.query(`
+      create function identity_test_fail() returns trigger language plpgsql as
+        $$ begin raise exception 'disk on fire'; end $$;
+      create trigger identity_test_fail before update on identity_login_throttle
+        for each row execute function identity_test_fail();`);
+    // `spray-11` is past the cap: its failure would go to the overflow row, in the transaction of the throttle that fails
+    await fail('spray-11');
+    await fail('spray-1');
+    expect(
+      await rows(kernel, 'select key_hash, failures from identity_login_failure order by key_hash'),
+    ).toEqual(before);
   });
 
   it('keeps the count and the throttle record together: when the throttle cannot be written, neither changes (rollback)', async () => {

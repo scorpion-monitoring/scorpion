@@ -115,6 +115,7 @@ describe('the module', () => {
         maxDelaySeconds: 900,
         forgetAfterSeconds: 3600,
         auditWindowSeconds: 3600,
+        auditMaxUnknownNames: 200,
       },
     });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
@@ -150,7 +151,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(11); // 0000 to 0010, each once
+    expect(journal.rows).toHaveLength(12); // 0000 to 0011, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {
