@@ -151,14 +151,16 @@ export function chosenLabels(definition: FacetDefinition, state: FacetState): st
 export const CHIP_FOLD_AT = 32;
 
 /**
- * The words of one facet's chip: `full` names every chosen value (`Consortium: de.NBI, NFDI4Plants`, the chip's
- * accessible name), `short` is what fits (`Provider: IPK Gatersleben +2`). A range reads `Year: 2018–2022`,
+ * The words of one facet's chip: `full` names every chosen value (`Consortium: de.NBI, NFDI4Plants`), `short` is
+ * what is shown (`Provider: IPK Gatersleben +2` past `CHIP_FOLD_AT` characters), and `name` is for the chip's
+ * accessible name: every value, and the shown words in it too (WCAG 2.5.3), so a folded chip is named
+ * `Provider: IPK Gatersleben +2 (Forschungszentrum Jülich, IPK Data Hub)`. A range reads `Year: 2018–2022`,
  * `Year: ≥ 2018` or `Year: ≤ 2022`. `undefined` when the facet has nothing chosen.
  */
 export function chipText(
   definition: FacetDefinition,
   state: FacetState,
-): { full: string; short: string } | undefined {
+): { full: string; short: string; name: string } | undefined {
   const value = state[definition.id];
   if (value === undefined) return undefined;
   if (definition.type === 'range') {
@@ -166,16 +168,14 @@ export function chipText(
     const text = rangeText(value);
     if (!text) return undefined;
     const full = `${definition.label}: ${text}`;
-    return { full, short: full };
+    return { full, short: full, name: full };
   }
   const labels = chosenLabels(definition, state);
   if (labels.length === 0) return undefined;
   const full = `${definition.label}: ${labels.join(', ')}`;
-  const short =
-    labels.length > 1 && full.length > CHIP_FOLD_AT
-      ? `${definition.label}: ${labels[0]} +${labels.length - 1}`
-      : full;
-  return { full, short };
+  if (labels.length < 2 || full.length <= CHIP_FOLD_AT) return { full, short: full, name: full };
+  const short = `${definition.label}: ${labels[0]} +${labels.length - 1}`;
+  return { full, short, name: `${short} (${labels.slice(1).join(', ')})` };
 }
 
 /** `2018–2022`, `≥ 2018`, `≤ 2022`, or empty for a range with neither end. */

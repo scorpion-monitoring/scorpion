@@ -182,39 +182,55 @@ describe('matchingOffers', () => {
 });
 
 describe('chipText', () => {
-  it.each<[FacetDefinition, FacetState, { full: string; short: string } | undefined]>([
-    [consortium, {}, undefined],
+  it.each<[FacetDefinition, FacetState, { full: string; short: string; name: string } | undefined]>(
     [
-      consortium,
-      { consortium: ['denbi'] },
-      { full: 'Consortium: de.NBI', short: 'Consortium: de.NBI' },
+      [consortium, {}, undefined],
+      [
+        consortium,
+        { consortium: ['denbi'] },
+        { full: 'Consortium: de.NBI', short: 'Consortium: de.NBI', name: 'Consortium: de.NBI' },
+      ],
+      [
+        consortium,
+        { consortium: ['denbi', 'nfdi4plants'] },
+        {
+          full: 'Consortium: de.NBI, NFDI4Plants',
+          short: 'Consortium: de.NBI, NFDI4Plants',
+          name: 'Consortium: de.NBI, NFDI4Plants',
+        },
+      ],
+      [
+        provider,
+        { provider: ['ipk', 'fzj', 'ipk-hub'] },
+        {
+          full: 'Provider: IPK Gatersleben, Forschungszentrum Jülich, IPK Data Hub',
+          short: 'Provider: IPK Gatersleben +2',
+          name: 'Provider: IPK Gatersleben +2 (Forschungszentrum Jülich, IPK Data Hub)',
+        },
+      ],
+      // A value the facets no longer list (0 matches) keeps its key, and stays removable.
+      [
+        provider,
+        { provider: ['gone'] },
+        { full: 'Provider: gone', short: 'Provider: gone', name: 'Provider: gone' },
+      ],
+      [
+        year,
+        { year: { min: 2018, max: 2022 } },
+        { full: 'Year: 2018–2022', short: 'Year: 2018–2022', name: 'Year: 2018–2022' },
+      ],
+      [
+        year,
+        { year: { min: 2018 } },
+        { full: 'Year: ≥ 2018', short: 'Year: ≥ 2018', name: 'Year: ≥ 2018' },
+      ],
+      [
+        year,
+        { year: { max: 2022 } },
+        { full: 'Year: ≤ 2022', short: 'Year: ≤ 2022', name: 'Year: ≤ 2022' },
+      ],
     ],
-    [
-      consortium,
-      { consortium: ['denbi', 'nfdi4plants'] },
-      {
-        full: 'Consortium: de.NBI, NFDI4Plants',
-        short: 'Consortium: de.NBI, NFDI4Plants',
-      },
-    ],
-    [
-      provider,
-      { provider: ['ipk', 'fzj', 'ipk-hub'] },
-      {
-        full: 'Provider: IPK Gatersleben, Forschungszentrum Jülich, IPK Data Hub',
-        short: 'Provider: IPK Gatersleben +2',
-      },
-    ],
-    // A value the facets no longer list (0 matches) keeps its key, and stays removable.
-    [provider, { provider: ['gone'] }, { full: 'Provider: gone', short: 'Provider: gone' }],
-    [
-      year,
-      { year: { min: 2018, max: 2022 } },
-      { full: 'Year: 2018–2022', short: 'Year: 2018–2022' },
-    ],
-    [year, { year: { min: 2018 } }, { full: 'Year: ≥ 2018', short: 'Year: ≥ 2018' }],
-    [year, { year: { max: 2022 } }, { full: 'Year: ≤ 2022', short: 'Year: ≤ 2022' }],
-  ])('%#', (definition, state, expected) => {
+  )('%#', (definition, state, expected) => {
     expect(chipText(definition, state)).toEqual(expected);
   });
 });

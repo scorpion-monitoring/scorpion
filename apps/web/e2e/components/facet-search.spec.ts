@@ -137,3 +137,184 @@ test.describe('FacetSearch, look sidebar', () => {
     'look=sidebar&set=zero&q=gatersleben',
   );
 });
+
+test.describe('FacetSearch, look bar', () => {
+  const open = (scene: (n: string, o?: object) => Promise<void>, query = '', lang?: 'de') =>
+    scene('facet-search', { query: `look=bar${query ? `&${query}` : ''}`, lang });
+  const facetButton = (page: Page, name: string) =>
+    page
+      .getByRole('group', { name: 'Filter by' })
+      .getByRole('button', { name: new RegExp(`^${name}`) });
+
+  test('a facet button discloses its panel; choosing keeps it open and adds one chip per facet', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'page=2');
+    const consortium = facetButton(page, 'Consortium');
+    await expect(consortium).toHaveAttribute('aria-expanded', 'false');
+    await consortium.click();
+    await expect(consortium).toHaveAttribute('aria-expanded', 'true');
+    const list = page.getByRole('listbox', { name: 'Consortium' });
+    await expect(list).toBeFocused();
+    const denbi = list.getByRole('option', { name: /^de\.NBI/ });
+    const count = Number(/\((\d+)\)/.exec(await denbi.innerText())?.[1]);
+    await denbi.click();
+    await expect(denbi).toHaveAttribute('aria-selected', 'true');
+    await expect(live(page)).toHaveText(`${count} services match`);
+    // The panel stays open while picking: OR within the facet is several clicks.
+    await list.getByRole('option', { name: /^NFDI4Plants/ }).click();
+    await expect(list).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Remove Consortium: de.NBI, NFDI4Plants' }),
+    ).toBeVisible();
+    await expect(consortium).toHaveAccessibleName('Consortium 2 chosen');
+    const search = await address(page);
+    expect(search.getAll('f.consortium')).toEqual(['denbi', 'nfdi4plants']);
+    expect(search.get('page')).toBeNull();
+    // Escape closes the popover and gives the focus back to its button.
+    await page.keyboard.press('Escape');
+    await expect(list).toBeHidden();
+    await expect(consortium).toBeFocused();
+    await expect(consortium).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('a removed chip is announced; the focus goes to the next chip, then to the search box', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'f.consortium=denbi&f.stage=PROD');
+    const first = page.getByRole('button', { name: 'Remove Consortium: de.NBI' });
+    await first.click();
+    await expect(live(page)).toHaveText(/^Consortium: de\.NBI removed\. \d+ services? match/);
+    await expect(page.getByRole('button', { name: 'Remove Stage: Production' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('searchbox', { name: 'Search services' })).toBeFocused();
+    expect([...(await address(page)).keys()].filter((key) => key.startsWith('f.'))).toEqual([]);
+  });
+
+  test('"Clear all" clears the text and the facets and puts the focus in the search box', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'f.consortium=denbi&q=service');
+    await page.getByRole('button', { name: 'Clear all' }).click();
+    await expect(page.getByTestId('state')).toHaveText('{"q":"","state":{}}');
+    await expect(page.getByRole('searchbox', { name: 'Search services' })).toBeFocused();
+    await expect(page.getByRole('searchbox', { name: 'Search services' })).toHaveValue('');
+  });
+
+  test('a facet with 300 values takes no more room: a filter field, 50 values and "type to narrow"', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'set=300');
+    await facetButton(page, 'Provider').click();
+    const field = page.getByRole('combobox', { name: 'Filter Provider' });
+    await expect(field).toBeFocused();
+    const list = page.getByRole('listbox', { name: 'Provider' });
+    await expect(list.getByRole('option')).toHaveCount(50);
+    await expect(page.getByText(/^\d+ more, type to narrow/)).toBeVisible();
+    // The list scrolls inside its panel; the page does not grow.
+    const box = await list.boundingBox();
+    expect(box!.height).toBeLessThanOrEqual(18 * 16 + 1);
+    await field.fill('GATERSLEBEN');
+    await expect(list.getByRole('option')).toHaveCount(1);
+    await expect(page.getByText(/\b1 of 300 match/)).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Space');
+    await expect(list.getByRole('option', { name: /^IPK Gatersleben/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(
+      page.getByRole('button', { name: 'Remove Provider: IPK Gatersleben' }),
+    ).toBeVisible();
+  });
+
+  test('a range is applied with Enter, and from > to is refused with a message, not a request', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'set=range');
+    await facetButton(page, 'Year').click();
+    const from = page.getByRole('spinbutton', { name: 'From' });
+    await expect(from).toBeFocused();
+    await from.fill('2022');
+    await page.getByRole('spinbutton', { name: 'To' }).fill('2018');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('alert')).toHaveText('“From” must not be greater than “To”.');
+    await expect(page.getByTestId('changes')).toHaveText('0');
+    await from.fill('2018');
+    await page.getByRole('spinbutton', { name: 'To' }).fill('2022');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Remove Year: 2018–2022' })).toBeVisible();
+    const search = await address(page);
+    expect([search.get('f.year.min'), search.get('f.year.max')]).toEqual(['2018', '2022']);
+    await expect(live(page)).toHaveText(/^\d+ services match$/);
+  });
+
+  test('speaks German when the page does', async ({ page, scene }) => {
+    await open(scene, 'f.consortium=denbi', 'de');
+    await expect(page.getByRole('group', { name: 'Filtern nach' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Consortium: de.NBI entfernen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Alles zurücksetzen' })).toBeVisible();
+  });
+
+  test('[component:FacetSearch] keyboard (bar): Tab to a facet, Enter opens, arrows and Space choose, Escape returns', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene);
+    await page.getByRole('searchbox', { name: 'Search services' }).focus();
+    await page.keyboard.press('Tab');
+    const consortium = facetButton(page, 'Consortium');
+    await expect(consortium).toBeFocused();
+    await page.keyboard.press('Enter');
+    const list = page.getByRole('listbox', { name: 'Consortium' });
+    await expect(list).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(list).toHaveAttribute('aria-activedescendant', /-1$/);
+    await page.keyboard.press('Space');
+    await expect(list.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(live(page)).toHaveText(/services? match/);
+    await page.keyboard.press('Escape');
+    await expect(consortium).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(facetButton(page, 'Stage')).toBeFocused();
+  });
+
+  const openPanel = (name: string) => async (page: Page) => {
+    await facetButton(page, name).click();
+    await expect(
+      page.locator('[role="listbox"], [role="group"][id$="-list"]').last(),
+    ).toBeVisible();
+  };
+  inBothThemes('[component:FacetSearch] axe (bar): closed', 'facet-search', undefined, 'look=bar');
+  inBothThemes(
+    '[component:FacetSearch] axe (bar): value panel with a choice',
+    'facet-search',
+    openPanel('Consortium'),
+    'look=bar&f.consortium=denbi',
+  );
+  inBothThemes(
+    '[component:FacetSearch] axe (bar): 300 values',
+    'facet-search',
+    openPanel('Provider'),
+    'look=bar&set=300',
+  );
+  inBothThemes(
+    '[component:FacetSearch] axe (bar): range panel',
+    'facet-search',
+    openPanel('Year'),
+    'look=bar&set=range&f.year.min=2015',
+  );
+  inBothThemes(
+    '[component:FacetSearch] axe (bar): chips at 360 px',
+    'facet-search',
+    async (page) => {
+      await page.setViewportSize({ width: 360, height: 740 });
+    },
+    'look=bar&set=6&f.consortium=denbi&f.consortium=nfdi4plants&f.stage=PROD&f.provider=ipk&f.provider=fzj&f.license=MIT&f.topic=genomics',
+  );
+});

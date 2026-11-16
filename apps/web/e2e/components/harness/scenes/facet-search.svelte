@@ -96,8 +96,8 @@
   const withYear = set === 'range';
 
   const pick = <T,>(items: readonly T[], index: number) => items[index % items.length]!;
-  const services: Service[] = Array.from({ length: 24 }, (_, index) => ({
-    name: `Service ${String.fromCharCode(65 + index)}${index === 3 ? ' Galaxy' : ''}`,
+  const services: Service[] = Array.from({ length: set === '300' ? 300 : 24 }, (_, index) => ({
+    name: `Service ${index < 26 ? String.fromCharCode(65 + index) : index}${index === 3 ? ' Galaxy' : ''}`,
     year: 2010 + (index % 12),
     values: Object.fromEntries(
       lists.map((facet) => {
@@ -106,6 +106,9 @@
           if (index === 0) return [facet.id, ['denbi', 'nfdi4plants']];
           if (index % 5 === 4) return [facet.id, [':none']];
         }
+        // Every one of the 300 providers runs a service, so each is listed (a value with none is not).
+        if (facet.id === 'provider' && set === '300')
+          return [facet.id, [pick(facet.options, index).value]];
         return [facet.id, [pick(facet.options, index * (facet.id.length + 1)).value]];
       }),
     ),
