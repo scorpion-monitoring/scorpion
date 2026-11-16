@@ -143,7 +143,15 @@ test.describe('the language', () => {
 
     // Signed out, nobody is known and the English browser decides; signed in again, it is German.
     await page.getByRole('button', { name: 'Kontomenü' }).click();
+    // The session ends with the answer of the sign-out call; a `goto` that starts before it is back can reach the login page of a
+    // person who is still signed in, and that page sends them on. Wait for the answer, not for time.
+    const signedOut = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/auth/logout') && response.request().method() === 'POST',
+    );
     await page.getByRole('button', { name: 'Abmelden', exact: true }).click();
+    expect((await signedOut).ok()).toBe(true);
+    await expect(page.getByRole('button', { name: 'Kontomenü' })).toHaveCount(0);
     await page.goto(at('/login'));
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await page.getByLabel('Username').fill(who.username);
