@@ -129,7 +129,6 @@ What M4 deferred (plan §9) and what the sprint found. The viewer screens, the i
 - **`openapi-typescript` declares a peer of TypeScript 5**; the repository uses 6. It works; move to a release that lists 6 when there is one.
 - **Dev dependencies of the web app are heavy for the image build:** `@scorpion/testing` (Testcontainers) and Playwright come in through the
   e2e tests. Moving `e2e/` to its own package would shorten step 4 of `docker/Dockerfile`.
-- **The icon set is a dozen drawn paths** (`Icon.svelte`). A module that needs another name gets a dot. Add icons as screens need them, or take a set when more than about thirty are used.
 - **`GET /ui/navigation` is asked on every page request** (twice with `/auth/me`). They are cheap, but a short per-session cache in the web process would halve the calls if profiling asks for it.
 - **The legal page shows the API's title as its heading;** a text that starts with `#` has two. Documented in the module README; a later change could drop a leading `h1` of the text on the server.
 
@@ -346,14 +345,6 @@ Found while using the instance; not yet investigated.
   file hash, never an address) in the member list and the decider's row, an update of the membership field table in
   `docs/security/authorization.md` and the walker in `response-fields.test.ts`, and a fallback (initials) for a person without one. The
   header needs the avatar in `GET /auth/me` or `GET /account/profile` (check what the shell already loads).
-- **Use an icon library instead of hand-drawn SVGs.** The shell draws its icons from a small table of paths in
-  `apps/web/src/lib/components/Icon.svelte` (about 20 names; `Bell.svelte` of `core.notifications` has its own SVG). The maintainer recommends
-  [Tabler Icons](https://tabler.io/icons) (MIT, outline style on a 24 x 24 grid like the current ones). Decide how to ship it (the Svelte
-  package `@tabler/icons-svelte` imports per icon and tree-shakes, or the SVG set copied into the repository, which avoids a runtime
-  dependency and fits the CLAUDE.md rule to justify new dependencies), keep the `name` string of `ui.nav` entries working through a mapping (an
-  unknown name still falls back to a dot), and check that the icons stay out of the accessible name (`aria-hidden`). A side finding: nav
-  entries use names the table does not have (`inbox`, `mail`, `settings` in the notifications and registry modules), so those entries
-  already show the fallback dot; a library mapping would fix them, and until then a test could fail on a `ui.nav` icon that is not in the table. _Done in M7 sprint 7 for the side finding: `inbox`, `mail` and `settings` are drawn (the table moved to `packages/contracts/src/icons.ts`), and `apps/server/src/ui-routes.test.ts` fails when a `ui.nav` entry of the full profile names an icon the table lacks. The library itself stays open._
 
 ## Services follow-ups (M7 sprint 1)
 
@@ -366,7 +357,6 @@ Found while using the instance; not yet investigated.
 - **The SPDX list is refreshed by hand in the repository.** The bundled fallback is regenerated with `node packages/integrations/scripts/generate-spdx.ts` after the pin in `spdx-pin.ts` moves; nothing reminds the maintainer when a new SPDX release appears. A scheduled workflow that opens a pull request, or a Dependabot-style check, is not built. The live list is fetched at most once a day and cached in `svc_license_cache`.
 - **A custom licence** (`LicenseRef-…`) and an expression such as `MIT OR Apache-2.0` are refused: only one SPDX id is accepted (plan §12).
 - **The field type `check` cannot ask for more than a vocabulary term and an SPDX id.** `FieldEnv` is closed on purpose; a contributed type that needs another lookup (an ORCID, a ROR id, an EDAM term) extends the interface with an ADR, or does its work inside its own module's route.
-- **`create` is Admin-only until sprint 2** (plan §5 item 8); the event carries `by: 'admin' | 'member'` already so the payload does not change. _Done in sprint 2: an Admin or an approved member of the chosen provider._
 
 ## Services follow-ups (M7 sprint 2)
 
@@ -574,7 +564,6 @@ What the plan of M7 (§12) leaves out on purpose, so that nobody has to look in 
 - **A review queue for member edits,** a request-and-approve flow for publication (a Reviewer or Admin sets the flag today) and a preview of the public page before publishing.
 - **A public catalogue,** public facets, anonymous search and a sitemap of public services. The public pages link to each other through the provider and the groups only.
 - **Transfer of a service between providers by someone who is not a manager** of both, and a per-service history view beyond the audit trail (and the slug history).
-- **A public read of `services` in v1** with the Schema.org representation (additive); M8. _Done in M8 sprint 2: `GET /api/v1/services`, `/services/{id}` and `/services/{id}/schema-org`._
 - **Logos and icons in list rows.** The catalogue shows the service icon; the organisation lists, the member tables and the public organisation page's service list show none.
 - **The layout's four calls on every navigation** and what to do about them are in "Too many 429s" above, with the numbers.
 
@@ -639,7 +628,6 @@ Measurements (a development machine, Postgres in a container; the method is in t
 - **`rimo:requestedBy` is not written** (ADR-0040 section 3).
 - **Scalar does not draw a Turtle answer.** The reference page shows the status of the call but not its body, so the e2e journey checks the text with a plain request.
 - **No negotiation.** `Accept: text/turtle` on the indicator routes and a page per IRI are out of scope (plan §11).
-- **For M10:** the measurements per period (M10 sprint 1), and the KPIs a service had in a period (done, see above). The `rimo:KPIValue` node `<indicator IRI>#value` is the one real values attach to; keep them out of `buildRdfModel`, so the public pair stays definitions only.
 
 ## Measurement follow-ups (M10 sprint 1)
 
@@ -664,7 +652,6 @@ Measurements (a development machine, Postgres in a container; the method is in t
 - **The bounds of an effective row come from a second query** in `effectiveIndicatorsAsSystem`. If `serviceKpis.get` should show `min` and `max` too, add them to `effectiveOf`'s columns once and drop the second query.
 - **A problem is named two ways.** The routes name semantic problems `[3].kpi` and Zod names the shape errors `3.kpi`; an unknown key of a strict object (a query parameter, an item field) is named in the message with an empty path. One form would need a hook in the pipeline's error mapper (an ASVS scoped path), so it was left.
 - **Indicator names are unique by `lower(name)`, not by their normalised form.** Two names that differ only in a composed or decomposed letter can both exist, and `resolveIndicatorRef` then answers "matches more than one KPI" and asks for the id. A unique index on the normalised, lower-cased name would remove the case (`kpi.framework`, a migration).
-- **The order of a month's rows ranks the service's indicators in memory** (the name is in `kpii`'s foreign table, which this module does not read) and sorts by `array_position`. ~~It is the expectation, not a result, that this holds for a service with hundreds of indicators and tens of thousands of values; sprint 5 measures `GET /api/v1/measurements` at 50 000 rows (plan §9 item 6).~~ Done in M10 sprint 5: at 49 980 rows of one service (42 indicators over 1 190 months) the first page is 56 ms, a middle page 86 ms and the last page 111 ms, a filtered series 40 ms (see "Measured in sprint 5"); the in-memory ranking of indicators is not the cost at this size.
 - **`mandatory` is a key the module names** (`MANDATORY_NECESSITY`: the legacy term and RIMO's `mandatoryFor`). The vocabulary `necessity` has no flag that says "a month needs a value"; if an instance renames or adds a term that should count, give the term that flag in `core.settings` and read it. The reporting reminder of sprint 5 uses the same constant, so one change of rule would change the coverage, the template's mandatory marker and the reminder together.
 - **The coverage and the grid use the KPI set as it is now,** not as it was in the month (`kpisInPeriod` could say); a month view that must show the KPIs of the month will want the history (M11's dashboard does not: it reads the values that exist). The reminder of sprint 5 uses the set now by design (a dropped KPI is not asked for; its values stay).
 - **A non-admin member cannot make a working write token on the profile page.** The write needs the scope `kpi.ingestion.measurement.submit`, and the token form offers only what `GET /account/permissions` lists, which is the role's permissions: a member holds `submit` through the provider policy, so it is not listed (checked by a probe in sprint 2; an Admin sees it). `POST /tokens` with both scopes works, because it accepts any declared permission. Fix before the page of sprint 4 ships a "make a token" hint: either list the scoped permissions a person may hold on some resource in the token form, or let the service check `submit` for the owner of a token that names `kpi.ingestion.v1.write` (the owner still has to be allowed, ADR-0015). The maintainer chose two scopes for sprint 2; this is the cost. The `/docs` landing page lists only `kpi.ingestion.v1.write` for the route, and the reference text of the write names both.
@@ -1007,14 +994,11 @@ reader (or a second tab, or anybody behind the same address) exhausts it sooner.
 
 - **Create and delete roles.** M3 sprint 1 seeds Admin, Reviewer and User and lets `core.authz.role.manage` edit the permissions of the non-Admin roles. Creating and deleting custom roles (with the rule that a role in use cannot be deleted) is not built; the schema allows it (`system = false`).
 - **Scoped permissions at the route.** The authoriser checks a scoped permission (for example `service.edit` with scope `service`) globally, so a provider member who lacks it globally is denied at the route even though a resource policy would allow them. M7 needs a route-level pass-through for scoped permissions, with the service re-check as the guard; decide it with the first resource policy.
-- **"Last Admin" counts assignments, not accounts.** `core.authz` cannot see whether an Admin's account is deactivated. If M5's user management needs "the last _active_ Admin", the check moves to a call from identity that passes the active holders.
 - **Grant escalation.** `core.authz.role.assign` lets the holder give any role, Admin included. Treat it as an admin permission; revisit if a delegated "assign only roles up to X" is wanted.
 - **Cache invalidation after the outer commit.** The permission cache is emptied when a role change commits its own transaction. When a caller wraps the call in a larger transaction, a request that races with the outer commit can refill a stale entry for up to the 5 s TTL (the documented bound).
 
 ## Identity on authz follow-ups (M3 sprint 2)
 
-- **List a user's roles.** `GET /users/{id}/roles` (identity, `core.identity.role.read`, `AuthzService.rolesOf`) for the admin UI; `GET /roles` lists the roles only. Add it with M5's user management.
-- **Tokens of another user.** `core.identity.token.manage-any` revokes a token by id; there is no route to list another user's tokens, so an administrator needs the id. Add a list with the admin user management (M5).
 - **Delegated approval.** Approving needs `core.authz.role.assign` as well as `core.identity.user.approve`, so a role that may only approve cannot approve. A "may assign only roles up to X" rule (see "Grant escalation") would let a reviewer approve accounts for the role `user`.
 - **Old token scopes.** Tokens made in 0.3.0 keep their `read:kpi`-shaped scopes, which grant nothing. A cleanup that lists them for their owners, or a one-time migration that revokes them, is not built.
 - **Wildcard scopes.** A scope names one permission. `core.identity.*` or a "read-only" preset would help scripts with many scopes; decide with the first real script.
@@ -1024,7 +1008,6 @@ reader (or a second tab, or anybody behind the same address) exhausts it sooner.
 ## Settings follow-ups (M3 sprint 3)
 
 - **Admin form and history.** `GET /settings/{module}/schema` and the effective values are ready for the settings form (M5). The form needs per-field labels and grouping (Zod `.describe()` and `.meta()` flow into the JSON Schema); decide the convention with the first form. The history of changes is the audit trail (M4 sprint 4: `settings.changed@1` with the actor and the names of the keys that changed, never the values; `GET /audit?action=settings.changed@1`); the table keeps only the current version, so the trail cannot show the old value.
-- **Partial updates.** `PUT` replaces the whole stored object, so the form sends every field. A `PATCH` that merges keys (and removes one with `null` to return to the default) would help scripts that change one setting; add it with the first such script.
 - **Declared secrets.** The API lists stored secrets only, so the admin UI cannot show "OIDC secret for provider X: not set". A registry where modules declare the secret names they use (with a description, and a pattern for per-provider names) would let the UI list the unset ones. Secret names are not namespaced by module today: an Admin can set any name, and nothing checks that a module uses it.
 - **Faster propagation.** A changed setting reaches another process within 5 seconds (cache TTL). If that is too slow for some setting, a `LISTEN/NOTIFY` message on write that empties the cache of the other processes would make it near-immediate; the kernel already has the listener machinery for the outbox.
 - **Secret hygiene checks.** A guard that refuses a `settings` schema with a key that looks like a secret (`password`, `secret`, `token`) at start-up, and a `verify-secrets` command that decrypts every row with the current keys and reports names that fail (useful before and after a rotation), are not built.
@@ -1049,7 +1032,6 @@ reader (or a second tab, or anybody behind the same address) exhausts it sooner.
 
 ## Repository hardening follow-ups (M4a sprint 1)
 
-- **The `57P01` teardown error (#48, #50).** Resolved 2026-10-06. The CI error's object carried `err.client` with `release` and `_poolUseCount`, which only pg-pool's idle listener sets: the pool re-emitted a pooled client's error as its own `error` event, and nothing listened. Two pg-pool behaviours met: `pool.end()` resolves once it has let go of its clients, before they have closed, and a client closing in that gap still has the idle listener. The harness stopped the container in the gap. Now `createPool` listens for `error` (the kernel logs a warning with the SQLSTATE), and `closePool` waits until every connection has closed; the kernel's `stop()` and `openDatabase().close()` use it. `db.test.ts` reproduces the uncaught error without the listener and the early return without the wait. The same fix keeps a running server alive when Postgres ends an idle connection. The earlier `jobs.stop()` fix stays. Not looked at further: the listener clients of the outbox and `wake.ts` (suspect 2), and harnesses without `afterEach` cleanup (suspect 3); neither matches the CI error.
 - **Base images outside the Dockerfile.** `postgres:16.15-alpine` (CI service, `docker-compose.dev.yml`) and `axllent/mailpit` are pinned by tag only, and Dependabot's `docker` ecosystem reads Dockerfiles, not these files. Scorecard does not count them. Pin by digest and add a `docker-compose` entry to `.github/dependabot.yml` if the score asks for it.
 - **Dependabot runtime bumps without a changeset.** A Dependabot pull request that changes only dependency files needs no changeset (`scripts/changeset-check.ts`), so a security bump of a production dependency does not reach `CHANGELOG.md` by itself. Write a changeset by hand at release time for those, or revisit the exemption.
 - **`cli.test.ts` picks a random port.** `freePort()` in `apps/server/src/cli.test.ts` returns a random number from 20000 to 40000 without checking it. It collided once with a port in use (`EADDRINUSE`, `exits 1 and says why when the database cannot be reached`) in a full local run and passed on the re-run. Bind port 0 and read the port back, or retry.
@@ -1076,7 +1058,6 @@ What the response-side audit and the walker (`apps/server/src/response-fields.te
 - **The walker reads declared schemas, not payloads.** No pipeline step validates a response against its schema, so a service that returned an extra field would not be seen. Services build named fields and the route tests for tokens, secrets, settings and the audit trail read real responses, but nothing checks every route. The contract tests of M8 (`pnpm test:contract`, every public route against its OpenAPI schema) should also fail on a forbidden name in a real response body.
 - **Free-form values cannot be walked.** `values` of a setting and `value` of a preference are `z.unknown()` records, so a secret-named key inside them is not seen by the walker. The guard in "Secret hygiene checks" above (a settings schema with a secret-looking key is refused at start-up) would close that; do it with that item.
 - **The route matrix is regenerated by hand.** `authorization-doc.test.ts` fails when `docs/security/authorization.md` differs from the live registry, but regenerating needs Docker and an environment variable (the header of the test says how). A `pnpm` command that boots the kernel without a database would make that quicker.
-- **Rows for the registry modules.** Done for organisations (M6) and services (M7); the KPIs' field tables are still to come with M9 to M11. `docs/security/authorization.md` gets them when those modules add them; the generated route table needs no change, and the walker covers their responses from the first route.
 - **The assessment's accepted weaknesses, in one place.** Each is written in the note of its ASVS entry; this list keeps them from being forgotten. None has a milestone.
   - **No second factor of our own (6.3.3).** See "Credentials follow-ups": TOTP, WebAuthn and recovery codes.
   - **The breach check fails open and can be switched off** (6.2.4, 6.2.12): a breached password is accepted when the service does not answer or `passwordBreachCheck` is `off`. The offline floor above narrows it.
@@ -1100,7 +1081,6 @@ What the session work left for later ([ADR-0025](adr/0025-absolute-session-lifet
 - **AAL2 behaviour.** A deployment whose provider enforces MFA may want its local session to follow the provider's `acr` and the NIST periods for AAL2; `acr` and `amr` are not read (sessions.md).
 - **A notice mail when sessions are ended by an administrator, and when a new session starts** from an unfamiliar browser. The audit trail has the first; neither mails.
 - ~~**A disable-account feature** must call `revokeAll` in the same transaction and get a test (ASVS 7.4.2).~~ Done in M5 sprint 3: `POST /users/{id}/deactivate`, tested for the ended sessions and for the rollback.
-- **The re-authentication screen** (M5): the page that shows `reauthentication-required`, asks for the password or sends the person to the provider, and returns to the change. The OIDC callback redirects to the application root today, with no return path.
 
 ## Credentials follow-ups (M4b sprint 2)
 
@@ -1118,8 +1098,6 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **Verification link of 10 minutes** if the maintainer rejects the reading of ADR-0026 section 3: change `VERIFICATION_TTL_MS`, the mail text and the README.
 
 ## Found while taking the documentation screenshots (R3)
-
-- **The "token is ready" alert wraps one word to a line at 1280 px.** On the profile page the alert that shows a new access token (`j04/01-token-secret`) puts its text, the secret and the buttons in one row, so the sentence "This is the only time it is shown" is a column of single words. Give the text the remaining width and let the secret and the buttons wrap below it.
 
 ## `kpi.impact` follow-ups (M12 sprint 1)
 
@@ -1164,14 +1142,17 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 
 - **Measured: the calls of the page** (`apps/web/e2e/impact.spec.ts`, `[impact-calls]` lines, identical under both base paths): arrival 0 browser requests (the loader read the consortia and the unit labels on the server); choosing a consortium `summary` + `table` (2); changing the year `table` (1); changing the page size or the page `table` (1); the switch for unpublished services `summary` + `table` (2); arrival on a link that names a consortium `summary` + `table` (2).
 - **Image size against `0.14.0-full`:** the `full` image built from `v0.14.0` is 508,810,706 bytes and the one built from this branch 509,103,969: **+0.29 MB** for the whole of M12 (the module, its reads, the page and its texts; no dependency was added). `check-image-modules.ts` passes for `full`; `kpi.impact` is in `profiles/full.ts` only, so the `core-only` and `registry` images do not carry it.
-- **Sprint-2 leftovers settled.** The e2e flake `navigation.spec.ts` `[ASVS-7.4.4]` (Admin) was a **timeout**: the test opens every page of the navigation (more than thirty) and took 36 s against the 30 s default; it has `test.slow()` now and passed alone, and nothing is relaxed. **Not fixed:** `dashboard.spec.ts:223` ("no request while dragging, one save afterwards") and `components/dashboard-grid.spec.ts:176` (moves and resizes by pointer). Run alone four times each, in a clean `dev` worktree (`9cc05c5`) and on this branch, they fail about every other run on both (clean `dev`: 4 of 8 failed; this branch: 6 of 8): the passing runs take 2 s and the failing ones 6 s, the failures are "a drag sends nothing" / "two saves instead of one" and "the item did not move", which points at the pointer drag of `@dnd-kit` (the first mouse-down after the page loads is taken as a drag or not) and not at the test timing alone. Next step: record a trace of a failing run and look at the pointer events; the fix is probably in `packages/ui-kit/src/dashboard-grid` (an activation constraint) and needs a look at the library, so it is a task of its own. These two make `CI=true pnpm test:e2e:parallel` exit 1 on `dev` and on this branch.
 - **A sparkline per service, a comparison of two years, an export of the table** stay as listed in the plan's §10; `licencesAsOf` and a search box for more than 500 consortia stay as above.
 - **The select's years come from the loader's clock**; if the server's clock and the loader's differ across a New Year's midnight the first read can be a 422 until the page is reloaded. Reading the years from the consortia route would remove it.
 
 ## M12a sprint 1 follow-ups
 
 - The header of the shell is wider than a 360 px screen (the page scrolls sideways: the theme toggle, widgets and account menu); reproduce with `/profile` at 360 px.
-- The public catalogue `/catalog/services` has no link from the start page or the navigation; decide where visitors find it.
 - The Schema.org `@id` of a public service and organisation names the signed-in page; decide whether the public profile should name `/catalog/...`.
 - The footer shows the product version to visitors (ADR-0050 vs ADR-0045): decide whether anonymous visitors should see it.
 - The Breadcrumb on the public catalogue shows only the page title (a one-item trail).
+
+## M12a sprint 2 follow-ups
+
+- **A pending save can fire while a tile is being dragged.** The autosave is a plain one-second debounce (`createAutosave`) and does not know about a drag in progress, so a save that is already pending (for example the seeding of the defaults of the two analytics tiles that were never set up, which entering edit mode causes) is sent in the middle of a slow drag. The save carries a consistent layout and nothing is lost, but "nothing is sent while a tile is moved" holds only if no save is pending when the drag starts. A `hold()` / `release()` on the saver, called from the grid's drag and resize start and end, would make it true; the e2e now waits for the seeding save before it measures.
+- **Timing races show only on a slow CPU.** Both drag flakes were 0 of 24 failures on an idle machine and 13 of 24 (4x) or 24 of 24 (8x) with Chrome's CPU throttled through CDP (`Emulation.setCPUThrottlingRate`). A CI shard that runs the pointer and timing specs at 4x would find the next one before a loaded runner does.
