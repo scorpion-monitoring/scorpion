@@ -20,7 +20,9 @@
     onpage: (page: number) => void;
     onpagesize?: (pageSize: number) => void;
   } = $props();
-  const { t } = getShell();
+  const { t, navigating } = getShell();
+  // A button pressed while a navigation is pending would build its address from the page on screen, not from the target.
+  const pending = $derived(navigating());
 
   const pages = $derived(pageCount(total, pageSize));
   // A gap has no page number.
@@ -46,6 +48,7 @@
           id={sizeId}
           class="select select-sm"
           value={String(pageSize)}
+          disabled={pending}
           onchange={(event) => onpagesize(Number(event.currentTarget.value))}
         >
           {#each pageSizes as size (size)}
@@ -58,7 +61,7 @@
       <button
         type="button"
         class="join-item btn btn-sm"
-        disabled={page <= 0}
+        disabled={pending || page <= 0}
         onclick={() => onpage(page - 1)}
       >
         {t('kit.pagination.previous')}
@@ -73,6 +76,7 @@
             class:btn-active={button.number === page}
             aria-current={button.number === page ? 'page' : undefined}
             aria-label={t('kit.pagination.page', { page: button.number + 1 })}
+            disabled={pending}
             onclick={() => onpage(button.number!)}
           >
             {button.number + 1}
@@ -82,7 +86,7 @@
       <button
         type="button"
         class="join-item btn btn-sm"
-        disabled={page >= pages - 1}
+        disabled={pending || page >= pages - 1}
         onclick={() => onpage(page + 1)}
       >
         {t('kit.pagination.next')}
