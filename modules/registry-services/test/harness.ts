@@ -64,6 +64,8 @@ export interface ServicesStarted {
   actor: (...roles: string[]) => Promise<UserActor>;
   /** Saves the settings of registry.services (the whole object) as an administrator would. */
   configure: (values: Record<string, unknown>) => Promise<void>;
+  /** Saves the settings of registry.services (the whole object) as `who`; core.settings checks the permission. */
+  configureAs: (who: UserActor, values: Record<string, unknown>) => Promise<void>;
   /** Delivers every pending outbox event. */
   dispatch: () => Promise<void>;
   /** The events in the outbox (name and payload), oldest first. */
@@ -204,6 +206,16 @@ export function useServices(): ServicesHarness {
           const current = await settings.settings.get(admin, 'registry.services');
           await settings.settings.update(admin, 'registry.services', {
             version: current.version,
+            values,
+          });
+        },
+        async configureAs(who, values) {
+          const settings = kernel.services.get('core.settings') as SettingsInternalsBundle;
+          const { rows } = await kernel.pool.query<{ version: number }>(
+            `select version from settings_setting where module_id = 'registry.services'`,
+          );
+          await settings.settings.update(who, 'registry.services', {
+            version: rows[0]?.version ?? 0,
             values,
           });
         },

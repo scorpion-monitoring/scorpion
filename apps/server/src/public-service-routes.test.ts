@@ -7,7 +7,7 @@
 // modules/registry-services/service/public.test.ts and profile.test.ts, the pinned fields in
 // public-records.test.ts, the prototype in public-routes-prototype.test.ts.
 import { makeOrganisation, makeService } from '@scorpion/testing';
-import { DEFAULT_CATALOGUE_FILTERS } from '@scorpion/registry-services/module';
+import { DEFAULT_CATALOGUE_FILTERS } from '@scorpion/registry-services/public';
 import { describe, expect, it } from 'vitest';
 import { useIdentityApp, type Reply } from './testing/identity-app.ts';
 

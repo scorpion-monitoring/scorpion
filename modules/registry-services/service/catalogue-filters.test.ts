@@ -3,7 +3,6 @@
 // services and the default for a new one, once, never over an administrator's choice; and only an administrator
 // may change it.
 import { Forbidden } from '@scorpion/contracts';
-import type { SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import { makeOrganisation, makeService } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATALOGUE_FILTERS } from '../settings-schema.ts';
@@ -74,15 +73,11 @@ describe('the setting', () => {
 
   it('cannot be changed by a signed-in person who is no administrator, and nothing is stored', async () => {
     const s = await h.start();
-    const settings = s.kernel.services.get('core.settings') as SettingsInternalsBundle;
     const plain = await s.actor('user');
     const before = await stored(s);
-    await expect(
-      settings.settings.update(plain, 'registry.services', {
-        version: before!.version,
-        values: { catalogueFilters: 'bar' },
-      }),
-    ).rejects.toBeInstanceOf(Forbidden);
+    await expect(s.configureAs(plain, { catalogueFilters: 'bar' })).rejects.toBeInstanceOf(
+      Forbidden,
+    );
     expect(await stored(s)).toEqual(before);
     expect(await s.services.catalogueFilters()).toBe(DEFAULT_CATALOGUE_FILTERS);
   });
