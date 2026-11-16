@@ -101,3 +101,14 @@ Nothing holds a secret. No module subscribes yet; M4's audit trail does.
   fail.
 - Changing `core.identity.role.assign` alone, without the authz permission, does not let anyone assign a role: the
   error is a 403 from authz, and the route table does not show it.
+
+## Amended in M12a sprint 5: the write scope of the public API implies the scoped `submit`
+
+The write of the public API (`POST /api/v1/measurements`) needed two scopes, `kpi.ingestion.v1.write` and the scoped `kpi.ingestion.measurement.submit`. A person with a role can list a permission in the token form only if `GET /account/permissions` returns it, and that is the permissions of the **roles** (`permissionsHeldBy`); a member holds `submit` through the policy of `kpi.ingestion`, so the form could never offer it and a member's token could not write (an Admin's could). `POST /tokens` with both scopes worked only when the id was typed into the API by hand.
+
+Two ways out were named: list the scoped permissions a person may hold on some resource in the form, or let the service accept `submit` for the owner of a token that names `kpi.ingestion.v1.write`. **The second is taken**, as the plan recommended: `GET /account/permissions` stays a statement about roles, and the check stays where the write is made.
+
+- **In the service** (`upsertByName` of `kpi.ingestion`): a token whose scopes name `kpi.ingestion.v1.write` is presented to `ctx.authz.require` as naming `kpi.ingestion.measurement.submit` too. `core.authz` is unchanged: the scope ∩ owner rule, the resource policy (an approved member of the provider, or Admin) and the rule that nobody approves their own request all still decide.
+- **What does not change:** a token with no scope of the route is refused as before (a `submit` scope alone is not the route's scope); an owner who may not submit for that service (another provider, no membership, a requested, rejected or left membership) is 403 whichever scopes the token names; a token made with both scopes works as before; a token never does more than its owner, and a permission lost by the owner is lost by the token at the next call. Nobody can widen their own rights: the scopes of a token are fixed when it is made, and no route changes a role.
+- **Only the write of the public API** reads it this way. The internal ingestion routes (preview, run) still check `submit` and `ingest` as scopes of their own.
+- The same shape exists for the services' other scoped permissions (a manager's token needs both scopes to change a slug, `service-editing-routes.test.ts`); it is a line in `docs/backlog.md`, not part of this change.

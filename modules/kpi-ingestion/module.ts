@@ -141,7 +141,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       },
       [PERMISSION_V1_WRITE]: {
         description:
-          'Record measurements (`POST /api/v1/measurements`) through the public API, with a token that holds this scope; its owner must also be allowed to submit for the service (`kpi.ingestion.measurement.submit`)',
+          'Record measurements (`POST /api/v1/measurements`) through the public API, with a token that holds this scope; its owner must also be allowed to submit for the service (`kpi.ingestion.measurement.submit`, which this scope implies for the write)',
       },
       [PERMISSION_INGEST]: {
         description:

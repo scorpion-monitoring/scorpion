@@ -323,6 +323,20 @@ export function createMeasurementsService(
   }
 
   /**
+   * A token that names the scope of the write (`kpi.ingestion.v1.write`) is taken to name the scoped `submit` as well (ADR-0015, M12a
+   * sprint 5): a person cannot list `submit` as a scope, because it is held through a policy and not through a role, so a member's
+   * token could never pass. The token gets nothing it was not given: its owner still has to be allowed to submit for this service (the
+   * policy of this module, or Admin), and a token without the write scope is untouched. Only the write of the public API (`upsertByName`) asks.
+   */
+  function submitting(actor: Actor): Actor {
+    if (actor.kind !== 'user' || actor.via !== 'token') return actor;
+    const scopes = actor.scopes ?? [];
+    return scopes.includes(PERMISSION_V1_WRITE) && !scopes.includes(PERMISSION_SUBMIT)
+      ? { ...actor, scopes: [...scopes, PERMISSION_SUBMIT] }
+      : actor;
+  }
+
+  /**
    * The checks that come before anything about the batch: the scoped permission first (an anonymous caller is 401 and anyone who
    * may not submit is 403, whether or not the service exists: the answer must not tell a stranger which ids are services; Admin
    * passes and learns 404 below), then that the service exists.
@@ -483,7 +497,7 @@ export function createMeasurementsService(
             message: 'must be the id or the abbreviation of a service',
           },
         ]);
-      await guard(actor, found.id);
+      await guard(submitting(actor), found.id);
       const { inserted, updated, unchanged, rejected } = await run(
         actor,
         found.id,

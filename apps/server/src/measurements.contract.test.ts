@@ -172,6 +172,10 @@ beforeAll(async () => {
   tokens.bobWrite = await tokenFor(people.bob, [WRITE, SUBMIT]);
   tokens.carolWrite = await tokenFor(people.carol, [WRITE, SUBMIT]);
   tokens.adminWrite = await tokenFor(people.admin, [WRITE, SUBMIT]);
+  // The token a member can make from the form: the route scope alone (the scoped permission is not on the list, ADR-0015).
+  tokens.bobWriteOnly = await tokenFor(people.bob, [WRITE]);
+  tokens.carolWriteOnly = await tokenFor(people.carol, [WRITE]);
+  tokens.adminWriteOnly = await tokenFor(people.admin, [WRITE]);
   await makeSetting(pool, 'public-api', { corsOrigins: [ORIGIN] });
 }, 180_000);
 
@@ -473,13 +477,14 @@ describe('POST /measurements', () => {
     expect(viaApi).toHaveLength(4);
   });
 
-  it('is 403 for a token of a member of another provider, of a person who is no member, and for a token without the scoped permission [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+  it('is 403 for a token of a member of another provider, of a person who is no member, and for a token without the route scope [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
     const body = [{ kpi: 'Contract downloads', value: 1, date: '2026-03' }];
     const before = await countRows(world.write.id);
     for (const [who, token] of [
       ['bob (member of the other provider)', tokens.bobWrite!],
+      ['bob with the route scope only', tokens.bobWriteOnly!],
       ['carol (no membership)', tokens.carolWrite!],
-      ['alice with the route scope only', tokens.writeOnly!],
+      ['carol with the route scope only', tokens.carolWriteOnly!],
       ['alice with the scoped permission only', tokens.submitOnly!],
       ['alice with a read token', tokens.read!],
     ] as const) {
@@ -488,13 +493,55 @@ describe('POST /measurements', () => {
       expect(reply.res.headers.get('content-type')).toContain('application/problem+json');
     }
     expect(await countRows(world.write.id)).toBe(before);
-    // the member and Admin are let through
+    // the member and Admin are let through, with both scopes and with the route scope alone (a member cannot list the scoped one, ADR-0015)
     expect((await post(world.write.slug, body, tokens.write)).status).toBe(200);
+    expect((await post(world.write.slug, body, tokens.writeOnly)).status).toBe(200);
     expect((await post(world.write.slug, body, tokens.adminWrite)).status).toBe(200);
+    expect((await post(world.write.slug, body, tokens.adminWriteOnly)).status).toBe(200);
     // and bob writes to the service of his own provider (the body is refused for what it asks, not for the right: that service has the KPI)
     expect((await post(world.elsewhere.slug, body, tokens.bobWrite)).status).toBe(200);
-    // alice is refused there
+    expect((await post(world.elsewhere.slug, body, tokens.bobWriteOnly)).status).toBe(200);
+    // alice is refused there, whichever scopes her token names
     expect((await post(world.elsewhere.slug, body, tokens.write)).status).toBe(403);
+    expect((await post(world.elsewhere.slug, body, tokens.writeOnly)).status).toBe(403);
+  });
+
+  it('lets a member make a working write token from the permissions the token form lists, and keeps the scoped permission out of that list [ASVS-8.2.1]', async () => {
+    const aliceListed = await started.get('/account/permissions', {
+      cookie: people.alice.cookie,
+      csrf: people.alice.csrf,
+    });
+    const ids = (aliceListed.body as { result: { id: string }[] }).result.map((p) => p.id);
+    // What the form offers: the route scope of the write, and not the scoped permission, which no role holds.
+    expect(ids).toContain(WRITE);
+    expect(ids).not.toContain(SUBMIT);
+    // So the token a member can make is [WRITE], and it writes a month for the service of their provider.
+    const token = await tokenFor(people.alice, [WRITE]);
+    const body = [{ kpi: 'Contract downloads', value: 77, date: '2026-04' }];
+    const reply = await post(world.write.slug, body, token);
+    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
+    expect(reply.body).toMatchObject({ inserted: 1 });
+    expect((await rowsOf(world.write.id)).map((row) => row.value_numeric)).toContain('77');
+  });
+
+  it('gives a token no right it was not given: the scope is the ceiling and the owner still has to be allowed [ASVS-8.3.1]', async () => {
+    const body = [{ kpi: 'Contract downloads', value: 5, date: '2026-05' }];
+    const before = await countRows(world.write.id);
+    // Carol, with no membership, makes the same kind of token and is refused at the write.
+    const carolToken = await tokenFor(people.carol, [WRITE]);
+    expect((await post(world.write.slug, body, carolToken)).status).toBe(403);
+    // A member's token that names only the read scope cannot write, whatever the owner may do.
+    expect((await post(world.write.slug, body, tokens.read)).status).toBe(403);
+    // A member who loses the membership loses the token's reach at the next call.
+    await started.kernel.pool.query(`update org_membership set state = 'left' where user_id = $1`, [
+      people.bob.user.id,
+    ]);
+    expect((await post(world.elsewhere.slug, body, tokens.bobWriteOnly)).status).toBe(403);
+    expect(await countRows(world.write.id)).toBe(before);
+    await started.kernel.pool.query(
+      `update org_membership set state = 'approved' where user_id = $1`,
+      [people.bob.user.id],
+    );
   });
 
   it('is 422 naming `service` for an unknown service, or none, and naming [i].kpi for a KPI the service does not have', async () => {
