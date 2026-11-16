@@ -9,6 +9,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -296,4 +297,31 @@ export const loginThrottle = pgTable(
     blockedUntil: timestamptz('blocked_until'),
   },
   (table) => [index('identity_login_throttle_last_failure_idx').on(table.lastFailureAt)],
+);
+
+/**
+ * Failed sign-ins counted for the audit trail, one row per account key and window (ADR 0026, M12a): the
+ * SHA-256 of the submitted username, the start of the window and how many attempts failed in it. A
+ * flood of a thousand attempts is one row with a count, never a row each. A job turns a closed window
+ * into one audit event and deletes the row, in one transaction. Like the throttle, the table holds no
+ * name and no address; `user_id` is set when the name was an account (the trail is read by administrators).
+ */
+export const loginFailure = pgTable(
+  'identity_login_failure',
+  {
+    /** The account key of the throttle: the hash of the lower-case username. */
+    keyHash: text('key_hash').notNull(),
+    windowStart: timestamptz('window_start').notNull(),
+    /** The length of the window in seconds when it was opened: a later change of the setting does not move it. */
+    windowSeconds: integer('window_seconds').notNull(),
+    failures: integer().notNull(),
+    /** The account the name belonged to, when it was one (no foreign key: the row is transient). */
+    userId: uuid('user_id'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.keyHash, table.windowStart] }),
+    index('identity_login_failure_window_start_idx').on(table.windowStart),
+    check('identity_login_failure_count_positive', sql`${table.failures} >= 1`),
+    check('identity_login_failure_window_positive', sql`${table.windowSeconds} >= 1`),
+  ],
 );

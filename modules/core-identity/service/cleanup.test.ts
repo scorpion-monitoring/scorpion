@@ -323,6 +323,13 @@ describe('the job', () => {
         retry: { limit: 2, delaySeconds: 60 },
         timeoutSeconds: 300,
       }) as unknown,
+      // The sign-in audit (M12a sprint 5): every five minutes, turns the closed windows of failed sign-ins into events.
+      expect.objectContaining({
+        name: 'core.identity.login-failures',
+        schedule: '*/5 * * * *',
+        retry: { limit: 2, delaySeconds: 60 },
+        timeoutSeconds: 300,
+      }) as unknown,
     ]);
     const user = await makeUser(kernel.pool);
     await makeSession(kernel.pool, user, { expiresAt: ago(DAY) });

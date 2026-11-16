@@ -81,6 +81,11 @@ describe('the first login (provisioning)', () => {
         name: 'identity.user.registered@1',
         payload: expect.objectContaining({ username: 'quick', status: 'active' }) as unknown,
       },
+      // The sign-in itself, in the transaction that made the session (M12a sprint 5); no provider token, subject or session id.
+      {
+        name: 'identity.session.created@1',
+        payload: { userId: expect.any(String) as string, username: 'quick', method: 'oidc' },
+      },
     ]);
     expect(
       await rows(

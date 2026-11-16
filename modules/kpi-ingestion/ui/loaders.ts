@@ -24,7 +24,7 @@ const terms = async (api: Api, vocabulary: string) =>
     )
   ).result;
 
-export async function loadSubmit({ api, url }: UiLoadContext) {
+export async function loadSubmit({ api, url, remember }: UiLoadContext) {
   const query = parseSubmitQuery(url.searchParams);
   const picker = unwrap(
     api.GET('/kpi/ingestion/services', { params: { query: query.q ? { q: query.q } : {} } }),
@@ -32,7 +32,18 @@ export async function loadSubmit({ api, url }: UiLoadContext) {
   if (!query.service) return { query, services: (await picker).result, selected: undefined };
 
   const service = query.service;
-  const [services, record, coverage, runs, adapters, necessity, units, types] = await Promise.all([
+  // The reference data (adapters, the two vocabularies, the value types) is the same for a whole visit, and a month change
+  // loads the page again: it is read once per visit and not on every change of month (ADR-0041, M12a sprint 5).
+  const reference = remember('kpi.ingestion.submit.reference', async () => {
+    const [adapters, necessity, units, types] = await Promise.all([
+      unwrap(api.GET('/kpi/ingestion/adapters')),
+      terms(api, 'necessity'),
+      terms(api, 'kpi.unit'),
+      unwrap(api.GET('/kpi/value-types')),
+    ]);
+    return { adapters: adapters.result, necessity, units, types: types.result };
+  });
+  const [services, record, coverage, runs, referenceData] = await Promise.all([
     picker,
     unwrap(api.GET('/services/{id}', { params: { path: { id: service } } })),
     unwrap(
@@ -41,10 +52,7 @@ export async function loadSubmit({ api, url }: UiLoadContext) {
       }),
     ),
     unwrap(api.GET('/kpi/ingestion/runs', { params: { query: { service } } })),
-    unwrap(api.GET('/kpi/ingestion/adapters')),
-    terms(api, 'necessity'),
-    terms(api, 'kpi.unit'),
-    unwrap(api.GET('/kpi/value-types')),
+    reference,
   ]);
   const months = offeredMonths(coverage.result);
   const period = chooseMonth(query.period, months);
@@ -68,10 +76,10 @@ export async function loadSubmit({ api, url }: UiLoadContext) {
       grid,
       coverage: recent,
       runs: runs.result,
-      adapters: adapters.result,
-      necessity,
-      units,
-      types: types.result,
+      adapters: referenceData.adapters,
+      necessity: referenceData.necessity,
+      units: referenceData.units,
+      types: referenceData.types,
     },
   };
 }

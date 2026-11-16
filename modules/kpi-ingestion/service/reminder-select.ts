@@ -74,6 +74,17 @@ export function selectMissing(candidates: readonly ReminderCandidate[]): Provide
 }
 
 /**
+ * Whether the reminder may run at `now`: on `dayOfMonth` (UTC) or any day after it in the same month. A node that
+ * was down on the day sends on its next run; the sent table (`kpii_reminder_sent`) keeps a provider from a second
+ * mail. A day the month does not have (the settings stop at the 28th, but a stored value is not trusted) counts as
+ * the month's last day.
+ */
+export function reminderDue(now: Date, dayOfMonth: number): boolean {
+  const last = daysInMonth(now.getUTCFullYear(), now.getUTCMonth() + 1);
+  return now.getUTCDate() >= Math.min(dayOfMonth, last);
+}
+
+/**
  * The month before the one `now` is in, in UTC: `month` is `YYYY-MM` (the link and the mail), `period` the last day of it
  * (how a measurement is keyed). January gives December of the year before.
  */

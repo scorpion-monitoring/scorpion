@@ -455,7 +455,7 @@
         "permission": "registry.services.v1.read",
         "audit": true,
         "summary": "List the services",
-        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
+        "description": "The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values); a filter may also be repeated (`provider=A&provider=B`), and then each occurrence is one value as it is, so an abbreviation with a comma is given that way. An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.\n\nNeeds the scope `registry.services.v1.read`.",
         "parameters": [
           {
             "schema": {
@@ -483,56 +483,121 @@
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Abbreviations of services, comma-separated."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Abbreviations of services, comma-separated or repeated."
             },
             "required": false,
-            "description": "Abbreviations of services, comma-separated.",
+            "description": "Abbreviations of services, comma-separated or repeated.",
             "name": "service",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Abbreviations of providers, comma-separated: the services they provide."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Abbreviations of providers, comma-separated or repeated: the services they provide."
             },
             "required": false,
-            "description": "Abbreviations of providers, comma-separated: the services they provide.",
+            "description": "Abbreviations of providers, comma-separated or repeated: the services they provide.",
             "name": "provider",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Keys of the `stage` vocabulary, comma-separated."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Keys of the `stage` vocabulary, comma-separated or repeated."
             },
             "required": false,
-            "description": "Keys of the `stage` vocabulary, comma-separated.",
+            "description": "Keys of the `stage` vocabulary, comma-separated or repeated.",
             "name": "stage",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "SPDX licence ids, comma-separated."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "SPDX licence ids, comma-separated or repeated."
             },
             "required": false,
-            "description": "SPDX licence ids, comma-separated.",
+            "description": "SPDX licence ids, comma-separated or repeated.",
             "name": "license",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "maxLength": 3250,
-              "description": "Names of KPI sets, comma-separated: the services that use one of them."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 3250
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 65
+                  },
+                  "minItems": 1,
+                  "maxItems": 50
+                }
+              ],
+              "description": "Names of KPI sets, comma-separated or repeated: the services that use one of them."
             },
             "required": false,
-            "description": "Names of KPI sets, comma-separated: the services that use one of them.",
+            "description": "Names of KPI sets, comma-separated or repeated: the services that use one of them.",
             "name": "category",
             "in": "query"
           }
@@ -2175,7 +2240,7 @@
         "audit": true,
         "maxBodyBytes": 3145728,
         "summary": "Record the measurements of a service",
-        "description": "Upserts a batch of 1 to 500 values for one service: a month that already has a value for that indicator is updated, never duplicated. The batch is all or nothing: one bad item is a 422 that names every bad path (`[3].kpi`, `[3].value`, `[3].date`) and nothing is stored. Only the KPIs the service has (its KPI set and its extra indicators) are accepted, a value must fit the type and the bounds of its indicator, a month after the current one is refused, and the same indicator and month twice in one batch is refused. `service` is the id or the abbreviation of a service; an unknown one is 422 naming `service`. The token needs two scopes, `kpi.ingestion.v1.write` (this route) and `kpi.ingestion.measurement.submit` (the permission the service checks), and its owner must be allowed to submit for that service (an approved member of its provider, or an Admin): else 403. A body over 3 MiB is 413. Structural errors of the JSON (a missing field, a wrong type) are named by their position, `0.kpi`.\n\nNeeds the scope `kpi.ingestion.v1.write`.",
+        "description": "Upserts a batch of 1 to 500 values for one service: a month that already has a value for that indicator is updated, never duplicated. The batch is all or nothing: one bad item is a 422 that names every bad path (`[3].kpi`, `[3].value`, `[3].date`) and nothing is stored. Only the KPIs the service has (its KPI set and its extra indicators) are accepted, a value must fit the type and the bounds of its indicator, a month after the current one is refused, and the same indicator and month twice in one batch is refused. `service` is the id or the abbreviation of a service; an unknown one is 422 naming `service`. The token needs the scope `kpi.ingestion.v1.write` (this route; a token that names it is taken to name the permission the service checks, `kpi.ingestion.measurement.submit`, as well), and its owner must be allowed to submit for that service (an approved member of its provider, or an Admin): else 403. A body over 3 MiB is 413. Structural errors of the JSON (a missing field, a wrong type) are named by their position, `0.kpi`.\n\nNeeds the scope `kpi.ingestion.v1.write`.",
         "parameters": [
           {
             "schema": {

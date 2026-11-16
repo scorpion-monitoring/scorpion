@@ -103,7 +103,7 @@ export const settingsSchema = z.strictObject({
   /** How the instance presents itself: names, sender, contact, logos and legal texts. */
   branding: brandingSchema.prefault({}).meta({ title: 'Branding' }),
   /**
-   * Limits per client address (and per credential) for each route group. `strict` is for routes an
+   * Limits per client address (and per credential, and per session) for each route group. `strict` is for routes an
    * attacker gains from by repeating them: login, register, token use and creation.
    */
   rateLimits: z
@@ -118,7 +118,7 @@ export const settingsSchema = z.strictObject({
     .meta({
       title: 'Rate limits',
       description:
-        'Requests per client address (and per credential) for each route group. "strict" is for routes an attacker gains from by repeating them: sign-in, registration, token use and creation.',
+        'Requests per client address (and per credential, and per signed-in session) for each route group. "strict" is for routes an attacker gains from by repeating them: sign-in, registration, token use and creation.',
     }),
 });
 

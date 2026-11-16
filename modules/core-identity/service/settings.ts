@@ -83,6 +83,8 @@ export const DEFAULT_LOGIN_THROTTLE = {
   baseDelaySeconds: 15,
   maxDelaySeconds: 900,
   forgetAfterSeconds: 3600,
+  /** The failed sign-ins of one name are counted per window and written to the audit trail as one event when it closes. */
+  auditWindowSeconds: 3600,
 } as const;
 
 /** Mails that one address, and one signed-in user, may cause: a burst, then a steady rate per hour. */
@@ -204,6 +206,12 @@ export const settingsSchema = z.strictObject({
         .min(60)
         .max(604_800)
         .default(DEFAULT_LOGIN_THROTTLE.forgetAfterSeconds),
+      auditWindowSeconds: z
+        .number()
+        .int()
+        .min(60)
+        .max(86_400)
+        .default(DEFAULT_LOGIN_THROTTLE.auditWindowSeconds),
     })
     .refine((value) => value.maxDelaySeconds >= value.baseDelaySeconds, {
       message: 'maxDelaySeconds must not be less than baseDelaySeconds',
@@ -215,7 +223,7 @@ export const settingsSchema = z.strictObject({
     .meta({
       title: 'Throttle on failed sign-ins',
       description:
-        'After a few free failures a further one blocks that account and network for a delay that doubles up to a maximum. Nothing locks an account for good.',
+        'After a few free failures a further one blocks that account and network for a delay that doubles up to a maximum. Nothing locks an account for good. The failures of one name in one audit window are written to the audit trail as one entry with a count when the window closes.',
     }),
   /** The id of the `auth.approvalPolicy` entry that decides the status of a new account. */
   approvalPolicy: z.string().min(1).default('manual').meta({

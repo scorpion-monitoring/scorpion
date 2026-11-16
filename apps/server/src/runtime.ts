@@ -162,6 +162,7 @@ export function startServer(options: RuntimeOptions): RunningServer {
       ...common,
       routes: kernel.routes,
       authenticator: kernel.authenticator,
+      sessionCookie: kernel.sessionCookie,
       authorizer: kernel.authorizer,
     });
     state = 'started';

@@ -45,6 +45,10 @@ test.describe('J05: request membership in a provider', () => {
       const search = page.getByLabel('Search by abbreviation or name');
       await search.fill(group);
       await page.getByRole('button', { name: 'Search' }).click();
+      // The page lists every organisation before a search, five to a page, so five rows do not show that the search has been
+      // applied: wait for its navigation (the address names it). "Next" clicked earlier is built from the data of the page that
+      // was there, so it asks for the second page of the unfiltered list, which is not what this step is about.
+      await page.waitForURL((address) => address.searchParams.get('q') === group);
       await expect(page.getByRole('rowheader')).toHaveCount(5);
       await page.getByRole('button', { name: 'Next' }).click();
       await expect(page).toHaveURL(/page=1/);

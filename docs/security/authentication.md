@@ -103,6 +103,7 @@ Three controls apply to a password login, in the order a request meets them. The
 | `baseDelaySeconds`        | 15      | The first block; each further failure doubles it (15, 30, 60, 120, 240, 480, …)   |
 | `maxDelaySeconds`         | 900     | The ceiling: no block is ever longer than 15 minutes                              |
 | `forgetAfterSeconds`      | 3600    | A counter without a failure for this long starts again                            |
+| `auditWindowSeconds`      | 3600    | The window in which the failed sign-ins of one name become one audit entry        |
 
 **Lockout stance: there is no hard lockout.** An account is never disabled by failed logins. A lockout lets anybody who knows a username
 lock that person out, which is the malicious lockout that 6.1.1 names. A block ends by itself within the ceiling, and the person's own
@@ -110,6 +111,8 @@ login from their usual network is not affected by an attacker's failures from an
 that someone who knows a name and controls many addresses can keep the account-wide key blocked, 15 minutes at a time; the person can
 still reset the password by mail (which is throttled by the mail budget, not by this) or sign in at a provider. A notice mail on
 repeated failures, a CAPTCHA and other alternatives to a lockout are in the [backlog](../backlog.md).
+
+**The trail (M12a).** A successful sign-in is `identity.session.created@1` and the failed sign-ins of one name in one window are **one** `identity.login.failed@1` with a count (written when the window closes), both critical on the audit trail, so an administrator sees who signed in and which names were guessed at, without a row per attempt and without the name (ADR-0026 addendum; `login-failures.test.ts`, `signin-audit-routes.test.ts`, tagged `[ASVS-6.3.1]`). An attempt the throttle refuses with 429 looks at no password and is not counted.
 
 Registration, reset requests and resend are not password guesses and have no counter of this kind; they have the `strict` bucket and
 the mail budget of the address (3 mails an hour, 5 for a signed-in user), which also stop somebody from using Scorpion to flood a mailbox.

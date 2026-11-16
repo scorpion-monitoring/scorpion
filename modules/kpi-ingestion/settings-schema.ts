@@ -17,7 +17,7 @@ const reminders = z.strictObject({
   dayOfMonth: z.number().int().min(1).max(MAX_REMINDER_DAY).default(DEFAULT_REMINDER_DAY).meta({
     title: 'Reminder day of the month',
     description:
-      'The day of the month, from 1 to 28, on which the reminder for the previous month is sent. The day is counted in UTC: the job checks it every day at 06:00 UTC. A value outside 1 to 28 is refused.',
+      'The day of the month, from 1 to 28, from which the reminder for the previous month is sent: on that day, or on the first run after it if the job did not run, and once per provider and month. The day is counted in UTC: the job checks it every day at 06:00 UTC. A value outside 1 to 28 is refused.',
   }),
 });
 

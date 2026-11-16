@@ -20,7 +20,8 @@ export const PERMISSION_V1_READ = 'kpi.ingestion.v1.read';
 /**
  * Write measurements through the public API (`POST /api/v1/measurements`) with a token that holds this scope. The role `user`
  * holds it, and it is **not** enough: the service checks the scoped `kpi.ingestion.measurement.submit` for the token's owner
- * (ADR-0015), so a token without write access to that service is refused (the legacy "anyone with a key can write to any
+ * (ADR-0015), so a token without write access to that service is refused. A token that names this scope is taken to name
+ * `submit` as well (M12a sprint 5): a person cannot list a scoped permission in the token form, so a member could not make a working token (the legacy "anyone with a key can write to any
  * service" gap).
  */
 export const PERMISSION_V1_WRITE = 'kpi.ingestion.v1.write';

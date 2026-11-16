@@ -353,6 +353,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
         log,
         routes: kernel.routes,
         authenticator: kernel.authenticator,
+        sessionCookie: kernel.sessionCookie,
         authorizer: kernel.authorizer,
         audit: kernel.audit,
         rateLimiter:

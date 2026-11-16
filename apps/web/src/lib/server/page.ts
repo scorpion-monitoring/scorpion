@@ -24,6 +24,8 @@ export interface PageRequest {
   /** The caller's language, for a page whose API call returns labels in one language. English when absent. */
   locale?: () => Promise<string>;
   publicApi: Parameters<NonNullable<UiRoute['load']>>[0]['publicApi'];
+  /** The visit cache of this visitor (`UiLoadContext.remember`). Without it (a test) every call loads. */
+  remember?: Parameters<NonNullable<UiRoute['load']>>[0]['remember'];
 }
 
 export interface PageResult {
@@ -92,6 +94,7 @@ async function runPage(
       // The path of the page the loader names, below the base path; the base is added here, once.
       redirect: (path) => redirect(303, withBase(request.basePath, path)),
       api: request.api,
+      remember: request.remember ?? ((_key, load) => load()),
       publicApi: request.publicApi,
     });
     return { pattern, params, data: data ?? null };
