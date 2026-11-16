@@ -1,4 +1,4 @@
-import type { Page, Request } from '@playwright/test';
+import type { Locator, Page, Request } from '@playwright/test';
 import { violations } from './support/a11y.ts';
 import {
   activeUser,
@@ -102,6 +102,10 @@ const sameBox = (
   Math.abs(a.y - b.y) < 2 &&
   Math.abs(a.width - b.width) < 2 &&
   Math.abs(a.height - b.height) < 2;
+
+/** Scrolls an element to the middle of the window, so a pointer drag from it never reaches dnd-kit's autoscroll zone. */
+const centre = (locator: Locator) =>
+  locator.evaluate((element) => element.scrollIntoView({ block: 'center', inline: 'center' }));
 
 const saved = (page: Page) => page.getByRole('status').filter({ hasText: 'Saved' });
 
@@ -239,13 +243,20 @@ test.describe('journey: a person customises their dashboard', () => {
     await page.keyboard.press('Escape');
     await expect(fab(page)).toBeFocused();
     await expect(fab(page)).toHaveAttribute('aria-expanded', 'false');
+    // Entering edit mode makes the two analytics tiles that were never set up take the person's defaults, and the page
+    // saves that one second later. That save is a burst of its own: it must be over before the drag is measured, or it
+    // lands in the middle of the drag (or as a second save) depending on how fast the machine is.
+    await expect.poll(() => seen.puts.length, { timeout: 8000 }).toBe(1);
+    await expect(saved(page)).toBeVisible();
 
     seen.clear();
     const dead = tileOf(page, DEAD);
+    // Dragging near the edge of the window makes dnd-kit scroll the page by an amount that depends on how many frames
+    // the drag takes, so the drag starts with the grip in the middle of the window and stays well inside it.
+    const gripOf = page.getByRole('button', { name: `Move ${DEAD}`, exact: true });
+    await centre(gripOf);
     const start = (await dead.boundingBox())!;
-    const grip = (await page
-      .getByRole('button', { name: `Move ${DEAD}`, exact: true })
-      .boundingBox())!;
+    const grip = (await gripOf.boundingBox())!;
     await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
     await page.mouse.down();
     await page.mouse.move(grip.x + 40, grip.y + 60, { steps: 5 });
@@ -254,24 +265,29 @@ test.describe('journey: a person customises their dashboard', () => {
     await page.mouse.up();
     const moved = (await dead.boundingBox())!;
     expect(Math.abs(moved.x - start.x) + Math.abs(moved.y - start.y)).toBeGreaterThan(40);
+    // The drop is one change and its save follows one second later. The resize is a second gesture, so it is a second
+    // burst: the first save is waited for, not hoped to fall inside the same second.
+    await expect.poll(() => seen.puts.length, { timeout: 8000 }).toBe(1);
+    await expect(saved(page)).toBeVisible();
+    const dropped = [...seen.calls];
+    seen.clear();
 
-    await dead.locator('.dashboard-resize').scrollIntoViewIfNeeded();
+    await centre(dead.locator('.dashboard-resize'));
     const handle = (await dead.locator('.dashboard-resize').boundingBox())!;
     const size = (await dead.boundingBox())!;
     await page.mouse.move(handle.x + 12, handle.y + 12);
     await page.mouse.down();
     await page.mouse.move(handle.x + 40, handle.y + 30, { steps: 4 });
     await page.mouse.move(handle.x + 160, handle.y + 90, { steps: 10 });
-    expect(seen.calls.filter((call) => !call.startsWith('PUT'))).toEqual([]);
+    expect(seen.calls, 'a resize sends nothing').toEqual([]);
     await page.mouse.up();
     expect((await dead.boundingBox())!.width).toBeGreaterThan(size.width + 20);
-    await expect.poll(() => seen.puts.length, { timeout: 6000 }).toBe(1);
+    await expect.poll(() => seen.puts.length, { timeout: 8000 }).toBe(1);
     await page.waitForTimeout(1500);
     expect(seen.puts).toHaveLength(1);
-    console.log(`[dashboard-calls] a drag then a resize: ${seen.calls.join(' | ')}`);
-    test
-      .info()
-      .annotations.push({ type: 'dashboard: pointer', description: seen.calls.join(' | ') });
+    const calls = [...dropped, ...seen.calls].join(' | ');
+    console.log(`[dashboard-calls] a drag, then a resize: ${calls}`);
+    test.info().annotations.push({ type: 'dashboard: pointer', description: calls });
 
     await page.reload();
     await expect(page.getByRole('heading', { name: DEAD })).toBeVisible();
