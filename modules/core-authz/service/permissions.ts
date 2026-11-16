@@ -63,16 +63,28 @@ export interface Caller {
 
 /**
  * Whether a token may use `permission` at all. A scope is the id of a permission, compared exactly
- * (ADR 0015); a token without scopes may use nothing. A session is not limited by scopes.
+ * (ADR 0015); a token without scopes may use nothing. A scope that the manifest declares as implying the permission
+ * (`impliedBy`) passes too. A session is not limited by scopes.
  */
-export function withinScopes(caller: Caller, permission: string): boolean {
-  return caller.via !== 'token' || (caller.scopes?.includes(permission) ?? false);
+export function withinScopes(
+  caller: Caller,
+  permission: string,
+  impliedBy: readonly string[] = [],
+): boolean {
+  if (caller.via !== 'token') return true;
+  const scopes = caller.scopes ?? [];
+  return scopes.includes(permission) || impliedBy.some((implying) => scopes.includes(implying));
 }
 
 /**
  * Whether the caller holds `permission`: the owner must hold it (`held`, from their roles) and,
  * for a token, a scope must name it. The effective permissions of a token are scope ∩ owner.
  */
-export function grants(held: ReadonlySet<string>, caller: Caller, permission: string): boolean {
-  return held.has(permission) && withinScopes(caller, permission);
+export function grants(
+  held: ReadonlySet<string>,
+  caller: Caller,
+  permission: string,
+  impliedBy: readonly string[] = [],
+): boolean {
+  return held.has(permission) && withinScopes(caller, permission, impliedBy);
 }

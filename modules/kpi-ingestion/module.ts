@@ -132,6 +132,9 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     permissions: {
       [PERMISSION_SUBMIT]: {
         scope: RESOURCE_SERVICE,
+        // A member holds `submit` through the policy, which the token form cannot offer: the write scope of the public API
+        // passes its scope gate (ADR-0015). The owner must still be allowed to submit for the service.
+        impliedBy: [PERMISSION_V1_WRITE],
         description:
           'Submit measurements for one service (Admin, and the approved members of the service provider through the policy of this module)',
       },

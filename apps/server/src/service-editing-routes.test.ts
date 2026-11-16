@@ -533,6 +533,7 @@ describe('a token edits only within its scopes', () => {
   const EDIT = 'registry.services.service.edit';
   const IDENTITY = 'registry.services.service.edit-identity';
   const PUBLISH = 'registry.services.service.publish';
+  const WRITE = 'registry.services.service.write';
 
   it('lets a member’s token with the scope edit, refuses it without, and never gives a member the identity [ASVS-8.2.1]', async () => {
     const w = await world();
@@ -546,11 +547,37 @@ describe('a token edits only within its scopes', () => {
     expect((await call(withEdit, { slug: 'c' })).status).toBe(403);
     expect((await w.row()).description).toBe('old');
     expect((await call(withEdit, { description: 'by token' })).status).toBe(200);
-    // A manager's token needs both scopes to change the slug and a description at once.
+    // The scopes of the permissions themselves still work: a manager's token that names only `edit` may not change the slug.
     const managerEdit = await tokenOf(w.s, w.people.manager, [READ, EDIT]);
     const managerBoth = await tokenOf(w.s, w.people.manager, [READ, EDIT, IDENTITY]);
     expect((await call(managerEdit, { slug: 'd' })).status).toBe(403);
     expect((await call(managerBoth, { slug: 'e', description: 'f' })).status).toBe(200);
+  });
+
+  it('lets the write scope, which the token form offers, stand for the scoped permissions, never beyond what the owner may [ASVS-8.2.1]', async () => {
+    const w = await world();
+    const call = (token: string, body: unknown) =>
+      w.s.call('PATCH', `/services/${w.svc.id}`, { headers: bearer(token), body });
+    // The form offers the permissions of the roles: `write` is one of them, `edit` and `edit-identity` are not.
+    const offered = await w.s.call('GET', '/account/permissions', as(w.people.manager));
+    const ids = (offered.body as { result: { id: string }[] }).result.map((p) => p.id);
+    expect(ids).toContain(WRITE);
+    expect(ids).not.toContain(EDIT);
+    expect(ids).not.toContain(IDENTITY);
+    // A manager's token with one scope changes the slug and a description at once.
+    const manager = await tokenOf(w.s, w.people.manager, [READ, WRITE]);
+    expect((await call(manager, { slug: 'g', description: 'h' })).status).toBe(200);
+    // A member's token with the same scope changes a description, not the slug: the owner decides.
+    const member = await tokenOf(w.s, w.people.member, [READ, WRITE]);
+    expect((await call(member, { slug: 'i' })).status).toBe(403);
+    expect((await call(member, { description: 'j' })).status).toBe(200);
+    // Without the scope, or with `read` only, the same people are refused.
+    const readOnly = await tokenOf(w.s, w.people.manager, [READ]);
+    expect((await call(readOnly, { description: 'k' })).status).toBe(403);
+    // A person who has no part in the provider gets nothing from the scope.
+    const stranger = await tokenOf(w.s, w.people.plain, [READ, WRITE]);
+    expect((await call(stranger, { description: 'l' })).status).toBe(403);
+    expect((await w.row()).description).toBe('j');
   });
 
   it('lets only a token that names publish switch publication, and a manager’s never', async () => {

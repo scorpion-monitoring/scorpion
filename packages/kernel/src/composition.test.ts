@@ -160,6 +160,38 @@ describe('buildComposition', () => {
     ]);
   });
 
+  it('checks `impliedBy`: the implying permission is another permission of the same module, with none of its own', () => {
+    const module = (id: string, permissions: ModuleManifest['permissions']) =>
+      defineModule({ id, version: '1.0.0', permissions });
+    expect(
+      problemsOfInline([
+        module('one', {
+          'one.edit': {
+            description: 'e',
+            impliedBy: ['one.write', 'two.write', 'one.edit', 'one.gone'],
+          },
+          'one.write': { description: 'w' },
+        }),
+        module('two', { 'two.write': { description: 'w' } }),
+      ]),
+    ).toEqual([
+      'one: permission "one.edit" is implied by "two.write", which is not another permission of the module',
+      'one: permission "one.edit" is implied by "one.edit", which is not another permission of the module',
+      'one: permission "one.edit" is implied by "one.gone", which is not another permission of the module',
+    ]);
+    expect(
+      problemsOfInline([
+        module('one', {
+          'one.a': { description: 'a', impliedBy: ['one.b'] },
+          'one.b': { description: 'b', impliedBy: ['one.c'] },
+          'one.c': { description: 'c' },
+        }),
+      ]),
+    ).toEqual([
+      'one: permission "one.a" is implied by "one.b", which is itself implied by another (one level only)',
+    ]);
+  });
+
   it('rejects a command name that two modules both declare', () => {
     const command = { name: 'tidy', description: 'x', run: async () => {} };
     const one = defineModule({ id: 'one', version: '1.0.0', commands: [command] });

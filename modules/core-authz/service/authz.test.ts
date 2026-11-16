@@ -3,6 +3,7 @@
 import { Conflict, Forbidden, Invalid, NotFound, Unauthorized } from '@scorpion/contracts';
 import type { Actor, UserActor } from '@scorpion/contracts';
 import { makeRole, makeRoleAssignment } from '@scorpion/testing';
+import { defineModule } from '@scorpion/kernel';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { notesModule, useAuthz, type Started } from '../test/harness.ts';
@@ -710,6 +711,70 @@ const tokenActor = (userId: string, ...scopes: string[]): UserActor => ({
 });
 const events = async (pool: Pool) =>
   await rows(pool, 'select name, payload from kernel_outbox order by occurred_at, id');
+
+describe('a permission implied by another scope (ADR-0015)', () => {
+  // `fix.notes.edit` is held through the policy and implied by `fix.notes.write`, which a role holds and a token can name.
+  const WRITE = 'fix.notes.write';
+  const withImplied = () => {
+    const base = notesModule({
+      contributes: { 'authz.resourcePolicy': [{ resourceType: 'note', allows: () => true }] },
+    });
+    return {
+      id: base.id,
+      manifest: defineModule({
+        id: base.id,
+        version: '1.0.0',
+        permissions: {
+          'fix.notes.read': { description: 'Read notes' },
+          'fix.notes.approve': { description: 'Approve notes' },
+          [WRITE]: { description: 'Write notes with a token' },
+          'fix.notes.edit': { description: 'Edit a note', scope: 'note', impliedBy: [WRITE] },
+        },
+        contributes: base.manifest.contributes,
+      }),
+    };
+  };
+  const note = { type: 'note', id: '1' };
+
+  it('lets the implying scope pass the scope gate, and still asks the owner for the permission [ASVS-8.2.1]', async () => {
+    const { authz, kernel } = await start({ modules: [withImplied()] });
+    const owner = await userWith(kernel.pool, { permissions: [WRITE] });
+    // The scope of the policy-held permission is passed by the implying one ...
+    await expect(
+      authz.require(tokenActor(owner.userId, WRITE), EDIT, note),
+    ).resolves.toBeUndefined();
+    // ... not by an unrelated one, and not by none.
+    await expect(authz.require(tokenActor(owner.userId, READ), EDIT, note)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    await expect(authz.require(tokenActor(owner.userId), EDIT, note)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    // The implying scope is not the permission: nothing else is passed by it.
+    await expect(authz.require(tokenActor(owner.userId, WRITE), APPROVE)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+  });
+
+  it('never gives a token more than its owner: a resource the policy refuses stays refused [ASVS-8.2.1]', async () => {
+    const refusing = withImplied();
+    refusing.manifest = defineModule({
+      ...refusing.manifest,
+      contributes: { 'authz.resourcePolicy': [{ resourceType: 'note', allows: () => false }] },
+    });
+    const { authz, kernel } = await start({ modules: [refusing] });
+    const owner = await userWith(kernel.pool, { permissions: [WRITE] });
+    await expect(authz.require(tokenActor(owner.userId, WRITE), EDIT, note)).rejects.toBeInstanceOf(
+      Forbidden,
+    );
+    expect(await authz.can(tokenActor(owner.userId, WRITE), EDIT, note)).toBe(false);
+    // Without a policy that allows it, the plain permission is held only through a role: no role, no pass.
+    const nobody = actorFor(randomUUID());
+    await expect(
+      authz.require(tokenActor(nobody.userId, WRITE), EDIT, note),
+    ).rejects.toBeInstanceOf(Forbidden);
+  });
+});
 
 describe('token scopes (scope ∩ owner)', () => {
   it('lets a token use only the permissions its scopes name and its owner holds', async () => {

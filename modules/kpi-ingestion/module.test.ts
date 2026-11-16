@@ -34,6 +34,7 @@ describe('the manifest', () => {
     expect(manifest.permissions).toEqual({
       'kpi.ingestion.measurement.submit': {
         scope: 'service',
+        impliedBy: ['kpi.ingestion.v1.write'],
         description: expect.any(String) as string,
       },
       'kpi.ingestion.v1.read': { description: expect.any(String) as string },
