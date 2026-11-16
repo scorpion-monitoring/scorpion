@@ -1,0 +1,54 @@
+name: Screen readers
+
+# The screen-reader gate of the faceted search (sprint 3 of M12a, item 7): Guidepup drives VoiceOver on macOS
+# and NVDA on Windows against the component harness (a static page: no Docker, no server, no database).
+# SPIKE STAGE: runs on pushes to the spike branch only, with each test repeated, to learn whether the readers
+# are stable on hosted runners. The triggers of the real gate (path filter, nightly, release) replace this.
+on:
+  push:
+    branches: ['feature/m12a-facets-sr-spike']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screen-reader-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reader:
+    name: ${{ matrix.reader }} (keys via ${{ matrix.keys }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { reader: voiceover, os: macos-latest, browser: webkit, keys: page }
+          - { reader: voiceover, os: macos-latest, browser: webkit, keys: reader }
+          - { reader: nvda, os: windows-latest, browser: chromium, keys: page }
+          - { reader: nvda, os: windows-latest, browser: chromium, keys: reader }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      SCREEN_READER: ${{ matrix.reader }}
+      SR_KEYS: ${{ matrix.keys }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Set up the screen reader
+        shell: bash
+        run: |
+          pnpm --filter @scorpion/web exec guidepup setup --ci
+          pnpm --filter @scorpion/web exec guidepup install "$SCREEN_READER"
+      - name: Install the browser
+        shell: bash
+        run: pnpm --filter @scorpion/web exec playwright install ${{ matrix.browser }}
+      - name: Run the spike (repeated, no retries)
+        shell: bash
+        working-directory: apps/web
+        run: pnpm exec playwright test --config e2e/screen-reader/playwright.config.ts --repeat-each=5
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screen-reader-${{ matrix.reader }}-${{ matrix.keys }}
+          path: apps/web/playwright-report
+          retention-days: 7

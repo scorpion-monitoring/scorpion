@@ -18,6 +18,8 @@ engineStrict: true
 # Testcontainers (Docker over SSH) and a version-check hook; none is needed here.
 ignoredBuiltDependencies:
   - cpu-features
+  # The screen-recording helper of @guidepup/setup (dev only, apps/web); the screen-reader job records nothing.
+  - ffmpeg-static
   - protobufjs
   - ssh2
 
