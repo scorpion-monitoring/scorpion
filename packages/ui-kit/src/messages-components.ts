@@ -72,6 +72,15 @@ export const componentMessages: MessageBundles = {
     'kit.facets.clear': 'Clear all filters',
     'kit.facets.clearOne': 'Clear {label}',
 
+    'kit.facetSearch.search': 'Search',
+    'kit.facetSearch.matches.one': '1 result matches',
+    'kit.facetSearch.matches.other': '{count} results match',
+    'kit.facetSearch.matches.none': 'No results match',
+    'kit.facetSearch.matches.noName': 'No results match the name',
+    'kit.facetSearch.suggest': 'Filter by {facet}: {value} ({count})',
+    'kit.facetSearch.clearAll': 'Clear all',
+    'kit.facetSearch.removed': '{chip} removed.',
+
     'kit.chart.category': 'Category',
     'kit.chart.showTable': 'Show the data as a table',
     'kit.chart.hideTable': 'Hide the table',
@@ -213,6 +222,15 @@ export const componentMessages: MessageBundles = {
     'kit.facets.count': '({count})',
     'kit.facets.clear': 'Alle Filter zurücksetzen',
     'kit.facets.clearOne': '{label} zurücksetzen',
+
+    'kit.facetSearch.search': 'Suche',
+    'kit.facetSearch.matches.one': '1 Treffer',
+    'kit.facetSearch.matches.other': '{count} Treffer',
+    'kit.facetSearch.matches.none': 'Keine Treffer',
+    'kit.facetSearch.matches.noName': 'Kein Name passt',
+    'kit.facetSearch.suggest': 'Filtern nach {facet}: {value} ({count})',
+    'kit.facetSearch.clearAll': 'Alles zurücksetzen',
+    'kit.facetSearch.removed': '{chip} entfernt.',
 
     'kit.chart.category': 'Kategorie',
     'kit.chart.showTable': 'Daten als Tabelle anzeigen',

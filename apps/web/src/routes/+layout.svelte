@@ -120,7 +120,11 @@
     locale: () => data.locale,
     localPath,
     refresh: () => invalidateAll(),
-    goto: (address, options) => goto(address, { replaceState: options?.replace }),
+    goto: (address, options) =>
+      goto(address, {
+        replaceState: options?.replace,
+        ...(options?.keep && { reset: false }),
+      }),
     navigating: () => navigating.to !== null,
     replaceUrl: (address) => void replaceState(address, {}),
     withReauth: (action, intent) => reauth.run(action, intent),
