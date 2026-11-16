@@ -5,6 +5,7 @@ import {
   type PwnedPasswords,
 } from '@scorpion/integrations';
 import { defineModule, type ModuleContext } from '@scorpion/kernel';
+import { SESSION_COOKIE } from './cookie.ts';
 import { createAuthenticator } from './authenticator.ts';
 import { USER_PERMISSIONS } from './permissions.ts';
 import type { IdentityService } from './public.ts';
@@ -342,6 +343,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       'kernel.authenticator': [
         {
           authenticate: createAuthenticator({ sessions: sessionsOrThrow, tokens: tokensOrThrow }),
+          // So the rate limiter can tell a browser's request from an anonymous one (its presence only).
+          sessionCookie: SESSION_COOKIE,
         },
       ],
     },

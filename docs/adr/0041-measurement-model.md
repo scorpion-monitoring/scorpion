@@ -407,6 +407,8 @@ load and no call. A save is **1** call (`POST /kpi/ingestion/runs`) and one page
 the coverage, the runs, the adapters, two vocabularies, the value types, the grid) and 1 for a page with none. They share the bucket of the caller (the default one, a burst of 120 and 120 a minute) with the shell's own
 reads, so a person who changes the month about nine times in a minute meets a 429; none was seen in the tests. Five of the nine are reference data that does not change within a visit (the adapters, the two vocabularies, the value
 types, and in practice the picker's list): see the backlog.
+**Measured again in M12a sprint 5, with the default limits** (a burst of 120, then 120 a minute), on the same spec before and after: on `dev` the seventh month change in a row worked and the eighth failed (the error page, a 429 from
+the loader); with the bucket keyed by session and the four reference reads kept in the visit cache a month change uses 9 tokens (the shell's 4 and the page's 5) and nine in a row leave 25 of 120.
 
 ## Amended in sprint 5
 
@@ -496,3 +498,4 @@ of the page are in sprint 4's addendum and were measured again (see the backlog)
 ## Amended in M12a sprint 5
 
 - **The reminder runs on the day or after it** (the maintainer's decision of 2026-11-16, which replaces the exact day check of item 10 above). The job is due when the UTC day is `reminders.dayOfMonth` or later in the same month (`reminderDue`); `kpii_reminder_sent` still keeps a provider from a second mail, so the daily runs after the first send nothing for it. A node that was down on the day now sends on its next run. The cost named in sprint 5 stays: a provider that was complete on the day and lost a mandatory value later in the month is asked on the 20th. The `skipped` value `not-the-day` is now `before-the-day`.
+- **The loader reads the reference data once per visit.** The adapters, the `necessity` and `kpi.unit` terms and the value types (4 of the 9 reads; the plan said 5, counting the picker's list, which depends on the search text and stays) go through `UiLoadContext.remember`, a visit cache of the web process keyed by a hash of the request's cookie header, five minutes long, never holding a failure. A month change reads 5 things, not 9.

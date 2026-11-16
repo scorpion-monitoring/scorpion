@@ -5,8 +5,9 @@ import type { PageServerLoad } from './$types';
 import { pages, patterns } from '#lib/pages.ts';
 import { basePath } from '#lib/server/env.ts';
 import { loadPage } from '#lib/server/page.ts';
+import { visits } from '#lib/server/visit-cache.ts';
 
-export const load: PageServerLoad = ({ locals, url }) =>
+export const load: PageServerLoad = ({ locals, url, request }) =>
   loadPage(
     { pages, patterns },
     {
@@ -18,5 +19,6 @@ export const load: PageServerLoad = ({ locals, url }) =>
       needsFirstAdmin: () => locals.bootstrap(),
       locale: () => locals.locale(),
       publicApi,
+      remember: visits.forVisitor(request.headers.get('cookie') ?? undefined),
     },
   );

@@ -28,7 +28,7 @@ import { createClientIpResolver } from './pipeline/client-ip.ts';
 import { preflightCors } from './preflight.ts';
 import { errorMapper, fieldProblems, notFoundHandler } from './pipeline/errors.ts';
 import { requestLogging, type RequestInfo } from './pipeline/logging.ts';
-import { RATE_LIMITS, rateLimit } from './pipeline/rate-limit.ts';
+import { RATE_LIMITS, rateLimit, sessionRateLimit } from './pipeline/rate-limit.ts';
 import { requestId } from './pipeline/request-id.ts';
 import { securityHeaders } from './pipeline/security-headers.ts';
 import { healthz, metricsRoute, readyz, type SystemProbes } from './system-routes.ts';
@@ -51,6 +51,8 @@ export interface AppOptions {
   rateLimiter?: RateLimiter;
   /** Limits per route group, for tests. They win over the stored ones. Default: `RATE_LIMITS`. */
   rateLimits?: Partial<Record<RateLimitGroup, RateLimit>>;
+  /** The name of the session cookie, from the authenticator's entry; its presence only, never its value. */
+  sessionCookie?: string | undefined;
   /**
    * The limits an administrator saved (core.settings), read for every request from the settings
    * cache. An answer of `undefined`, or an error, leaves the constants in force.
@@ -198,7 +200,14 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
         app.on(
           method,
           honoPath,
-          rateLimit({ limiter: options.rateLimiter, group, limit: limitFor(group), clientIp, log }),
+          rateLimit({
+            limiter: options.rateLimiter,
+            group,
+            limit: limitFor(group),
+            clientIp,
+            log,
+            sessionCookie: options.sessionCookie,
+          }),
         );
       }
       app.on(
@@ -210,6 +219,20 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
           options.rateLimiter ? { limiter: options.rateLimiter, clientIp, log } : undefined,
         ),
       );
+      // Step 3b: a signed-in caller by session has a bucket of their own (the address bucket is the ceiling).
+      if (options.rateLimiter) {
+        app.on(
+          method,
+          honoPath,
+          sessionRateLimit({
+            limiter: options.rateLimiter,
+            group,
+            limit: limitFor(group),
+            clientIp,
+            log,
+          }),
+        );
+      }
     }
     app.openapi(
       { ...route, path: `${base}${path}` } as never,

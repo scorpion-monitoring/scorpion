@@ -20,6 +20,15 @@ export interface UiLoadContext {
    * calls it as `redirect('/services/x')` and nothing after it runs.
    */
   redirect: (path: string) => never;
+  /**
+   * Runs `load` once for this visitor and `key` within a few minutes (the shell's visit cache) and
+   * hands every later call the same answer: for reference data that no one changes while a person
+   * works (a list of adapters, the terms of a vocabulary), so that a page that is loaded again for a
+   * query change does not read it again. Never for what the person changes, nor for anything that
+   * decides access. A rejected `load` is not kept. Name the key after the module and the data
+   * (`kpi.ingestion.submit.reference`).
+   */
+  remember: <T>(key: string, load: () => Promise<T>) => Promise<T>;
   /** The OpenAPI document of the public API (v1) of this build, for the documentation page. */
   publicApi: OpenApiDocument;
 }
