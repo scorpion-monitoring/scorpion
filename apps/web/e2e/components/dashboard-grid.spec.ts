@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { violations } from '../support/a11y.ts';
 import { expect, inBothThemes, test } from './support.ts';
 
@@ -178,6 +178,12 @@ test.describe('DashboardGrid', () => {
     scene,
   }) => {
     await scene('dashboard-grid', { query: 'edit' });
+    // Near the edge of the window dnd-kit scrolls the page by an amount that depends on how many frames the drag takes
+    // (the harness page is taller than the window), and the next measurement is then of a page that has moved. Each
+    // drag starts with its handle in the middle of the window and stays well inside it.
+    const centre = (locator: Locator) =>
+      locator.evaluate((element) => element.scrollIntoView({ block: 'center', inline: 'center' }));
+    await centre(tile(page, 'tuned').locator('.dashboard-resize'));
     const handle = await tile(page, 'tuned').locator('.dashboard-resize').boundingBox();
     const size = await at(page, 'tuned');
     await page.mouse.move(handle!.x + 12, handle!.y + 12);
@@ -188,9 +194,9 @@ test.describe('DashboardGrid', () => {
     await expect.poll(() => at(page, 'tuned')).not.toEqual(size);
     await expect(page.getByTestId('changes')).toContainText('resize:tuned');
 
-    const grip = await page
-      .getByRole('button', { name: 'Move Quiet card', exact: true })
-      .boundingBox();
+    const gripOf = page.getByRole('button', { name: 'Move Quiet card', exact: true });
+    await centre(gripOf);
+    const grip = await gripOf.boundingBox();
     const before = await at(page, 'quiet');
     await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
     await page.mouse.down();
