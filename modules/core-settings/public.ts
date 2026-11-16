@@ -93,6 +93,14 @@ export interface SettingsService {
   seedSettings(moduleId: string, values: unknown): Promise<'seeded' | 'kept'>;
 
   /**
+   * Stores one key of `moduleId`'s settings **only when the stored value has no such key**, keeping every
+   * other stored key; for a module's upgrade step that pins a value an existing instance had before a
+   * default changed. Trusted code with no human caller, like `seedSettings`: checks no permission and no
+   * route calls it. `Invalid` when the schema refuses the value.
+   */
+  seedSettingKey(moduleId: string, key: string, value: unknown): Promise<'seeded' | 'kept'>;
+
+  /**
    * The terms of a vocabulary, in order (`sortOrder`, then key). Active terms only, unless
    * `includeInactive`. `NotFound` for a vocabulary no loaded module declares.
    */

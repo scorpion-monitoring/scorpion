@@ -60,6 +60,14 @@ export interface SettingsInternals extends SettingsAdminService {
    * module with no settings. Emits `settings.changed@1` when it writes. Checks no permission.
    */
   seed(moduleId: string, values: unknown): Promise<'seeded' | 'kept'>;
+  /**
+   * For trusted code with no human caller (a module's upgrade step): stores one key of `moduleId`'s
+   * settings **only when the stored value has no such key**, keeping every other stored key (a row is
+   * created when there is none). `Invalid` when the schema refuses the value, `NotFound` for a module
+   * with no settings. Bumps the version and emits `settings.changed@1` when it writes. Checks no
+   * permission.
+   */
+  seedKey(moduleId: string, key: string, value: unknown): Promise<'seeded' | 'kept'>;
   /** The stored JSON of one module, straight from the database (no cache, and the cache is not filled). */
   readFresh(moduleId: string): Promise<unknown>;
   /** Empties the cache of this process. */
@@ -197,6 +205,48 @@ export function createSettingsService(
           module: moduleId,
           keys: Object.keys(values).sort(),
           version: 1,
+          actorId: null,
+        });
+        return true;
+      });
+      if (seeded) invalidate(moduleId);
+      return seeded ? 'seeded' : 'kept';
+    },
+
+    async seedKey(moduleId, key, value) {
+      const schema = schemaOf(moduleId);
+      const parsed = schema.safeParse({ [key]: value });
+      if (!parsed.success) {
+        throw new Invalid('The settings are not valid.', fieldProblems(parsed.error, 'values'));
+      }
+      const seeded = await ctx.db.tx(async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(setting)
+          .where(eq(setting.moduleId, moduleId))
+          .for('update');
+        const stored = isPlainObject(current?.value) ? current.value : {};
+        if (current && key in stored) return false;
+        const version = (current?.version ?? 0) + 1;
+        const merged = { ...stored, [key]: value };
+        if (current) {
+          await tx
+            .update(setting)
+            .set({ value: merged, version, updatedAt: new Date() })
+            .where(eq(setting.moduleId, moduleId));
+        } else {
+          const inserted = await tx
+            .insert(setting)
+            .values({ moduleId, value: merged, version, updatedBy: null })
+            .onConflictDoNothing()
+            .returning({ moduleId: setting.moduleId });
+          // Another process created the row in the meantime: its value wins, this step is done.
+          if (inserted.length === 0) return false;
+        }
+        await ctx.events.emit('settings.changed@1', {
+          module: moduleId,
+          keys: [key],
+          version,
           actorId: null,
         });
         return true;

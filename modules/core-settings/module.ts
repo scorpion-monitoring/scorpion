@@ -188,6 +188,7 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
           await preferences.set(actor, key, value);
         },
         seedSettings: (moduleId, values) => settings.seed(moduleId, values),
+        seedSettingKey: (moduleId, key, value) => settings.seedKey(moduleId, key, value),
         listTerms: (vocabularyId, options) => vocabularies.terms(vocabularyId, options),
         validateTerm: (vocabularyId, key, options) =>
           vocabularies.validateTerm(vocabularyId, key, options),
