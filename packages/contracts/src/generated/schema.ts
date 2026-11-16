@@ -9193,6 +9193,11 @@ export interface paths {
                                     name: string;
                                 }[];
                             }[];
+                            /**
+                             * @description The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).
+                             * @enum {string}
+                             */
+                            filterStyle: "sidebar" | "bar";
                         };
                     };
                 };
@@ -10425,6 +10430,11 @@ export interface paths {
                                     selected: boolean;
                                 }[];
                             }[];
+                            /**
+                             * @description The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).
+                             * @enum {string}
+                             */
+                            filterStyle: "sidebar" | "bar";
                         };
                     };
                 };

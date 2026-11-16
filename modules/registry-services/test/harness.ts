@@ -176,6 +176,11 @@ export function useServices(): ServicesHarness {
     async start(options) {
       const kernel = await build(options);
       await kernel.start();
+      // What the start wrote (the upgrade step's `settings.changed@1`) is not the test's: `events()` leaves it out.
+      const { rows: startup } = await kernel.pool.query<{ id: string }>(
+        'select id from kernel_outbox',
+      );
+      const before = new Set(startup.map((row) => row.id));
       const actor: ServicesStarted['actor'] = async (...roles) => {
         const user = await makeUser(kernel.pool);
         for (const role of roles) await makeRoleAssignment(kernel.pool, user, role);
@@ -209,10 +214,13 @@ export function useServices(): ServicesHarness {
         },
         async events() {
           const { rows } = await kernel.pool.query<{
+            id: string;
             name: string;
             payload: Record<string, unknown>;
-          }>('select name, payload from kernel_outbox order by occurred_at, id');
-          return rows;
+          }>('select id, name, payload from kernel_outbox order by occurred_at, id');
+          return rows
+            .filter((row) => !before.has(row.id))
+            .map(({ name, payload }) => ({ name, payload }));
         },
       };
     },

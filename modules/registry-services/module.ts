@@ -5,7 +5,7 @@ import type { IdentityService } from '@scorpion/core-identity/public';
 import type { NotificationsService } from '@scorpion/core-notifications/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import { createSpdx, createStubSpdx, type Spdx } from '@scorpion/integrations';
-import { defineModule } from '@scorpion/kernel';
+import { defineModule, SYSTEM_READY } from '@scorpion/kernel';
 import {
   ORG_TYPE_REGISTRY,
   ORG_PUBLIC_REFERENCE_REGISTRY,
@@ -65,7 +65,13 @@ import { TEMPLATES } from './templates/registry.ts';
 import { SERVICE_NAV, SERVICE_ROUTES } from './ui/routes.ts';
 import { settingsSchema, type ServicesSettings } from './settings-schema.ts';
 
-export { settingsSchema, type ServicesSettings } from './settings-schema.ts';
+export {
+  CATALOGUE_FILTERS,
+  DEFAULT_CATALOGUE_FILTERS,
+  settingsSchema,
+  type CatalogueFilters,
+  type ServicesSettings,
+} from './settings-schema.ts';
 export type { ServicesService } from './service/services.ts';
 
 /** What the module registers as its service. */
@@ -196,6 +202,14 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
     migrations: new URL('./migrations', import.meta.url),
 
     events: {
+      on: {
+        // The upgrade step of sprint 3 of M12a (decision Q4): an instance that has services keeps `sidebar`.
+        // Once per instance (the key is stored then); a second process finds it stored.
+        [SYSTEM_READY]: async (_event, ctx) => {
+          const result = await current?.upgradeCatalogueFiltersAsSystem();
+          if (result === 'seeded') ctx.log.info('stored the look of the catalogue filters');
+        },
+      },
       // Ids and field names, never text, an address or a URL (a test checks the payloads).
       emits: {
         'registry.service.created@1': z.strictObject({

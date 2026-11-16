@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { FIELDS } from './config/fields.ts';
 import * as schema from './db/schema.ts';
 import manifest, { createServicesModule } from './module.ts';
-import { settingsSchema } from './settings-schema.ts';
+import { DEFAULT_CATALOGUE_FILTERS, settingsSchema } from './settings-schema.ts';
 import packageJson from './package.json' with { type: 'json' };
 import { fixtureContributor, useServices } from './test/harness.ts';
 
@@ -121,8 +121,16 @@ describe('the manifest', () => {
   });
 
   it('declares the settings with defaults, titles and descriptions', () => {
-    expect(Object.keys(settingsSchema.shape)).toEqual(['exposeContactPoint', 'allowPublic']);
-    expect(settingsSchema.parse({})).toEqual({ exposeContactPoint: true, allowPublic: true });
+    expect(Object.keys(settingsSchema.shape)).toEqual([
+      'exposeContactPoint',
+      'allowPublic',
+      'catalogueFilters',
+    ]);
+    expect(settingsSchema.parse({})).toEqual({
+      exposeContactPoint: true,
+      allowPublic: true,
+      catalogueFilters: DEFAULT_CATALOGUE_FILTERS,
+    });
     for (const field of Object.values(settingsSchema.shape)) {
       expect(field.meta()).toMatchObject({
         title: expect.any(String) as string,
@@ -131,6 +139,7 @@ describe('the manifest', () => {
     }
     expect(settingsSchema.safeParse({ allowPublic: 'yes' }).success).toBe(false);
     expect(settingsSchema.safeParse({ other: true }).success).toBe(false);
+    expect(settingsSchema.safeParse({ catalogueFilters: 'carousel' }).success).toBe(false);
   });
 
   it('depends on authz, settings, identity, notifications, blob, organisations and the SPDX adapter, with the shell and audit as optional peers', () => {

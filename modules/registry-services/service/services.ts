@@ -24,7 +24,11 @@ import type {
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { ResolvedConfig } from '../config/validate.ts';
 import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/schema.ts';
-import { settingsSchema } from '../settings-schema.ts';
+import {
+  DEFAULT_CATALOGUE_FILTERS,
+  settingsSchema,
+  type CatalogueFilters,
+} from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import {
   createCatalogue,
@@ -348,6 +352,17 @@ export interface ServicesService {
   >;
   /** The public services an organisation is the provider or a consortium of, by name; empty with `allowPublic` off. */
   listPublicByOrganisationAsSystem: (organisationId: string) => Promise<PublicServiceLink[]>;
+  /**
+   * The look of the catalogues' faceted search (setting `catalogueFilters`), for the two list answers. Not a
+   * secret and not a person's: the list routes have checked their caller already, the public one has none.
+   */
+  catalogueFilters: () => Promise<CatalogueFilters>;
+  /**
+   * The upgrade step of sprint 3 of M12a (decision Q4): an instance that already has services keeps the look it
+   * had (`sidebar`); a new one gets the default. Stores the key once, only when it is not stored, and never
+   * overwrites an administrator's choice. Trusted code, run at start (`system.ready`); checks no permission.
+   */
+  upgradeCatalogueFiltersAsSystem: () => Promise<'seeded' | 'kept'>;
   /** The SPDX search for the licence field; needs `…service.read`. */
   searchLicences: (actor: Actor, query: string, limit?: number) => Promise<SpdxLicense[]>;
   listRoles: (actor: Actor, locale?: string) => Promise<RoleView[]>;
@@ -443,7 +458,7 @@ function isSlugClash(error: unknown): boolean {
 export interface ServicesDeps {
   authz: Pick<AuthzService, 'require' | 'can'>;
   blob: Pick<BlobService, 'put' | 'setReference'>;
-  settings: Pick<SettingsService, 'validateTerm' | 'listTerms'>;
+  settings: Pick<SettingsService, 'validateTerm' | 'listTerms' | 'seedSettingKey'>;
   organisations: Pick<
     OrganisationsPublic,
     | 'findByIdsAsSystem'
@@ -1548,6 +1563,19 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     async schemaOrgPublicAsSystem(ref) {
       const hit = await publicRow(ref);
       return hit && profileOf(hit.row, hit.links, hit.values);
+    },
+
+    async catalogueFilters() {
+      return (await settingsNow()).catalogueFilters;
+    },
+
+    async upgradeCatalogueFiltersAsSystem() {
+      const [existing] = await ctx.db.select({ id: service.id }).from(service).limit(1);
+      return deps.settings.seedSettingKey(
+        ctx.moduleId,
+        'catalogueFilters',
+        existing ? 'sidebar' : DEFAULT_CATALOGUE_FILTERS,
+      );
     },
 
     async listPublicAsSystem(query) {
