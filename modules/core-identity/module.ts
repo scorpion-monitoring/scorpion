@@ -16,6 +16,7 @@ import { createDemoSeed } from './service/demo-seed.ts';
 import { createAdminCommand } from './service/create-admin-command.ts';
 import { createApprovalService } from './service/approval.ts';
 import { createCleanupService, type CleanupService } from './service/cleanup.ts';
+import { createLoginFailureAudit, type LoginFailureAudit } from './service/login-failures.ts';
 import { createProfileService, type ProfileService } from './service/profile.ts';
 import { createRecoveryService, type RecoveryService } from './service/recovery.ts';
 import { createIdentityMail } from './service/identity-mail.ts';
@@ -60,6 +61,7 @@ export interface IdentityInternals extends IdentityService {
   approval: ApprovalService;
   bootstrap: BootstrapService;
   cleanup: CleanupService;
+  loginFailures: LoginFailureAudit;
   loginStates: LoginStateService;
   oidc: OidcService;
   oidcLink: OidcLinkService;
@@ -134,6 +136,11 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
     return currentBootstrap;
   };
   let currentCleanup: CleanupService | undefined;
+  let currentLoginFailures: LoginFailureAudit | undefined;
+  const loginFailuresOrThrow = (): LoginFailureAudit => {
+    if (!currentLoginFailures) throw new Error('core.identity: the sign-in audit is not ready');
+    return currentLoginFailures;
+  };
   const cleanupOrThrow = (): CleanupService => {
     if (!currentCleanup) throw new Error('core.identity: the cleanup service is not ready');
     return currentCleanup;
@@ -246,6 +253,18 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           ctx.log.info(result, 'identity cleanup finished');
         },
       },
+      {
+        // Turns the closed windows of failed sign-ins into audit events (one per name and window).
+        name: 'core.identity.login-failures',
+        schedule: '*/5 * * * *',
+        retry: { limit: 2, delaySeconds: 60 },
+        timeoutSeconds: 300,
+        handler: async (_job, ctx) => {
+          const result = await loginFailuresOrThrow().flush();
+          // Counts only: no name, id or address.
+          ctx.log.info(result, 'sign-in failures written to the audit trail');
+        },
+      },
     ],
 
     events: {
@@ -287,6 +306,20 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         'identity.password.reset@1': userEvent,
         'identity.password.changed@1': userEvent,
         // The caller proved who they are again in their session; `method` is how (never a credential).
+        // A sign-in succeeded and a session was made; `method` is how (never a credential, never the session id).
+        'identity.session.created@1': userEvent.extend({
+          method: z.enum(['password', 'oidc']),
+        }),
+        // The failed sign-ins of one name in one window, counted: one event per name and window, however many attempts
+        // (ADR 0026, M12a). `userId` is the account the name belonged to, else null; `nameKey` is the start of the name's
+        // hash, never the name. Written when the window has closed.
+        'identity.login.failed@1': z.strictObject({
+          userId: z.string().nullable(),
+          nameKey: z.string(),
+          count: z.number().int().min(1),
+          windowStart: z.string(),
+          windowSeconds: z.number().int().min(1),
+        }),
         'identity.session.reauthenticated@1': userEvent.extend({
           method: z.enum(['password', 'oidc']),
         }),
@@ -434,9 +467,12 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         settings,
       });
       currentCleanup = cleanup;
+      const loginFailures = createLoginFailureAudit(ctx);
+      currentLoginFailures = loginFailures;
       return {
         bootstrap,
         cleanup,
+        loginFailures,
         profile: createProfileService(ctx, { recovery, mail, authz, blob, settings, sessions }),
         roles: createRoleService(ctx, { authz, users }),
         recovery,
