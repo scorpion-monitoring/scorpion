@@ -17,20 +17,21 @@ concurrency:
 
 jobs:
   reader:
-    name: ${{ matrix.reader }} (keys via ${{ matrix.keys }})
+    name: ${{ matrix.reader }} on ${{ matrix.os }} with ${{ matrix.browser }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { reader: voiceover, os: macos-latest, browser: webkit, keys: page }
-          - { reader: voiceover, os: macos-latest, browser: webkit, keys: reader }
-          - { reader: nvda, os: windows-latest, browser: chromium, keys: page }
-          - { reader: nvda, os: windows-latest, browser: chromium, keys: reader }
+          - { reader: voiceover, os: macos-26, browser: webkit }
+          - { reader: voiceover, os: macos-26, browser: chromium }
+          - { reader: voiceover, os: macos-15, browser: webkit }
+          - { reader: voiceover, os: macos-15, browser: chromium }
+          - { reader: nvda, os: windows-latest, browser: chromium }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
       SCREEN_READER: ${{ matrix.reader }}
-      SR_KEYS: ${{ matrix.keys }}
+      SR_BROWSER: ${{ matrix.browser }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -41,7 +42,7 @@ jobs:
           pnpm --filter @scorpion/web exec guidepup install "$SCREEN_READER"
       - name: Install the browser
         shell: bash
-        run: pnpm --filter @scorpion/web exec playwright install ${{ matrix.browser }}
+        run: pnpm --filter @scorpion/web exec playwright install "$SR_BROWSER"
       - name: Run the spike (repeated, no retries)
         shell: bash
         working-directory: apps/web
@@ -49,6 +50,6 @@ jobs:
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: screen-reader-${{ matrix.reader }}-${{ matrix.keys }}
+          name: screen-reader-${{ matrix.reader }}-${{ matrix.os }}-${{ matrix.browser }}
           path: apps/web/playwright-report
           retention-days: 7

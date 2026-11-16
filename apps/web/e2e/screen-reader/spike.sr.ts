@@ -11,8 +11,11 @@ interface Reader {
   navigateToWebContent(): Promise<void>;
 }
 
-/** `page`: keys go to the browser (CDP), the reader only listens. `reader`: keys go through the reader. */
-const KEYS = process.env.SR_KEYS === 'reader' ? 'reader' : 'page';
+/**
+ * `reader` (the default): keys go through the reader, as a person's would. `page`: keys go to the browser over
+ * CDP and the reader only listens; round 1 showed NVDA hears nothing that way.
+ */
+const KEYS = process.env.SR_KEYS === 'page' ? 'page' : 'reader';
 
 interface Step {
   name: string;
@@ -29,7 +32,7 @@ const STEPS: Step[] = [
   },
   { name: 'Down to Stage', keys: ['ArrowDown'], expect: [/stage/i] },
   { name: 'Up to Consortium', keys: ['ArrowUp'], expect: [/consortium/i] },
-  { name: 'Enter opens Consortium', keys: ['Enter'], expect: [/de\.?nbi/i, /12/] },
+  { name: 'Enter opens Consortium', keys: ['Enter'], expect: [/de( dot |\.)?nbi/i, /12/] },
   {
     name: 'Space chooses de.NBI',
     keys: ['Space'],
@@ -51,8 +54,11 @@ async function heard(reader: Reader, from: number, wanted: RegExp[], timeout = 6
 }
 
 async function path(page: Page, reader: Reader, testInfo: TestInfo) {
-  await page.goto('/?scene=sr-spike', { waitUntil: 'load' });
-  await expect(page.getByRole('heading', { name: 'Screen reader spike' })).toBeVisible();
+  // Round 1: under VoiceOver, WebKit never fired `load`; wait for the heading instead.
+  await page.goto('/?scene=sr-spike', { waitUntil: 'commit', timeout: 60_000 });
+  await expect(page.getByRole('heading', { name: 'Screen reader spike' })).toBeVisible({
+    timeout: 60_000,
+  });
   await reader.navigateToWebContent();
   await page.getByRole('button', { name: 'Before' }).focus();
 
@@ -74,6 +80,11 @@ async function path(page: Page, reader: Reader, testInfo: TestInfo) {
   console.log(text);
   await testInfo.attach('spoken-log.json', { body: text, contentType: 'application/json' });
 }
+
+// Round 1 captured only the first phrase of each command (`initial`): the live region, which speaks after it,
+// was never in the log. `true` captures everything that is said.
+voiceOverTest.use({ voiceOverStartOptions: { capture: true } });
+nvdaTest.use({ nvdaStartOptions: { capture: true } });
 
 if (process.env.SCREEN_READER === 'voiceover') {
   voiceOverTest('combobox path under VoiceOver', async ({ page, voiceOver }, testInfo) => {
