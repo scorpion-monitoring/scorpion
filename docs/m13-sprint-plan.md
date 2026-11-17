@@ -160,20 +160,23 @@ A live connection to the legacy stores; importing API keys; a mapping editor in 
 - Gate 4's "final migration run" moves to the cutover the maintainer chooses (decision 11).
 - A note in `FEATURES.md` §1 that it describes the PostgreSQL application, and that the application in use is `ipk-bit/scorpion` (Neo4j, InfluxDB, Keycloak).
 
-## 13. Decisions (open)
+## 13. Decisions
 
-1. **Is `ipk-bit/scorpion` the only source?** Did the PostgreSQL application of `FEATURES.md` ever hold production data? _Recommended:_ the plan assumes not.
-2. **Snapshots.** Who fetches them (an administrator's API key of the legacy instance), where they stay, and may sprint 1 have one for discovery (only counts and spellings go into the plan)? Are the S3 backups complete and current enough to be the source of the measurements? _Recommended:_ the maintainer fetches one at the start of sprint 1 and one for the rehearsal; the S3 backups are the cross-check.
+Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; the others are open until the sprint that needs them.
+
+1. **Is `ipk-bit/scorpion` the only source?** Did the PostgreSQL application of `FEATURES.md` ever hold production data? _Recommended:_ the plan assumes not. **Answer (maintainer, 2026-11-17): `ipk-bit/scorpion` is the only source.**
+2. **Snapshots.** Who fetches them (an administrator's API key of the legacy instance), where they stay, and may sprint 1 have one for discovery (only counts and spellings go into the plan)? Are the S3 backups complete and current enough to be the source of the measurements? _Recommended:_ the maintainer fetches one at the start of sprint 1 and one for the rehearsal; the S3 backups are the cross-check. **Answer (maintainer, 2026-11-17): the maintainer fetches; the API is the source of the measurements, and the S3 backups are not needed as a cross-check** (`--measurements` stays an optional input of `discover`, since the files have the same shape).
 3. **The OIDC issuer.** Which issuer gave the `sub` in `USER.id` (the Keycloak realm, or LS-AAI directly), and which provider will the new instance use? Users keep their accounts only if the issuer is the same. _Recommended:_ configure the same issuer in the new instance.
 4. **Admin role.** The `admin` property of `USER` (what `GET /aai/users` returns and most of the code reads), or Keycloak's role mappings (which the registration routes check)? _Recommended:_ the property, as the API gives it; the report lists every administrator for a check by eye.
 5. **API keys.** Not imported, and every user told to create a new token (the plan; the API cannot list the holders), or imported from a database read? _Recommended:_ not imported: they were stored in plain text.
 6. **`HAS_KPIS` without `DEFINES`.** Which necessity? _Recommended:_ `mandatory`, reported.
-7. **Slugs that break the rule.** A new slug from the mapping; keep the legacy abbreviation anywhere? _Recommended:_ the mapping gives the slug; the report pairs old and new.
-8. **Publication.** Every service private (M7's rule) or published as in the legacy catalogue? _Recommended:_ published, since the legacy catalogue showed every service; a mapping switch.
+7. **Slugs that break the rule.** A new slug from the mapping; keep the legacy abbreviation anywhere? _Recommended:_ the mapping gives the slug; the report pairs old and new. **Answer (maintainer, 2026-11-17): the tool derives the slug from the abbreviation (`deriveSlug`); the mapping may override it; the report pairs old and new.**
+8. **Publication.** Every service private (M7's rule) or published as in the legacy catalogue? _Recommended:_ published, since the legacy catalogue showed every service; a mapping switch. **Answer (maintainer, 2026-11-17): private, M7's rule; the tool never calls `setPublication`.**
 9. **A value for a KPI the service no longer has.** Add the KPI to the service as optional (the plan), or drop the value? _Recommended:_ add, so no value is lost.
 10. **SQLite `users.db`.** Ignore it? _Recommended:_ ignore; no route reads it.
 11. **When to cut over.** The legacy application has no maturity, onboarding, bibliometrics or announcements, so nothing waits for M14 to M17. Cut over after Gate 3, or at Gate 4 as planned? _Recommended:_ after Gate 3.
 12. **User subjects.** `GET /aai/users` has no user id, and the OIDC subject is what lets a user keep their account. Options: (a) one read-only query over Neo4j's HTTP endpoint (`MATCH (u:USER) RETURN u.id, u.username`), (b) the user list of Keycloak's admin API (id, username, address), (c) migrate users without an identity and link it at their first sign-in by a verified address (a new feature of `core.identity` and a risk of account takeover; not recommended). _Recommended:_ (a) or (b), whichever the maintainer can run; the tool takes the answer as a two-column file.
+13. **Months missing inside a KPI history.** The legacy API leaves out every value of 0 (`if record[label]` in `get_measurements_for_service`), and the S3 backups were made through it, so a 0 is a missing month in both (maintainer, 2026-11-17). A missing month can also be a month nobody reported. Sprint 2 needs the rule: write 0 for every month missing between a KPI's first and last point of a service (reported per service and KPI), or leave the months empty? `discover` counts them ("months missing inside a KPI history"). _Recommended:_ decide with the count from the discovery; fill only if no other reading of a gap is plausible.
 
 ## 14. Discovery and rehearsal results
 
