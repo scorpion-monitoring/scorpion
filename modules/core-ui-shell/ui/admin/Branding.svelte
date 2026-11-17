@@ -12,6 +12,7 @@
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import LogoWidget from './LogoWidget.svelte';
+  import ThemeColorsWidget from './ThemeColorsWidget.svelte';
   import type { SettingsFormData } from './loaders.ts';
 
   let { data }: { data: SettingsFormData } = $props();
@@ -73,7 +74,7 @@
     errorPrefix="values.branding"
     {busy}
     {conflict}
-    widgets={{ logo: LogoWidget }}
+    widgets={{ logo: LogoWidget, themeColors: ThemeColorsWidget }}
     onreload={() => {
       conflict = false;
       failure = undefined;

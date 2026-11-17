@@ -21,6 +21,13 @@ export interface Branding {
   logos: { light: string | null; dark: string | null };
   /** The legal pages that have a text: `terms`, `privacy`, `imprint`. */
   legalPages: ('terms' | 'privacy' | 'imprint')[];
+  /**
+   * The theme colours the web app's `GET /theme.css` writes, per theme: what the administrator set and the text colours derived for
+   * it (`#rrggbb` by daisyUI token). Empty objects when nothing is set: the built-in themes apply.
+   */
+  colors: { light: Record<string, string>; dark: Record<string, string> };
+  /** Changes whenever `colors` does (a hash of the stylesheet); `null` when nothing is set, so the page links no stylesheet. */
+  themeVersion: string | null;
 }
 
 export interface VocabularyTerm {

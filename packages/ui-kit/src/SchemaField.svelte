@@ -11,6 +11,7 @@
     childPointer,
     describeField,
     emptyValue,
+    errorsBelow,
     groupChildren,
     hasErrorsUnder,
     messagesFor,
@@ -155,7 +156,14 @@
 {#if node.fixed}
   <!-- A pinned value of a variant is part of the data, never of the form. -->
 {:else if Widget}
-  <Widget {node} {value} errors={own} {disabled} onchange={(next: unknown) => (value = next)} />
+  <Widget
+    {node}
+    {value}
+    errors={own}
+    errorsBelow={errorsBelow(errors, node.pointer)}
+    {disabled}
+    onchange={(next: unknown) => (value = next)}
+  />
 {:else if node.kind === 'string' || node.kind === 'password'}
   <FieldShell
     label={node.label}

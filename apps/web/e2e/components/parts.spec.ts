@@ -117,6 +117,12 @@ test.describe('Tabs', () => {
   });
 
   inBothThemes('[component:Tabs] axe', 'parts');
+  inBothThemes(
+    'the parts with a custom set of theme colours: axe',
+    'parts',
+    undefined,
+    'colors=custom',
+  );
 });
 
 test.describe('Breadcrumb', () => {

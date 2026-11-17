@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { resolveSettings } from '@scorpion/kernel';
 import { renderMarkdown } from '@scorpion/sanitize';
+import { themeOverrides, themeStylesheet } from '@scorpion/contracts/theme-colors';
 import {
   DEFAULT_MAIL_FROM,
   LEGAL_PAGES,
@@ -39,6 +40,19 @@ const TITLES: Record<LegalPage, string> = {
 
 const RENDER_CACHE_SIZE = 16;
 
+/** The colours the stylesheet writes, and a version that changes with them (null when nothing is set). */
+function theme(colors: unknown): Pick<Branding, 'colors' | 'themeVersion'> {
+  const overrides = themeOverrides(colors);
+  const empty =
+    Object.keys(overrides.light).length === 0 && Object.keys(overrides.dark).length === 0;
+  return {
+    colors: overrides,
+    themeVersion: empty
+      ? null
+      : createHash('sha256').update(themeStylesheet(colors)).digest('hex').slice(0, 16),
+  };
+}
+
 export function createBrandingService(settings: SettingsInternals): BrandingService {
   // Rendering is the expensive part; the key is the text itself (hashed), so an edit is a new entry.
   const rendered = new Map<string, string>();
@@ -61,6 +75,7 @@ export function createBrandingService(settings: SettingsInternals): BrandingServ
         imprintUrl: branding.imprintUrl ?? null,
         logos: { light: branding.logos.light ?? null, dark: branding.logos.dark ?? null },
         legalPages: LEGAL_PAGES.filter((page) => (branding.legal[page] ?? '').trim() !== ''),
+        ...theme(branding.colors),
       };
     },
 

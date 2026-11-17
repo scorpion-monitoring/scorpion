@@ -108,12 +108,16 @@ export const childPointer = (parent: string, segment: string | number) =>
 /**
  * The pointer a server message names. The API reports `sessions.absoluteDays` (dotted, with `0` for an
  * array index); a JSON pointer (`/sessions/absoluteDays`) is accepted too. `prefix` is what the API puts in
- * front (`values` for a settings body) and is dropped. A path that does not start with the prefix is kept.
+ * front (`values` for a settings body, `values.branding` for one group of it) and is dropped. A path that does not start with the prefix is kept.
  */
 export function pointerOf(path: string, prefix?: string): string {
   if (path.startsWith('/')) return path;
   let segments = path === '' ? [] : path.split('.');
-  if (prefix !== undefined && segments[0] === prefix) segments = segments.slice(1);
+  // The prefix may have several segments (`values.branding` for one group of a settings body).
+  const front = prefix === undefined || prefix === '' ? [] : prefix.split('.');
+  if (front.length > 0 && front.every((segment, index) => segments[index] === segment)) {
+    segments = segments.slice(front.length);
+  }
   return segments.map((segment) => `/${pointerSegment(segment)}`).join('');
 }
 
@@ -145,6 +149,18 @@ export function messagesFor(
     if (other.startsWith(`${pointer}/`)) own.push(...messages);
   }
   return own;
+}
+
+/** The messages under `pointer` (not at it), keyed by the rest of their pointer (`/light/primary` under `/colors`). */
+export function errorsBelow(
+  errors: ReadonlyMap<string, readonly string[]>,
+  pointer: string,
+): Map<string, readonly string[]> {
+  const below = new Map<string, readonly string[]>();
+  for (const [other, messages] of errors) {
+    if (other.startsWith(`${pointer}/`)) below.set(other.slice(pointer.length), messages);
+  }
+  return below;
 }
 
 /** True when the pointer, or anything below it, has a message. A fieldset uses it to open and to say "has errors". */

@@ -23,6 +23,7 @@ import {
 import { createBrandingService, type BrandingService } from './service/branding.ts';
 import { createSecretsService, type Cipher, type SecretsInternals } from './service/secrets.ts';
 import { createSettingsService, type SettingsInternals } from './service/settings.ts';
+import { themeColorCheck } from './service/theme-colors.ts';
 import {
   createVocabularyService,
   VOCABULARY_REGISTRY,
@@ -169,7 +170,11 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
       const { ring, problems } = loadKeyRing(options.env ?? process.env);
       if (!ring) throw new KernelStartupError('Cannot start core.settings:', problems);
       const authz = ctx.deps['core.authz'];
-      const settings = createSettingsService(ctx, { authz }, options);
+      const settings = createSettingsService(
+        ctx,
+        { authz },
+        { ...options, check: themeColorCheck },
+      );
       const secrets = createSecretsService(ctx, { authz, keys: ring, cipher: options.cipher });
       const vocabularies = createVocabularyService(ctx, { authz });
       await vocabularies.seed();

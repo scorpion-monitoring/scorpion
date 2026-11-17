@@ -62,6 +62,8 @@
       imprintUrl: null,
       logos: { light: null, dark: null },
       legalPages: [],
+      colors: { light: {}, dark: {} },
+      themeVersion: null,
     }),
     locale: () => locale,
     localPath: (candidate) => (typeof candidate === 'string' ? candidate : null),

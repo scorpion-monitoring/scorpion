@@ -26,6 +26,7 @@
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
   import { builtInFavicon, builtInLogos } from '#lib/builtin-logos.ts';
   import { logoSources } from '#lib/logos.ts';
+  import { themeHref } from '#lib/theme-link.ts';
   import { shellMessages } from '#lib/messages.ts';
   import { forwardWizardExtensions } from '#lib/wizard-extensions.ts';
   import { uiModules } from '../generated/ui.ts';
@@ -184,6 +185,7 @@
     // Under a base path the build's address may already carry it (the server saw it in the request); it is never added twice.
     return href((stripBase(basePath, pathname) ?? pathname) + search);
   };
+  const theme = $derived(themeHref(brand, href));
   const logos = $derived(
     logoSources(
       brand.logos,
@@ -196,6 +198,8 @@
 <svelte:head>
   <title>{brand.instanceName}</title>
   <link rel="icon" type="image/png" href={assetHref(builtInFavicon)} />
+  <!-- The administrator's theme colours (ADR-0051), only when some are set: a stylesheet from this origin, never inline style. -->
+  {#if theme}<link rel="stylesheet" href={theme} />{/if}
 </svelte:head>
 
 <a

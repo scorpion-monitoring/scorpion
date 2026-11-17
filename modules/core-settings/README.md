@@ -259,15 +259,16 @@ contributes: {
 
 The `branding` group of this module's settings, saved with `PUT /settings/core.settings` like any setting:
 
-| Key                                            | Default              | Meaning                                                                                                                        |
-| ---------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `branding.productName`                         | `Scorpion`           | What the software is called ("Powered by …"); the one place in code that says it                                               |
-| `branding.instanceName`                        | the product name     | What this instance calls itself (headers, mails)                                                                               |
-| `branding.mailFrom`                            | `no-reply@localhost` | The `From` address of mails. Was `mailFrom` of `core.identity`                                                                 |
-| `branding.contactEmail`                        | none                 | A public contact address                                                                                                       |
-| `branding.imprintUrl`                          | none                 | An `http(s)` link to an imprint kept elsewhere                                                                                 |
-| `branding.logos.light`, `.dark`                | none                 | The SHA-256 of an uploaded file (`POST /files` of [core.blob](../core-blob/README.md)); `dark` falls back to `light` in the UI |
-| `branding.legal.terms`, `.privacy`, `.imprint` | none                 | Markdown, at most 100 000 characters each                                                                                      |
+| Key                                            | Default              | Meaning                                                                                                                         |
+| ---------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `branding.productName`                         | `Scorpion`           | What the software is called ("Powered by …"); the one place in code that says it                                                |
+| `branding.instanceName`                        | the product name     | What this instance calls itself (headers, mails)                                                                                |
+| `branding.mailFrom`                            | `no-reply@localhost` | The `From` address of mails. Was `mailFrom` of `core.identity`                                                                  |
+| `branding.contactEmail`                        | none                 | A public contact address                                                                                                        |
+| `branding.imprintUrl`                          | none                 | An `http(s)` link to an imprint kept elsewhere                                                                                  |
+| `branding.logos.light`, `.dark`                | none                 | The SHA-256 of an uploaded file (`POST /files` of [core.blob](../core-blob/README.md)); `dark` falls back to `light` in the UI  |
+| `branding.legal.terms`, `.privacy`, `.imprint` | none                 | Markdown, at most 100 000 characters each                                                                                       |
+| `branding.colors.light`, `.dark`               | none                 | The theme colours, by daisyUI token (`primary`, `primary-content`, … `error-content`), `#rrggbb` only ([below](#theme-colours)) |
 
 - **Reading it from code:** `ctx.deps['core.settings'].getBranding()` gives the effective values (names and sender with
   their fallbacks); `{ fresh: true }` skips this process's cache. `core.identity` uses it for the name and sender of mails.
@@ -278,6 +279,26 @@ The `branding` group of this module's settings, saved with `PUT /settings/core.s
   keeps their references in step from `settings.changed@1`.
 - **Upgrading.** `instanceName` and `mailFrom` of the stored `core.identity` settings are moved into `branding` by
   migration `0002_branding_from_identity` (a value already in `branding` wins). Only databases of sprint-3 builds have any.
+
+### Theme colours
+
+`branding.colors` holds the colours of the two themes of the web app (`scorpionlight`, `scorpiondark`; M12a sprint 4, [ADR-0051](../../docs/adr/0051-theme-stylesheet-route.md)).
+Each of the 20 daisyUI tokens is optional per theme; an unset token keeps the built-in colour of `apps/web/src/app.css`.
+
+- **Values are data.** The schema accepts `#rrggbb` and the token names only (a strict object): `red;}body{…}`, `</style>`, a
+  `url(…)` or an unknown name is a 422 at save. The maths and the token list are one module shared with the web app and the
+  admin screen, `@scorpion/contracts/theme-colors`.
+- **Contrast is checked on save** (WCAG AA), per theme, inside the transaction of the save: a set with a failing pair is a 422
+  naming the theme and the pair (`In the dark theme, error-content on error is 1.00:1, needs 4.5:1 (WCAG AA).`, at
+  `values.branding.colors.dark`) and nothing of the save is written. The pairs are `CONTRAST_PAIRS`: each content colour on its
+  colour, `base-content` on `base-100`, `-200` and `-300`, `primary`, `error` and `warning` as text (4.5:1), and the primary
+  focus ring on `base-200` and `base-300` (3:1). A save that leaves the colours as they were is not measured again, so a later
+  change of the built-in colours never blocks a save of another setting. `seedSettings` and `seedSettingKey` are checked too.
+  The check is not in the schema on purpose: a read drops a stored key the schema refuses, and that would drop all of `branding`.
+- **Derived text colours.** A content token left unset whose colour is set (for `base-content`: any of the three surfaces) is
+  black or white, whichever reads better on the worst of its surfaces. The check measures the derived colour.
+- **Reading.** `getBranding()` (and `GET /branding`) carries `colors` (what was set plus the derived text colours, per theme)
+  and `themeVersion`, a hash of the stylesheet that is `null` when nothing is set. The web app serves them as `GET /theme.css`.
 
 ## Events
 

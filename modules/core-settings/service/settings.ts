@@ -99,11 +99,23 @@ export function fieldProblems(error: z.ZodError, prefix = ''): FieldProblem[] {
   }));
 }
 
+/**
+ * A rule a module's settings must keep that its schema cannot say (the contrast of the theme colours of core.settings). It gets the
+ * values about to be stored and those stored before, inside the transaction, and returns the problems; any problem refuses the save.
+ */
+export type SettingsCheck = (moduleId: string, values: unknown, before: unknown) => FieldProblem[];
+
 export function createSettingsService(
   ctx: ModuleContext,
   deps: { authz: Pick<AuthzService, 'require'> },
-  options: { cacheTtlMs?: number; now?: () => number } = {},
+  options: { cacheTtlMs?: number; now?: () => number; check?: SettingsCheck } = {},
 ): SettingsInternals {
+  const check: SettingsCheck = options.check ?? (() => []);
+  /** Refuses values that break a rule of `check`. Called inside the transaction, so a refusal writes nothing. */
+  const enforce = (moduleId: string, values: unknown, before: unknown) => {
+    const problems = check(moduleId, values, before);
+    if (problems.length > 0) throw new Invalid('The settings are not valid.', problems);
+  };
   const ttl = options.cacheTtlMs ?? SETTINGS_CACHE_TTL_MS;
   const clock = options.now ?? Date.now;
   const cache = new Map<string, CacheEntry>();
@@ -195,6 +207,7 @@ export function createSettingsService(
         );
       }
       const seeded = await ctx.db.tx(async (tx) => {
+        enforce(moduleId, values, undefined);
         const inserted = await tx
           .insert(setting)
           .values({ moduleId, value: values, version: 1, updatedBy: null })
@@ -229,6 +242,7 @@ export function createSettingsService(
         if (current && key in stored) return false;
         const version = (current?.version ?? 0) + 1;
         const merged = { ...stored, [key]: value };
+        enforce(moduleId, merged, current?.value);
         if (current) {
           await tx
             .update(setting)
@@ -279,6 +293,7 @@ export function createSettingsService(
         }
         const keys = changedKeys(current?.value, input.values);
         if (current && keys.length === 0) return { keys, version: current.version };
+        enforce(moduleId, input.values, current?.value);
         const version = (current?.version ?? 0) + 1;
         if (current) {
           await tx
