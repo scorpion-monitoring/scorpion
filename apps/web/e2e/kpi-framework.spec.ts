@@ -505,8 +505,9 @@ test.describe('the calls the KPI parts add', () => {
     // A second visit asks for the vocabularies of nobody (kept for the session): the client navigates inside the app.
     seen.length = 0;
     await page.getByRole('link', { name: 'Services' }).first().click();
+    // The catalogue searches as one types (sprint 3 of M12a): no button.
     await page.getByRole('searchbox', { name: 'Search by name or short name' }).fill(tag);
-    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL(new RegExp(`q=${tag}`));
     await page.getByRole('link', { name: `${tag} service` }).click();
     await expect(page.getByTestId('service-kpis').getByText(w.first.name)).toBeVisible();
     test.info().annotations.push({
