@@ -141,6 +141,13 @@ export interface Kernel {
     options: { password?: string; allowProduction?: boolean },
     io: Pick<CommandIo, 'out'>,
   ): Promise<Record<string, JobResult>>;
+  /**
+   * Loader step 5 alone, for a trusted tool that writes through the services (`tools/migrate-legacy`, ADR-0052): builds
+   * every module's services and nothing else. It never migrates (it throws `KernelStartupError` naming the modules when
+   * a migration is pending), mounts no routes, announces no `system.ready` (whose handlers may write) and starts no
+   * workers. Read the services from `services` afterwards.
+   */
+  buildServices(): Promise<void>;
   /** Loader step 2 alone: apply pending migrations. */
   migrate(): Promise<MigrationReport>;
   /** Modules whose migrations have not all been applied. Empty when the database is ready. */
@@ -370,11 +377,26 @@ export function createKernel(options: KernelOptions): Kernel {
       { profile: profile.name, modules: profile.modules.map((module) => module.id) },
       'permissions, settings, events and registries registered',
     ); // steps 3 and 4 ran in createKernel()
+    await buildModuleServices(); // step 5
+  }
+
+  async function buildModuleServices(): Promise<void> {
     for (const module of profile.modules) {
-      // step 5
       if (module.manifest.services)
         services.set(module.id, await module.manifest.services(contextFor(module)));
     }
+  }
+
+  async function buildServices(): Promise<void> {
+    await checkSchemas();
+    const pending = await pendingMigrations(pool, targets());
+    if (pending.length > 0) {
+      throw new KernelStartupError(
+        'Migrations are pending; apply them first (scorpion migrate):',
+        pending.map(({ module, pending: count }) => `${module}: ${count} migration(s)`),
+      );
+    }
+    await buildModuleServices();
   }
 
   const commands = profile.modules.flatMap((module) =>
@@ -459,6 +481,7 @@ export function createKernel(options: KernelOptions): Kernel {
     })),
     runCommand,
     runDemoSeed,
+    buildServices,
     rateLimiter: createRateLimiter(db),
     settingsOf(moduleId) {
       if (!moduleById.has(moduleId)) {
