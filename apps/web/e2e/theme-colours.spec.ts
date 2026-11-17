@@ -89,8 +89,13 @@ test.describe('the theme stylesheet', () => {
       // The system's light theme, then its dark theme, then a choice by hand against the system.
       expect(await variable(page, '--color-primary')).toBe(CUSTOM_COLOURS.light.primary);
       expect(await variable(page, '--color-base-content')).toBe('#000000'); // derived
+      // The logos' switch follows the theme, whatever its colours: the light logo on a light page, the dark one on a dark page.
+      await expect(page.locator('header img.logo-light')).toBeVisible();
+      await expect(page.locator('header img.logo-dark')).toBeHidden();
       await page.emulateMedia({ colorScheme: 'dark' });
       expect(await variable(page, '--color-primary')).toBe(CUSTOM_COLOURS.dark.primary);
+      await expect(page.locator('header img.logo-dark')).toBeVisible();
+      await expect(page.locator('header img.logo-light')).toBeHidden();
       expect(await variable(page, '--color-info')).toBe('#00e5ff'); // not set: the built-in dark value, not a light one
       await page.emulateMedia({ colorScheme: 'light' });
       await page.evaluate(() => (document.documentElement.dataset.theme = 'scorpiondark'));

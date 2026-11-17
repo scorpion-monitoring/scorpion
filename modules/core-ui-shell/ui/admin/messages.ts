@@ -67,7 +67,7 @@ export const adminMessages: UiMessages = {
     'admin.colors.custom.one': '1 colour set; the others are built in or derived.',
     'admin.colors.custom.other': '{count} colours set; the others are built in or derived.',
     'admin.colors.pick': '{label}: pick a colour',
-    'admin.colors.format': 'A colour is # and six hex digits, such as #0a2540.',
+    'admin.colors.format': 'A colour is # and six hex digits: #rrggbb.',
     'admin.colors.set': 'Set.',
     'admin.colors.derived': 'Derived: {color} (the more readable of black and white).',
     'admin.colors.default': 'Built in: {color}.',
@@ -235,7 +235,7 @@ export const adminMessages: UiMessages = {
     'admin.colors.custom.other':
       '{count} Farben gesetzt; die anderen sind eingebaut oder abgeleitet.',
     'admin.colors.pick': '{label}: Farbe wählen',
-    'admin.colors.format': 'Eine Farbe ist # mit sechs Hex-Ziffern, etwa #0a2540.',
+    'admin.colors.format': 'Eine Farbe ist # mit sechs Hex-Ziffern: #rrggbb.',
     'admin.colors.set': 'Gesetzt.',
     'admin.colors.derived': 'Abgeleitet: {color} (das besser lesbare von Schwarz und Weiß).',
     'admin.colors.default': 'Eingebaut: {color}.',

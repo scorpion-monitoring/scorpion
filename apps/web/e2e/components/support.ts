@@ -3,7 +3,9 @@
 // the application's policy). A component's spec has a test tagged `[component:<Name>] keyboard` and one tagged
 // `[component:<Name>] axe`; `coverage.test.ts` fails for a component of ui-kit that lacks either.
 import { expect, test as base, type Page } from '@playwright/test';
+import { themeStylesheet } from '@scorpion/contracts/theme-colors';
 import { violations } from '../support/a11y.ts';
+import { CUSTOM_COLOURS } from '../support/theme.ts';
 
 export { expect };
 
@@ -25,6 +27,10 @@ export const test = base.extend<{ scene: (name: string, options?: SceneOptions) 
           ),
         );
       });
+      // `?colors=custom` (harness/main.ts) links `./theme.css`: it is the sheet the web app would serve for the custom set (ADR-0051).
+      await page.route('**/theme.css', (route) =>
+        route.fulfill({ contentType: 'text/css', body: themeStylesheet(CUSTOM_COLOURS) }),
+      );
       // A colour that is still fading in when axe looks is not what a visitor sees.
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await use(async (name, options = {}) => {
