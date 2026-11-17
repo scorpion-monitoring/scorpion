@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 import { adminApi } from './support/admin.ts';
-import { expect, test } from './support/fixtures.ts';
+import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
 import { applyThemeColours, CUSTOM_COLOURS } from './support/theme.ts';
 
 // M12a sprint 4: the administrator's theme colours reach the page as `GET /theme.css` from this origin (ADR-0051), linked by the layout
@@ -111,6 +111,73 @@ test.describe('the theme stylesheet', () => {
       expect(await variable(page2, '--color-primary')).toBe('#006da8');
     } finally {
       await after.close();
+    }
+  });
+
+  test('are edited in the branding screen: two tabs, a failing pair named before and at save, a good set applied, a reset', async ({
+    page,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    const api = await adminApi(playwright, baseURL, at);
+    const { restore } = await applyThemeColours(api, { light: {}, dark: {} });
+    try {
+      await signInThroughPage(page, at, admin);
+      await page.goto(at('/admin/settings/branding'));
+      const colours = page.getByRole('group', { name: 'Colours' });
+      const tabs = colours.getByRole('tablist', { name: 'Theme' });
+      await expect(tabs.getByRole('tab')).toHaveText(['Light theme', 'Dark theme']);
+      await expect(tabs.getByRole('tab', { name: 'Light theme' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      const panel = colours.getByRole('tabpanel');
+
+      // A primary too light for text on the page: the tab and the panel say so before anything is sent.
+      await panel.getByLabel('Primary', { exact: true }).fill('#29b6f6');
+      await expect(tabs.getByRole('tab', { name: 'Light theme (3 to fix)' })).toBeVisible();
+      await expect(panel.getByRole('status')).toContainText('Primary on Page: 2.15:1, needs 4.5:1');
+      await expect(panel.getByText('Derived: #000000', { exact: false }).first()).toBeVisible();
+
+      // The server refuses it with the pair named (the form's summary), and the light theme's tab stays open.
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('alert').filter({ hasText: 'WCAG AA' })).toContainText(
+        'In the light theme, primary on base-100 is 2.15:1, needs 4.5:1 (WCAG AA).',
+      );
+      await expect(tabs.getByRole('tab', { name: 'Light theme (3 to fix)' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      // The other tab can still be opened while the message stands.
+      await tabs.getByRole('tab', { name: 'Dark theme' }).click();
+      await expect(tabs.getByRole('tab', { name: 'Dark theme' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await expect(colours.getByRole('tabpanel')).toContainText('Built in: #00e5ff.');
+      await tabs.getByRole('tab', { name: /^Light theme/ }).click();
+
+      // A readable one is saved, and the page takes it at once.
+      await panel.getByLabel('Primary', { exact: true }).fill('#0f5c5c');
+      await expect(tabs.getByRole('tab', { name: 'Light theme' })).toBeVisible();
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByText('The settings were saved.')).toBeVisible();
+      await expect(page.locator('link[rel="stylesheet"][href*="theme.css?v="]')).toHaveCount(1);
+      await page.emulateMedia({ colorScheme: 'light' });
+      await expect.poll(() => variable(page, '--color-primary')).toBe('#0f5c5c');
+
+      // The reset of the light theme clears it; after the save the page links no sheet again.
+      await panel
+        .getByRole('button', { name: 'Reset the light theme to the built-in colours' })
+        .click();
+      await expect(panel.getByLabel('Primary', { exact: true })).toHaveValue('');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.locator('link[href*="theme.css"]')).toHaveCount(0);
+      await expect.poll(() => variable(page, '--color-primary')).toBe('#006da8');
+    } finally {
+      await restore();
+      await api.dispose();
     }
   });
 });

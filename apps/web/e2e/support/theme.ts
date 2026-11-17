@@ -64,16 +64,14 @@ async function save(api: AdminApi, colors: unknown): Promise<string | null> {
 }
 
 /**
- * Applies `colors` and returns the version and a function that puts back the colours stored before (call it in `finally`).
+ * Applies `colors` (none clears them) and returns the version (`null` for none) and a function that puts back the colours stored before (call it in `finally`).
  */
 export async function applyThemeColours(
   api: AdminApi,
   colors: unknown = CUSTOM_COLOURS,
-): Promise<{ version: string; restore: () => Promise<void> }> {
+): Promise<{ version: string | null; restore: () => Promise<void> }> {
   const before = await api.get<SettingsDocument>('/settings/core.settings');
   const previous = before.values.branding?.colors ?? { light: {}, dark: {} };
   const version = await save(api, colors);
-  if (version === null)
-    throw new Error('the colours were saved but the branding read has no version');
   return { version, restore: async () => void (await save(api, previous)) };
 }
