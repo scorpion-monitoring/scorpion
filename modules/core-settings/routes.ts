@@ -243,6 +243,18 @@ const brandingSchema = z.object({
   imprintUrl: z.string().nullable(),
   logos: z.object({ light: z.string().nullable(), dark: z.string().nullable() }),
   legalPages: z.array(z.enum(LEGAL_PAGES)),
+  colors: z
+    .object({
+      light: z.record(z.string(), z.string()),
+      dark: z.record(z.string(), z.string()),
+    })
+    .describe(
+      'The theme colours the web app writes into `/theme.css`, by daisyUI token (`#rrggbb`): the ones set and the text colours derived for them. Empty when none is set.',
+    ),
+  themeVersion: z
+    .string()
+    .nullable()
+    .describe('Changes with `colors`; null when no colour is set.'),
 });
 const legalSchema = z.object({
   page: z.enum(LEGAL_PAGES),

@@ -1600,6 +1600,17 @@ export interface paths {
                                 dark: string | null;
                             };
                             legalPages: ("terms" | "privacy" | "imprint")[];
+                            /** @description The theme colours the web app writes into `/theme.css`, by daisyUI token (`#rrggbb`): the ones set and the text colours derived for them. Empty when none is set. */
+                            colors: {
+                                light: {
+                                    [key: string]: string;
+                                };
+                                dark: {
+                                    [key: string]: string;
+                                };
+                            };
+                            /** @description Changes with `colors`; null when no colour is set. */
+                            themeVersion: string | null;
                         };
                     };
                 };

@@ -4,6 +4,12 @@
 // every module that shows or sends something with the instance's name needs it, and this module is
 // the one all of them can depend on (ADR-0018).
 import { z } from '@scorpion/contracts';
+import {
+  COLOR_TOKENS,
+  HEX_COLOR,
+  type ColorToken,
+  type ThemeMode,
+} from '@scorpion/contracts/theme-colors';
 
 /** One token bucket: a burst, then a steady rate per minute. */
 const bucket = z.strictObject({
@@ -35,6 +41,51 @@ const fileHash = z
   .string()
   .regex(/^[0-9a-f]{64}$/, 'must be the SHA-256 of an uploaded file (64 lower-case hex digits)');
 const legalText = z.string().max(MAX_LEGAL_TEXT);
+
+/** A colour of a theme: `#rrggbb` and nothing else, so a stored value can never be CSS (ADR-0051). */
+const hexColor = z.string().regex(HEX_COLOR, 'must be a colour as #rrggbb (six hex digits)');
+
+/** The labels the generated form shows for each daisyUI token. */
+const TOKEN_TITLES: Record<ColorToken, string> = {
+  primary: 'Primary',
+  'primary-content': 'Text on primary',
+  secondary: 'Secondary',
+  'secondary-content': 'Text on secondary',
+  accent: 'Accent',
+  'accent-content': 'Text on accent',
+  neutral: 'Neutral',
+  'neutral-content': 'Text on neutral',
+  'base-100': 'Page',
+  'base-200': 'Cards',
+  'base-300': 'Raised parts and borders',
+  'base-content': 'Text on the page',
+  info: 'Info',
+  'info-content': 'Text on info',
+  success: 'Success',
+  'success-content': 'Text on success',
+  warning: 'Warning',
+  'warning-content': 'Text on warning',
+  error: 'Error',
+  'error-content': 'Text on error',
+};
+
+/** One theme: each token optional; an unset token keeps the built-in colour, an unset text colour may be derived. */
+const themeColors = (mode: ThemeMode) =>
+  z
+    .strictObject(
+      Object.fromEntries(
+        COLOR_TOKENS.map((token) => [
+          token,
+          hexColor.optional().meta({ title: TOKEN_TITLES[token] }),
+        ]),
+      ) as Record<ColorToken, z.ZodOptional<typeof hexColor>>,
+    )
+    .prefault({})
+    .meta({
+      title: mode === 'light' ? 'Light theme' : 'Dark theme',
+      widget: 'themeColors',
+      mode,
+    });
 
 const brandingSchema = z.strictObject({
   /** The software's name, shown as "Powered by …" and used where no instance name is set. */
@@ -84,6 +135,18 @@ const brandingSchema = z.strictObject({
     })
     .prefault({})
     .meta({ title: 'Logos' }),
+  /**
+   * The colours of both themes (M12a sprint 4): any daisyUI token, `#rrggbb` only. Unset tokens keep the built-in themes of the web
+   * app. Every text and background pair must pass WCAG AA on save (the settings service checks it; `CONTRAST_PAIRS`).
+   */
+  colors: z
+    .strictObject({ light: themeColors('light'), dark: themeColors('dark') })
+    .prefault({})
+    .meta({
+      title: 'Colours',
+      description:
+        'The colours of the light and the dark theme. Leave a colour empty to keep the built-in one; leave a text colour empty to have black or white chosen for you. Every text must stay readable (WCAG AA, 4.5:1; 3:1 for focus rings): a set that fails is refused and the pair is named.',
+    }),
   /** Markdown, rendered on the server and sanitised. Raw HTML in it shows as text. */
   legal: z
     .strictObject({

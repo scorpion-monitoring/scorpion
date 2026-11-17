@@ -160,6 +160,8 @@ describe('GET /branding and GET /legal/{page}', () => {
       imprintUrl: null,
       logos: { light: null, dark: null },
       legalPages: [],
+      colors: { light: {}, dark: {} },
+      themeVersion: null,
     });
   });
 
@@ -180,6 +182,51 @@ describe('GET /branding and GET /legal/{page}', () => {
       legalPages: ['privacy'],
     });
     expect(JSON.stringify(reply.body)).not.toContain('registry@example.org');
+  });
+
+  it('carries the theme colours to anyone, without a session, with the derived text colours and a version', async () => {
+    const s = await start();
+    await save(s, { colors: { light: { primary: '#0f5c5c' } } });
+    const reply = await s.get('/branding'); // no session
+    expect(reply.status).toBe(200);
+    const body = reply.body as { colors: unknown; themeVersion: string | null };
+    expect(body.colors).toEqual({
+      light: { primary: '#0f5c5c', 'primary-content': '#ffffff' },
+      dark: {},
+    });
+    expect(body.themeVersion).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it('refuses a theme colour set that fails WCAG AA with 422, the pair named on the theme', async () => {
+    const s = await start();
+    const root = await admin(s);
+    const current = await s.get('/settings/core.settings', as(root));
+    const { version, values } = current.body as {
+      version: number;
+      values: Record<string, unknown>;
+    };
+    const reply = await s.call('PUT', '/settings/core.settings', {
+      ...as(root),
+      body: {
+        version,
+        values: { ...values, branding: { colors: { dark: { 'error-content': '#f87171' } } } },
+      },
+    });
+    expect(reply.status).toBe(422);
+    expect(reply.body).toMatchObject({
+      status: 422,
+      errors: [
+        {
+          in: 'body',
+          path: 'values.branding.colors.dark',
+          message: 'In the dark theme, error-content on error is 1.00:1, needs 4.5:1 (WCAG AA).',
+        },
+      ],
+    });
+    expect((await s.get('/branding')).body).toMatchObject({
+      colors: { dark: {} },
+      themeVersion: null,
+    });
   });
 
   it('serves a legal page to anyone, rendered and sanitised, and 404 for one without a text', async () => {
