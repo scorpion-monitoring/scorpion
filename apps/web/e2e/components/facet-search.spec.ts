@@ -6,8 +6,13 @@ import type { Page } from '@playwright/test';
 // ARIA snapshots and axe states are in the describe blocks per look.
 
 const live = (page: Page) => page.locator('[data-facet-status]');
+/**
+ * The address as the browser has it. Read from `window.location`, not from the scene's copy (which the scene writes a
+ * tick after a change): the harness's `goto` writes the location in the same task as the change, so once an action
+ * has been handled the location is current.
+ */
 const address = async (page: Page) =>
-  new URLSearchParams(await page.getByTestId('search').innerText());
+  new URLSearchParams(await page.evaluate(() => window.location.search));
 /** The count in a checkbox's name, "BioNet (7)" → 7. */
 const countOf = async (page: Page, name: RegExp) => {
   const label = await page
