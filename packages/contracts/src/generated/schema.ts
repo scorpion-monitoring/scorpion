@@ -9197,7 +9197,7 @@ export interface paths {
                              * @description The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).
                              * @enum {string}
                              */
-                            filterStyle: "sidebar" | "bar";
+                            filterStyle: "sidebar" | "bar" | "combined";
                         };
                     };
                 };
@@ -10434,7 +10434,7 @@ export interface paths {
                              * @description The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).
                              * @enum {string}
                              */
-                            filterStyle: "sidebar" | "bar";
+                            filterStyle: "sidebar" | "bar" | "combined";
                         };
                     };
                 };

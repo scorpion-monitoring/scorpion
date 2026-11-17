@@ -2,13 +2,13 @@
 import { z } from '@scorpion/contracts';
 
 /**
- * The looks of the catalogues' faceted search (the kit's `FacetSearch`), the ones an administrator may choose.
- * `combined` joins them only once its screen-reader gate passes (sprint 3 of M12a, item 6).
+ * The looks of the catalogues' faceted search (the kit's `FacetSearch`), all three permanent (sprint 3 of M12a).
+ * `combined` is offered, and the default, because its screen-reader gate passes (`.github/workflows/screen-reader.yml`).
  */
-export const CATALOGUE_FILTERS = ['sidebar', 'bar'] as const;
+export const CATALOGUE_FILTERS = ['sidebar', 'bar', 'combined'] as const;
 export type CatalogueFilters = (typeof CATALOGUE_FILTERS)[number];
 /** What an instance gets that has not chosen. */
-export const DEFAULT_CATALOGUE_FILTERS: CatalogueFilters = 'sidebar';
+export const DEFAULT_CATALOGUE_FILTERS: CatalogueFilters = 'combined';
 
 export const settingsSchema = z.strictObject({
   /**
@@ -30,7 +30,7 @@ export const settingsSchema = z.strictObject({
   catalogueFilters: z.enum(CATALOGUE_FILTERS).default(DEFAULT_CATALOGUE_FILTERS).meta({
     title: 'Look of the catalogue filters',
     description:
-      'How the search and the filters of the service catalogues look. “sidebar”: the filters as lists of checkboxes beside the table. “bar”: a search box with a row of filter buttons that open a list, and the chosen filters as chips. Both search as one types and behave the same; the choice applies to the signed-in and the public catalogue.',
+      'How the search and the filters of the service catalogues look. “combined”: one box for the name and the filters; the chosen filters are chips inside it, and clicking into it lists the filters. “bar”: a search box with a row of filter buttons that open a list, and the chosen filters as chips. “sidebar”: the filters as lists of checkboxes beside the table. All three search as one types and behave the same; the choice applies to the signed-in and the public catalogue. Instances that existed before this setting keep “sidebar”.',
   }),
 });
 
