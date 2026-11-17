@@ -57,6 +57,11 @@ export const adminMessages: UiMessages = {
     'admin.logo.tooBig': 'The file is larger than {count} MB.',
     'admin.colors.mode.light': 'light theme',
     'admin.colors.mode.dark': 'dark theme',
+    'admin.colors.tabs': 'Theme',
+    'admin.colors.tab.light': 'Light theme',
+    'admin.colors.tab.dark': 'Dark theme',
+    'admin.colors.tabProblems.one': '{theme} (1 to fix)',
+    'admin.colors.tabProblems.other': '{theme} ({count} to fix)',
     'admin.colors.builtIn':
       'The built-in colours. Set any of them to change it; leave a text colour empty to have black or white chosen.',
     'admin.colors.custom.one': '1 colour set; the others are built in or derived.',
@@ -219,6 +224,11 @@ export const adminMessages: UiMessages = {
     'admin.logo.tooBig': 'Die Datei ist größer als {count} MB.',
     'admin.colors.mode.light': 'helle Farbschema',
     'admin.colors.mode.dark': 'dunkle Farbschema',
+    'admin.colors.tabs': 'Farbschema',
+    'admin.colors.tab.light': 'Helles Farbschema',
+    'admin.colors.tab.dark': 'Dunkles Farbschema',
+    'admin.colors.tabProblems.one': '{theme} (1 zu beheben)',
+    'admin.colors.tabProblems.other': '{theme} ({count} zu beheben)',
     'admin.colors.builtIn':
       'Die eingebauten Farben. Setzen Sie eine, um sie zu ändern; lassen Sie eine Textfarbe leer, wird Schwarz oder Weiß gewählt.',
     'admin.colors.custom.one': '1 Farbe gesetzt; die anderen sind eingebaut oder abgeleitet.',

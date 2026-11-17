@@ -81,11 +81,7 @@ const themeColors = (mode: ThemeMode) =>
       ) as Record<ColorToken, z.ZodOptional<typeof hexColor>>,
     )
     .prefault({})
-    .meta({
-      title: mode === 'light' ? 'Light theme' : 'Dark theme',
-      widget: 'themeColors',
-      mode,
-    });
+    .meta({ title: mode === 'light' ? 'Light theme' : 'Dark theme' });
 
 const brandingSchema = z.strictObject({
   /** The software's name, shown as "Powered by …" and used where no instance name is set. */
@@ -144,6 +140,8 @@ const brandingSchema = z.strictObject({
     .prefault({})
     .meta({
       title: 'Colours',
+      // The admin screen draws both themes as two tabs of one control, with a preview and a reset each.
+      widget: 'themeColors',
       description:
         'The colours of the light and the dark theme. Leave a colour empty to keep the built-in one; leave a text colour empty to have black or white chosen for you. Every text must stay readable (WCAG AA, 4.5:1; 3:1 for focus rings): a set that fails is refused and the pair is named.',
     }),

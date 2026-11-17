@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The colours of one theme in the branding form (M12a sprint 4): one row per daisyUI token from the schema's own fields, a colour
-  // picker and a `#rrggbb` field each, the contrast pairs that would be refused (the same check the server runs on save), a reset to
-  // the built-in colours, and a preview. The preview is an SVG whose colours are `fill` attributes, not inline style, so the page's
+  // The colours of one theme, a tab of `ThemeColorsWidget` (M12a sprint 4): one row per daisyUI token from the schema's own fields, a
+  // colour picker and a `#rrggbb` field each, the contrast pairs that would be refused (the same check the server runs on save), a reset
+  // to the built-in colours, and a preview. The preview is an SVG whose colours are `fill` attributes, not inline style, so the page's
   // policy (no 'unsafe-inline') is untouched. Nothing here is sent until the form is saved.
   import { getShell, type WidgetProps } from '@scorpion/ui-kit';
   import {
@@ -15,7 +15,9 @@
     type ThemeMode,
   } from '@scorpion/contracts/theme-colors';
 
-  let { node, value, onchange, errors, disabled }: WidgetProps = $props();
+  // The server's messages are not repeated here: the live list below runs the same check and stays current while the person edits,
+  // and the form's summary at the top keeps what the server said.
+  let { node, value, onchange, disabled }: Omit<WidgetProps, 'errors'> = $props();
   const { t } = getShell();
   const id = $props.id();
 
@@ -136,11 +138,6 @@
         {/each}
       </ul>
     </div>
-  {/if}
-  {#if errors.length > 0}
-    <ul class="text-error list-disc ps-5 text-sm">
-      {#each errors as message (message)}<li>{message}</li>{/each}
-    </ul>
   {/if}
 
   <figure class="flex flex-col gap-1">
