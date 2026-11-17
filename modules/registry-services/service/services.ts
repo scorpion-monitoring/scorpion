@@ -21,11 +21,11 @@ import type {
   OrganisationsPublic,
   SchemaOrgProfile,
 } from '@scorpion/registry-organisations/public';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { ResolvedConfig } from '../config/validate.ts';
 import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/schema.ts';
 import {
-  DEFAULT_CATALOGUE_FILTERS,
+  CATALOGUE_FILTERS_SINCE,
   settingsSchema,
   type CatalogueFilters,
 } from '../settings-schema.ts';
@@ -358,9 +358,10 @@ export interface ServicesService {
    */
   catalogueFilters: () => Promise<CatalogueFilters>;
   /**
-   * The upgrade step of sprint 3 of M12a (decision Q4): an instance that already has services keeps the look it
-   * had (`sidebar`); a new one gets the default. Stores the key once, only when it is not stored, and never
-   * overwrites an administrator's choice. Trusted code, run at start (`system.ready`); checks no permission.
+   * The upgrade step of sprint 3 of M12a (decision Q4): an instance with a service created before the looks
+   * (`CATALOGUE_FILTERS_SINCE`) keeps the look it had: `sidebar` is stored once, only when the key is not stored, and
+   * an administrator's choice is never overwritten. A new instance writes nothing; the default applies. Trusted code,
+   * run at start (`system.ready`); checks no permission.
    */
   upgradeCatalogueFiltersAsSystem: () => Promise<'seeded' | 'kept'>;
   /** The SPDX search for the licence field; needs `…service.read`. */
@@ -1570,12 +1571,15 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     },
 
     async upgradeCatalogueFiltersAsSystem() {
-      const [existing] = await ctx.db.select({ id: service.id }).from(service).limit(1);
-      return deps.settings.seedSettingKey(
-        ctx.moduleId,
-        'catalogueFilters',
-        existing ? 'sidebar' : DEFAULT_CATALOGUE_FILTERS,
-      );
+      // An instance that existed before the looks did has a service from before them. A new instance has none, writes
+      // nothing (the default applies) and never will: its services all come later.
+      const [existing] = await ctx.db
+        .select({ id: service.id })
+        .from(service)
+        .where(lt(service.createdAt, CATALOGUE_FILTERS_SINCE))
+        .limit(1);
+      if (!existing) return 'kept';
+      return deps.settings.seedSettingKey(ctx.moduleId, 'catalogueFilters', 'sidebar');
     },
 
     async listPublicAsSystem(query) {

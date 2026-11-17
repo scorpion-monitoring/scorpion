@@ -7,6 +7,11 @@ import { z } from '@scorpion/contracts';
  */
 export const CATALOGUE_FILTERS = ['sidebar', 'bar', 'combined'] as const;
 export type CatalogueFilters = (typeof CATALOGUE_FILTERS)[number];
+/**
+ * When the looks came (sprint 3 of M12a). A service created before it marks an instance that had the catalogue's
+ * look before the setting existed; the upgrade step keeps `sidebar` for it (decision Q4).
+ */
+export const CATALOGUE_FILTERS_SINCE = new Date('2026-11-17T00:00:00Z');
 /** What an instance gets that has not chosen. */
 export const DEFAULT_CATALOGUE_FILTERS: CatalogueFilters = 'combined';
 

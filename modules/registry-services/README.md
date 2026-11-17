@@ -432,10 +432,11 @@ entry of each kind fails at load with the module's name in the message.
 | `allowPublic`        | on                                                        | On: Reviewers and Admin may make a service public and the public routes answer for public services. Off: a publication is 409 (an unpublication is allowed) and **every public address answers the 404 of an unknown id**, a service that is public included                                                                                                                       |
 | `catalogueFilters`   | `combined` (`sidebar` on an instance that existed before) | The look of the faceted search of both catalogues (`FacetSearch` of ui-kit): `combined` (one box for the name and the filters, chips inside it), `bar` (a row of filter buttons and chips) or `sidebar` (checkbox lists beside the table). Both answers of the lists carry it as `filterStyle`, so a member who may not read the settings and the anonymous public page get it too |
 
-**The upgrade step of `catalogueFilters`** (sprint 3 of M12a, decision Q4). On `system.ready` the module stores the key once,
-through `seedSettingKey()` of core.settings, only when it is not stored: `sidebar` for an instance that already has services
-(it keeps the look it had), the default for a new one. An administrator's choice is never overwritten, and the key is
-stored explicitly, so a later change of the default reaches only instances that start after it.
+**The upgrade step of `catalogueFilters`** (sprint 3 of M12a, decision Q4). On `system.ready` the module looks for a service
+created before the looks came (`CATALOGUE_FILTERS_SINCE`, 2026-11-17). Such an instance had the catalogue's look before the
+setting existed, so `sidebar` is stored once, through `seedSettingKey()` of core.settings, only when the key is not stored (an
+administrator's choice is never overwritten; the other stored keys stay). A new instance has no such service, writes nothing
+and gets the default `combined`; it never gets pinned later, because its services all come after the date.
 
 ## Events
 
