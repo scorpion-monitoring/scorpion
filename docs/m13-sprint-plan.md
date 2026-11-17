@@ -140,14 +140,14 @@ One pull request per sprint.
 
 ## 10. Risks
 
-| Risk                                                                                                           | Mitigation                                                                                                             |
-| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| The deployed legacy code differs from `5a92c31` (more properties, other spellings)                             | Discovery on a real snapshot first; the mapping file absorbs spellings without a code change                           |
-| The OIDC subjects do not match the new instance's issuer                                                       | Decision 3 before sprint 2; the dry run reports users whose issuer is unknown                                          |
-| Real data breaks many rules (slugs, usernames, two providers)                                                  | The report is per record and the mapping is data; repeat the dry run until it is clean (Gate 3)                        |
-| A large history makes the run slow                                                                             | Batches of 120 months per service; the run is idempotent, so it can be stopped and restarted                           |
-| The legacy API answers wrongly (the measurements route pages per InfluxDB table and starts at 2022 by default) | The fetch passes `start` and one large page and checks the count; the S3 backups and `compare` cross-check every value |
-| The snapshot and the report hold personal data and the keys                                                    | Mode 0600, never committed, deleted after the cutover (runbook); keys never leave the reader                           |
+| Risk                                                                                                           | Mitigation                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The deployed legacy code differs from `5a92c31` (more properties, other spellings)                             | Discovery on a real snapshot first; the mapping file absorbs spellings without a code change                                                |
+| The OIDC subjects do not match the new instance's issuer                                                       | Decision 3 before sprint 2; the dry run reports users whose issuer is unknown                                                               |
+| Real data breaks many rules (slugs, usernames, two providers)                                                  | The report is per record and the mapping is data; repeat the dry run until it is clean (Gate 3)                                             |
+| A large history makes the run slow                                                                             | Batches of 120 months per service; the run is idempotent, so it can be stopped and restarted                                                |
+| The legacy API answers wrongly (the measurements route pages per InfluxDB table and starts at 2022 by default) | The fetch passes `start` and one large page and checks the count; the S3 backups and `compare` cross-check every value                      |
+| The snapshot and the report hold personal data (names and addresses)                                           | Mode 0600, never committed, deleted after the cutover (runbook); the API key used for `fetch` is read from the environment and never logged |
 
 ## 11. Out of scope (goes to `docs/backlog.md`)
 
