@@ -381,7 +381,13 @@ test.describe('FacetSearch, look combined', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('listbox', { name: 'Filter by' })).toBeVisible();
     await expect(combobox).toHaveValue('');
-    await expect(page.getByRole('option', { name: 'Consortium, 1 chosen' })).toBeVisible();
+    const left = page.getByRole('option', { name: 'Consortium, 1 chosen' });
+    await expect(left).toBeVisible();
+    // The facet just left is the active option: a reader says where the person is.
+    await expect(combobox).toHaveAttribute(
+      'aria-activedescendant',
+      (await left.getAttribute('id'))!,
+    );
     await page.keyboard.press('Escape');
     await expect(combobox).toHaveAttribute('aria-expanded', 'false');
     await expect(combobox).toBeFocused();

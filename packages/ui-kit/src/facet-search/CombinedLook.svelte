@@ -133,9 +133,12 @@
   function back() {
     // Leaving a `facet:value` text puts back the search it stood in for (it was never sent).
     if (shortcut && !level) view.cancelText();
+    // The facet that was open becomes the active option, so a reader says where the person is now (NVDA said
+    // only the box when no option was active).
+    const left = view.definitions.findIndex((definition) => definition.id === level);
     level = undefined;
     filter = '';
-    active = -1;
+    active = left < 0 ? -1 : offers.length + left;
     input?.focus();
   }
 
