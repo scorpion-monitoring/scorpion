@@ -96,7 +96,6 @@ export const componentMessages: MessageBundles = {
     'kit.facetSearch.clearBox': 'Clear the search and the filters',
     'kit.facetSearch.offers': 'Matching values',
     'kit.facetSearch.offer': '{facet}: {value} ({count})',
-    'kit.facetSearch.noOffer': 'No filter value matches',
     'kit.facetSearch.openChip': 'Edit {chip}',
 
     'kit.chart.category': 'Category',
@@ -265,7 +264,6 @@ export const componentMessages: MessageBundles = {
     'kit.facetSearch.clearBox': 'Suche und Filter zurücksetzen',
     'kit.facetSearch.offers': 'Passende Werte',
     'kit.facetSearch.offer': '{facet}: {value} ({count})',
-    'kit.facetSearch.noOffer': 'Kein Filterwert passt',
     'kit.facetSearch.openChip': '{chip} bearbeiten',
 
     'kit.chart.category': 'Kategorie',

@@ -158,6 +158,12 @@
       }, SEARCH_DEBOUNCE_MS);
     },
     flushText,
+    cancelText() {
+      clearTimeout(timer);
+      timer = undefined;
+      held = false;
+      text = sent;
+    },
     endTyping() {
       flushText();
       typing = false;

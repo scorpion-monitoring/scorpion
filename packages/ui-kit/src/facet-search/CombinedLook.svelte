@@ -59,9 +59,11 @@
       ? matchingOffers(view.suggestions, view.text, view.state)
       : [],
   );
-  /** What the first level lists: the matching values while there is text, else the facets. */
-  const typing = $derived(!level && !shortcut && view.text.trim() !== '');
-  const firstLevel = $derived(typing ? offers.length : view.definitions.length);
+  /**
+   * The first level is one listbox: the matching values while there is text ("Matching values"), then the facets
+   * ("Filter by"), so a facet can be opened without giving up the name search. ↓ and ↑ run through both.
+   */
+  const firstLevel = $derived(offers.length + view.definitions.length);
 
   const chips = $derived(
     view.definitions.flatMap((definition) => {
@@ -106,9 +108,8 @@
   }
 
   function back() {
-    if (shortcut && !level) {
-      view.setText('');
-    }
+    // Leaving a `facet:value` text puts back the search it stood in for (it was never sent).
+    if (shortcut && !level) view.cancelText();
     level = undefined;
     filter = '';
     active = -1;
@@ -199,22 +200,21 @@
           }
           break;
         }
-        if (typing) {
+        if (active < offers.length) {
           if (event.key === 'Enter') {
             event.preventDefault();
-            const offer = offers[active];
-            if (offer) take(offer);
+            take(offers[active]!);
           }
         } else {
           event.preventDefault();
-          const facet = view.definitions[active];
+          const facet = view.definitions[active - offers.length];
           if (facet) void enter(facet.id);
         }
         break;
       case 'Escape':
+        // Closes the list; the typed search stays.
         event.preventDefault();
-        if (view.text && typing) view.setText('');
-        else close();
+        close();
         break;
     }
   }
@@ -232,6 +232,34 @@
     view.setText(value, { send: !known });
   }
 </script>
+
+{#snippet facetOptions()}
+  {#each view.definitions as definition, at (definition.id)}
+    {@const index = offers.length + at}
+    {@const count = chosenCount(definition.id)}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      id={optionId(index)}
+      role="option"
+      tabindex="-1"
+      aria-selected={index === active}
+      class={[
+        'flex cursor-pointer items-center gap-2 rounded px-2 py-1.5',
+        index === active && 'bg-base-200 outline-primary outline-2 -outline-offset-2',
+      ]}
+      onmousedown={(event) => event.preventDefault()}
+      onclick={() => void enter(definition.id)}
+      aria-label={count > 0
+        ? `${definition.label}, ${count} ${view.t('kit.facetSearch.chosen')}`
+        : undefined}
+    >
+      <span class="grow">{definition.label}</span>
+      {#if count > 0}<span class="badge badge-sm badge-primary" aria-hidden="true">{count}</span
+        >{/if}
+      <span aria-hidden="true">›</span>
+    </div>
+  {/each}
+{/snippet}
 
 <div class="flex flex-col gap-1">
   <label class="text-sm font-medium" for="{view.id}-search">{view.label}</label>
@@ -346,62 +374,55 @@
             filter={level ? filter : (shortcut?.value ?? '')}
             onback={back}
           />
-        {:else if typing}
-          {#if offers.length > 0}
-            <ul id={listId} role="listbox" aria-label={view.t('kit.facetSearch.offers')}>
-              {#each offers as offer, index (`${offer.facet.id}/${offer.option.value}`)}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <li
-                  id={optionId(index)}
-                  role="option"
-                  aria-selected={index === active}
-                  class={[
-                    'cursor-pointer rounded px-2 py-1.5',
-                    index === active && 'bg-base-200 outline-primary outline-2 -outline-offset-2',
-                  ]}
-                  onmousedown={(event) => event.preventDefault()}
-                  onclick={() => take(offer)}
-                >
-                  {view.t('kit.facetSearch.offer', {
-                    facet: offer.facet.label,
-                    value: offer.option.label,
-                    count: offer.option.count ?? 0,
-                  })}
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <p id={listId} class="px-2 py-1.5 text-sm opacity-70">
-              {view.t('kit.facetSearch.noOffer')}
-            </p>
-          {/if}
         {:else}
-          <ul id={listId} role="listbox" aria-label={view.t('kit.facetSearch.filterBy')}>
-            {#each view.definitions as definition, index (definition.id)}
-              {@const count = chosenCount(definition.id)}
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <li
-                id={optionId(index)}
-                role="option"
-                aria-selected={index === active}
-                class={[
-                  'flex cursor-pointer items-center gap-2 rounded px-2 py-1.5',
-                  index === active && 'bg-base-200 outline-primary outline-2 -outline-offset-2',
-                ]}
-                onmousedown={(event) => event.preventDefault()}
-                onclick={() => void enter(definition.id)}
-                aria-label={count > 0
-                  ? `${definition.label}, ${count} ${view.t('kit.facetSearch.chosen')}`
-                  : undefined}
-              >
-                <span class="grow">{definition.label}</span>
-                {#if count > 0}<span class="badge badge-sm badge-primary" aria-hidden="true"
-                    >{count}</span
-                  >{/if}
-                <span aria-hidden="true">›</span>
-              </li>
-            {/each}
-          </ul>
+          <div id={listId} role="listbox" aria-label={view.t('kit.facetSearch.filterBy')}>
+            {#if offers.length > 0}
+              <div role="group" aria-labelledby="{listId}-offers">
+                <div
+                  id="{listId}-offers"
+                  role="presentation"
+                  class="px-2 pt-1 text-xs font-semibold opacity-70"
+                >
+                  {view.t('kit.facetSearch.offers')}
+                </div>
+                {#each offers as offer, index (`${offer.facet.id}/${offer.option.value}`)}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <div
+                    id={optionId(index)}
+                    role="option"
+                    tabindex="-1"
+                    aria-selected={index === active}
+                    class={[
+                      'cursor-pointer rounded px-2 py-1.5',
+                      index === active && 'bg-base-200 outline-primary outline-2 -outline-offset-2',
+                    ]}
+                    onmousedown={(event) => event.preventDefault()}
+                    onclick={() => take(offer)}
+                  >
+                    {view.t('kit.facetSearch.offer', {
+                      facet: offer.facet.label,
+                      value: offer.option.label,
+                      count: offer.option.count ?? 0,
+                    })}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            {#if offers.length > 0}
+              <div role="group" aria-labelledby="{listId}-facets">
+                <div
+                  id="{listId}-facets"
+                  role="presentation"
+                  class="px-2 pt-1 text-xs font-semibold opacity-70"
+                >
+                  {view.t('kit.facetSearch.filterBy')}
+                </div>
+                {@render facetOptions()}
+              </div>
+            {:else}
+              {@render facetOptions()}
+            {/if}
+          </div>
         {/if}
       </div>
     {/if}

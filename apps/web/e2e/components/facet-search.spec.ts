@@ -405,7 +405,13 @@ test.describe('FacetSearch, look combined', () => {
     await open(scene, 'set=zero');
     await box(page).click();
     await page.keyboard.type('gaters');
-    const offers = page.getByRole('listbox', { name: 'Matching values' });
+    // The matching values come first, in a group of their own, above the facets ("Filter by"), in one listbox.
+    const offers = page
+      .getByRole('listbox', { name: 'Filter by' })
+      .getByRole('group', { name: 'Matching values' });
+    await expect(
+      page.getByRole('listbox', { name: 'Filter by' }).getByRole('group', { name: 'Filter by' }),
+    ).toBeVisible();
     await expect(
       offers.getByRole('option', { name: /^Provider: IPK Gatersleben \(\d+\)$/ }),
     ).toBeVisible();
@@ -445,6 +451,40 @@ test.describe('FacetSearch, look combined', () => {
     await page.keyboard.press('Escape');
     await box(page).fill('owner:x');
     await expect.poll(async () => (await address(page)).get('q')).toBe('owner:x');
+  });
+
+  test('with a name typed, a facet still opens from the list and its value adds to the search', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene);
+    await box(page).click();
+    await page.keyboard.type('service');
+    await expect.poll(async () => (await address(page)).get('q')).toBe('service');
+    const stage = page
+      .getByRole('listbox', { name: 'Filter by' })
+      .getByRole('option', { name: 'Stage' });
+    await stage.click();
+    await page
+      .getByRole('listbox', { name: 'Stage' })
+      .getByRole('option', { name: /^Production/ })
+      .click();
+    const search = await address(page);
+    expect(search.get('q')).toBe('service');
+    expect(search.getAll('f.stage')).toEqual(['PROD']);
+  });
+
+  test('leaving a facet:value text puts back the search it stood in for, and sends nothing', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'q=service');
+    await box(page).click();
+    await box(page).fill('stage:prod');
+    await expect(page.getByRole('listbox', { name: 'Stage' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(box(page)).toHaveValue('service');
+    await expect(page.getByTestId('changes')).toHaveText('0');
   });
 
   test('the shortcut takes the facet’s label in the page’s language', async ({ page, scene }) => {
