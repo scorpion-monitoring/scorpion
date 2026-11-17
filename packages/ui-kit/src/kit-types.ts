@@ -22,5 +22,10 @@ export interface WidgetProps {
   value: unknown;
   onchange: (value: unknown) => void;
   errors: readonly string[];
+  /**
+   * The server's messages for fields inside the widget's value, by pointer relative to it (`/light`, `/light/primary`), for a widget
+   * that draws an object and shows each message where it belongs. Empty when there is none.
+   */
+  errorsBelow?: ReadonlyMap<string, readonly string[]>;
   disabled: boolean;
 }

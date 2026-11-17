@@ -53,7 +53,7 @@ fails for a component that has neither the pair of specs nor a place in its list
   - **The convention (M5 plan, decision 6).** A module describes a setting with Zod's `.meta({ title, description, group, order, widget })`; Zod copies those keys into the JSON
     Schema (`.describe(text)` is `description`), and the form reads only those (`x-group`, `x-order` and `x-widget` are accepted too). `title` is the label (the key in words
     when there is none), `description` the hint, `group` the fieldset a field belongs to (loose fields first, then the groups in the order they are first used), `order` moves a field
-    within its object (declaration order otherwise), `widget` names a custom control: the page passes `widgets={{ logo: LogoUpload }}` (a component that takes `WidgetProps`).
+    within its object (declaration order otherwise), `widget` names a custom control: the page passes `widgets={{ logo: LogoUpload }}` (a component that takes `WidgetProps`). A widget may draw a whole object: it gets the server's messages at its own field as `errors` and those of the fields inside it as `errorsBelow`, by relative pointer (`/light`). `errorPrefix` may have several segments (`values.branding`).
     Nothing else in a schema changes the form.
   - **A secret is `writeOnly`**: a password field that is empty even when a value is stored (nothing is stored in a setting, see "Secrets" in the core.settings README), with
     `autocomplete="new-password"`, and sent only when something was typed.

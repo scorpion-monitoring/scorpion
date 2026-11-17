@@ -6,6 +6,7 @@ import {
   emptyValue,
   errorsByPointer,
   groupChildren,
+  errorsBelow,
   hasErrorsUnder,
   humanize,
   messagesFor,
@@ -48,6 +49,11 @@ describe('pointerOf', () => {
     ['password', undefined, '/password'],
     ['', undefined, ''],
     ['a/b', undefined, '/a~1b'],
+    // A prefix of several segments (the branding screen edits `values.branding`).
+    ['values.branding.colors.light', 'values.branding', '/colors/light'],
+    ['values.branding', 'values.branding', ''],
+    ['values.brandingx.a', 'values.branding', '/values/brandingx/a'],
+    ['values.rateLimits.default', 'values.branding', '/values/rateLimits/default'],
   ])('maps %s (prefix %s) to %s', (path, prefix, expected) => {
     expect(pointerOf(path, prefix)).toBe(expected);
   });
@@ -75,6 +81,21 @@ describe('errorsByPointer', () => {
     expect(hasErrorsUnder(errors, '/b')).toBe(false);
     // `/a/li` is not a parent of `/a/list`.
     expect(hasErrorsUnder(errors, '/a/li')).toBe(false);
+  });
+
+  it('gives a widget the messages below its node, by relative pointer, and none of its own or of a sibling', () => {
+    const errors = errorsByPointer({
+      'colors.light': ['pair'],
+      'colors.light.primary': ['format'],
+      colors: ['own'],
+      colorsx: ['sibling'],
+      'logos.dark': ['elsewhere'],
+    });
+    expect(Object.fromEntries(errorsBelow(errors, '/colors'))).toEqual({
+      '/light': ['pair'],
+      '/light/primary': ['format'],
+    });
+    expect(errorsBelow(errors, '/names').size).toBe(0);
   });
 });
 
