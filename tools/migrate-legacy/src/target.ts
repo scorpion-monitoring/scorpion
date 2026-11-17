@@ -17,6 +17,16 @@ export const ADMIN_ROLE = 'admin';
 
 export class TargetError extends Error {}
 
+/** `host:port/database` of a connection URL, for the operator: never the user or the password. */
+export function describeDatabase(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname}${parsed.port ? `:${parsed.port}` : ''}${parsed.pathname}`;
+  } catch {
+    return '(DATABASE_URL is not a URL)';
+  }
+}
+
 export interface Target {
   kernel: Kernel;
   organisations: OrganisationsPublic;

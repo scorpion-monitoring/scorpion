@@ -23,7 +23,8 @@ export interface Report {
   snapshot: { source: string; fetchedAt: string; files: number };
   mapping: { file: string; open: number };
   account: { username: string; state: 'found' | 'created' | 'not created (dry run)' };
-  target: { empty: boolean; notes: string[] };
+  /** `database` is `host:port/name`, never the credentials. */
+  target: { database: string; empty: boolean; notes: string[] };
   counts: Record<
     Kind,
     { read: number; created: number; kept: number; changed: number; dropped: number }
@@ -88,7 +89,7 @@ export function reportMarkdown(report: Report): string {
     `- Snapshot: ${report.snapshot.source}, fetched ${report.snapshot.fetchedAt} (${report.snapshot.files} files, checked against the manifest)`,
     `- Mapping: ${report.mapping.file} (${report.mapping.open} open line(s))`,
     `- Account: \`${report.account.username}\` (${report.account.state})`,
-    `- Target: ${report.target.empty ? 'empty' : 'not empty'}${report.target.notes.length ? `; ${report.target.notes.join('; ')}` : ''}`,
+    `- Target: ${report.target.database}, ${report.target.empty ? 'empty' : 'not empty'}${report.target.notes.length ? `; ${report.target.notes.join('; ')}` : ''}`,
     `- From ${report.startedAt} to ${report.finishedAt}`,
     ...(report.stopped ? ['', `**Stopped:** ${report.stopped}`] : []),
     '',

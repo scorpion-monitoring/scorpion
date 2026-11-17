@@ -5,7 +5,7 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DomainError, Forbidden, Invalid } from '@scorpion/contracts';
+import { Forbidden, Invalid } from '@scorpion/contracts';
 import { createKernel, createLogger, loadConfig } from '@scorpion/kernel';
 import { moduleIds, profileName, sources } from '@scorpion/server/src/generated/profile.ts';
 import { makeSecretsKey, startPostgres, type StartedPostgres } from '@scorpion/testing';
@@ -16,7 +16,7 @@ import { MAPPING_FORMAT, readMapping } from '../src/mapping.ts';
 import type { Report } from '../src/report.ts';
 import { spdxIndex } from '../src/rules.ts';
 import { readSnapshot } from '../src/snapshot.ts';
-import { migrationAccount, MIGRATION_USERNAME, openTarget, type Target } from '../src/target.ts';
+import { migrationAccount, MIGRATION_USERNAME, openTarget } from '../src/target.ts';
 import { transformRegistry } from '../src/transform.ts';
 import { service, writeSnapshot } from './snapshot-factory.ts';
 
@@ -269,7 +269,9 @@ describe('run (registry)', () => {
       Stray: ['service.provider-dropped'],
     });
     const md = await readFile(join(first.dir, 'report.md'), 'utf8');
-    expect(md).toMatch(/^- service `Root Atlas` → `Root-Atlas`: .*service\.slug-derived: "Root Atlas" is not a valid slug → "Root-Atlas"/m);
+    expect(md).toMatch(
+      /^- service `Root Atlas` → `Root-Atlas`: .*service\.slug-derived: "Root Atlas" is not a valid slug → "Root-Atlas"/m,
+    );
     expect(md).toContain('service.stage.missing-mapped');
     for (const file of ['report.json', 'report.md']) {
       expect((await stat(join(first.dir, file))).mode & 0o777).toBe(0o600);
@@ -353,13 +355,13 @@ describe('run (registry)', () => {
         organisations: target.organisations,
         services: {
           ...target.services,
-          create: (async (who, input) => {
+          create: async (who, input) => {
             if ((input as { slug: string }).slug === 'SeedBank')
               throw new Invalid('The request is not valid.', [
                 { path: 'stage', message: 'is not allowed' },
               ]);
             return target.services.create(who, input);
-          }) as typeof target.services.create,
+          },
         },
       };
       const { results, findings } = await loadRegistry(plan, ports, { dryRun: false, actor });
@@ -445,6 +447,3 @@ describe('run (registry)', () => {
     expect(await runCli(['plan', snapshotDir, '--out', out], cli(env).deps)).toBe(1);
   });
 });
-
-// DomainError is the base the load step tells refusals by; keep the import honest.
-void DomainError;

@@ -61,11 +61,7 @@ describe('transformRegistry: providers', () => {
       ['adjusted:provider.abbreviation-mapped', 'dropped:provider.abbreviation-duplicate'],
     ],
   ] as const)('%s', (_name, legacy, m, rules) => {
-    const plan = transformRegistry(
-      { providers, services: [] },
-      mapping(m as Partial<Mapping>),
-      facts,
-    );
+    const plan = transformRegistry({ providers, services: [] }, mapping(m), facts);
     expect(rulesOf(plan.findings, legacy)).toEqual(rules);
   });
 
@@ -97,7 +93,7 @@ describe('transformRegistry: consortia (the API gives names)', () => {
     ],
     ['a name that is a valid abbreviation is kept', {}, 'PLX', []],
   ] as const)('%s', (_name, m, legacy, rules) => {
-    const plan = transformRegistry({ providers, services }, mapping(m as Partial<Mapping>), facts);
+    const plan = transformRegistry({ providers, services }, mapping(m), facts);
     expect(rulesOf(plan.findings, legacy)).toEqual(rules);
   });
 

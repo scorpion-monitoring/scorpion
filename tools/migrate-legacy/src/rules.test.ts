@@ -1,6 +1,7 @@
 // The registry rules of the M13 plan §3, table by table: abbreviation, slug (decision 7: derived), stage spellings,
 // licence, provider count, consortium by name or by abbreviation.
 import { describe, expect, it } from 'vitest';
+import { describeDatabase } from './target.ts';
 import {
   checkAbbreviation,
   checkName,
@@ -179,5 +180,16 @@ describe('consortiumKind (the API gives the consortium name)', () => {
     ['A/B', 'name'],
   ])('%j is given by %s', (name, kind) => {
     expect(consortiumKind(name)).toBe(kind);
+  });
+});
+
+describe('describeDatabase (what the operator is shown of DATABASE_URL)', () => {
+  it.each([
+    ['postgres://scorpion:secret@localhost:5432/scorpion', 'localhost:5432/scorpion'],
+    ['postgres://u:p@db.example.org/prod', 'db.example.org/prod'],
+    ['not a url', '(DATABASE_URL is not a URL)'],
+  ])('%s → %s, never the credentials', (url, shown) => {
+    expect(describeDatabase(url)).toBe(shown);
+    expect(describeDatabase(url)).not.toMatch(/secret|:p@/);
   });
 });

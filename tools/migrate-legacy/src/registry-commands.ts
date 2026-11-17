@@ -16,6 +16,7 @@ import {
 import { resolveLicence, spdxIndex } from './rules.ts';
 import { readSnapshot, type Snapshot } from './snapshot.ts';
 import {
+  describeDatabase,
   migrationAccount,
   MIGRATION_USERNAME,
   openTarget,
@@ -78,6 +79,9 @@ export async function planCommand(args: string[], { env, io }: CliDeps): Promise
   }
   const out = refuseInsideRepository(values.out, 'The mapping file');
   const snapshot = await readSnapshot(dir);
+  // Named first, so an operator sees which database a .env or the shell pointed to.
+  const database = describeDatabase(env.DATABASE_URL ?? '');
+  io.err(`Target database: ${database}`);
   const target = await openTarget(env);
   try {
     const facts = await factsOf(target);
@@ -124,6 +128,9 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
   const snapshot = await readSnapshot(dir);
   const mapping = await readMapping(values.mapping);
 
+  // Named first, so an operator sees which database a .env or the shell pointed to.
+  const database = describeDatabase(env.DATABASE_URL ?? '');
+  io.err(`Target database: ${database}`);
   const target = await openTarget(env);
   try {
     const facts = await factsOf(target);
@@ -134,7 +141,7 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
     });
     if (!dryRun && !values.yes) {
       io.err(
-        `This run writes to the database of DATABASE_URL, which is ${state.empty ? 'empty' : `not empty (${state.notes.join('; ')})`}. ` +
+        `This run writes to ${database}, which is ${state.empty ? 'empty' : `not empty (${state.notes.join('; ')})`}. ` +
           'Records that exist are kept or updated by their abbreviation and slug. Run it with --dry-run first; pass --yes to write.',
       );
       return 2;
@@ -164,7 +171,7 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
       snapshot: snapshotSummary(snapshot.manifest),
       mapping: { file: values.mapping, open: mapping.open.length },
       account: { username: MIGRATION_USERNAME, state: account.state },
-      target: state,
+      target: { database, ...state },
       counts: countRecords(plan.read, records),
       records,
     };
