@@ -32,9 +32,9 @@ const STEPS: Step[] = [
   },
   { name: 'Down to Stage', keys: ['ArrowDown'], expect: [/stage/i] },
   { name: 'Up to Consortium', keys: ['ArrowUp'], expect: [/consortium/i] },
-  { name: 'Enter opens Consortium', keys: ['Enter'], expect: [/de( dot |\.)?nbi/i, /12/] },
+  { name: 'Enter opens Consortium', keys: ['Enter'], expect: [/bio ?net/i, /12/] },
   {
-    name: 'Space chooses de.NBI',
+    name: 'Space chooses BioNet',
     keys: ['Space'],
     expect: [/selected|checked/i, /12 services match/i],
   },

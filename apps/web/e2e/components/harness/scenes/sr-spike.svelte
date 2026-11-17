@@ -9,12 +9,12 @@
   ];
   const values: Record<string, Option[]> = {
     consortium: [
-      { id: 'denbi', label: 'de.NBI', count: 12 },
-      { id: 'nfdi', label: 'NFDI4Plants', count: 4 },
+      { id: 'bionet', label: 'BioNet', count: 12 },
+      { id: 'plantdata', label: 'PlantData', count: 4 },
     ],
     stage: [{ id: 'prod', label: 'Production', count: 9 }],
   };
-  const totals: Record<string, number> = { denbi: 12, nfdi: 4, prod: 9 };
+  const totals: Record<string, number> = { bionet: 12, plantdata: 4, prod: 9 };
 
   let open = $state(false);
   let facet = $state<string | undefined>(undefined);
