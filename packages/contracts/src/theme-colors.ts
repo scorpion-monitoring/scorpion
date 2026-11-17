@@ -279,14 +279,15 @@ export const describeFailure = (failure: ContrastFailure): string =>
  * over the built-in themes by the cascade, whatever their specificity. The light rules must not match a dark page: an unset dark
  * token then keeps its built-in value instead of taking the light one.
  */
-const SELECTORS: Readonly<Record<ThemeMode, readonly string[]>> = {
+const SELECTORS: Readonly<Record<ThemeMode, readonly ((declarations: string) => string)[]>> = {
   light: [
-    '@media not all and (prefers-color-scheme: dark) { :root:not([data-theme]) { $ } }',
-    "[data-theme='scorpionlight'] { $ }",
+    (body) =>
+      `@media not all and (prefers-color-scheme: dark) { :root:not([data-theme]) { ${body} } }`,
+    (body) => `[data-theme='scorpionlight'] { ${body} }`,
   ],
   dark: [
-    '@media (prefers-color-scheme: dark) { :root:not([data-theme]) { $ } }',
-    "[data-theme='scorpiondark'] { $ }",
+    (body) => `@media (prefers-color-scheme: dark) { :root:not([data-theme]) { ${body} } }`,
+    (body) => `[data-theme='scorpiondark'] { ${body} }`,
   ],
 };
 
@@ -306,7 +307,7 @@ export function themeStylesheet(set: unknown): string {
       .map((token) => `--color-${token}: ${overrides[token]};`)
       .join(' ');
     if (declarations === '') continue;
-    for (const rule of SELECTORS[mode]) blocks.push(rule.replace('$', () => declarations));
+    for (const rule of SELECTORS[mode]) blocks.push(rule(declarations));
   }
   return HEADER + blocks.map((block) => `${block}\n`).join('');
 }
