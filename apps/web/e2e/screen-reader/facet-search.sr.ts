@@ -65,6 +65,13 @@ async function path(page: Page, reader: Reader, testInfo: TestInfo) {
     timeout: 60_000,
   });
   await reader.navigateToWebContent();
+  // Start inside the page: the first Tab must reach the box, not the browser's own toolbar (the first run of the
+  // gate went there). The heading takes the focus for the start only.
+  await page.bringToFront();
+  await page.getByRole('heading', { name: 'Facet search' }).evaluate((heading) => {
+    heading.tabIndex = -1;
+    heading.focus();
+  });
 
   const log: { step: string; spoken: string[]; missing: string[] }[] = [];
   for (const step of STEPS) {
