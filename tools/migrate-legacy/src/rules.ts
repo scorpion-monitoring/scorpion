@@ -130,7 +130,7 @@ export function providerCount(
   | { ok: false; rule: 'service.no-provider' | 'service.two-providers'; providers: string[] } {
   const providers = [
     ...new Set(rows.map((row) => row.provider?.trim() ?? '').filter((p) => p !== '')),
-  ];
+  ].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   if (providers.length === 1) return { ok: true, provider: providers[0]! };
   return {
     ok: false,

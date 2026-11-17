@@ -153,8 +153,10 @@ export function discover(snapshot: Snapshot, now: Date = new Date()): Discovery 
   }
 
   // Stages and licences, per service (its first row).
-  const stages = countBy(serviceNames, (s) => first(s).stage ?? '(none)');
-  const licences = countBy(serviceNames, (s) => first(s).license ?? '(none)');
+  // No stage or licence at all, and an empty one, read the same: `(none)`.
+  const orNone = (value: string | null) => (value?.trim() ? value : '(none)');
+  const stages = countBy(serviceNames, (s) => orNone(first(s).stage));
+  const licences = countBy(serviceNames, (s) => orNone(first(s).license));
   const spdx = spdxIndex();
 
   // Consortia: the names the services link to.
