@@ -1163,3 +1163,9 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **"Screen reader (NVDA)" as a required check of `release/**`** is a branch-protection setting of the repository; the workflow runs on every pull request into `release/**` for it.
 - **One more read while there is a search text**: the loaders ask for the facets without `q` (the values `combined` offers and the hint of decision Q2). If the catalogue's calls per filter click are measured again (the table above), count it.
 - **The look `sidebar` draws uncapped facet lists**, as before the sprint; if an instance with many providers keeps `sidebar`, its value lists could get the panel's filter field and cap too.
+
+## M12a sprint 4 follow-ups
+
+- **`--scorpion-muted` and `--scorpion-glow` are not theme tokens** (`apps/web/src/app.css`): a custom set of colours keeps their built-in values. The muted grey stays readable on the test set (5.2:1 or more), but a set with a mid-tone surface could make it fail AA without the contrast check knowing (it measures the daisyUI tokens only). Either make them settings with their own pairs, or derive them from `base-content`. Agreed with the maintainer to leave for later (2026-11-17).
+- **The API reference keeps its fixed palette** (`apps/web/src/lib/server/reference-theme.ts`, ADR-0038): a custom set of colours does not reach the Scalar page. The route already reads the branding; it could merge `colors` into `REFERENCE_PALETTES` (its own policy allows inline style). Agreed to leave for later (2026-11-17).
+- **The drawer's backdrop is `bg-black/40`** (`apps/web/src/lib/components/Sidebar.svelte`), a fixed colour in the shell. The no-hard-coded-colour test covers `modules/*/ui` and `packages/ui-kit` (the sprint's scope), not `apps/web/src`; `bg-neutral/40` would follow the theme but changes the default drawer on a phone, so it was not changed here.
