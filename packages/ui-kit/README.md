@@ -87,7 +87,8 @@ table-driven tests.
 
 - **Props:** `definitions` (the facets as `Facets` takes them, counted over the text and the other facets), `suggestions` (the same
   counted without the text, for the hint below; default `definitions`), `state` and `q` (from the address), `total`, `look`, `path`,
-  `label`, `countKey` (the page's words for the count line: `<key>.one`, `.other`, `.none`, `.noName`), and the list itself as children.
+  `label`, `countKey` (the page's words for the count line: `<key>.one`, `.other`, `.none`, `.noName`), `shortcuts`, and the list itself
+  as children. The catalogues pass the look from the list answers' `filterStyle` (setting `catalogueFilters` of `registry.services`).
 - **The address** is the one `Facets` wrote (`?q=&f.<facet>=<value>`, `f.<facet>.min`/`.max`), built by `facetSearchParams()` over
   `serializeFacets()`: every change drops `page`; `sort`, `dir` and `pageSize` stay.
 - **Live search:** the text is sent after 250 ms of rest (Enter sends at once). A run of typing adds **one** history entry and
@@ -101,7 +102,20 @@ table-driven tests.
   (a row of facet disclosure buttons under the box whose value panel opens as a popover, a bottom sheet below `sm`; Escape closes it and
   gives the focus back to its button; one chip per facet named with every value, "Clear all"; after a removal the focus goes to the next
   chip, the one before, or the box).
-- **Value panels** (`bar`): one per facet type, picked through `PANELS` in `facet-search/panels.ts` (a new facet type adds a panel there,
+- **`combined`** (the default look of a new instance): one ARIA 1.2 combobox above the list. The chips of the chosen facets sit before the
+  input in the same box (out of the tab order: Tab into the box reaches the input, Shift+Tab reaches the chips; a chip opens its facet, its ×
+  removes it); ✕ clears the text and the filters. Focusing the empty box opens a listbox of the facets **with no active option** (so a screen
+  reader says the combobox, its name and "expanded" first); ↓ ↑ move, Enter or → opens a facet's value panel (second level, with a back
+  entry), typing narrows its values, Space chooses (the panel stays open; while a filter is typed, Space types until an arrow key was
+  pressed), Escape or ← (empty filter) goes back, Escape on the facets closes the list with the focus in the box, Backspace in the empty
+  box removes the last chip and announces it, Tab leaves. A range panel takes the focus into its fields and gives it back on Escape.
+  Typed text searches the names; the list then offers the facet values whose label matches (group "Matching values", with counts, from
+  `suggestions`) above the facets, and shows only when it has something to offer or is asked for (↓, a click), so it never hides the rows
+  the name found. `provider:ipk`, `Anbieter:ipk`, `provider:"IPK Gat"` narrow the list to that facet and are **not** sent as a search
+  (Escape puts back the search they stood in for); an unknown facet name is plain text. The list is drawn in the flow under the box (it
+  pushes the results down, never covers them); a press outside closes it after its click. Below `sm` the chips fold after the first into
+  a `+N` chip, so the box keeps to two lines. `shortcuts` (the public page) adds a row of facet buttons that open the list at a facet.
+- **Value panels** (`bar` and `combined`): one per facet type, picked through `PANELS` in `facet-search/panels.ts` (a new facet type adds a panel there,
   no `if` in a look). The list panel is a multi-select listbox with counts; above 8 values a filter field narrows it (the label in the
   page's language, without case or accents), at most 50 values are drawn and "N more, type to narrow" says how many are not. The range
   panel has from and to within the facet's limits; Enter applies, and from > to is refused with a message, never sent.
