@@ -11,7 +11,7 @@ import {
   params,
   range,
   rows,
-  seedCatalogue,
+  sharedCatalogue,
   setLook,
   type Look,
 } from '../support/services.ts';
@@ -41,7 +41,7 @@ for (const look of LOOKS) {
     }) => {
       test.slow();
       const api = await adminApi(playwright, baseURL, at);
-      const c = await seedCatalogue(api);
+      const c = await sharedCatalogue(api, baseURL!, 'j08');
       replaced = await setLook(api, look);
       const reader = newPerson('reader');
       await activeUser(api, at, reader);
@@ -184,7 +184,7 @@ for (const look of LOOKS) {
     }) => {
       test.slow();
       const api = await adminApi(playwright, baseURL, at);
-      const c = await seedCatalogue(api);
+      const c = await sharedCatalogue(api, baseURL!, 'j08');
       replaced = await setLook(api, look);
       const reader = newPerson('reader');
       await activeUser(api, at, reader);

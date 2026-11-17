@@ -1,5 +1,7 @@
 import { violations } from './support/a11y.ts';
+import { adminApi } from './support/admin.ts';
 import { admin, expect, signInThroughPage, test } from './support/fixtures.ts';
+import { setLook } from './support/services.ts';
 
 // The start page (M12a): a visitor gets an introduction ("What is Scorpion?"); a signed-in person gets the dashboard at the
 // full width, with no banner above it.
@@ -43,10 +45,16 @@ test.describe('the start page', () => {
     expect(other!.width).toBeLessThanOrEqual(1152);
   });
 
+  // The filters beside the table are the look `sidebar` (sprint 3 of M12a: the default of a new instance is
+  // `combined`, one box above the table); the test chooses it and puts back the look it replaced.
   test('uses the full width for the service catalogue, with the filters in the left column', async ({
     page,
+    playwright,
+    baseURL,
     at,
   }) => {
+    const api = await adminApi(playwright, baseURL, at);
+    const replaced = await setLook(api, 'sidebar');
     await page.setViewportSize({ width: 1700, height: 900 });
     await signInThroughPage(page, at, admin);
     await page.goto(at('/services'));
@@ -57,5 +65,11 @@ test.describe('the start page', () => {
     const table = (await page.getByRole('table').boundingBox())!;
     // The filters sit beside the table, on its left, not above it.
     expect(filters.x + filters.width).toBeLessThanOrEqual(table.x);
+    // The look it replaced (on a new instance `combined`, one box above the table) uses the full width as well.
+    await setLook(api, replaced);
+    await page.reload();
+    await expect(page.locator(`[data-facet-look="${replaced}"]`)).toBeVisible();
+    expect((await page.getByRole('table').boundingBox())!.width).toBeGreaterThan(1200);
+    await api.dispose();
   });
 });

@@ -262,3 +262,21 @@ export async function searchFor(page: Page, text: string) {
   await closeFacets(page);
   await page.getByLabel(SEARCH).fill(text);
 }
+
+const shared = new Map<string, Promise<Catalogue>>();
+
+/**
+ * One catalogue per stack and spec file, for the specs that run the same reads once per look (j08, the accessibility
+ * spec): the looks only read it, and seeding one per run made a full run create more than the 100 organisations that
+ * the admin's membership filter lists (backlog: "Long lists"). Keyed by the stack, so the two base paths never share
+ * data; a retry runs in a new worker and seeds its own.
+ */
+export function sharedCatalogue(api: AdminApi, stack: string, spec: string): Promise<Catalogue> {
+  const key = `${stack} ${spec}`;
+  let made = shared.get(key);
+  if (!made) {
+    made = seedCatalogue(api);
+    shared.set(key, made);
+  }
+  return made;
+}

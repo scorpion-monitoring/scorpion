@@ -7,7 +7,7 @@ import {
   expectChosen,
   expectChosenFacets,
   LOOKS,
-  seedCatalogue,
+  sharedCatalogue,
   setLook,
   type Look,
 } from './support/services.ts';
@@ -71,7 +71,7 @@ for (const look of LOOKS) {
       }) => {
         test.slow();
         const api = await adminApi(playwright, baseURL, at);
-        const c = await seedCatalogue(api);
+        const c = await sharedCatalogue(api, baseURL!, 'a11y');
         replaced = await setLook(api, look);
         const icon = await api.request.put(at(`/api/internal/services/${c.zeta.id}/icon`), {
           headers: { 'x-csrf-token': api.csrf, 'content-type': 'application/octet-stream' },
@@ -193,7 +193,7 @@ for (const look of LOOKS) {
     }) => {
       test.slow();
       const api = await adminApi(playwright, baseURL, at);
-      const c = await seedCatalogue(api);
+      const c = await sharedCatalogue(api, baseURL!, 'a11y');
       replaced = await setLook(api, look);
       const reader = newPerson('kbcat');
       await activeUser(api, at, reader);
