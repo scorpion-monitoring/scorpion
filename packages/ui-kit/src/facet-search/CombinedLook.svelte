@@ -9,7 +9,8 @@
   // on the facet list closes it with the focus kept in the box, Backspace in the empty box removes the last chip
   // (announced), Tab leaves, Shift+Tab reaches the chips (out of the tab order, so Tab into the box reaches the
   // input first). The focus stays in the box while the list is open; a range panel takes it into its
-  // fields, and its Escape gives it back.
+  // fields, and its Escape gives it back. The list is drawn in the flow under the box (as the sprint's sketch has it),
+  // so it pushes the count line and the table down and never covers a row.
   //
   // Typing on the first level searches the names at once (the shared state sends it) and offers the facet values
   // whose label matches, with counts; Enter on one adds it as a chip and clears the text. `provider:ipk` (the
@@ -40,6 +41,13 @@
   /** Below `sm` the chips fold after the first into a `+N` chip (the box keeps to two lines), until it is pressed. */
   let narrow = $state(false);
   let unfolded = $state(false);
+  /** The list was asked for (↓, a click): it shows the facets even while a typed name offers no value. */
+  let asked = $state(false);
+  /**
+   * A pointer is pressed somewhere. The list is in the flow, so closing it moves the page: when the box loses the
+   * focus to a press, the list closes only after that press's click, which then lands where it was aimed.
+   */
+  let pressing = false;
 
   $effect(() => {
     const query = window.matchMedia('(max-width: 639px)');
@@ -79,17 +87,32 @@
     return Array.isArray(value) ? value.length : value ? 1 : 0;
   };
 
+  /**
+   * Whether the list shows. While a name is typed it shows only when it has matching values to offer (or was
+   * asked for), so the list never covers the rows the name has found (goal 1 of the sprint: type, no click).
+   */
+  const expanded = $derived(
+    open &&
+      (Boolean(level) ||
+        Boolean(shortcut) ||
+        view.text.trim() === '' ||
+        offers.length > 0 ||
+        asked),
+  );
+
   const activeDescendant = $derived(
-    !open ? undefined : shown ? panelActive : active >= 0 ? optionId(active) : undefined,
+    !expanded ? undefined : shown ? panelActive : active >= 0 ? optionId(active) : undefined,
   );
   const controls = $derived(shown ? `${listId}-panel` : listId);
 
-  function show() {
+  function show(ask = false) {
     open = true;
+    if (ask) asked = true;
   }
 
   function close() {
     open = false;
+    asked = false;
     level = undefined;
     filter = '';
     active = -1;
@@ -159,10 +182,10 @@
       }
       return;
     }
-    if (!open) {
+    if (!expanded) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        show();
+        show(true);
       } else if (event.key === 'Enter') {
         event.preventDefault();
         view.flushText();
@@ -222,6 +245,7 @@
   function oninput(event: Event & { currentTarget: HTMLInputElement }) {
     const value = event.currentTarget.value;
     open = true;
+    asked = false;
     active = -1;
     if (level) {
       filter = value;
@@ -232,6 +256,17 @@
     view.setText(value, { send: !known });
   }
 </script>
+
+<svelte:window
+  onpointerdown={() => (pressing = true)}
+  onclick={() => {
+    if (!pressing) return;
+    pressing = false;
+    const inside = (node: Element | null) =>
+      Boolean(node && (field?.contains(node) || popup?.contains(node)));
+    if (!inside(document.activeElement)) close();
+  }}
+/>
 
 {#snippet facetOptions()}
   {#each view.definitions as definition, at (definition.id)}
@@ -318,21 +353,21 @@
         autocomplete="off"
         spellcheck="false"
         maxlength={100}
-        aria-expanded={open}
+        aria-expanded={expanded}
         aria-controls={controls}
         aria-autocomplete="list"
         aria-activedescendant={activeDescendant}
         value={level ? filter : view.text}
-        onfocus={show}
-        onclick={show}
+        onfocus={() => show()}
+        onclick={() => show(true)}
         {oninput}
         {onkeydown}
         onblur={(event) => {
-          // Into the open list (a range panel's fields): the list stays. Anywhere else: it closes.
-          if (!popup?.contains(event.relatedTarget as Node | null)) {
-            close();
-            view.endTyping();
-          }
+          // Into the open list (a range panel's fields): the list stays. Anywhere else: it closes, after the
+          // click when a pointer press took the focus.
+          if (popup?.contains(event.relatedTarget as Node | null)) return;
+          view.endTyping();
+          if (!pressing) close();
         }}
       />
       {#if view.text || chips.length > 0}
@@ -349,10 +384,10 @@
       {/if}
     </div>
 
-    {#if open}
+    {#if expanded}
       <div
         bind:this={popup}
-        class="bg-base-100 border-base-300 rounded-box z-30 mt-1 w-full border p-1 shadow-lg sm:absolute sm:top-full sm:left-0 sm:w-96"
+        class="bg-base-100 border-base-300 rounded-box mt-1 max-h-80 w-full overflow-y-auto overscroll-contain border p-1 shadow-sm sm:max-w-md"
       >
         {#if shown}
           {@const Panel = PANELS[shown.type]}
