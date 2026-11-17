@@ -46,6 +46,43 @@ test.describe('journey 2: the catalogue', () => {
     await api.dispose();
   });
 
+  // Sprint 3 of M12a: the search runs as one types, and a run of typing is one step back, never one per keystroke;
+  // a filter change still replaces the entry, as before. The focus stays in the box while the list changes.
+  test('a typed search is one history entry, however slowly it is typed, and keeps the focus', async ({
+    page,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    const api = await adminApi(playwright, baseURL, at);
+    const c = await seedCatalogue(api);
+    await signInThroughPage(page, at, admin);
+    await page.goto(at('/services?sort=stage'));
+    const box = page.getByLabel('Search by name or short name');
+    await box.focus();
+    let sent = 0;
+    page.on('request', (request) => {
+      // The page's data, read by the client (`__data.json`) for each search it sends.
+      if (/\/services\/__data\.json\?.*q=/.test(request.url())) sent += 1;
+    });
+    // Slower than the search's rest (250 ms): each character sends.
+    await page.keyboard.type(c.tag, { delay: 400 });
+    await expect(page).toHaveURL(new RegExp(`q=${c.tag}`));
+    await expect(rows(page)).toHaveCount(20);
+    expect(sent, 'the search was sent while typing, more than once').toBeGreaterThan(1);
+    await expect(box).toBeFocused();
+    await expect(page).toHaveURL(/sort=stage/);
+    // A filter change replaces that entry.
+    await choice(page, /^Production/).check();
+    await expect(page).toHaveURL(/f\.stage=PROD/);
+    // One step back leaves the whole search, filter and all.
+    await page.goBack();
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page).toHaveURL(/sort=stage/);
+    await expect(box).toHaveValue('');
+    await api.dispose();
+  });
+
   test('answers a made-up filter in the address with an error, not an empty list', async ({
     page,
     at,

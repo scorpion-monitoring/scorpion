@@ -45,10 +45,9 @@ test.describe('the public service catalogue', () => {
       await expect(rows(page)).toHaveCount(1);
       await expect(rows(page).first()).toContainText(c.zeta.name);
       await expect(rows(page).first()).toContainText(c.consortia[1].name);
-      await expect(
-        page.getByRole('button', { name: 'Remove the filter Stage: Development' }),
-      ).toBeVisible();
-      await page.getByRole('button', { name: 'Remove the filter Stage: Development' }).click();
+      // Sprint 3 of M12a: the chosen value is drawn once, by its look (here: the checked box), and comes off there.
+      await expect(choice(page, /^Development \(1\)/)).toBeChecked();
+      await choice(page, /^Development \(1\)/).uncheck();
       await expect(page).not.toHaveURL(/f\.stage/);
     });
 

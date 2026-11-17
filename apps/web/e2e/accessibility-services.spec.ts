@@ -59,8 +59,10 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.goto(
         at(`/services?q=${c.tag}&f.stage=DEV&f.stage=PROD&f.consortium=${c.consortia[0].id}`),
       );
-      await expect(page.getByRole('button', { name: /^Remove the filter/ })).toHaveCount(3);
-      await clean('the catalogue with chosen filters and their badges');
+      // Sprint 3 of M12a: the copied badges are gone; the look draws each chosen value once (here: a checked box).
+      await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(3);
+      await expect(page.getByText(/^\d+ services? match/)).toBeVisible();
+      await clean('the catalogue with chosen filters');
 
       await page.goto(at(`/services?q=${c.tag}&f.stage=DEV&f.consortium=:none`));
       await expect(page.getByText('No service matches.')).toBeVisible();
@@ -72,7 +74,7 @@ for (const scheme of ['light', 'dark'] as const) {
 }
 
 test.describe('the catalogue by keyboard', () => {
-  test('search, choose a filter, remove its badge and page without a mouse', async ({
+  test('search, choose a filter, remove it and page without a mouse', async ({
     browser,
     playwright,
     baseURL,
@@ -87,7 +89,8 @@ test.describe('the catalogue by keyboard', () => {
     const page = opened.page;
 
     await page.goto(at('/services'));
-    // The search: reached by Tab from the top of the page, typed into and submitted with Enter.
+    // The search: reached by Tab from the top of the page, typed into and sent with Enter (it also searches as one
+    // types, sprint 3 of M12a).
     const search = page.getByLabel('Search by name or short name');
     await tabTo(page, search);
     await page.keyboard.type(c.tag);
@@ -95,19 +98,21 @@ test.describe('the catalogue by keyboard', () => {
     await expect(page).toHaveURL(new RegExp(`q=${c.tag}`));
     await expect(rows(page)).toHaveCount(20);
 
-    // A filter: Tab to the checkbox, Space chooses it, and a badge with its name appears.
+    // A filter: Tab to the checkbox, Space chooses it, the box is checked and the count line says so.
     const production = page.getByRole('checkbox', { name: /^Production/ });
     await tabTo(page, production);
     await page.keyboard.press('Space');
     await expect(page).toHaveURL(/f\.stage=PROD/);
-    const badge = page.getByRole('button', { name: 'Remove the filter Stage: Production' });
-    await expect(badge).toBeVisible();
+    await expect(production).toBeChecked();
+    const clear = page.getByRole('button', { name: 'Clear Stage' });
+    await expect(clear).toBeVisible();
 
-    // The badge comes off with Enter.
-    await tabTo(page, badge);
+    // The filter comes off with Enter on its clear button.
+    await tabTo(page, clear);
     await page.keyboard.press('Enter');
     await expect(page).not.toHaveURL(/f\.stage/);
-    await expect(badge).toHaveCount(0);
+    await expect(clear).toHaveCount(0);
+    await expect(production).not.toBeChecked();
 
     // The pages: the next page by keyboard, and the sorted column by keyboard.
     const next = page.getByRole('button', { name: 'Next' });
