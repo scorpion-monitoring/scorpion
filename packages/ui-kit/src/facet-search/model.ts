@@ -117,7 +117,25 @@ export interface Shortcut {
   value: string;
 }
 
-const SHORTCUT = /^\s*(?:"([^"]+)"|([^\s:"]+))\s*:\s*(?:"([^"]*)"?|(.*))$/u;
+/** The facet name and the text after its colon, or `undefined` when the text has no `name:` at its start. */
+function splitShortcut(text: string): { name: string; rest: string } | undefined {
+  // Read left to right with `indexOf`, no regular expression: typed text is library input, and a pattern with
+  // optional spaces on both sides of the colon backtracks (CodeQL js/polynomial-redos).
+  const trimmed = text.trim();
+  if (trimmed.startsWith('"')) {
+    const end = trimmed.indexOf('"', 1);
+    if (end < 2) return undefined;
+    const after = trimmed.slice(end + 1).trimStart();
+    return after.startsWith(':')
+      ? { name: trimmed.slice(1, end), rest: after.slice(1) }
+      : undefined;
+  }
+  const colon = trimmed.indexOf(':');
+  if (colon < 1) return undefined;
+  const name = trimmed.slice(0, colon).trimEnd();
+  if (/[\s"]/.test(name)) return undefined;
+  return { name, rest: trimmed.slice(colon + 1) };
+}
 
 /**
  * Reads `provider:ipk`, `Anbieter:ipk`, `provider:"IPK Gatersleben"` and `"KPI set":core`. The facet is named by its
@@ -128,14 +146,20 @@ export function parseShortcut(
   text: string,
   definitions: readonly FacetDefinition[],
 ): Shortcut | undefined {
-  const match = SHORTCUT.exec(text);
-  if (!match) return undefined;
-  const name = fold(match[1] ?? match[2] ?? '');
+  const split = splitShortcut(text);
+  if (!split) return undefined;
+  const name = fold(split.name);
   const facet = definitions.find(
     (definition) => fold(definition.id) === name || fold(definition.label) === name,
   );
   if (!facet) return undefined;
-  return { facet, value: (match[3] ?? match[4] ?? '').trim() };
+  let value = split.rest.trim();
+  if (value.startsWith('"')) {
+    // A quoted value, closed or still being typed.
+    const close = value.indexOf('"', 1);
+    value = close < 0 ? value.slice(1) : value.slice(1, close);
+  }
+  return { facet, value: value.trim() };
 }
 
 /** Labels of the chosen values of a list facet, in the order they were chosen; an unknown value keeps its key. */

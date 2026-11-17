@@ -85,11 +85,27 @@ describe('parseShortcut', () => {
     ['http://example.org', definitions, undefined, undefined],
     ['', definitions, undefined, undefined],
     [':ipk', definitions, undefined, undefined],
+    ['"":ipk', definitions, undefined, undefined],
+    ['"KPI set" core', definitions, undefined, undefined],
+    ['  provider  :  ipk  ', definitions, 'provider', 'ipk'],
+    ['provider:""', definitions, 'provider', ''],
   ])('%s (%#)', (text, facets, facet, value) => {
     const found = parseShortcut(text, facets);
     expect(found?.facet.id).toBe(facet);
     expect(found?.value).toBe(value);
   });
+});
+
+it('reads a long run of spaces in linear time (CodeQL js/polynomial-redos)', () => {
+  const started = performance.now();
+  for (const text of [
+    `!:${' '.repeat(50_000)}`,
+    `provider:${' '.repeat(50_000)}x`,
+    ' '.repeat(50_000),
+  ]) {
+    parseShortcut(text, definitions);
+  }
+  expect(performance.now() - started).toBeLessThan(200);
 });
 
 describe('facetSearchParams', () => {
