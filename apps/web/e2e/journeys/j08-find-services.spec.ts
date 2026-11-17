@@ -4,10 +4,11 @@ import { docShot } from '../support/doc-shot.ts';
 import { choice, params, range, rows, seedCatalogue } from '../support/services.ts';
 
 // J08: find services in the catalogue. Moved from services.spec.ts ("journey 2: the catalogue") with every assertion: the
-// search, the facets with their counts, the badges, the sort and the paging; and a service with two consortia, which is
+// search, the facets with their counts, the chosen values (badges until sprint 3 of M12a; each look draws them once), the
+// sort and the paging; and a service with two consortia, which is
 // shown once, and one with none. Each test makes its own services under a tag and searches for it.
 test.describe('J08: find services in the catalogue', () => {
-  test('searches, filters by two facets whose counts follow the filtered set, resets the page, removes a badge, sorts and pages by 20', async ({
+  test('searches, filters by two facets whose counts follow the filtered set, resets the page, removes a filter, sorts and pages by 20', async ({
     page,
     playwright,
     baseURL,
@@ -24,8 +25,8 @@ test.describe('J08: find services in the catalogue', () => {
       // The navigation leads to the catalogue, and the search narrows it to this journey's services.
       await page.getByRole('link', { name: 'Services' }).first().click();
       await expect(page.getByRole('heading', { name: 'Services', level: 1 })).toBeVisible();
+      // The search runs as one types (sprint 3 of M12a): no button.
       await page.getByLabel('Search by name or short name').fill(c.tag);
-      await page.getByRole('button', { name: 'Search', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`q=${c.tag}`));
     });
     await test.step('Page through the results, 20 to a page', async () => {
@@ -45,9 +46,8 @@ test.describe('J08: find services in the catalogue', () => {
       expect(params(page).get('page')).toBeNull();
       await expect(rows(page)).toHaveCount(20);
       await range(page, `1–20 of ${c.total - 1}`);
-      await expect(
-        page.getByRole('button', { name: 'Remove the filter Stage: Production' }),
-      ).toBeVisible();
+      await expect(choice(page, /^Production/)).toBeChecked();
+      await expect(page.getByText(`${c.total - 1} services match`)).toBeVisible();
     });
     await test.step('Read the counts of the other facets over the filtered set', async () => {
       // Zeta is the only service in development: it is not in the list now, and the stage facet still counts
@@ -61,9 +61,9 @@ test.describe('J08: find services in the catalogue', () => {
       await docShot(page, 'j08', 'facet-counts');
     });
 
-    await test.step('Remove the filter with its badge', async () => {
-      // A badge comes off with one click, and the page goes back to what it was.
-      await page.getByRole('button', { name: 'Remove the filter Stage: Production' }).click();
+    await test.step('Remove the filter', async () => {
+      // A chosen value comes off with one click, and the page goes back to what it was.
+      await choice(page, /^Production/).uncheck();
       await expect(page).not.toHaveURL(/f\.stage/);
       await expect(rows(page)).toHaveCount(20);
       await range(page, `1–20 of ${c.total}`);
@@ -79,17 +79,15 @@ test.describe('J08: find services in the catalogue', () => {
       await choice(page, new RegExp(`^${c.consortia[1].name} `)).check();
       await expect(rows(page)).toHaveCount(1);
       await expect(rows(page).first()).toContainText(`${c.tag} Zeta`);
-      await expect(page.getByRole('button', { name: /^Remove the filter/ })).toHaveCount(2);
+      await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(2);
     });
-    await test.step('Take the badges off one by one', async () => {
+    await test.step('Take the filters off one by one', async () => {
       // The stage facet ignores its own choice: over consortium B it still counts Development, and Production
-      // has nothing there. Taking the consortium badge off leaves the stage filter.
-      await page
-        .getByRole('button', { name: new RegExp(`Remove the filter .*: ${c.consortia[1].name}`) })
-        .click();
+      // has nothing there. Taking the consortium off leaves the stage filter.
+      await choice(page, new RegExp(`^${c.consortia[1].name} `)).uncheck();
       await expect(page).not.toHaveURL(/f\.consortium/);
       await expect(page).toHaveURL(/f\.stage=DEV/);
-      await page.getByRole('button', { name: /^Remove the filter Stage/ }).click();
+      await choice(page, /^Development/).uncheck();
       await expect(page).not.toHaveURL(/f\./);
       await expect(rows(page)).toHaveCount(20);
     });

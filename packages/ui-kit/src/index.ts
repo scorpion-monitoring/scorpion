@@ -51,6 +51,7 @@ export { default as Chart } from './Chart.svelte';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';
 export { default as DataTable } from './DataTable.svelte';
 export { default as Facets } from './Facets.svelte';
+export { default as FacetSearch } from './FacetSearch.svelte';
 export { default as FieldShell } from './FieldShell.svelte';
 export { default as Pagination } from './Pagination.svelte';
 export { default as SchemaField } from './SchemaField.svelte';
@@ -84,6 +85,13 @@ export {
   type FacetOption,
   type FacetState,
 } from './facets.ts';
+export {
+  FACET_LOOKS,
+  facetSearchParams,
+  fold,
+  parseShortcut,
+  type FacetLook,
+} from './facet-search/model.ts';
 export {
   chartProblems,
   createChartController,

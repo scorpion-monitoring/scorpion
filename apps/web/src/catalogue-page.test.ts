@@ -1,6 +1,6 @@
 // The service catalogue, rendered on the server with a stand-in for the shell (`ShellHarness.svelte`): what a
 // person must never see wrong. Labels come from the API's answer (the vocabulary, the registry, the
-// organisation), never from the page; the chosen filters are removable badges; the link to the wizard and to a
+// organisation), never from the page; each chosen filter is drawn once and is removable; the link to the wizard and to a
 // service page appear only when the API says the caller may create and the page is offered; the icon has an
 // alt text from the name; an empty answer says so. The address handling is in `query.test.ts` of the module,
 // the clicks and the counts changing over the filtered set are in `e2e/services.spec.ts`. The page belongs to
@@ -73,7 +73,9 @@ const data = (over: Record<string, unknown> = {}) => ({
   services: [row({})],
   total: 1,
   facets,
+  suggestions: facets,
   canCreate: false,
+  filterStyle: 'sidebar',
   ...over,
 });
 
@@ -124,18 +126,27 @@ describe('the catalogue page', () => {
     expect(html).toMatch(/In development[\s\S]{0,400}\(0\)|In development[\s\S]{0,400}>0</);
   });
 
-  it('draws one removable badge for each chosen value, named by facet and value, and none without a choice', () => {
-    expect(draw(data())).not.toContain('Chosen filters');
+  // Sprint 3 of M12a: the copied badges are gone; the look draws the selection once. In `sidebar` a chosen value is
+  // a checked box under its facet's legend, and unchecking it removes the filter.
+  it('draws each chosen value once as removable, under its facet, and nothing chosen without a choice', () => {
+    expect([...draw(data()).matchAll(/<input[^>]*type="checkbox"[^>]*checked/g)]).toHaveLength(0);
     const html = draw(
       data({
         query: { ...DEFAULT_QUERY, filters: { stage: ['DEV', 'PROD'], license: [':none'] } },
       }),
     );
-    expect(html).toContain('Chosen filters');
-    expect(html).toContain('aria-label="Remove the filter Stage: In development"');
-    expect(html).toContain('aria-label="Remove the filter Stage: In production"');
-    expect(html).toContain('aria-label="Remove the filter Licence: Unknown"');
-    expect([...html.matchAll(/aria-label="Remove the filter/g)]).toHaveLength(3);
+    const checked = [
+      ...html.matchAll(/<input[^>]*type="checkbox"[^>]*checked[^>]*>\s*<span>([^<]*)</g),
+    ];
+    expect(checked.map((match) => match[1])).toEqual([
+      'In production',
+      'In development',
+      'Unknown',
+    ]);
+    expect(html).toMatch(
+      /<legend[^>]*>Stage<\/legend>[\s\S]*In development[\s\S]*<legend[^>]*>Licence/,
+    );
+    expect(html).not.toContain('Remove the filter');
   });
 
   it('says so when no service matches, and shows no row', () => {

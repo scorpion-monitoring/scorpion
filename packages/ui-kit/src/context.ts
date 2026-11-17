@@ -25,7 +25,11 @@ export interface Shell {
   /** Asks the server again who is signed in, what they may see and in which language, and reloads the page's data. */
   refresh: () => Promise<void>;
   /** Goes to an address built with `href()`. */
-  goto: (address: string, options?: { replace?: boolean }) => Promise<void>;
+  goto: (
+    address: string,
+    /** `keep`: the focus and the scroll stay where they are (a change made while typing in a search box). */
+    options?: { replace?: boolean; keep?: boolean },
+  ) => Promise<void>;
   /**
    * True while a navigation is pending (a search or a page button was pressed and the next page is still loading). A control
    * that builds its next address from the data of the page on screen is disabled meanwhile, or it asks for the old query.

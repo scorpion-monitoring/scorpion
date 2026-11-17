@@ -78,6 +78,37 @@ fails for a component that has neither the pair of specs nor a place in its list
 - `zod` is set to `jitless` by `@scorpion/contracts/client`, because the page's policy has no `unsafe-eval` and zod would otherwise try `new Function` on first use.
 - **New runtime dependency: `echarts`** (the one named in CLAUDE.md), behind the adapter.
 
+## `FacetSearch` (M12a sprint 3)
+
+The faceted search of a list, used by both service catalogues. **One state, several looks**: `FacetSearch.svelte` holds the text, the
+selection, the address, the history and the announcements; a look (`facet-search/*Look.svelte`, picked by name in `facet-search/looks.ts`)
+only draws and calls the functions of the `view` it is given (`facet-search/types.ts`). The pure parts are in `facet-search/model.ts` with
+table-driven tests.
+
+- **Props:** `definitions` (the facets as `Facets` takes them, counted over the text and the other facets), `suggestions` (the same
+  counted without the text, for the hint below; default `definitions`), `state` and `q` (from the address), `total`, `look`, `path`,
+  `label`, `countKey` (the page's words for the count line: `<key>.one`, `.other`, `.none`, `.noName`), and the list itself as children.
+- **The address** is the one `Facets` wrote (`?q=&f.<facet>=<value>`, `f.<facet>.min`/`.max`), built by `facetSearchParams()` over
+  `serializeFacets()`: every change drops `page`; `sort`, `dir` and `pageSize` stay.
+- **Live search:** the text is sent after 250 ms of rest (Enter sends at once). A run of typing adds **one** history entry and
+  replaces it while it goes on; a filter change replaces the entry, as before. The shell's `goto(…, { keep: true })` keeps the focus in
+  the box and the scroll where it is.
+- **The count line** above the list ("12 services match", "1 service", "No services match" with "Clear all") and a polite live region
+  that says the same after every answer (not on the first render), with "Stage: Production removed." before it when a chip was removed.
+  When the text matches no name but a facet value (decision Q2), the line says "No services match the name" and offers the best value
+  ("Filter by Provider: IPK Gatersleben (12)"), which adds it and clears the text; `q` keeps its meaning.
+- **Looks:** `sidebar` (the search box above, `Facets` beside the list from `lg`; the look of the catalogues before the sprint) and `bar`
+  (a row of facet disclosure buttons under the box whose value panel opens as a popover, a bottom sheet below `sm`; Escape closes it and
+  gives the focus back to its button; one chip per facet named with every value, "Clear all"; after a removal the focus goes to the next
+  chip, the one before, or the box).
+- **Value panels** (`bar`): one per facet type, picked through `PANELS` in `facet-search/panels.ts` (a new facet type adds a panel there,
+  no `if` in a look). The list panel is a multi-select listbox with counts; above 8 values a filter field narrows it (the label in the
+  page's language, without case or accents), at most 50 values are drawn and "N more, type to narrow" says how many are not. The range
+  panel has from and to within the facet's limits; Enter applies, and from > to is refused with a message, never sent.
+- **Tests:** `facet-search/model.test.ts` (the parser of `facet:value`, the address, offers, chips, ranges) and
+  `apps/web/e2e/components/facet-search.spec.ts` over the scene `facet-search` (`?look=&set=2x3|6|300|range|zero`): keyboard, focus, the
+  live region and axe in both themes.
+
 ## `DashboardGrid` (M11 sprint 2)
 
 The widget grid of the start page, on [Snapgrid](https://snapgrid.dev/svelte/docs/getting-started)'s **headless API** (`createGridContainer`, `createGridItem` with
