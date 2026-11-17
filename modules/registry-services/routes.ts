@@ -18,6 +18,7 @@ import { serializeJsonLd } from '@scorpion/registry-organisations/public';
 import type { CatalogueRow } from './service/catalogue.ts';
 import { MAX_CREATE_BODY_BYTES } from './service/create-schema.ts';
 import { CONTRIBUTABLE_PROPERTIES } from './service/schema-org.ts';
+import { CATALOGUE_FILTERS } from './settings-schema.ts';
 import {
   PERMISSION_CREATE,
   PERMISSION_PUBLISH,
@@ -347,6 +348,13 @@ const publicListQuery = z.looseObject({
   locale: z.string().max(35).optional().describe('The locale of the labels. Default `en`.'),
 });
 
+/** Additive on both list answers (sprint 3 of M12a, decision Q1): the page learns the look from the list it reads. */
+const filterStyleSchema = z
+  .enum(CATALOGUE_FILTERS)
+  .describe(
+    'The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).',
+  );
+
 export const listServicesRoute = createRoute({
   method: 'get',
   path: '/services',
@@ -357,7 +365,7 @@ export const listServicesRoute = createRoute({
   responses: {
     200: ok(
       'Services in the order asked for, then by id; each service once, with its provider and its consortia (none, one or many).',
-      listEnvelope(catalogueRowSchema),
+      listEnvelope(catalogueRowSchema).extend({ filterStyle: filterStyleSchema }),
     ),
     422: {
       description:
@@ -435,6 +443,7 @@ export const listPublicServicesRoute = createRoute({
         'application/json': {
           schema: listEnvelope(publicServiceRowSchema).extend({
             facets: z.array(publicFacetSchema),
+            filterStyle: filterStyleSchema,
           }),
         },
       },
@@ -809,13 +818,19 @@ const roleOut = (r: RoleView) => ({
 export function registerServiceRoutes(r: RouteRegistrar, service: ServicesService) {
   r.internal(listServicesRoute, (async (c) => {
     const { page, pageSize, locale, q, sort, dir, ...rest } = c.req.valid('query');
-    const { services, total } = await service.list(
-      c.get('actor'),
-      { q, sort, dir, filters: filtersOf(rest) },
-      { page, pageSize },
-      locale,
+    const [{ services, total }, filterStyle] = await Promise.all([
+      service.list(
+        c.get('actor'),
+        { q, sort, dir, filters: filtersOf(rest) },
+        { page, pageSize },
+        locale,
+      ),
+      service.catalogueFilters(),
+    ]);
+    return c.json(
+      { ...paginate({ page, pageSize }, total, services.map(rowOut)), filterStyle },
+      200,
     );
-    return c.json(paginate({ page, pageSize }, total, services.map(rowOut)), 200);
   }) satisfies RouteHandler<typeof listServicesRoute, AppEnv>);
 
   r.internal(listServiceFacetsRoute, (async (c) => {
@@ -883,9 +898,11 @@ export function registerServiceRoutes(r: RouteRegistrar, service: ServicesServic
       locale,
     });
     if (!found) throw new NotFound(PUBLIC_NOT_FOUND);
+    const filterStyle = await service.catalogueFilters();
     return c.json(
       {
         ...paginate({ page, pageSize }, found.total, found.services),
+        filterStyle,
         facets: found.facets.map((facet) => ({
           id: facet.id,
           label: facet.label,

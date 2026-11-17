@@ -7,9 +7,11 @@ import { jsonLd, watchCsp } from './support/page-checks.ts';
 import {
   makeCatalogueService,
   makeConsortium,
-  choice,
+  choose,
+  facetValue,
   makeReviewer,
   rows,
+  searchFor,
   seedCatalogue,
   serviceEvents,
 } from './support/services.ts';
@@ -33,14 +35,14 @@ test.describe('journey 2: the catalogue', () => {
     await signInThroughPage(page, at, admin);
     await page.goto(at(`/services?q=${c.tag}`));
     // The licence facet: one service has MIT, the others have none ("Unknown").
-    await expect(choice(page, /^MIT \(1\)/)).toBeVisible();
-    await expect(choice(page, /^Unknown \(23\)/)).toBeVisible();
-    await choice(page, /^MIT/).check();
+    await expect(await facetValue(page, 'Licence', /^MIT \(1\)/)).toBeVisible();
+    await expect(await facetValue(page, 'Licence', /^Unknown \(23\)/)).toBeVisible();
+    await choose(page, 'Licence', /^MIT/);
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page).first()).toContainText(`${c.tag} Alpha`);
     await expect(rows(page).first()).toContainText(c.providers[1].name);
     // Nothing matches a search for something else: the empty state, and a way back.
-    await page.getByLabel('Search by name or short name').fill(`${c.tag}-no-such-service`);
+    await searchFor(page, `${c.tag}-no-such-service`);
     await expect(page).toHaveURL(/no-such-service/);
     await expect(page.getByText('No service matches.')).toBeVisible();
     await api.dispose();
@@ -73,7 +75,7 @@ test.describe('journey 2: the catalogue', () => {
     await expect(box).toBeFocused();
     await expect(page).toHaveURL(/sort=stage/);
     // A filter change replaces that entry.
-    await choice(page, /^Production/).check();
+    await choose(page, 'Stage', /^Production/);
     await expect(page).toHaveURL(/f\.stage=PROD/);
     // One step back leaves the whole search, filter and all.
     await page.goBack();

@@ -7,6 +7,7 @@
 // modules/registry-services/service/public.test.ts and profile.test.ts, the pinned fields in
 // public-records.test.ts, the prototype in public-routes-prototype.test.ts.
 import { makeOrganisation, makeService } from '@scorpion/testing';
+import { DEFAULT_CATALOGUE_FILTERS } from '@scorpion/registry-services/public';
 import { describe, expect, it } from 'vitest';
 import { useIdentityApp, type Reply } from './testing/identity-app.ts';
 
@@ -560,5 +561,48 @@ describe('GET /catalog/services (the public list)', () => {
       const reply = await w.s.call(method, '/catalog/services', { body: {} });
       expect([404, 405, 401, 403], method).toContain(reply.status);
     }
+  });
+});
+
+describe('filterStyle on both list answers (sprint 3 of M12a, decision Q1)', () => {
+  const look = (reply: Reply) => (reply.body as { filterStyle?: unknown }).filterStyle;
+
+  it('carries the setting in the public list and the signed-in list, each in its declared schema', async () => {
+    const w = await world();
+    const anonymous = await w.s.get('/catalog/services');
+    const member = await w.s.get('/services', as(w.people.plain));
+    expect([anonymous.status, member.status]).toEqual([200, 200]);
+    conforms(w.s, anonymous, 'GET', '/catalog/services');
+    conforms(w.s, member, 'GET', '/services');
+    expect([look(anonymous), look(member)]).toEqual([
+      DEFAULT_CATALOGUE_FILTERS,
+      DEFAULT_CATALOGUE_FILTERS,
+    ]);
+  });
+
+  it('follows an administrator’s change, also for a signed-in person who may not read the settings', async () => {
+    const w = await world();
+    const saved = await w.s.get('/settings/registry.services', as(w.people.admin));
+    const put = await w.s.call('PUT', '/settings/registry.services', {
+      ...as(w.people.admin),
+      body: {
+        version: (saved.body as { version: number }).version,
+        values: { ...(saved.body as { values: object }).values, catalogueFilters: 'bar' },
+      },
+    });
+    expect(put.status).toBe(200);
+    expect((await w.s.get('/settings/registry.services', as(w.people.plain))).status).toBe(403);
+    expect(look(await w.s.get('/services', as(w.people.plain)))).toBe('bar');
+    expect(look(await w.s.get('/catalog/services'))).toBe('bar');
+  });
+
+  it('is changed by no one but an administrator: a plain reader’s write is 403 and changes nothing', async () => {
+    const w = await world();
+    const put = await w.s.call('PUT', '/settings/registry.services', {
+      ...as(w.people.plain),
+      body: { version: 1, values: { catalogueFilters: 'bar' } },
+    });
+    expect(put.status).toBe(403);
+    expect(look(await w.s.get('/catalog/services'))).toBe(DEFAULT_CATALOGUE_FILTERS);
   });
 });

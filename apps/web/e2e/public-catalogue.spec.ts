@@ -1,7 +1,15 @@
 import { adminApi } from './support/admin.ts';
 import { violations } from './support/a11y.ts';
 import { expect, test } from './support/fixtures.ts';
-import { choice, params, range, rows, seedCatalogue } from './support/services.ts';
+import {
+  choose,
+  expectChosen,
+  params,
+  range,
+  rows,
+  searchFor,
+  seedCatalogue,
+} from './support/services.ts';
 
 // The public list of services (M12a, sprint 1, item 3): an anonymous visitor searches, filters and pages through the
 // services that were made public, and never sees a private one. The page lives at `/catalog/services`, the pages
@@ -40,20 +48,20 @@ test.describe('the public service catalogue', () => {
     });
 
     await test.step('Filter by stage and read the counts over the published services', async () => {
-      await choice(page, /^Development \(1\)/).check();
+      await choose(page, 'Stage', /^Development \(1\)/);
       await expect(page).toHaveURL(/f\.stage=DEV/);
       await expect(rows(page)).toHaveCount(1);
       await expect(rows(page).first()).toContainText(c.zeta.name);
       await expect(rows(page).first()).toContainText(c.consortia[1].name);
       // Sprint 3 of M12a: the chosen value is drawn once, by its look (here: the checked box), and comes off there.
-      await expect(choice(page, /^Development \(1\)/)).toBeChecked();
-      await choice(page, /^Development \(1\)/).uncheck();
+      await expectChosen(page, 'Stage', /^Development \(1\)/);
+      await choose(page, 'Stage', /^Development \(1\)/, false);
       await expect(page).not.toHaveURL(/f\.stage/);
     });
 
     await test.step('Search by name', async () => {
       // The search runs as one types (sprint 3 of M12a): no button.
-      await page.getByLabel('Search by name or short name').fill(`${c.tag} Alpha`);
+      await searchFor(page, `${c.tag} Alpha`);
       await expect(page).toHaveURL(/q=/);
       await expect(rows(page)).toHaveCount(1);
       await expect(rows(page).first()).toContainText(c.alpha.name);

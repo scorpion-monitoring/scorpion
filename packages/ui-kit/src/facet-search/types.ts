@@ -22,8 +22,10 @@ export interface FacetSearchView {
   readonly text: string;
   /** The search box's label. */
   readonly label: string;
-  /** Typing: the text is sent after `SEARCH_DEBOUNCE_MS` of rest. */
-  setText(text: string): void;
+  /** Typing: the text is sent after `SEARCH_DEBOUNCE_MS` of rest; `send: false` only shows it (a `facet:value` shortcut). */
+  setText(text: string, options?: { send?: boolean }): void;
+  /** Puts back the last text sent (leaving a `facet:value` text that was never a search). */
+  cancelText(): void;
   /** Sends a waiting text at once (Enter). */
   flushText(): void;
   /** The box was left: the next typing starts a new history entry. */

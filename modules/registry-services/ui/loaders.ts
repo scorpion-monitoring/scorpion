@@ -5,7 +5,6 @@
 import type { UiLoadContext } from '@scorpion/contracts';
 import { ApiError, unwrap } from '@scorpion/contracts/client';
 import type { OrganisationChoices, WizardData, WizardSchema } from './wizard-types.ts';
-import type { FacetLook } from '@scorpion/ui-kit';
 import {
   catalogueApiQuery,
   facetsApiQuery,
@@ -65,7 +64,7 @@ export async function loadCatalogue({ api, url, locale }: UiLoadContext) {
     facets: facets.result,
     suggestions,
     canCreate,
-    filterStyle: 'sidebar' as FacetLook,
+    filterStyle: answer.filterStyle,
   };
 }
 
@@ -266,7 +265,7 @@ export async function loadPublicCatalogue({ api, url, locale }: UiLoadContext) {
     total: answer.metadata.totalCount,
     facets: answer.facets,
     suggestions,
-    filterStyle: 'sidebar' as FacetLook,
+    filterStyle: answer.filterStyle,
   };
 }
 

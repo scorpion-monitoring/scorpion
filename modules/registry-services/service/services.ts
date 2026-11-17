@@ -21,10 +21,14 @@ import type {
   OrganisationsPublic,
   SchemaOrgProfile,
 } from '@scorpion/registry-organisations/public';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { ResolvedConfig } from '../config/validate.ts';
 import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/schema.ts';
-import { settingsSchema } from '../settings-schema.ts';
+import {
+  CATALOGUE_FILTERS_SINCE,
+  settingsSchema,
+  type CatalogueFilters,
+} from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import {
   createCatalogue,
@@ -348,6 +352,18 @@ export interface ServicesService {
   >;
   /** The public services an organisation is the provider or a consortium of, by name; empty with `allowPublic` off. */
   listPublicByOrganisationAsSystem: (organisationId: string) => Promise<PublicServiceLink[]>;
+  /**
+   * The look of the catalogues' faceted search (setting `catalogueFilters`), for the two list answers. Not a
+   * secret and not a person's: the list routes have checked their caller already, the public one has none.
+   */
+  catalogueFilters: () => Promise<CatalogueFilters>;
+  /**
+   * The upgrade step of sprint 3 of M12a (decision Q4): an instance with a service created before the looks
+   * (`CATALOGUE_FILTERS_SINCE`) keeps the look it had: `sidebar` is stored once, only when the key is not stored, and
+   * an administrator's choice is never overwritten. A new instance writes nothing; the default applies. Trusted code,
+   * run at start (`system.ready`); checks no permission.
+   */
+  upgradeCatalogueFiltersAsSystem: () => Promise<'seeded' | 'kept'>;
   /** The SPDX search for the licence field; needs `…service.read`. */
   searchLicences: (actor: Actor, query: string, limit?: number) => Promise<SpdxLicense[]>;
   listRoles: (actor: Actor, locale?: string) => Promise<RoleView[]>;
@@ -443,7 +459,7 @@ function isSlugClash(error: unknown): boolean {
 export interface ServicesDeps {
   authz: Pick<AuthzService, 'require' | 'can'>;
   blob: Pick<BlobService, 'put' | 'setReference'>;
-  settings: Pick<SettingsService, 'validateTerm' | 'listTerms'>;
+  settings: Pick<SettingsService, 'validateTerm' | 'listTerms' | 'seedSettingKey'>;
   organisations: Pick<
     OrganisationsPublic,
     | 'findByIdsAsSystem'
@@ -1548,6 +1564,22 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     async schemaOrgPublicAsSystem(ref) {
       const hit = await publicRow(ref);
       return hit && profileOf(hit.row, hit.links, hit.values);
+    },
+
+    async catalogueFilters() {
+      return (await settingsNow()).catalogueFilters;
+    },
+
+    async upgradeCatalogueFiltersAsSystem() {
+      // An instance that existed before the looks did has a service from before them. A new instance has none, writes
+      // nothing (the default applies) and never will: its services all come later.
+      const [existing] = await ctx.db
+        .select({ id: service.id })
+        .from(service)
+        .where(lt(service.createdAt, CATALOGUE_FILTERS_SINCE))
+        .limit(1);
+      if (!existing) return 'kept';
+      return deps.settings.seedSettingKey(ctx.moduleId, 'catalogueFilters', 'sidebar');
     },
 
     async listPublicAsSystem(query) {

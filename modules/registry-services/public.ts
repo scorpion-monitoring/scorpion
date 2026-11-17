@@ -62,3 +62,10 @@ declare module '@scorpion/kernel' {
     'registry.services': ServicesPublic;
   }
 }
+
+/** The looks of the catalogues' faceted search and the default (setting `catalogueFilters`, sprint 3 of M12a). */
+export {
+  CATALOGUE_FILTERS,
+  DEFAULT_CATALOGUE_FILTERS,
+  type CatalogueFilters,
+} from './settings-schema.ts';

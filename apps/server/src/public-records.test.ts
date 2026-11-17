@@ -39,6 +39,8 @@ const PUBLIC_SERVICE_LIST = [
   'facets[].options[].key',
   'facets[].options[].label',
   'facets[].options[].selected',
+  // The look of the filters the administrator chose (sprint 3 of M12a, decision Q1): not a record's field.
+  'filterStyle',
   'metadata',
   'metadata.currentPage',
   'metadata.pageSize',

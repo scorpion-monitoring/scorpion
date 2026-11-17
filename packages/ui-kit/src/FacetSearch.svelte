@@ -74,6 +74,9 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** True after the first send of a typing run: the next sends replace its history entry. */
   let typing = false;
+  /** The box shows text that is not a search (a `facet:value` shortcut): a change keeps the last text sent. */
+  let held = false;
+  const query = () => (held ? sent : text);
 
   $effect.pre(() => {
     // The address changed from outside (back, a link): take its text, unless it is the one just sent.
@@ -115,7 +118,7 @@
     }
     typing = false;
     selection = next;
-    navigate(text, next, false);
+    navigate(query(), next, false);
   }
 
   /** Said before the count after the next answer ("Stage: Production removed."), then forgotten. */
@@ -139,9 +142,14 @@
     get label() {
       return label ?? t('kit.facetSearch.search');
     },
-    setText(next) {
+    setText(next, options) {
       text = next.slice(0, MAX_TEXT);
       if (timer !== undefined) clearTimeout(timer);
+      held = options?.send === false;
+      if (held) {
+        timer = undefined;
+        return;
+      }
       timer = setTimeout(() => {
         timer = undefined;
         if (text.trim() === sent) return;
@@ -150,6 +158,12 @@
       }, SEARCH_DEBOUNCE_MS);
     },
     flushText,
+    cancelText() {
+      clearTimeout(timer);
+      timer = undefined;
+      held = false;
+      text = sent;
+    },
     endTyping() {
       flushText();
       typing = false;
@@ -169,10 +183,12 @@
     },
     clearAll() {
       text = '';
+      held = false;
       change({});
     },
     take(offer: Offer) {
       text = '';
+      held = false;
       change(toggleOption(selection, offer.facet.id, offer.option.value, true));
     },
   };
