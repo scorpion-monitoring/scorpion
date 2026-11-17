@@ -461,6 +461,8 @@ test.describe('FacetSearch, look combined', () => {
     await box(page).click();
     await page.keyboard.type('service');
     await expect.poll(async () => (await address(page)).get('q')).toBe('service');
+    // Nothing to offer for "service": the list waits to be asked for.
+    await page.keyboard.press('ArrowDown');
     const stage = page
       .getByRole('listbox', { name: 'Filter by' })
       .getByRole('option', { name: 'Stage' });
@@ -485,6 +487,33 @@ test.describe('FacetSearch, look combined', () => {
     await page.keyboard.press('Escape');
     await expect(box(page)).toHaveValue('service');
     await expect(page.getByTestId('changes')).toHaveText('0');
+  });
+
+  test('the list is drawn above the count line and the results, never over them', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene, 'set=zero');
+    await box(page).click();
+    await page.keyboard.type('gat');
+    const list = page.getByRole('listbox', { name: 'Filter by' });
+    await expect(list).toBeVisible();
+    const bottom = (await list.boundingBox())!;
+    const count = (await page.locator('[data-facet-count]').boundingBox())!;
+    expect(bottom.y + bottom.height).toBeLessThanOrEqual(count.y);
+  });
+
+  test('typing a name that offers no value shows no list, so the found rows are in view; ↓ opens it', async ({
+    page,
+    scene,
+  }) => {
+    await open(scene);
+    await box(page).click();
+    await page.keyboard.type('galaxy');
+    await expect(page.getByTestId('rows').getByRole('listitem')).toHaveText(['Service D Galaxy']);
+    await expect(box(page)).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('listbox', { name: 'Filter by' })).toBeVisible();
   });
 
   test('the shortcut takes the facet’s label in the page’s language', async ({ page, scene }) => {
