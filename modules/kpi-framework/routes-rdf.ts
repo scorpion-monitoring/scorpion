@@ -1,7 +1,7 @@
 // The RDF reads of kpi.framework (ADR-0040, M9 sprint 4): the indicators and KPI sets as RIMO-shaped Turtle and JSON-LD.
 // Two pairs over one model:
 //   - `GET /api/v1/kpi/rimo.ttl` and `.jsonld`: the public API, a token with `kpi.framework.v1.read`, `private, no-cache`;
-//   - `GET /public/kpi/rimo.ttl` and `.jsonld` (the internal surface, like `/public/services/{ref}`): no token, definitions
+//   - `GET /catalog/kpi/rimo.ttl` and `.jsonld` (the internal surface, like `/catalog/services/{ref}`): no token, definitions
 //     only, a short `max-age` and an ETag (`If-None-Match` gets 304).
 // Thin: one service call, the document is returned as it is. The IRIs in the answers identify; they do not dereference.
 import { createRoute, z, type AppEnv, type Context, type RouteHandler } from '@scorpion/contracts';
@@ -33,7 +33,7 @@ const jsonLdSchema = z
   );
 
 const V1_DESCRIPTION = (format: string) =>
-  `The indicators and KPI sets as RDF (${format}) following RIMO 0.2.0: each indicator is a \`rimo:KPI\` with its name, description, example, \`rimo:isQualitativeIndicator\`, one \`rimo:KPIValue\` node that carries the unit, \`rimo:measuredBy\` and \`rimo:canBeAutomatedBy\`, and \`rimo:mandatoryFor\`, \`rimo:recommendedFor\` or \`rimo:appliedTo\` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. \`Cache-Control: private, no-cache\`. The same document without a token is \`GET /public/kpi/rimo.ttl\` and \`/public/kpi/rimo.jsonld\` of the internal surface.`;
+  `The indicators and KPI sets as RDF (${format}) following RIMO 0.2.0: each indicator is a \`rimo:KPI\` with its name, description, example, \`rimo:isQualitativeIndicator\`, one \`rimo:KPIValue\` node that carries the unit, \`rimo:measuredBy\` and \`rimo:canBeAutomatedBy\`, and \`rimo:mandatoryFor\`, \`rimo:recommendedFor\` or \`rimo:appliedTo\` pointing to the KPI set (a RIMO service category when the set maps to one). Definitions only: no measurement and no service. The identifiers identify; they are not addresses of pages. \`Cache-Control: private, no-cache\`. The same document without a token is \`GET /catalog/kpi/rimo.ttl\` and \`/catalog/kpi/rimo.jsonld\` of the internal surface.`;
 
 export const getRimoTurtleV1Route = createRoute({
   method: 'get',
@@ -76,7 +76,7 @@ const notModified = {
 
 export const getPublicRimoTurtleRoute = createRoute({
   method: 'get',
-  path: '/public/kpi/rimo.ttl',
+  path: '/catalog/kpi/rimo.ttl',
   public: true,
   publicReason: PUBLIC_REASON,
   summary: 'Read the KPI definitions as RDF (Turtle), public',
@@ -93,7 +93,7 @@ export const getPublicRimoTurtleRoute = createRoute({
 
 export const getPublicRimoJsonLdRoute = createRoute({
   method: 'get',
-  path: '/public/kpi/rimo.jsonld',
+  path: '/catalog/kpi/rimo.jsonld',
   public: true,
   publicReason: PUBLIC_REASON,
   summary: 'Read the KPI definitions as RDF (JSON-LD), public',

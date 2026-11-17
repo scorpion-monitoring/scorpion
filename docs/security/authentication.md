@@ -96,13 +96,15 @@ Three controls apply to a password login, in the order a request meets them. The
    The password checks of a signed-in session (re-authentication and changing the password) count on the username alone.
 3. **The cost of one guess.** Argon2id with 64 MiB, 3 passes and 1 lane (RFC 9106 second option), a unique salt per password.
 
-| Setting `loginThrottle.…` | Default | Meaning                                                                           |
-| ------------------------- | ------- | --------------------------------------------------------------------------------- |
-| `freeAttempts`            | 5       | Failures for one account from one network before it is blocked                    |
-| `freeAttemptsPerAccount`  | 20      | Failures for one account from anywhere before it is blocked (a rotating attacker) |
-| `baseDelaySeconds`        | 15      | The first block; each further failure doubles it (15, 30, 60, 120, 240, 480, …)   |
-| `maxDelaySeconds`         | 900     | The ceiling: no block is ever longer than 15 minutes                              |
-| `forgetAfterSeconds`      | 3600    | A counter without a failure for this long starts again                            |
+| Setting `loginThrottle.…` | Default | Meaning                                                                                            |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `freeAttempts`            | 5       | Failures for one account from one network before it is blocked                                     |
+| `freeAttemptsPerAccount`  | 20      | Failures for one account from anywhere before it is blocked (a rotating attacker)                  |
+| `baseDelaySeconds`        | 15      | The first block; each further failure doubles it (15, 30, 60, 120, 240, 480, …)                    |
+| `maxDelaySeconds`         | 900     | The ceiling: no block is ever longer than 15 minutes                                               |
+| `forgetAfterSeconds`      | 3600    | A counter without a failure for this long starts again                                             |
+| `auditWindowSeconds`      | 3600    | The window in which the failed sign-ins of one name become one audit entry                         |
+| `auditMaxUnknownNames`    | 200     | Names that are no account that get an entry of their own per window; the rest are counted together |
 
 **Lockout stance: there is no hard lockout.** An account is never disabled by failed logins. A lockout lets anybody who knows a username
 lock that person out, which is the malicious lockout that 6.1.1 names. A block ends by itself within the ceiling, and the person's own
@@ -110,6 +112,10 @@ login from their usual network is not affected by an attacker's failures from an
 that someone who knows a name and controls many addresses can keep the account-wide key blocked, 15 minutes at a time; the person can
 still reset the password by mail (which is throttled by the mail budget, not by this) or sign in at a provider. A notice mail on
 repeated failures, a CAPTCHA and other alternatives to a lockout are in the [backlog](../backlog.md).
+
+**The trail (M12a).** A successful sign-in is `identity.session.created@1` and the failed sign-ins of one name in one window are **one** `identity.login.failed@1` with a count (written when the window closes), both critical on the audit trail, so an administrator sees who signed in and which names were guessed at, without a row per attempt and without the name (ADR-0026 addendum; `login-failures.test.ts`, `signin-audit-routes.test.ts`, tagged `[ASVS-6.3.1]`). An attempt the throttle refuses with 429 looks at no password and is not counted. M12a sprint 5 findings: a wrong password at a re-authentication and a wrong current password at a password change are counted the same way (`context` on the event; the actor is the account whose session made the attempt); a spray of unique unknown names gets at most `auditMaxUnknownNames` entries per window and one `overflow` entry for the rest, so neither the table nor the trail grows with the number of names; a sign-out is an `api.POST /auth/logout` entry (`audit: true`) with the caller, the address and the outcome. A reset has no password to check and no counter.
+
+**Privacy: the client address.** The entry of a successful sign-in and of a sign-out has the client address as the pipeline resolved it (`TRUSTED_PROXIES`) in the `ip` column of the trail, and nowhere else in the entry; the retention job cuts it to a network prefix (/24, /48) after `ipTruncateAfterDays` (30), like every address of the trail. Two limits: the event that carries it waits in the outbox until it is delivered and for `outboxRetentionDays` (14) after, so an operator who sets that above `ipTruncateAfterDays` keeps the full address longer there; and the failed sign-ins of a window have **no** address, because a window counts attempts from many addresses and a table of names and addresses would be what the counter avoids. The throttle table and the failure table hold no address.
 
 Registration, reset requests and resend are not password guesses and have no counter of this kind; they have the `strict` bucket and
 the mail budget of the address (3 mails an hour, 5 for a signed-in user), which also stop somebody from using Scorpion to flood a mailbox.

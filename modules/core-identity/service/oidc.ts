@@ -61,6 +61,8 @@ export interface CompleteInput {
   verifier: string | undefined;
   /** The session cookie, if there is one; a successful login replaces it. */
   previousSessionId: string | undefined;
+  /** The client address the pipeline resolved, for the sign-in entry of the trail. */
+  clientIp?: string | undefined;
 }
 
 /** What the sign-in page may know of a provider: no issuer, no client id. */
@@ -190,13 +192,26 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       throw new Forbidden('Your account is waiting for approval.', ACCOUNT_PENDING);
   }
 
-  async function startSession(userId: string, provider: string, previous: string | undefined) {
+  async function startSession(
+    userId: string,
+    username: string,
+    provider: string,
+    previous: string | undefined,
+    clientIp: string | undefined,
+  ) {
     const created = await ctx.db.tx(async (tx) => {
       const session = await sessions.create(userId, tx);
       await tx
         .update(authMethod)
         .set({ lastLoginAt: sql`now()` })
         .where(and(eq(authMethod.userId, userId), eq(authMethod.provider, provider)));
+      // On the trail in the transaction that makes the session (the provider's id is not part of the event).
+      await ctx.events.emit('identity.session.created@1', {
+        userId,
+        username,
+        method: 'oidc',
+        ip: clientIp ?? null,
+      });
       return session;
     });
     if (previous) await sessions.revoke(previous);
@@ -255,6 +270,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
     provider: OidcProvider,
     claims: IdentityClaims,
     previousSessionId: string | undefined,
+    clientIp: string | undefined,
   ): Promise<CompletedLogin> {
     const [known] = await ctx.db
       .select({ userId: authMethod.userId })
@@ -282,7 +298,13 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       assertMaySignIn(account);
     }
 
-    const session = await startSession(account.id, provider.id, previousSessionId);
+    const session = await startSession(
+      account.id,
+      account.username,
+      provider.id,
+      previousSessionId,
+      clientIp,
+    );
     return { kind: 'login', sessionId: session.id, expiresAt: session.expiresAt };
   }
 
@@ -469,7 +491,7 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         await link(provider, claims, stored.linkUserId!);
         return { kind: 'linked' };
       }
-      return login(provider, claims, input.previousSessionId);
+      return login(provider, claims, input.previousSessionId, input.clientIp);
     },
   };
 }

@@ -141,8 +141,9 @@ export function createAuthzService(
     if (resource?.approval && resource.requestedBy === actor.userId) return 'deny';
     // A token passes only for what its scopes name AND its owner holds (scope ∩ owner, ADR 0015).
     // The scope gate also covers resource policies, so a token cannot reach what it was not given.
-    if (!withinScopes(actor, permission)) return 'deny';
-    if (grants(await permissionsOf(actor.userId, fresh), actor, permission)) return 'allow';
+    if (!withinScopes(actor, permission, info.impliedBy)) return 'deny';
+    if (grants(await permissionsOf(actor.userId, fresh), actor, permission, info.impliedBy))
+      return 'allow';
     if (resource && info.scope !== undefined && resource.type === info.scope) {
       const policies = policyEntries().filter((entry) => entry.resourceType === resource.type);
       for (const policy of policies) {
@@ -291,7 +292,7 @@ export function createAuthzService(
       if (actor.kind !== 'user') throw new Unauthorized();
       const held = await permissionsOf(actor.userId, true);
       return [...held]
-        .filter((id) => withinScopes(actor, id))
+        .filter((id) => withinScopes(actor, id, declaredInfo.get(id)?.impliedBy))
         .flatMap((id) => {
           const info = declaredInfo.get(id);
           return info ? [infoOf(info)] : [];

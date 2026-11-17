@@ -30,6 +30,8 @@ describe('the effective branding', () => {
       imprintUrl: null,
       logos: { light: null, dark: null },
       legalPages: [],
+      colors: { light: {}, dark: {} },
+      themeVersion: null,
     });
   });
 
@@ -52,6 +54,8 @@ describe('the effective branding', () => {
       imprintUrl: 'https://example.org/imprint',
       logos: { light: HASH, dark: null },
       legalPages: ['terms', 'imprint'],
+      colors: { light: {}, dark: {} },
+      themeVersion: null,
     });
     await save({ productName: 'Registry' });
     expect(await settings.getBranding()).toMatchObject({

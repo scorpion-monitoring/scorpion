@@ -5,7 +5,7 @@ import type { IdentityService } from '@scorpion/core-identity/public';
 import type { NotificationsService } from '@scorpion/core-notifications/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import { createSpdx, createStubSpdx, type Spdx } from '@scorpion/integrations';
-import { defineModule } from '@scorpion/kernel';
+import { defineModule, SYSTEM_READY } from '@scorpion/kernel';
 import {
   ORG_TYPE_REGISTRY,
   ORG_PUBLIC_REFERENCE_REGISTRY,
@@ -32,6 +32,7 @@ import {
   PERMISSION_EDIT_IDENTITY,
   PERMISSION_MANAGE,
   PERMISSION_PUBLISH,
+  PERMISSION_WRITE,
   PERMISSION_READ,
   PERMISSION_V1_READ,
   PERMISSION_READ_CONTACT,
@@ -64,7 +65,13 @@ import { TEMPLATES } from './templates/registry.ts';
 import { SERVICE_NAV, SERVICE_ROUTES } from './ui/routes.ts';
 import { settingsSchema, type ServicesSettings } from './settings-schema.ts';
 
-export { settingsSchema, type ServicesSettings } from './settings-schema.ts';
+export {
+  CATALOGUE_FILTERS,
+  DEFAULT_CATALOGUE_FILTERS,
+  settingsSchema,
+  type CatalogueFilters,
+  type ServicesSettings,
+} from './settings-schema.ts';
 export type { ServicesService } from './service/services.ts';
 
 /** What the module registers as its service. */
@@ -163,6 +170,10 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
         description:
           'Read the services through the public API (`GET /api/v1/services`, one service and its Schema.org profile), with a token that holds this scope',
       },
+      [PERMISSION_WRITE]: {
+        description:
+          'Change services with a token that holds this scope: it stands for `edit` and `edit-identity` of the token, and its owner must still be allowed to change that service (a member: not the slug or owner; a manager of the provider: both; Admin: all)',
+      },
       [PERMISSION_PUBLISH]: {
         description: 'Make a service public, or private again (Reviewers and administrators)',
       },
@@ -171,11 +182,13 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       // service checks them (`ctx.authz.require` with the service).
       [PERMISSION_EDIT]: {
         scope: RESOURCE_TYPE,
+        impliedBy: [PERMISSION_WRITE],
         description:
           'Change the name, licence, stage, description, links, contact point, icon, further organisations and configured fields of a service (not its slug or owning organisation)',
       },
       [PERMISSION_EDIT_IDENTITY]: {
         scope: RESOURCE_TYPE,
+        impliedBy: [PERMISSION_WRITE],
         description: 'Change the slug and the owning organisation of a service',
       },
       [PERMISSION_READ_CONTACT]: {
@@ -189,6 +202,14 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
     migrations: new URL('./migrations', import.meta.url),
 
     events: {
+      on: {
+        // The upgrade step of sprint 3 of M12a (decision Q4): an instance that has services keeps `sidebar`.
+        // Once per instance (the key is stored then); a second process finds it stored.
+        [SYSTEM_READY]: async (_event, ctx) => {
+          const result = await current?.upgradeCatalogueFiltersAsSystem();
+          if (result === 'seeded') ctx.log.info('stored the look of the catalogue filters');
+        },
+      },
       // Ids and field names, never text, an address or a URL (a test checks the payloads).
       emits: {
         'registry.service.created@1': z.strictObject({
@@ -261,7 +282,10 @@ export function createServicesModule(options: ServicesModuleOptions = {}) {
       // Every signed-in person may read services and ask to create one (the service checks the provider);
       // Reviewers publish. `manage` stays with Admin (ADR-0014 resolution).
       'authz.defaultRole': [
-        { role: 'user', permissions: [PERMISSION_READ, PERMISSION_CREATE, PERMISSION_V1_READ] },
+        {
+          role: 'user',
+          permissions: [PERMISSION_READ, PERMISSION_CREATE, PERMISSION_V1_READ, PERMISSION_WRITE],
+        },
         { role: 'reviewer', permissions: [PERMISSION_READ, PERMISSION_PUBLISH] },
       ],
       // The policy `service.member` (ADR-0036): members and managers of the service's provider.

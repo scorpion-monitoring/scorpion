@@ -14,7 +14,7 @@ export const ORGANISATION_ROUTES: RouteEntry[] = [
   { path: '/account/organisations', permission: 'registry.organisations.organisation.read' },
   { path: '/admin/memberships', permission: 'registry.organisations.organisation.manage' },
   {
-    path: '/public/organisations/:id',
+    path: '/catalog/organisations/:id',
     public: true,
     publicReason:
       'Anyone may read the public profile of an organisation that a public service names. The page only calls the public routes, which answer 404 for every other organisation, so existence is not revealed; it draws nothing from a session or a role.',

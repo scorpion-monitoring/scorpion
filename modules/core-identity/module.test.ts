@@ -51,10 +51,12 @@ describe('the module', () => {
       'identity.authMethod.linkRequested@1',
       'identity.authMethod.linked@1',
       'identity.email.verified@1',
+      'identity.login.failed@1',
       'identity.password.changed@1',
       'identity.password.reset@1',
       'identity.password.resetRequested@1',
       'identity.profile.updated@1',
+      'identity.session.created@1',
       'identity.session.reauthenticated@1',
       'identity.sessions.revoked@1',
       'identity.sessions.revokedAll@1',
@@ -81,7 +83,10 @@ describe('the module', () => {
     expect(manifest.routes).toBeDefined();
     expect(manifest.commands?.map((command) => command.name)).toEqual(['create-admin']);
     expect(Object.keys(manifest.events?.on ?? {})).toEqual(['system.ready']);
-    expect(manifest.jobs?.map((job) => job.name)).toEqual(['core.identity.cleanup']);
+    expect(manifest.jobs?.map((job) => job.name)).toEqual([
+      'core.identity.cleanup',
+      'core.identity.login-failures',
+    ]);
   });
 
   it('contributes the manual policy and exactly one authenticator', async () => {
@@ -109,12 +114,14 @@ describe('the module', () => {
         baseDelaySeconds: 15,
         maxDelaySeconds: 900,
         forgetAfterSeconds: 3600,
+        auditWindowSeconds: 3600,
+        auditMaxUnknownNames: 200,
       },
     });
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
-  it('creates exactly its eight tables, all with the module prefix', async () => {
+  it('creates exactly its nine tables, all with the module prefix', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
@@ -123,6 +130,7 @@ describe('the module', () => {
     expect(rows.map((r) => r.table_name)).toEqual([
       'identity_auth_method',
       'identity_first_run_token',
+      'identity_login_failure',
       'identity_login_state',
       'identity_login_throttle',
       'identity_mail_token',
@@ -143,7 +151,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(10); // 0000 to 0009, each once
+    expect(journal.rows).toHaveLength(12); // 0000 to 0011, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {

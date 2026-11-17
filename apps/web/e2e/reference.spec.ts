@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Page } from '@playwright/test';
 import { withDb, stackFor } from './support/db.ts';
+import { permissionBox } from './support/profile.ts';
 import {
   admin,
   createUser,
@@ -34,12 +35,12 @@ const SCOPE_SERVICES = 'registry.services.v1.read';
 async function makeToken(page: Page, name: string, scope: string): Promise<string> {
   const tokens = page.getByRole('region', { name: 'Access tokens' });
   await tokens.getByLabel('Name').fill(name);
-  await tokens.getByRole('checkbox', { name: scope }).check();
+  await (await permissionBox(tokens, scope)).check();
   await tokens.getByRole('button', { name: 'Create the token' }).click();
   const secret = (await page.getByTestId('token-secret').textContent())!;
   await page.getByRole('button', { name: 'I have copied it' }).click();
   // The next token starts from a form with nothing ticked.
-  await tokens.getByRole('checkbox', { name: scope }).uncheck();
+  await (await permissionBox(tokens, scope)).uncheck();
   return secret;
 }
 

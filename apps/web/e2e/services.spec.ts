@@ -7,9 +7,11 @@ import { jsonLd, watchCsp } from './support/page-checks.ts';
 import {
   makeCatalogueService,
   makeConsortium,
-  choice,
+  choose,
+  facetValue,
   makeReviewer,
   rows,
+  searchFor,
   seedCatalogue,
   serviceEvents,
 } from './support/services.ts';
@@ -33,16 +35,53 @@ test.describe('journey 2: the catalogue', () => {
     await signInThroughPage(page, at, admin);
     await page.goto(at(`/services?q=${c.tag}`));
     // The licence facet: one service has MIT, the others have none ("Unknown").
-    await expect(choice(page, /^MIT \(1\)/)).toBeVisible();
-    await expect(choice(page, /^Unknown \(23\)/)).toBeVisible();
-    await choice(page, /^MIT/).check();
+    await expect(await facetValue(page, 'Licence', /^MIT \(1\)/)).toBeVisible();
+    await expect(await facetValue(page, 'Licence', /^Unknown \(23\)/)).toBeVisible();
+    await choose(page, 'Licence', /^MIT/);
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page).first()).toContainText(`${c.tag} Alpha`);
     await expect(rows(page).first()).toContainText(c.providers[1].name);
     // Nothing matches a search for something else: the empty state, and a way back.
-    await page.getByLabel('Search by name or short name').fill(`${c.tag}-no-such-service`);
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await searchFor(page, `${c.tag}-no-such-service`);
+    await expect(page).toHaveURL(/no-such-service/);
     await expect(page.getByText('No service matches.')).toBeVisible();
+    await api.dispose();
+  });
+
+  // Sprint 3 of M12a: the search runs as one types, and a run of typing is one step back, never one per keystroke;
+  // a filter change still replaces the entry, as before. The focus stays in the box while the list changes.
+  test('a typed search is one history entry, however slowly it is typed, and keeps the focus', async ({
+    page,
+    playwright,
+    baseURL,
+    at,
+  }) => {
+    const api = await adminApi(playwright, baseURL, at);
+    const c = await seedCatalogue(api);
+    await signInThroughPage(page, at, admin);
+    await page.goto(at('/services?sort=stage'));
+    const box = page.getByLabel('Search by name or short name');
+    await box.focus();
+    let sent = 0;
+    page.on('request', (request) => {
+      // The page's data, read by the client (`__data.json`) for each search it sends.
+      if (/\/services\/__data\.json\?.*q=/.test(request.url())) sent += 1;
+    });
+    // Slower than the search's rest (250 ms): each character sends.
+    await page.keyboard.type(c.tag, { delay: 400 });
+    await expect(page).toHaveURL(new RegExp(`q=${c.tag}`));
+    await expect(rows(page)).toHaveCount(20);
+    expect(sent, 'the search was sent while typing, more than once').toBeGreaterThan(1);
+    await expect(box).toBeFocused();
+    await expect(page).toHaveURL(/sort=stage/);
+    // A filter change replaces that entry.
+    await choose(page, 'Stage', /^Production/);
+    await expect(page).toHaveURL(/f\.stage=PROD/);
+    // One step back leaves the whole search, filter and all.
+    await page.goBack();
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page).toHaveURL(/sort=stage/);
+    await expect(box).toHaveValue('');
     await api.dispose();
   });
 
@@ -320,10 +359,10 @@ test.describe('journey 4: publication and the public pages', () => {
     // Nothing is public yet: an anonymous visitor gets the 404 of an address nobody has.
     const visitor = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
     const anon = await visitor.newPage();
-    const unknown = await anon.goto(at(`/public/services/${tag}-nobody`));
+    const unknown = await anon.goto(at(`/catalog/services/${tag}-nobody`));
     expect(unknown?.status()).toBe(404);
     const nothing = await mainOf(anon);
-    const closed = await anon.goto(at(`/public/services/${slug}`));
+    const closed = await anon.goto(at(`/catalog/services/${slug}`));
     expect(closed?.status()).toBe(404);
     expect(await mainOf(anon)).toBe(nothing);
 
@@ -352,7 +391,7 @@ test.describe('journey 4: publication and the public pages', () => {
     await expect(page.getByRole('button', { name: 'Make public' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Open the public page' })).toHaveAttribute(
       'href',
-      at(`/public/services/${slug}`),
+      at(`/catalog/services/${slug}`),
     );
 
     // The provider's manager got the inbox item (the service's id in its link resolves to the slug).
@@ -363,7 +402,7 @@ test.describe('journey 4: publication and the public pages', () => {
 
     // An anonymous browser reads the public service: words, links, the block in the head.
     const csp = await watchCsp(anon);
-    const reading = await anon.goto(at(`/public/services/${slug}`));
+    const reading = await anon.goto(at(`/catalog/services/${slug}`));
     expect(reading?.status()).toBe(200);
     await expect(anon.getByRole('heading', { name, level: 1 })).toBeVisible();
     await expect(anon.getByText(`Open data ${tag}`)).toBeVisible();
@@ -383,22 +422,22 @@ test.describe('journey 4: publication and the public pages', () => {
     expect(JSON.stringify(profile)).not.toContain('contactPoint');
     expect(await csp()).toEqual([]);
     // An id and an old address go to the short name.
-    await anon.goto(at(`/public/services/${id}`));
-    await expect(anon).toHaveURL(at(`/public/services/${slug}`));
+    await anon.goto(at(`/catalog/services/${id}`));
+    await expect(anon).toHaveURL(at(`/catalog/services/${slug}`));
 
     // The provider and the consortium link to their public pages.
     await anon.getByRole('link', { name: provider.name }).click();
-    await expect(anon).toHaveURL(at(`/public/organisations/${provider.id}`));
+    await expect(anon).toHaveURL(at(`/catalog/organisations/${provider.id}`));
     await expect(anon.getByRole('heading', { name: provider.name, level: 1 })).toBeVisible();
     await expect(anon.getByRole('link', { name })).toHaveAttribute(
       'href',
-      at(`/public/services/${slug}`),
+      at(`/catalog/services/${slug}`),
     );
     const orgProfile = await jsonLd(anon);
     expect(orgProfile).toMatchObject({ name: provider.name });
     expect(JSON.stringify(orgProfile)).not.toContain('contactPoint');
     expect(await csp()).toEqual([]);
-    await anon.goto(at(`/public/organisations/${consortium.id}`));
+    await anon.goto(at(`/catalog/organisations/${consortium.id}`));
     await expect(anon.getByRole('heading', { name: consortium.name, level: 1 })).toBeVisible();
 
     // With public reads switched off every public address is a 404: the pages and the API.
@@ -409,7 +448,7 @@ test.describe('journey 4: publication and the public pages', () => {
       }));
     await off(false);
     try {
-      for (const path of [`/public/services/${slug}`, `/public/organisations/${provider.id}`]) {
+      for (const path of [`/catalog/services/${slug}`, `/catalog/organisations/${provider.id}`]) {
         expect((await anon.goto(at(path)))?.status(), path).toBe(404);
         expect(
           (await visitor.request.get(at(`/api/internal/${path.slice(1)}`))).status(),
@@ -421,7 +460,7 @@ test.describe('journey 4: publication and the public pages', () => {
       await off(true);
     }
     // Switched back on, what was marked public is served again.
-    expect((await anon.goto(at(`/public/services/${slug}`)))?.status()).toBe(200);
+    expect((await anon.goto(at(`/catalog/services/${slug}`)))?.status()).toBe(200);
 
     // The Reviewer makes it private again, and the next anonymous request is the 404 of an unknown address.
     await page.reload();
@@ -433,7 +472,7 @@ test.describe('journey 4: publication and the public pages', () => {
       page.getByRole('status').filter({ hasText: `${name} is now private.` }),
     ).toBeFocused();
     await expect(page.getByText('Private', { exact: true })).toBeVisible();
-    for (const path of [`/public/services/${slug}`, `/public/organisations/${provider.id}`]) {
+    for (const path of [`/catalog/services/${slug}`, `/catalog/organisations/${provider.id}`]) {
       expect((await anon.goto(at(path)))?.status(), path).toBe(404);
       expect(await mainOf(anon), path).toBe(nothing);
     }
@@ -543,7 +582,7 @@ test.describe('journey 5: a plain User and an anonymous visitor', () => {
     const body = await navigation.text();
     expect(body).not.toMatch(/admin/i);
     expect((JSON.parse(body) as { routes: string[] }).routes).toEqual(
-      expect.arrayContaining(['/services', '/services/:slug', '/public/services/:slug']),
+      expect.arrayContaining(['/services', '/services/:slug', '/catalog/services/:slug']),
     );
 
     // Every write route refuses: the person may read, nothing more.
@@ -593,14 +632,14 @@ test.describe('journey 5: a plain User and an anonymous visitor', () => {
     await anon.goto(at(`/services/${service.slug}`));
     await expect(anon).toHaveURL(/\/login\?returnTo=/);
     await expect(anon.getByRole('heading', { name: /Sign in/ })).toBeVisible();
-    expect((await anon.goto(at(`/public/services/${service.slug}`)))?.status()).toBe(404);
+    expect((await anon.goto(at(`/catalog/services/${service.slug}`)))?.status()).toBe(404);
     expect((await visitor.request.get(at(`/api/internal/services/${service.id}`))).status()).toBe(
       401,
     );
     const open = await visitor.request.get(at('/api/internal/ui/navigation'));
     const routes = ((await open.json()) as { routes: string[] }).routes;
     expect(routes).toContain('/login');
-    expect(routes).toContain('/public/services/:slug');
+    expect(routes).toContain('/catalog/services/:slug');
     expect(
       routes.filter((route) => /^\/(services|admin|account|profile|inbox)/.test(route)),
     ).toEqual([]);

@@ -240,9 +240,9 @@ describe('defineProfile', () => {
     expect(defineProfile({ name: 'x', modules: [] })).toEqual({ name: 'x', modules: [] });
   });
 
-  it('checks module ids against the workspace (no module exists yet, so any id is an error)', () => {
-    // @ts-expect-error 'kpi.impact' is not a module in the workspace
-    defineProfile({ name: 'x', modules: ['kpi.impact'] });
+  it('checks module ids against the workspace (an id that is no workspace module is an error)', () => {
+    // @ts-expect-error 'kpi.nothing' is not a module in the workspace
+    defineProfile({ name: 'x', modules: ['kpi.nothing'] });
   });
 });
 

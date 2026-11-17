@@ -217,6 +217,23 @@ describe('the token routes', () => {
       expect(reply.res.headers.get('content-type')).toContain('application/problem+json');
     });
 
+    it('create and rotate: accept a future expiry through the whole pipeline (the form of the profile page sends one) and echo it', async () => {
+      const { post, session, created } = await withToken();
+      const day = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+      const made = await post('/tokens', {
+        ...session,
+        body: { name: 'with-expiry', scopes: GOOD, expiresAt: `${day}T23:59:59Z` },
+      });
+      expect(made.status, JSON.stringify(made.body)).toBe(201);
+      expect((made.body as { expiresAt: string }).expiresAt).toBe(`${day}T23:59:59.000Z`);
+      const rotated = await post(`/tokens/${created.id}/rotate`, {
+        ...session,
+        body: { expiresAt: `${day}T12:00:00Z` },
+      });
+      expect(rotated.status, JSON.stringify(rotated.body)).toBe(200);
+      expect((rotated.body as { expiresAt: string }).expiresAt).toBe(`${day}T12:00:00.000Z`);
+    });
+
     it('create: 409 for a taken name', async () => {
       const { post, session } = await withToken();
       expect(

@@ -69,8 +69,12 @@ A contributing module must depend on `core.authz` in its `package.json` (ADR-000
    name **and** its owner holds (scope ∩ owner), for the route (`authorizeRoute`) and for `require`/`can` in a
    service; the scope gate also covers resource policies, so a token cannot reach through a policy what it was not
    given. A token without scopes can do nothing; a scope that names a permission the owner lacks grants nothing; a
-   session is not limited by scopes. `grants` and `withinScopes` in `service/permissions.ts` are the pure rule, with
-   table-driven tests. A role taken from the owner takes effect for the token like for the owner (the cache bound
+   session is not limited by scopes. A manifest may declare `impliedBy` on a permission (permissions of the same module,
+   one level): a token that names one of them passes the **scope gate** of this permission, and nothing else changes, so
+   the owner must still hold it (a role, or the policy of the resource) and a token never does more than its owner
+   (ADR-0015, M12a sprint 5 findings). The kernel refuses an `impliedBy` that names another module, the permission itself
+   or a permission that is implied in turn. `grants` and `withinScopes` in `service/permissions.ts` are the pure rule,
+   with table-driven tests. A role taken from the owner takes effect for the token like for the owner (the cache bound
    below).
 
 ### Built-in protections

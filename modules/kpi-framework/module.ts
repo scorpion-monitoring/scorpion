@@ -19,8 +19,11 @@ import {
 import { kpisInPeriod, type KpisInPeriod } from './service/history.ts';
 import {
   effectiveIndicatorsAsSystem,
+  evaluationOfServiceAsSystem,
   indicatorsByIdAsSystem,
+  servicesOfSetAsSystem,
   type EffectiveIndicatorRow,
+  type EvaluationOfService,
   type IndicatorRowAsSystem,
 } from './service/trusted.ts';
 import { iriBaseOf } from './service/shared.ts';
@@ -99,6 +102,13 @@ export interface KpiFrameworkService {
    * the service has since dropped (M10 sprint 2, ADR-0041 "Amended in sprint 2"). A trusted read like the one above.
    */
   indicatorsByIdAsSystem(ids: readonly string[]): Promise<IndicatorRowAsSystem[]>;
+  /**
+   * The set a service has now and the evaluation of that set (M12 sprint 2): `null` for a service with no set, `headline: null` for a set with no
+   * evaluation. The current evaluation, whatever year the caller asks about. A trusted read like the ones above.
+   */
+  evaluationOfServiceAsSystem(serviceId: string): Promise<EvaluationOfService | null>;
+  /** The ids of the services that have a set, by id, at most 5 000 (M12 sprint 2). A trusted read: no permission, ids only. */
+  servicesOfSetAsSystem(setId: string): Promise<string[]>;
 }
 
 // The service types of the dependencies shape `ctx.deps`.
@@ -276,6 +286,8 @@ export function createKpiFrameworkModule() {
         kpisInPeriod: (serviceId, period) => kpisInPeriod(ctx.db, serviceId, period),
         effectiveIndicatorsAsSystem: (serviceId) => effectiveIndicatorsAsSystem(ctx.db, serviceId),
         indicatorsByIdAsSystem: (ids) => indicatorsByIdAsSystem(ctx.db, iriBaseOf(ctx), ids),
+        evaluationOfServiceAsSystem: (serviceId) => evaluationOfServiceAsSystem(ctx.db, serviceId),
+        servicesOfSetAsSystem: (setId) => servicesOfSetAsSystem(ctx.db, setId),
       };
     },
 

@@ -268,6 +268,58 @@ describe('seed (trusted code, no human caller)', () => {
   });
 });
 
+describe('seedKey (trusted code, an upgrade step)', () => {
+  it('creates the row with the one key when nothing is stored, and emits the event', async () => {
+    const { service, admin, kernel } = await setup();
+    expect(await service.seedKey('fix.widgets', 'limit', 7)).toBe('seeded');
+    expect(await service.get(admin, 'fix.widgets')).toMatchObject({
+      version: 1,
+      values: { limit: 7 },
+      updatedBy: null,
+    });
+    expect((await events(kernel.pool)).map((e) => e.payload)).toEqual([
+      { module: 'fix.widgets', keys: ['limit'], version: 1, actorId: null },
+    ]);
+  });
+
+  it('adds the key to a stored row and keeps the other stored keys', async () => {
+    const { service, kernel } = await setup();
+    await kernel.pool.query(
+      `insert into settings_setting (module_id, value, version) values ('fix.widgets', '{"label": "kept"}', 4)`,
+    );
+    expect(await service.seedKey('fix.widgets', 'limit', 9)).toBe('seeded');
+    const row = (
+      await kernel.pool.query<{ value: unknown; version: number }>(
+        `select value, version from settings_setting where module_id = 'fix.widgets'`,
+      )
+    ).rows[0];
+    expect(row).toEqual({ value: { label: 'kept', limit: 9 }, version: 5 });
+  });
+
+  it('never overwrites a stored key, and emits nothing then', async () => {
+    const { service, admin, kernel } = await setup();
+    await service.update(admin, 'fix.widgets', { version: 0, values: { limit: 5 } });
+    expect(await service.seedKey('fix.widgets', 'limit', 9)).toBe('kept');
+    expect(await service.get(admin, 'fix.widgets')).toMatchObject({ values: { limit: 5 } });
+    expect(await events(kernel.pool)).toHaveLength(1);
+  });
+
+  it('refuses a value the schema rejects (422) and a module with no settings (404), storing nothing', async () => {
+    const { service, kernel } = await setup();
+    await expect(service.seedKey('fix.widgets', 'limit', 'many')).rejects.toBeInstanceOf(Invalid);
+    await expect(service.seedKey('no.such', 'limit', 1)).rejects.toBeInstanceOf(NotFound);
+    expect((await kernel.pool.query('select 1 from settings_setting')).rows).toEqual([]);
+  });
+
+  it('rolls the row back with the event when the event cannot be written', async () => {
+    const { service, kernel } = await setup();
+    const restore = await breakOutbox(kernel.pool);
+    await expect(service.seedKey('fix.widgets', 'limit', 3)).rejects.toThrow();
+    await restore();
+    expect((await kernel.pool.query('select 1 from settings_setting')).rows).toEqual([]);
+  });
+});
+
 describe('the cache', () => {
   it('serves a read from memory until the TTL passes, and a write empties it in this process', async () => {
     let now = 1_000;

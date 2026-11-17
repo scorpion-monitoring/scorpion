@@ -132,6 +132,9 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
     permissions: {
       [PERMISSION_SUBMIT]: {
         scope: RESOURCE_SERVICE,
+        // A member holds `submit` through the policy, which the token form cannot offer: the write scope of the public API
+        // passes its scope gate (ADR-0015). The owner must still be allowed to submit for the service.
+        impliedBy: [PERMISSION_V1_WRITE],
         description:
           'Submit measurements for one service (Admin, and the approved members of the service provider through the policy of this module)',
       },
@@ -141,7 +144,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
       },
       [PERMISSION_V1_WRITE]: {
         description:
-          'Record measurements (`POST /api/v1/measurements`) through the public API, with a token that holds this scope; its owner must also be allowed to submit for the service (`kpi.ingestion.measurement.submit`)',
+          'Record measurements (`POST /api/v1/measurements`) through the public API, with a token that holds this scope; its owner must also be allowed to submit for the service (`kpi.ingestion.measurement.submit`, which this scope implies for the write)',
       },
       [PERMISSION_INGEST]: {
         description:
@@ -167,7 +170,7 @@ export function createKpiIngestionModule(options: KpiIngestionOptions = {}) {
 
     jobs: [
       {
-        // Daily at 06:00 UTC; the handler returns at once unless today is the setting's day (default the 6th). The job page's "run now"
+        // Daily at 06:00 UTC; the handler returns at once before the setting's day (default the 6th) and acts on it and every day after it in the month. The job page's "run now"
         // is the manual trigger, and `kpii_reminder_sent` makes it safe: a provider and month are mailed once.
         name: REMINDER_JOB,
         schedule: '0 6 * * *',

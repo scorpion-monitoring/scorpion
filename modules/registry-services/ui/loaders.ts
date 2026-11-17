@@ -5,7 +5,12 @@
 import type { UiLoadContext } from '@scorpion/contracts';
 import { ApiError, unwrap } from '@scorpion/contracts/client';
 import type { OrganisationChoices, WizardData, WizardSchema } from './wizard-types.ts';
-import { catalogueApiQuery, facetsApiQuery, parseCatalogueQuery } from './query.ts';
+import {
+  catalogueApiQuery,
+  facetsApiQuery,
+  parseCatalogueQuery,
+  type CatalogueQuery,
+} from './query.ts';
 
 const CREATE = 'registry.services.service.create';
 /** Held by an administrator only: the wizard then lists every organisation, not only the caller's own. */
@@ -33,25 +38,33 @@ export async function loadCatalogue({ api, url, locale }: UiLoadContext) {
   const query = parseCatalogueQuery(url.searchParams);
   // The filters are the facets' ids, which the module's own registry decides: the typed query names the four
   // seeded ones and the API takes the rest, hence the cast.
-  const [answer, facets, canCreate] = await Promise.all([
+  const facetsOf = (asked: CatalogueQuery) =>
+    unwrap(
+      api.GET('/services/facets', {
+        params: { query: facetsApiQuery(asked, locale) as never },
+      }),
+    );
+  // `unfiltered`: the facets counted without the text, for the values the search offers for typed text and the
+  // hint when the text matches no name (decision Q2). One more read, only while there is a text.
+  const [answer, facets, unfiltered, canCreate] = await Promise.all([
     unwrap(
       api.GET('/services', {
         params: { query: catalogueApiQuery(query, locale) as never },
       }),
     ),
-    unwrap(
-      api.GET('/services/facets', {
-        params: { query: facetsApiQuery(query, locale) as never },
-      }),
-    ),
+    facetsOf(query),
+    query.q ? facetsOf({ ...query, q: undefined }) : undefined,
     mayCreate(api),
   ]);
+  const suggestions = (unfiltered ?? facets).result;
   return {
     query,
     services: answer.result,
     total: answer.metadata.totalCount,
     facets: facets.result,
+    suggestions,
     canCreate,
+    filterStyle: answer.filterStyle,
   };
 }
 
@@ -210,6 +223,54 @@ export type ServiceData = Awaited<ReturnType<typeof loadService>>;
 
 // ----- the public pages -----------------------------------------------------------------------------------
 
+/** The two filters of the public list; any other `f.<id>` in the address is dropped, never sent (it would be a 422). */
+const PUBLIC_FILTERS = ['stage', 'consortium'] as const;
+
+/**
+ * The public list of services (`/catalog/services`): the search, the two facets and the page, asked of the one public
+ * route with no more than the request itself. With public reads switched off the API answers its 404, which the shell
+ * shows as the page of an address nobody has.
+ */
+export async function loadPublicCatalogue({ api, url, locale }: UiLoadContext) {
+  const query = parseCatalogueQuery(url.searchParams);
+  query.filters = Object.fromEntries(
+    Object.entries(query.filters).filter(([id]) =>
+      (PUBLIC_FILTERS as readonly string[]).includes(id),
+    ),
+  );
+  const list = (q: string | undefined, page: number, pageSize: number) =>
+    unwrap(
+      api.GET('/catalog/services', {
+        params: {
+          query: {
+            page: String(page),
+            pageSize: String(pageSize),
+            locale,
+            ...(q && { q }),
+            ...query.filters,
+          },
+        },
+      }),
+    );
+  // The facets counted without the text, as on the signed-in page (decision Q2): one smallest page, only while
+  // there is a text.
+  const [answer, unfiltered] = await Promise.all([
+    list(query.q, query.page, query.pageSize),
+    query.q ? list(undefined, 0, 1) : undefined,
+  ]);
+  const suggestions = (unfiltered ?? answer).facets;
+  return {
+    query,
+    services: answer.result,
+    total: answer.metadata.totalCount,
+    facets: answer.facets,
+    suggestions,
+    filterStyle: answer.filterStyle,
+  };
+}
+
+export type PublicCatalogueData = Awaited<ReturnType<typeof loadPublicCatalogue>>;
+
 /**
  * The public page of a service: the public record and its profile, asked of the public routes with no more
  * than the request itself. A service that is not public, an unknown one and a switched-off instance all come
@@ -220,10 +281,10 @@ export async function loadPublicService({ api, params, redirect }: UiLoadContext
   const ref = params.slug!;
   const path = { ref };
   const [service, profile] = await Promise.all([
-    unwrap(api.GET('/public/services/{ref}', { params: { path } })),
-    unwrap(api.GET('/public/services/{ref}/schema-org', { params: { path } })),
+    unwrap(api.GET('/catalog/services/{ref}', { params: { path } })),
+    unwrap(api.GET('/catalog/services/{ref}/schema-org', { params: { path } })),
   ]);
-  if (service.slug !== ref) redirect(`/public/services/${encodeURIComponent(service.slug)}`);
+  if (service.slug !== ref) redirect(`/catalog/services/${encodeURIComponent(service.slug)}`);
   return { service, profile };
 }
 

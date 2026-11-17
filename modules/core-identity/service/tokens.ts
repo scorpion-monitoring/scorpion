@@ -27,6 +27,17 @@ import { hashPassword, verifyPassword } from './password.ts';
 import { requireSession as requireSessionActor } from './require-user.ts';
 import { cacheKey, generateToken, parseToken } from './token-format.ts';
 
+/**
+ * The route has already parsed the body, so `expiresAt` arrives as a `Date`; the service checks its input again (it is
+ * called from the CLI and from tests too), and the schema reads the wire form. A date goes back to its ISO text first,
+ * which the schema reads to the same instant.
+ */
+function asWire(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null) return input;
+  const { expiresAt } = input as { expiresAt?: unknown };
+  return expiresAt instanceof Date ? { ...input, expiresAt: expiresAt.toISOString() } : input;
+}
+
 /** How long one process trusts a token it has verified. The staleness bound across processes. */
 export const TOKEN_CACHE_TTL_MS = 5_000;
 const CACHE_MAX_ENTRIES = 10_000;
@@ -290,7 +301,7 @@ export function createTokenService(
     async create(actor, input) {
       const { userId } = requireSession(actor);
       await authz.require(actor, 'core.identity.token.manage');
-      const parsed = createTokenInput.safeParse(input);
+      const parsed = createTokenInput.safeParse(asWire(input));
       if (!parsed.success) throw invalid(parsed.error);
       const { name, scopes, expiresAt } = parsed.data;
       // A scope that names no permission could never grant anything: say so now, not silently later.
@@ -401,7 +412,7 @@ export function createTokenService(
     async rotate(actor, id, input) {
       const { userId } = requireSession(actor);
       await authz.require(actor, 'core.identity.token.manage');
-      const parsed = rotateTokenInput.safeParse(input);
+      const parsed = rotateTokenInput.safeParse(asWire(input));
       if (!parsed.success) throw invalid(parsed.error);
       if (!UUID.test(id)) throw noSuchToken();
       const first = await prepare();

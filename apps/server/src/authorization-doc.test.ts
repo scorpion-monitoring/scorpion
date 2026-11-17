@@ -22,6 +22,7 @@ describe('docs/security/authorization.md', () => {
       kpi: true,
       ingestion: true,
       analytics: true,
+      impact: true,
     });
     const rows = kernel.routes
       .map(({ module, surface, route }) => ({

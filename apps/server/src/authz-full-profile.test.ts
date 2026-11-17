@@ -90,6 +90,7 @@ describe('profile full with core.authz', () => {
       'kpi.framework',
       'kpi.ingestion',
       'kpi.analytics',
+      'kpi.impact',
       'public-api',
     ]);
   });

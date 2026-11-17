@@ -53,7 +53,7 @@ fails for a component that has neither the pair of specs nor a place in its list
   - **The convention (M5 plan, decision 6).** A module describes a setting with Zod's `.meta({ title, description, group, order, widget })`; Zod copies those keys into the JSON
     Schema (`.describe(text)` is `description`), and the form reads only those (`x-group`, `x-order` and `x-widget` are accepted too). `title` is the label (the key in words
     when there is none), `description` the hint, `group` the fieldset a field belongs to (loose fields first, then the groups in the order they are first used), `order` moves a field
-    within its object (declaration order otherwise), `widget` names a custom control: the page passes `widgets={{ logo: LogoUpload }}` (a component that takes `WidgetProps`).
+    within its object (declaration order otherwise), `widget` names a custom control: the page passes `widgets={{ logo: LogoUpload }}` (a component that takes `WidgetProps`). A widget may draw a whole object: it gets the server's messages at its own field as `errors` and those of the fields inside it as `errorsBelow`, by relative pointer (`/light`). `errorPrefix` may have several segments (`values.branding`).
     Nothing else in a schema changes the form.
   - **A secret is `writeOnly`**: a password field that is empty even when a value is stored (nothing is stored in a setting, see "Secrets" in the core.settings README), with
     `autocomplete="new-password"`, and sent only when something was typed.
@@ -77,6 +77,51 @@ fails for a component that has neither the pair of specs nor a place in its list
   **`Breadcrumb`** (the last item is the page).
 - `zod` is set to `jitless` by `@scorpion/contracts/client`, because the page's policy has no `unsafe-eval` and zod would otherwise try `new Function` on first use.
 - **New runtime dependency: `echarts`** (the one named in CLAUDE.md), behind the adapter.
+
+## `FacetSearch` (M12a sprint 3)
+
+The faceted search of a list, used by both service catalogues. **One state, several looks**: `FacetSearch.svelte` holds the text, the
+selection, the address, the history and the announcements; a look (`facet-search/*Look.svelte`, picked by name in `facet-search/looks.ts`)
+only draws and calls the functions of the `view` it is given (`facet-search/types.ts`). The pure parts are in `facet-search/model.ts` with
+table-driven tests.
+
+- **Props:** `definitions` (the facets as `Facets` takes them, counted over the text and the other facets), `suggestions` (the same
+  counted without the text, for the hint below; default `definitions`), `state` and `q` (from the address), `total`, `look`, `path`,
+  `label`, `countKey` (the page's words for the count line: `<key>.one`, `.other`, `.none`, `.noName`), `shortcuts`, and the list itself
+  as children. The catalogues pass the look from the list answers' `filterStyle` (setting `catalogueFilters` of `registry.services`).
+- **The address** is the one `Facets` wrote (`?q=&f.<facet>=<value>`, `f.<facet>.min`/`.max`), built by `facetSearchParams()` over
+  `serializeFacets()`: every change drops `page`; `sort`, `dir` and `pageSize` stay.
+- **Live search:** the text is sent after 250 ms of rest (Enter sends at once). A run of typing adds **one** history entry and
+  replaces it while it goes on; a filter change replaces the entry, as before. The shell's `goto(…, { keep: true })` keeps the focus in
+  the box and the scroll where it is.
+- **The count line** above the list ("12 services match", "1 service", "No services match" with "Clear all") and a polite live region
+  that says the same after every answer (not on the first render), with "Stage: Production removed." before it when a chip was removed.
+  When the text matches no name but a facet value (decision Q2), the line says "No services match the name" and offers the best value
+  ("Filter by Provider: IPK Gatersleben (12)"), which adds it and clears the text; `q` keeps its meaning.
+- **Looks:** `sidebar` (the search box above, `Facets` beside the list from `lg`; the look of the catalogues before the sprint) and `bar`
+  (a row of facet disclosure buttons under the box whose value panel opens as a popover, a bottom sheet below `sm`; Escape closes it and
+  gives the focus back to its button; one chip per facet named with every value, "Clear all"; after a removal the focus goes to the next
+  chip, the one before, or the box).
+- **`combined`** (the default look of a new instance): one ARIA 1.2 combobox above the list. The chips of the chosen facets sit before the
+  input in the same box (out of the tab order: Tab into the box reaches the input, Shift+Tab reaches the chips; a chip opens its facet, its ×
+  removes it); ✕ clears the text and the filters. Focusing the empty box opens a listbox of the facets **with no active option** (so a screen
+  reader says the combobox, its name and "expanded" first); ↓ ↑ move, Enter or → opens a facet's value panel (second level, with a back
+  entry), typing narrows its values, Space chooses (the panel stays open; while a filter is typed, Space types until an arrow key was
+  pressed), Escape or ← (empty filter) goes back, Escape on the facets closes the list with the focus in the box, Backspace in the empty
+  box removes the last chip and announces it, Tab leaves. A range panel takes the focus into its fields and gives it back on Escape.
+  Typed text searches the names; the list then offers the facet values whose label matches (group "Matching values", with counts, from
+  `suggestions`) above the facets, and shows only when it has something to offer or is asked for (↓, a click), so it never hides the rows
+  the name found. `provider:ipk`, `Anbieter:ipk`, `provider:"IPK Gat"` narrow the list to that facet and are **not** sent as a search
+  (Escape puts back the search they stood in for); an unknown facet name is plain text. The list is drawn in the flow under the box (it
+  pushes the results down, never covers them); a press outside closes it after its click. Below `sm` the chips fold after the first into
+  a `+N` chip, so the box keeps to two lines. `shortcuts` (the public page) adds a row of facet buttons that open the list at a facet.
+- **Value panels** (`bar` and `combined`): one per facet type, picked through `PANELS` in `facet-search/panels.ts` (a new facet type adds a panel there,
+  no `if` in a look). The list panel is a multi-select listbox with counts; above 8 values a filter field narrows it (the label in the
+  page's language, without case or accents), at most 50 values are drawn and "N more, type to narrow" says how many are not. The range
+  panel has from and to within the facet's limits; Enter applies, and from > to is refused with a message, never sent.
+- **Tests:** `facet-search/model.test.ts` (the parser of `facet:value`, the address, offers, chips, ranges) and
+  `apps/web/e2e/components/facet-search.spec.ts` over the scene `facet-search` (`?look=&set=2x3|6|300|range|zero`): keyboard, focus, the
+  live region and axe in both themes.
 
 ## `DashboardGrid` (M11 sprint 2)
 

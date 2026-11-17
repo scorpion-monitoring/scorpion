@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { FIELDS } from './config/fields.ts';
 import * as schema from './db/schema.ts';
 import manifest, { createServicesModule } from './module.ts';
-import { settingsSchema } from './settings-schema.ts';
+import { DEFAULT_CATALOGUE_FILTERS, settingsSchema } from './settings-schema.ts';
 import packageJson from './package.json' with { type: 'json' };
 import { fixtureContributor, useServices } from './test/harness.ts';
 
@@ -26,7 +26,7 @@ const sourceFiles = (folder: string): string[] =>
   );
 
 describe('the manifest', () => {
-  it('has the id, the table prefix, five plain permissions (one of them the v1 read) and three scoped to the service (ADR-0036)', () => {
+  it('has the id, the table prefix, six plain permissions (one of them the v1 read) and three scoped to the service (ADR-0036)', () => {
     expect(manifest.id).toBe('registry.services');
     expect(manifest.tablePrefix).toBe('svc_');
     const permissions = manifest.permissions ?? {};
@@ -40,6 +40,7 @@ describe('the manifest', () => {
       'registry.services.service.manage',
       'registry.services.service.publish',
       'registry.services.service.read',
+      'registry.services.service.write',
       'registry.services.v1.read',
     ]);
     expect(
@@ -109,6 +110,7 @@ describe('the manifest', () => {
           'registry.services.service.read',
           'registry.services.service.create',
           'registry.services.v1.read',
+          'registry.services.service.write',
         ],
       },
       {
@@ -119,8 +121,16 @@ describe('the manifest', () => {
   });
 
   it('declares the settings with defaults, titles and descriptions', () => {
-    expect(Object.keys(settingsSchema.shape)).toEqual(['exposeContactPoint', 'allowPublic']);
-    expect(settingsSchema.parse({})).toEqual({ exposeContactPoint: true, allowPublic: true });
+    expect(Object.keys(settingsSchema.shape)).toEqual([
+      'exposeContactPoint',
+      'allowPublic',
+      'catalogueFilters',
+    ]);
+    expect(settingsSchema.parse({})).toEqual({
+      exposeContactPoint: true,
+      allowPublic: true,
+      catalogueFilters: DEFAULT_CATALOGUE_FILTERS,
+    });
     for (const field of Object.values(settingsSchema.shape)) {
       expect(field.meta()).toMatchObject({
         title: expect.any(String) as string,
@@ -129,6 +139,7 @@ describe('the manifest', () => {
     }
     expect(settingsSchema.safeParse({ allowPublic: 'yes' }).success).toBe(false);
     expect(settingsSchema.safeParse({ other: true }).success).toBe(false);
+    expect(settingsSchema.safeParse({ catalogueFilters: 'carousel' }).success).toBe(false);
   });
 
   it('depends on authz, settings, identity, notifications, blob, organisations and the SPDX adapter, with the shell and audit as optional peers', () => {

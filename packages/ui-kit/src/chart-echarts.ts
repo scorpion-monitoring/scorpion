@@ -115,6 +115,7 @@ export const echartsAdapter: ChartAdapter = {
             ? { type: 'hideTip' }
             : { type: 'showTip', seriesIndex: 0, dataIndex: index },
         ),
+      toSvg: () => chart.renderToSVGString({ useViewBox: true }),
       dispose: () => chart.dispose(),
     };
   },

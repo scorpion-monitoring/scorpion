@@ -4,5 +4,5 @@
     "rootDir": ".",
     "outDir": "node_modules/.cache/tsc/root"
   },
-  "include": ["vitest.config.ts"]
+  "include": ["vitest.config.ts", "drizzle.config.ts"]
 }

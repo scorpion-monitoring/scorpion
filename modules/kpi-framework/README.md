@@ -17,7 +17,7 @@ and the RDF reads of the indicators as Turtle and JSON-LD, token-bearing and pub
 | id           | `kpi.framework` (package `@scorpion/kpi-framework`)                                                                                                                                                                                                                                                                         |
 | table prefix | `kpif_` (set in the manifest; ADR-0004): `kpif_indicator`, `kpif_indicator_means`, `kpif_indicator_tool`, `kpif_kpi_set`, `kpif_kpi_set_indicator`, `kpif_evaluation`, `kpif_service_set`, `kpif_service_extra_indicator`, `kpif_service_kpi_history`. `kpi.ingestion` uses `kpii_`                                         |
 | dependencies | `core.authz`, `core.settings` (vocabularies, settings) and `registry.services` (it contributes to its registries and asks it whether a service exists and who may change it). `registry.services` does **not** depend on this module. No foreign key points to another module's table, a service included                   |
-| routes       | the internal routes below, the two public reads `GET /public/kpi/rimo.ttl` and `.jsonld`, and four v1 routes (`GET /api/v1/categories`, `/indicators`, `/kpi/rimo.ttl` and `/kpi/rimo.jsonld`, see "Routes")                                                                                                                |
+| routes       | the internal routes below, the two public reads `GET /catalog/kpi/rimo.ttl` and `.jsonld`, and four v1 routes (`GET /api/v1/categories`, `/indicators`, `/kpi/rimo.ttl` and `/kpi/rimo.jsonld`, see "Routes")                                                                                                               |
 | ui           | `./ui`: six pages through the registry `ui.routes` (see "Pages"), two `ui.nav` entries in the administration section, and the fourth export `wizardExtensions` (the widget of the `kpi-set` field and the section of the service page)                                                                                      |
 | events       | emits `kpi.indicator.changed@1`, `kpi.set.changed@1` and `kpi.serviceSet.changed@1` (see "Events")                                                                                                                                                                                                                          |
 | registries   | declares `kpi.valueType` and contributes its five entries; declares `kpi.indicatorUsage` (see "The history and the in-use hook"); contributes the vocabularies below to `vocabulary` (core.settings), and to `registry.services` the field type, the wizard step and the facet below, and to `core.authz` a resource policy |
@@ -84,6 +84,13 @@ no indicator is left out), because the reads of measurements show a value of an 
 them **after** its own scoped check, so a token needs the scopes of that module and none of this one's reads (ADR-0041, "Amended in sprint 2"). Tests:
 `service/trusted.test.ts`.
 
+**Two trusted reads for `kpi.impact`** (M12 sprint 2, additive; on the service and so on `public.ts`; no permission check, descriptive fields and ids only).
+`evaluationOfServiceAsSystem(serviceId)` returns `{ setId, headline }` for the set a service has **now**, with `headline` `{ indicatorId, name, valueType, unit,
+aggregate }` or `null` when the set has no evaluation; `null` when the service has no set or the id is no service. It is the **current** evaluation, whatever
+year the caller asks about. An evaluation never names an indicator that left the set (a composite key refuses it, and `sets.setIndicators` removes the
+evaluation with the indicator), so that case reads as no headline. `servicesOfSetAsSystem(setId)` returns the ids of the services that have a set, by id, at most
+5 000 (`MAX_SERVICES_OF_SET`). Tests: `service/trusted.test.ts`.
+
 **The in-use hook.** `kpi.framework` declares the registry `kpi.indicatorUsage`; an entry is `{ module, what, count(indicatorId) }` (a module id, a
 plural noun, and a function that counts that module's rows about the indicator). `indicators.delete` asks every entry after its own checks, and an
 indicator that something uses is **409 naming each module and the count** (`kpi.ingestion (12 measurements)`), the sets first and then each
@@ -107,7 +114,7 @@ administrator. It finds what exists by slug, so a second run adds nothing ([ADR-
 
 ## Value types (registry `kpi.valueType`)
 
-An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, schema(config) }`, validated by the loader
+An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, display?, schema(config) }`, validated by the loader
 (`valueTypeEntrySchema`). Nothing in the module branches on a type's id.
 
 | Id           | Canonical value          | Accepts                                                               | `numeric`              | Aggregates                 |
@@ -122,6 +129,8 @@ An entry is `{ id, labels, numeric, range?, input?, aggregates, parse, format, s
 indicator's `min` and `max`; `format(value)` writes the canonical value (a duration as `HH-MM-SS`); `aggregates` are keys of the
 `aggregate` vocabulary that make sense for the type. A **qualitative** indicator must have the value type `text`; a `text` indicator may
 or may not be qualitative; only a `numeric` type may have `min` and `max` (`boundsProblem(type, { min, max })`).
+
+**How a person reads a number (`display`, M12 sprint 4).** An optional `display(value, locale)` writes a number of the type for reading, calculated figures included (the average of durations is not a whole number of seconds); the impact table of `kpi.impact` uses it. Only `duration` has one (`displayDuration`: `HH:MM:SS`, rounded to the second, hours not capped); a type without it is written as a number in the language with at most two decimals. It never replaces `format`, which writes the stored value (`HH-MM-SS`) for CSV and forms.
 
 **How a form asks for a value (`input`, M10 sprint 4).** An optional descriptor `{ kind: 'number' | 'text', step?: number | 'any', pattern?: string, hint?: string }`
 that the Data Submission page draws its input from (`GET /kpi/value-types` answers it), so no page names a type: `integer` is a number input with `step` 1, `float` and
@@ -288,10 +297,10 @@ and `.jsonld` (next section).
 The indicators and KPI sets as RDF that follows RIMO 0.2.0 ([ADR-0040](../../docs/adr/0040-indicators-follow-rimo.md), the mapping table of
 [the plan](../../docs/m9-sprint-plan.md) §3), in two pairs of routes over **one model**:
 
-| Route                                                                                                              | Who                                                            | Cache and format                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld`                                                       | `kpi.framework.v1.read` (a token with the scope, or a session) | `text/turtle` or `application/ld+json`, UTF-8, `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`; audited like the other v1 reads |
-| `GET /public/kpi/rimo.ttl` and `GET /public/kpi/rimo.jsonld` (the internal surface, like `/public/services/{ref}`) | anyone, no token, no cookie                                    | the same bytes, `Cache-Control: public, max-age=300` and a strong ETag (the hash of the bytes); `If-None-Match` gets 304                              |
+| Route                                                                                                                 | Who                                                            | Cache and format                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/kpi/rimo.ttl` and `GET /api/v1/kpi/rimo.jsonld`                                                          | `kpi.framework.v1.read` (a token with the scope, or a session) | `text/turtle` or `application/ld+json`, UTF-8, `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`; audited like the other v1 reads |
+| `GET /catalog/kpi/rimo.ttl` and `GET /catalog/kpi/rimo.jsonld` (the internal surface, like `/catalog/services/{ref}`) | anyone, no token, no cookie                                    | the same bytes, `Cache-Control: public, max-age=300` and a strong ETag (the hash of the bytes); `If-None-Match` gets 304                              |
 
 Neither takes a query parameter (422), and a profile without this module has neither. The public pair gives **definitions only**: the model
 (`buildRdfModel`, one tested query function in [service/rdf-model.ts](service/rdf-model.ts)) has no field for a service, a person, a

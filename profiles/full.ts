@@ -24,6 +24,7 @@ export default defineProfile({
     'kpi.framework',
     'kpi.ingestion',
     'kpi.analytics',
+    'kpi.impact',
     'public-api',
   ],
 });

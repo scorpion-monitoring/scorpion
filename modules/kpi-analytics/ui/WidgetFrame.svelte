@@ -25,6 +25,8 @@
     setConfig,
     units = false,
     exportable = false,
+    chartImage,
+    imageName = 'chart',
     body,
   }: {
     /** The widget's name, as the heading and the tile's accessible name. */
@@ -36,6 +38,10 @@
     units?: boolean;
     /** The widget offers the Export menu (CSV, XLSX) of what it shows. */
     exportable?: boolean;
+    /** The widget's chart as a picture (`svg` or `png`); the Export menu then offers it beside the files of the numbers. */
+    chartImage?: (format: 'svg' | 'png') => Promise<Blob | undefined> | undefined;
+    /** The word in the name of the picture's file (`<service>-<imageName>-<range>.png`). */
+    imageName?: string;
     body: Snippet<[Body]>;
   } = $props();
 
@@ -162,7 +168,14 @@
       </div>
       <!-- Only when there is something to export; the file is the window the tile shows, in every category the tile shows. -->
       {#if exportable && shown && service !== null}
-        <ExportMenu {service} {range} {category} slug={named?.slug ?? 'service'} />
+        <ExportMenu
+          {service}
+          {range}
+          {category}
+          slug={named?.slug ?? 'service'}
+          image={chartImage}
+          {imageName}
+        />
       {/if}
     </div>
 
@@ -193,7 +206,9 @@
     {:else if hasNoValues}
       <p class="text-sm" role="status">{t('analytics.state.noValues')}</p>
     {:else if shown}
-      <div class="flex min-h-0 flex-1 flex-col gap-2">
+      <!-- daisyUI gives every paragraph of a card body `flex-grow: 1`, which stretched the "N KPIs" line over the free height and squeezed the list into a
+           small scroller; the body's paragraphs keep their own height (`[&_p]:grow-0` is more specific than `.card-body p`). -->
+      <div class="flex min-h-0 flex-1 flex-col gap-2 [&_p]:grow-0">
         {@render body(shown)}
         {#if shown.total > shown.rows.length}
           <p class="text-base-content/70 text-sm">

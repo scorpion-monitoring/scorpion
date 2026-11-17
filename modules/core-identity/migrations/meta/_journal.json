@@ -71,6 +71,20 @@
       "when": 1791385358926,
       "tag": "0009_user_deactivated",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794825615239,
+      "tag": "0010_login_failure_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794832145268,
+      "tag": "0011_login_failure_context",
+      "breakpoints": true
     }
   ]
 }

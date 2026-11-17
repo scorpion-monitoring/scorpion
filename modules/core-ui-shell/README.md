@@ -134,13 +134,21 @@ are contributed by `core.identity`.
 | `/admin/roles`                 | `core.authz.role.read`           | Each role (a tab) with its permissions grouped by module. Every role but Admin can be edited (`PUT /roles/{key}/permissions`, `core.authz.role.manage`, checked again by the route); edits are kept across tabs and leaving with edits not saved asks first                                       |
 | `/admin/settings`              | `core.settings.read`             | A card for every module that has settings, and for branding, secrets and vocabularies                                                                                                                                                                                                             |
 | `/admin/settings/:module`      | `core.settings.read`             | The settings of one module as a `SchemaForm` from the module's own schema (`GET /settings/{module}/schema`), saved with the version that was read; a 409 offers to load the current values, a 422 shows the server's messages on the fields. `core.settings` leaves its branding to the next page |
-| `/admin/settings/branding`     | `core.settings.read`             | The branding of `core.settings`: names, contact, imprint address, **logos with an upload** (`POST /files`, `core.blob.manage`, the file is re-encoded by the server and only its hash is saved), and the legal texts (Markdown)                                                                   |
+| `/admin/settings/branding`     | `core.settings.read`             | The branding of `core.settings`: names, contact, imprint address, **logos with an upload** (`POST /files`, `core.blob.manage`, the file is re-encoded by the server and only its hash is saved), the **theme colours** (two tabs, light and dark; see below) and the legal texts (Markdown)       |
 | `/admin/settings/secrets`      | `core.settings.read`             | The names and times of the stored secrets, and a form to set or replace one and a button to delete one. **A value is never shown and never sent back**; the box is emptied the moment it is sent. The names of the secrets a module needs are not listed (backlog)                                |
 | `/admin/settings/vocabularies` | `core.settings.vocabulary.write` | Terms of a vocabulary: add, relabel in each language, reorder, deactivate and activate, remove (a declared or used term is deactivated, and the screen says so). Reading terms is self-service, so this page needs the write permission, or it would open to everyone                             |
 
 The order of the paths matters only in that a fixed word beats `:module` (`/admin/settings/secrets` is never the settings of a module called `secrets`). The permission of a settings
 form comes from the schemas: a module labels its fields with `.meta({ title, description, group, widget })` (see the `ui-kit` README). A schema with a field `.meta({ widget: 'logo' })`
 gets the upload control.
+
+**The theme colours** (M12a sprint 4, [ADR-0051](../../docs/adr/0051-theme-stylesheet-route.md)). `branding.colors` asks for the widget `themeColors`
+(`ui/admin/ThemeColorsWidget.svelte`): the light and the dark theme are two tabs (`Tabs` of ui-kit), each with a row per token the schema names (a
+colour picker and a `#rrggbb` field; an empty field keeps the built-in colour, or for a text colour, shows the black or white that will be derived),
+a live list of the pairs that would be refused, a reset to the built-in colours and a preview. The live list runs `contrastFailures` of
+`@scorpion/contracts/theme-colors`, the check the server runs on save, so a tab's label counts what it would refuse ("Light theme (3 to fix)"); after a
+refused save the tab of the theme the server named is opened and its messages are in the form's summary. The preview is an SVG with `fill`
+attributes, not inline style. Nothing is sent before Save. The web app serves the saved colours as `GET /theme.css`.
 
 ## The widget entry and the dashboard grid
 

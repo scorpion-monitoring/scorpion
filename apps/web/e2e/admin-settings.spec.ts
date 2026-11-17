@@ -259,7 +259,11 @@ test.describe('branding', () => {
       await signInAsAdmin(page, at);
       await page.goto(at('/admin/settings/branding'));
       await expect(page.getByRole('heading', { name: 'Branding', level: 1 })).toBeVisible();
-      await expect(page.locator('header img.logo-light')).toHaveCount(0);
+      // Until an operator uploads one, the header draws the built-in logos of the software, from the app's own assets.
+      await expect(page.locator('header img.logo-light')).toHaveAttribute(
+        'src',
+        /^(data:image\/png|(?!.*\/api\/internal\/files\/).+\.png$)/,
+      );
 
       const logos = page.getByRole('group', { name: 'Logos' });
       await logos
@@ -278,7 +282,11 @@ test.describe('branding', () => {
       await logos.getByRole('button', { name: 'Remove the file' }).click();
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(toast(page).getByText('The settings were saved.').last()).toBeVisible();
-      await expect(page.locator('header img.logo-light')).toHaveCount(0);
+      // Removing the upload brings the built-in logo back; the slot is never empty.
+      await expect(page.locator('header img.logo-light')).toHaveAttribute(
+        'src',
+        /^(data:image\/png|(?!.*\/api\/internal\/files\/).+\.png$)/,
+      );
     } finally {
       const now = await api.get<{ version: number; values: Record<string, unknown> }>(
         '/settings/core.settings',

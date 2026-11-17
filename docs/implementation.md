@@ -47,6 +47,7 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | M10 | `kpi.ingestion`: form, CSV/TSV/XLSX, API write | 3 KPIs | L | M9 | 6 |
 | M11 | `kpi.analytics`: dashboard, scores, exports | 3 KPIs | L | M10 | 10 |
 | M12 | `kpi.impact` | 3 KPIs | M | M11 | 9 |
+| M12a | Polish: eight maintainer fixes, a slice of the backlog, the faceted search redesign and admin-editable theme colours ([m12a-plan.md](m12a-plan.md)) | 3 KPIs | S | M12 | none |
 | M13 | Legacy data migration tool | 3 KPIs | M | M12 | none |
 | **G3** | **Gate 3: migration dry run clean, KPI profile live** | | | M9–M13 | |
 | M14 | `maturity` | 4 Parity | M | G3 | 7 |
@@ -332,8 +333,9 @@ Additions agreed in [m11-sprint-plan.md](m11-sprint-plan.md) §13 (six sprints; 
 
 - Consortium summary tiles: total, open source (OSI-approved via the cached SPDX adapter), counts per stage from the vocabulary, including TERM (defect 9).
 - A per-service monthly table for the selected year using the evaluation configuration, with the states no-data, no-evaluation and error.
-- Monthly and yearly aggregates as a read model refreshed on `measurement.recorded` and nightly.
+- Monthly and yearly aggregates, **computed live** per request (one series read per service). The stored read model refreshed on `measurement.recorded` and nightly was planned as sprint 3 and **dropped on 2026-11-05** after the sprint-2 measurement (ADR-0048, decision 22 of the M12 plan); the module has no tables and no job.
 - Stage labels come only from the vocabulary, so they match on every screen (defect 9).
+- **The page** `/services/evaluate` (sprint 4, built): a consortium picker, a year select, the switch for unpublished services, the tiles (total, four licence lines, one line per stage term) and the paged yearly table, in English and German, accessible by keyboard and screen reader, axe-clean in both themes; the nav entry "Impact" for holders of `kpi.impact.read`. **Status:** sprints 1, 2 and 4 are built (sprint 3 dropped); the release `0.15.0` waits for the maintainer. Additions: the field `shown` on the table row, an optional `display` on the `kpi.valueType` entries (the duration shows `HH:MM:SS`), German labels for the `aggregate` terms of a new instance.
 
 ### M13: Legacy data migration (M)
 

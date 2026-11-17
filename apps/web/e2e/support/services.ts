@@ -2,7 +2,7 @@
 // through the API as the administrator, and a catalogue of known shape. Each journey makes its own data
 // under a tag of its own (the specs of a run share one database, and a retry must not meet what its first
 // try left), and searches for the tag so that the counts it asserts are its own.
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { activeUser, unique, type AdminApi } from './admin.ts';
 import { withDb } from './db.ts';
 import { expect, type Credentials } from './fixtures.ts';
@@ -138,3 +138,145 @@ export const params = (page: Page) => new URL(page.url()).searchParams;
 /** The checkbox of a facet value, named by its label and count: `Development (1)`. */
 export const choice = (page: Page, label: string | RegExp) =>
   page.getByRole('checkbox', { name: label });
+
+// ----- the faceted search in any look (sprint 3 of M12a) ----------------------------------------------------------
+// The catalogues draw their filters in the look an administrator chose (`catalogueFilters`: `sidebar`, `bar` or
+// `combined`). These helpers read the look from the page and do the same step in each: a value is a checkbox in
+// `sidebar` and an option of the facet's panel in `bar` and `combined`, whose panel they open as needed.
+
+export const LOOKS = ['sidebar', 'bar', 'combined'] as const;
+export type Look = (typeof LOOKS)[number];
+const SEARCH = 'Search by name or short name';
+const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Sets the look of both catalogues (the setting of registry.services) as the administrator; returns the one it replaced. */
+export async function setLook(api: AdminApi, look: Look): Promise<Look> {
+  const now = await api.get<{ version: number; values: Record<string, unknown> }>(
+    '/settings/registry.services',
+  );
+  const saved = await api.send('PUT', '/settings/registry.services', {
+    version: now.version,
+    values: { ...now.values, catalogueFilters: look },
+  });
+  expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+  return now.values.catalogueFilters as Look;
+}
+
+/** The look on the page. */
+export async function lookOf(page: Page): Promise<Look> {
+  const look = await page.locator('[data-facet-look]').getAttribute('data-facet-look');
+  return look as Look;
+}
+
+/** The values of a facet, with its panel opened when the look has one. */
+export async function facetValues(page: Page, facet: string): Promise<Locator> {
+  const look = await lookOf(page);
+  if (look === 'sidebar') return page.getByRole('group', { name: facet, exact: true });
+  const values = page.getByRole('listbox', { name: facet, exact: true });
+  if (await values.isVisible()) return values;
+  const name = new RegExp(`^${escapeRe(facet)}(,? \\d+ chosen)?$`);
+  if (look === 'bar') {
+    await page.getByRole('group', { name: 'Filter by' }).getByRole('button', { name }).click();
+  } else {
+    const box = page.getByRole('combobox', { name: SEARCH });
+    const list = page.getByRole('listbox', { name: 'Filter by' });
+    // Another facet's panel is open: back to the facet list first.
+    if ((await box.getAttribute('aria-expanded')) === 'true' && !(await list.isVisible())) {
+      await box.press('Escape');
+    }
+    if (!(await list.isVisible())) await box.click();
+    await list.getByRole('option', { name }).click();
+  }
+  await expect(values).toBeVisible();
+  return values;
+}
+
+/** One value of a facet (named by its label and count, `Development (1)`), its panel opened as needed. */
+export async function facetValue(page: Page, facet: string, name: string | RegExp) {
+  const values = await facetValues(page, facet);
+  return (await lookOf(page)) === 'sidebar'
+    ? values.getByRole('checkbox', { name })
+    : values.getByRole('option', { name });
+}
+
+/** Whether a value is chosen, in the look's terms (a checked box, a selected option). */
+export async function expectChosen(
+  page: Page,
+  facet: string,
+  name: string | RegExp,
+  chosen = true,
+) {
+  const value = await facetValue(page, facet, name);
+  if ((await lookOf(page)) === 'sidebar') {
+    await (chosen ? expect(value).toBeChecked() : expect(value).not.toBeChecked());
+  } else {
+    await expect(value).toHaveAttribute('aria-selected', String(chosen));
+  }
+}
+
+/** Chooses a value (or takes it away), and waits until the page shows it so. */
+export async function choose(page: Page, facet: string, name: string | RegExp, on = true) {
+  const value = await facetValue(page, facet, name);
+  const look = await lookOf(page);
+  const is =
+    look === 'sidebar'
+      ? await value.isChecked()
+      : (await value.getAttribute('aria-selected')) === 'true';
+  if (is !== on) await value.click();
+  // A value that is no longer chosen and has no service leaves the list (the API's rule): nothing to wait for then.
+  if (on || (await value.count()) > 0) await expectChosen(page, facet, name, on);
+}
+
+/** How many facets have a choice: the facets with a checked box, or the chips. */
+export async function expectChosenFacets(page: Page, count: number) {
+  if ((await lookOf(page)) === 'sidebar') {
+    await expect(
+      page.getByRole('group').filter({ has: page.getByRole('checkbox', { checked: true }) }),
+    ).toHaveCount(count);
+  } else {
+    await expect(page.getByRole('button', { name: /^Remove / })).toHaveCount(count);
+  }
+}
+
+/** Closes an open panel or list, so the table's own controls are reachable. */
+export async function closeFacets(page: Page) {
+  if ((await lookOf(page)) === 'sidebar') return;
+  await page.getByRole('heading', { level: 1 }).click();
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+}
+
+/** Takes every filter off and keeps the search: "Clear all filters" in `sidebar`, every chip's × elsewhere. */
+export async function clearFilters(page: Page) {
+  if ((await lookOf(page)) === 'sidebar') {
+    await page.getByRole('button', { name: 'Clear all filters' }).click();
+  } else {
+    await closeFacets(page);
+    const chips = page.getByRole('button', { name: /^Remove / });
+    while ((await chips.count()) > 0) await chips.first().click();
+  }
+  await expect(page).not.toHaveURL(/f\./);
+}
+
+/** Types a search into the catalogue's box, as a person does after leaving any open list (Escape). */
+export async function searchFor(page: Page, text: string) {
+  await closeFacets(page);
+  await page.getByLabel(SEARCH).fill(text);
+}
+
+const shared = new Map<string, Promise<Catalogue>>();
+
+/**
+ * One catalogue per stack and spec file, for the specs that run the same reads once per look (j08, the accessibility
+ * spec): the looks only read it, and seeding one per run made a full run create more than the 100 organisations that
+ * the admin's membership filter lists (backlog: "Long lists"). Keyed by the stack, so the two base paths never share
+ * data; a retry runs in a new worker and seeds its own.
+ */
+export function sharedCatalogue(api: AdminApi, stack: string, spec: string): Promise<Catalogue> {
+  const key = `${stack} ${spec}`;
+  let made = shared.get(key);
+  if (!made) {
+    made = seedCatalogue(api);
+    shared.set(key, made);
+  }
+  return made;
+}

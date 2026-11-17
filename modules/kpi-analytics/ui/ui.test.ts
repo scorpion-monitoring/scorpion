@@ -1,5 +1,6 @@
 // The two halves of the widgets of kpi.analytics must agree: `routes.ts` says who may see a widget and how it sits on the grid (the server),
 // `widgets.ts` says what is drawn (the web app). Every text exists in every shipped language, and every key a component uses has a text.
+import { readFileSync } from 'node:fs';
 import { REGISTRIES } from '@scorpion/core-ui-shell/public';
 import { catalogueProblems } from '@scorpion/ui-kit/i18n';
 import { describe, expect, it } from 'vitest';
@@ -94,5 +95,17 @@ describe('the widgets of kpi.analytics', () => {
     );
     expect(unused).toEqual([]);
     expect(used.size).toBeGreaterThan(50);
+  });
+});
+
+describe('the layout of the KPI cards', () => {
+  const read = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
+
+  it('keeps the paragraphs of a card body at their own height (daisyUI makes them grow), so the list is not pushed down', () => {
+    expect(read('./WidgetFrame.svelte')).toContain('[&_p]:grow-0');
+  });
+
+  it('lists the cards in as many columns as the tile is wide enough for, one when it is narrow', () => {
+    expect(read('./Cards.svelte')).toContain('grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]');
   });
 });

@@ -74,3 +74,12 @@ _Done in M3 sprint 2: migration `0006_bootstrap_admin_to_authz.sql` turned the m
 - Sessions and tokens have no effect until sprints 2 and 3 contribute the entry.
 - The authenticator runs on every module route, including public ones; with the session cache of
   sprint 2 that is one lookup per request that carries a cookie.
+
+## Amended in M12a sprint 5: the `default` bucket of a signed-in caller is their session
+
+The maintainer's decision of 2026-11-16, after the measurement in ADR-0041 (a person who changed the month of the data-submission page seven times in a row met a `429`): **the rate limit keyed everything a browser does by its address**, so the shell's reads, the page's reads and every other person behind the same address came out of one bucket of 120.
+
+- **A caller with a session** in the `default` group is charged in two places. Step 2 charges the address bucket `ip-session:` for a request that carries the session cookie (its presence only; the authenticator's registry entry names the cookie, `sessionCookie`, so the pipeline knows no cookie name of its own). It is `SESSION_ADDRESS_FACTOR` (10) times the size of the `default` limit: a ceiling for the browsers on one address, not a budget to share. After step 3 has found the session good, step 3b (`sessionRateLimit`) charges the bucket `session:` keyed by **a hash of the session row's id** (`Actor.sessionId`), never the cookie value, and neither is logged. A `429` from either carries `Retry-After`, as before.
+- **A cookie that is stale or forged** is no session: it is charged to the `ip-session:` bucket only, so it cannot make a bucket of its own (a row per guess) and one address cannot get a budget larger than the ceiling for it.
+- **Unchanged:** an anonymous caller (the `ip:` bucket), a token or API key (`ip-token:` and `credential:`, ADR-0037), and the whole `strict` group (the address). The limits are still the `rateLimits` setting of `core.settings`.
+- **A risk accepted:** a person with a session now has up to ten times the address's old budget for the browsers behind one address, bounded by the ceiling, in exchange for each person having their own. An operator who wants the old behaviour sets the limits lower.

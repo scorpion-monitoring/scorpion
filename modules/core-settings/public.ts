@@ -21,6 +21,13 @@ export interface Branding {
   logos: { light: string | null; dark: string | null };
   /** The legal pages that have a text: `terms`, `privacy`, `imprint`. */
   legalPages: ('terms' | 'privacy' | 'imprint')[];
+  /**
+   * The theme colours the web app's `GET /theme.css` writes, per theme: what the administrator set and the text colours derived for
+   * it (`#rrggbb` by daisyUI token). Empty objects when nothing is set: the built-in themes apply.
+   */
+  colors: { light: Record<string, string>; dark: Record<string, string> };
+  /** Changes whenever `colors` does (a hash of the stylesheet); `null` when nothing is set, so the page links no stylesheet. */
+  themeVersion: string | null;
 }
 
 export interface VocabularyTerm {
@@ -91,6 +98,14 @@ export interface SettingsService {
    * module's schema refuses the values.
    */
   seedSettings(moduleId: string, values: unknown): Promise<'seeded' | 'kept'>;
+
+  /**
+   * Stores one key of `moduleId`'s settings **only when the stored value has no such key**, keeping every
+   * other stored key; for a module's upgrade step that pins a value an existing instance had before a
+   * default changed. Trusted code with no human caller, like `seedSettings`: checks no permission and no
+   * route calls it. `Invalid` when the schema refuses the value.
+   */
+  seedSettingKey(moduleId: string, key: string, value: unknown): Promise<'seeded' | 'kept'>;
 
   /**
    * The terms of a vocabulary, in order (`sortOrder`, then key). Active terms only, unless

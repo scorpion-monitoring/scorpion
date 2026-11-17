@@ -19,6 +19,12 @@ const ALLOWED: Record<string, string> = {
     'DEFAULT_PRODUCT_NAME: the one place that says what the software is called when nothing is configured',
   'modules/core-identity/service/password-words.ts':
     'PROJECT_WORDS: the documented list of words a password may not contain (ASVS 6.1.2). It is a security list, not branding that anybody is shown; the instance and product name of an installation come from getBranding',
+  'apps/web/src/lib/software.ts':
+    "SOFTWARE: the software's own name, version and licence link in the footer. It is not instance branding and no setting changes it (ADR-0050)",
+  'apps/web/src/lib/messages.ts':
+    'app.footer.poweredBy: the words of the fixed attribution of the software in the footer (ADR-0050)',
+  'apps/web/e2e/footer-logos.spec.ts':
+    'asserts the fixed attribution of the software in the footer (ADR-0050)',
 };
 
 function files(dir: string, found: string[] = []): string[] {

@@ -1,14 +1,15 @@
 <script lang="ts">
-  // The service catalogue: a table with a search, facets that count over the filtered set, removable filter
-  // badges and server-side sort and pages. The search, the filters, the sort and the page live in the
-  // address; a change of the search, a filter, the sort or the page size goes back to the first page. The
+  // The service catalogue: a table with the faceted search of ui-kit (`FacetSearch`: a search as one types,
+  // facets that count over the filtered set, a count line, in the look the administrator chose) and server-side
+  // sort and pages. The search, the filters, the sort and the page live in the address; a change of the
+  // search, a filter, the sort or the page size goes back to the first page. The
   // labels of the facets and their values come from the API (the registry, the vocabulary, the organisation);
   // the page names none of them. The links to the wizard and to a service page appear only when the API says
   // the caller may create and the page is offered (`./offered.ts`).
   import {
     Breadcrumb,
     DataTable,
-    Facets,
+    FacetSearch,
     type Column,
     type FacetDefinition,
     type FacetState,
@@ -22,7 +23,6 @@
     changeCatalogueQuery,
     PAGE_SIZES,
     SORT_KEYS,
-    withoutFilter,
     type CatalogueQuery,
     type SortKey,
   } from './query.ts';
@@ -36,11 +36,9 @@
   const go = (change: Partial<CatalogueQuery>) =>
     goto(href(path) + catalogueQueryString(changeCatalogueQuery(data.query, change)));
 
-  // What is typed in the search box; it starts from the address and goes back to it when the address changes.
-  let search = $derived(data.query.q ?? '');
-
-  const definitions = $derived<FacetDefinition[]>(
-    data.facets
+  /** The API's facets as `FacetSearch` takes them; a facet with no value to show is left out. */
+  const toDefinitions = (facets: CatalogueData['facets']): FacetDefinition[] =>
+    facets
       .filter((facet) => facet.values.length > 0)
       .map((facet) => ({
         id: facet.id,
@@ -51,21 +49,9 @@
           label: value.label,
           count: value.count,
         })),
-      })),
-  );
-
-  /** The chosen values as badges: the facet's label and the value's label, from the API's answer. */
-  const badges = $derived(
-    Object.entries(data.query.filters).flatMap(([id, values]) => {
-      const facet = data.facets.find((entry) => entry.id === id);
-      return values.map((value) => ({
-        id,
-        value,
-        facet: facet?.label ?? id,
-        label: facet?.values.find((entry) => entry.key === value)?.label ?? value,
       }));
-    }),
-  );
+  const definitions = $derived(toDefinitions(data.facets));
+  const suggestions = $derived(toDefinitions(data.suggestions));
 
   const sort = $derived<Sort>({ key: data.query.sort, direction: data.query.dir });
   const onsort = (next: Sort) =>
@@ -89,53 +75,17 @@
     {/if}
   </div>
 
-  <form
-    role="search"
-    class="flex items-end gap-2"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void go({ q: search.trim() || undefined });
-    }}
+  <FacetSearch
+    {definitions}
+    {suggestions}
+    state={data.query.filters as FacetState}
+    q={data.query.q ?? ''}
+    total={data.total}
+    look={data.filterStyle}
+    {path}
+    label={t('services.search')}
+    countKey="services.matches"
   >
-    <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium" for="services-search">{t('services.search')}</label>
-      <input
-        id="services-search"
-        type="search"
-        class="input input-bordered"
-        maxlength={100}
-        autocomplete="off"
-        bind:value={search}
-      />
-    </div>
-    <button type="submit" class="btn">{t('services.searchSubmit')}</button>
-  </form>
-
-  {#if badges.length > 0}
-    <section aria-label={t('services.filters.active')} class="flex flex-wrap items-center gap-2">
-      <ul class="flex flex-wrap gap-2">
-        {#each badges as badge (`${badge.id}/${badge.value}`)}
-          <li>
-            <button
-              type="button"
-              class="badge badge-outline badge-lg gap-2"
-              aria-label={t('services.filters.remove', { facet: badge.facet, value: badge.label })}
-              onclick={() => void go(withoutFilter(data.query, badge.id, badge.value))}
-            >
-              <span>{badge.facet}: {badge.label}</span>
-              <span aria-hidden="true">×</span>
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
-
-  <div class="grid gap-6 lg:grid-cols-[16rem_1fr]">
-    <aside>
-      <Facets {definitions} state={data.query.filters as FacetState} {path} />
-    </aside>
-
     <div>
       {#snippet nameCell(row: Row)}
         <div class="flex items-center gap-3">
@@ -210,5 +160,5 @@
         empty={t('services.empty')}
       />
     </div>
-  </div>
+  </FacetSearch>
 </div>

@@ -23,12 +23,26 @@ import {
 const MAX_VALUES = 50;
 const MAX_VALUE_LENGTH = 64;
 
-/** A comma-separated list of values: at most 50, none empty, none longer than 64 characters. */
+/**
+ * A list filter, in two forms. Given once, it is a comma-separated list (`provider=A,B`: the form every client of
+ * v1 uses). Given more than once (`provider=A&provider=B`) each occurrence is one value, taken as it is, so the
+ * abbreviation of an organisation that contains a comma is reachable (`provider=Org,Inc&provider=Other`; a single
+ * such value is given twice). At most 50 values, none empty, none longer than 64 characters.
+ */
 const list = (description: string) =>
   z
-    .string()
-    .max(MAX_VALUES * (MAX_VALUE_LENGTH + 1))
-    .transform((text) => text.split(',').map((value) => value.trim()))
+    .union([
+      z.string().max(MAX_VALUES * (MAX_VALUE_LENGTH + 1)),
+      z
+        .array(z.string().max(MAX_VALUE_LENGTH + 1))
+        .min(1)
+        .max(MAX_VALUES),
+    ])
+    .transform((given) =>
+      typeof given === 'string'
+        ? given.split(',').map((value) => value.trim())
+        : [...new Set(given.map((value) => value.trim()))],
+    )
     .pipe(
       z.array(z.string().min(1, 'must not be empty').max(MAX_VALUE_LENGTH)).min(1).max(MAX_VALUES),
     )
@@ -90,14 +104,18 @@ export const listServicesV1Route = createRoute({
   audit: true,
   summary: 'List the services',
   description:
-    'The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values). An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.',
+    'The services, each once, whatever the number of its consortia (`[]` for none). A service that is not public is listed too, with `public: false`. Filters are combined with AND; a comma-separated list inside one filter is OR, compared without case (at most 50 values); a filter may also be repeated (`provider=A&provider=B`), and then each occurrence is one value as it is, so an abbreviation with a comma is given that way. An abbreviation that names no service or provider, a stage or licence that names nothing and a category that is no KPI set name is 422. Sorted by abbreviation without case, then by id; pages count from 0 and `pageSize` is at most 100 (default 100). `totalCount` is the size of the filtered set. The contact point of a service is never part of this API.',
   request: {
     query: paginationQuery({ defaultPageSize: 100 }).extend({
-      service: list('Abbreviations of services, comma-separated.'),
-      provider: list('Abbreviations of providers, comma-separated: the services they provide.'),
-      stage: list('Keys of the `stage` vocabulary, comma-separated.'),
-      license: list('SPDX licence ids, comma-separated.'),
-      category: list('Names of KPI sets, comma-separated: the services that use one of them.'),
+      service: list('Abbreviations of services, comma-separated or repeated.'),
+      provider: list(
+        'Abbreviations of providers, comma-separated or repeated: the services they provide.',
+      ),
+      stage: list('Keys of the `stage` vocabulary, comma-separated or repeated.'),
+      license: list('SPDX licence ids, comma-separated or repeated.'),
+      category: list(
+        'Names of KPI sets, comma-separated or repeated: the services that use one of them.',
+      ),
     }),
   },
   responses: {

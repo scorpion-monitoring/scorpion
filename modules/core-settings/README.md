@@ -9,18 +9,18 @@ Status: M3 sprint 4 (complete): settings, preferences, secrets, [vocabularies](#
 
 ## Manifest
 
-| Part           | Value                                                                                                                                                                                                                                                                                                                                                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id             | `core.settings`                                                                                                                                                                                                                                                                                                                                                                                                     |
-| table prefix   | `settings_` (set in the manifest; ADR-0004)                                                                                                                                                                                                                                                                                                                                                                         |
-| dependencies   | `core.authz` (and the `@scorpion/sanitize` package for legal texts)                                                                                                                                                                                                                                                                                                                                                 |
-| routes         | internal API: [settings](#settings), [secrets](#secrets), [preferences](#user-preferences) and [vocabularies](#vocabularies); public: `GET /branding`, `GET /legal/{page}` ([branding](#branding))                                                                                                                                                                                                                  |
-| jobs           | none                                                                                                                                                                                                                                                                                                                                                                                                                |
-| CLI            | `set-secret <name>`, `rotate-secrets [--batch-size <n>]` ([below](#cli))                                                                                                                                                                                                                                                                                                                                            |
-| env            | `SECRETS_KEY` (required, secret) and `SECRETS_KEY_NEXT` (secret, only while rotating), declared in the manifest's `env` so that `scorpion docs:export` lists them ([ADR-0047](../../docs/adr/0047-docs-export.md))                                                                                                                                                                                                  |
-| events         | emits `settings.changed@1`, `settings.secret.changed@1`, `settings.preference.changed@1`, `settings.vocabulary.changed@1` ([below](#events))                                                                                                                                                                                                                                                                        |
-| registries     | declares `settings.userPreference` and `vocabulary`; contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                                                                                                                                                                                                         |
-| public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `getUserPreference(userId, key)` and `setUserPreference(actor, key, value)` ([below](#user-preferences)), `seedSettings(moduleId, values)` ([below](#seeding-settings-from-code)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
+| Part           | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id             | `core.settings`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| table prefix   | `settings_` (set in the manifest; ADR-0004)                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| dependencies   | `core.authz` (and the `@scorpion/sanitize` package for legal texts)                                                                                                                                                                                                                                                                                                                                                                                            |
+| routes         | internal API: [settings](#settings), [secrets](#secrets), [preferences](#user-preferences) and [vocabularies](#vocabularies); public: `GET /branding`, `GET /legal/{page}` ([branding](#branding))                                                                                                                                                                                                                                                             |
+| jobs           | none                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| CLI            | `set-secret <name>`, `rotate-secrets [--batch-size <n>]` ([below](#cli))                                                                                                                                                                                                                                                                                                                                                                                       |
+| env            | `SECRETS_KEY` (required, secret) and `SECRETS_KEY_NEXT` (secret, only while rotating), declared in the manifest's `env` so that `scorpion docs:export` lists them ([ADR-0047](../../docs/adr/0047-docs-export.md))                                                                                                                                                                                                                                             |
+| events         | emits `settings.changed@1`, `settings.secret.changed@1`, `settings.preference.changed@1`, `settings.vocabulary.changed@1` ([below](#events))                                                                                                                                                                                                                                                                                                                   |
+| registries     | declares `settings.userPreference` and `vocabulary`; contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                                                                                                                                                                                                                                                    |
+| public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `getUserPreference(userId, key)` and `setUserPreference(actor, key, value)` ([below](#user-preferences)), `seedSettings(moduleId, values)` and `seedSettingKey(moduleId, key, value)` ([below](#seeding-settings-from-code)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
 
 ### Permissions
 
@@ -69,13 +69,13 @@ profile `ctx.settings` yields the schema's defaults.
 
 ### Settings of this module
 
-| Key                  | Default                               | Meaning                                                                                                                                                |
-| -------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `branding`           | product name `Scorpion`, nothing else | Names, sender, contact, logos and legal texts ([Branding](#branding)). Saved with the rest of this module's settings                                   |
-| `rateLimits.default` | `{ burst: 120, perMinute: 120 }`      | The server's rate limit for ordinary routes, per client address and per credential: a burst, then a steady rate. Read on every request, from the cache |
-| `rateLimits.strict`  | `{ burst: 10, perMinute: 10 }`        | The same for routes an attacker gains from by repeating them (login, register, token use and creation, secrets)                                        |
+| Key                  | Default                               | Meaning                                                                                                                                                                                      |
+| -------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `branding`           | product name `Scorpion`, nothing else | Names, sender, contact, logos and legal texts ([Branding](#branding)). Saved with the rest of this module's settings                                                                         |
+| `rateLimits.default` | `{ burst: 120, perMinute: 120 }`      | The server's rate limit for ordinary routes, per client address, per credential and, for a signed-in person, per session: a burst, then a steady rate. Read on every request, from the cache |
+| `rateLimits.strict`  | `{ burst: 10, perMinute: 10 }`        | The same for routes an attacker gains from by repeating them (login, register, token use and creation, secrets)                                                                              |
 
-The address bucket of a call that carries a token or an API key is separate from the browsers' bucket and ten times larger (`TOKEN_ADDRESS_FACTOR`, [ADR-0037](../../docs/adr/0037-public-api.md)); the credential's own bucket is the size above. The `strict` group is not scaled.
+The address bucket of a call that carries a token or an API key is separate from the browsers' bucket and ten times larger (`TOKEN_ADDRESS_FACTOR`, [ADR-0037](../../docs/adr/0037-public-api.md)); the credential's own bucket is the size above. A request that carries a session cookie is charged to the address bucket of the browsers, ten times larger (`SESSION_ADDRESS_FACTOR`), and, once the session is found good, to a bucket of the session itself, the size above, so people behind one address no longer share a budget ([ADR-0006](../../docs/adr/0006-actor-authenticator-interim-authorisation.md), M12a). The `strict` group is not scaled.
 
 The pipeline is not a module, so the module that stores settings owns these numbers; the server reads them with
 `kernel.settingsOf('core.settings')` and uses its constants when the profile has no core.settings or the value cannot be
@@ -214,6 +214,11 @@ Three more methods are for code of another module (no route; ADR-0015). Two chec
   (`'seeded'`, else `'kept'`); it never overwrites what an administrator saved. The values are checked by the module's
   schema (`Invalid`), and a write emits `settings.changed@1` like any other. `scorpion seed-dev-mail` of
   core.notifications is the one user today.
+- `seedSettingKey(moduleId, key, value)` stores **one key** of a module's settings only when the stored value has
+  no such key, keeping every other stored key (a row is created when there is none; `'seeded'`, else `'kept'`). It is
+  for a module's upgrade step that pins the value an existing instance had before a default changed;
+  `registry.services` uses it for `catalogueFilters` (M12a sprint 3). The value is checked by the module's schema,
+  the version is bumped and `settings.changed@1` is emitted, in one transaction.
 
 ## Vocabularies
 
@@ -232,13 +237,13 @@ contributes: {
 }
 ```
 
-| Vocabulary          | Terms (key: English label)                                                   |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `stage`             | `DEV` Development, `DEMO` Demonstrator, `PROD` Production, `TERM` Terminated |
-| `thematic-category` | `Bibliographic`, `Usage`, `Technical`, `Satisfaction`                        |
-| `necessity`         | `mandatory`, `recommended`, `optional`                                       |
-| `sender-type`       | `System`, `Reviewer`                                                         |
-| `aggregate`         | `sum`, `avg`, `min`, `max`                                                   |
+| Vocabulary          | Terms (key: English label)                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stage`             | `DEV` Development, `DEMO` Demonstrator, `PROD` Production, `TERM` Terminated                                                                                                                   |
+| `thematic-category` | `Bibliographic`, `Usage`, `Technical`, `Satisfaction`                                                                                                                                          |
+| `necessity`         | `mandatory`, `recommended`, `optional`                                                                                                                                                         |
+| `sender-type`       | `System`, `Reviewer`                                                                                                                                                                           |
+| `aggregate`         | `sum`, `avg`, `min`, `max` (with German labels `Summe`, `Durchschnitt`, `Minimum`, `Maximum` since M12 sprint 4; a database seeded before keeps its labels, as seeds only add what is missing) |
 
 - **Terms.** `key` (letters, digits, `_`, `-`, starting with a letter; case sensitive; never changes), `labels` (locale →
   text, `en` required), `sortOrder`, `active`. Order is `sortOrder`, then key as bytes. At most 500 terms per vocabulary.
@@ -254,15 +259,16 @@ contributes: {
 
 The `branding` group of this module's settings, saved with `PUT /settings/core.settings` like any setting:
 
-| Key                                            | Default              | Meaning                                                                                                                        |
-| ---------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `branding.productName`                         | `Scorpion`           | What the software is called ("Powered by …"); the one place in code that says it                                               |
-| `branding.instanceName`                        | the product name     | What this instance calls itself (headers, mails)                                                                               |
-| `branding.mailFrom`                            | `no-reply@localhost` | The `From` address of mails. Was `mailFrom` of `core.identity`                                                                 |
-| `branding.contactEmail`                        | none                 | A public contact address                                                                                                       |
-| `branding.imprintUrl`                          | none                 | An `http(s)` link to an imprint kept elsewhere                                                                                 |
-| `branding.logos.light`, `.dark`                | none                 | The SHA-256 of an uploaded file (`POST /files` of [core.blob](../core-blob/README.md)); `dark` falls back to `light` in the UI |
-| `branding.legal.terms`, `.privacy`, `.imprint` | none                 | Markdown, at most 100 000 characters each                                                                                      |
+| Key                                            | Default              | Meaning                                                                                                                         |
+| ---------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `branding.productName`                         | `Scorpion`           | What the software is called ("Powered by …"); the one place in code that says it                                                |
+| `branding.instanceName`                        | the product name     | What this instance calls itself (headers, mails)                                                                                |
+| `branding.mailFrom`                            | `no-reply@localhost` | The `From` address of mails. Was `mailFrom` of `core.identity`                                                                  |
+| `branding.contactEmail`                        | none                 | A public contact address                                                                                                        |
+| `branding.imprintUrl`                          | none                 | An `http(s)` link to an imprint kept elsewhere                                                                                  |
+| `branding.logos.light`, `.dark`                | none                 | The SHA-256 of an uploaded file (`POST /files` of [core.blob](../core-blob/README.md)); `dark` falls back to `light` in the UI  |
+| `branding.legal.terms`, `.privacy`, `.imprint` | none                 | Markdown, at most 100 000 characters each                                                                                       |
+| `branding.colors.light`, `.dark`               | none                 | The theme colours, by daisyUI token (`primary`, `primary-content`, … `error-content`), `#rrggbb` only ([below](#theme-colours)) |
 
 - **Reading it from code:** `ctx.deps['core.settings'].getBranding()` gives the effective values (names and sender with
   their fallbacks); `{ fresh: true }` skips this process's cache. `core.identity` uses it for the name and sender of mails.
@@ -273,6 +279,26 @@ The `branding` group of this module's settings, saved with `PUT /settings/core.s
   keeps their references in step from `settings.changed@1`.
 - **Upgrading.** `instanceName` and `mailFrom` of the stored `core.identity` settings are moved into `branding` by
   migration `0002_branding_from_identity` (a value already in `branding` wins). Only databases of sprint-3 builds have any.
+
+### Theme colours
+
+`branding.colors` holds the colours of the two themes of the web app (`scorpionlight`, `scorpiondark`; M12a sprint 4, [ADR-0051](../../docs/adr/0051-theme-stylesheet-route.md)).
+Each of the 20 daisyUI tokens is optional per theme; an unset token keeps the built-in colour of `apps/web/src/app.css`.
+
+- **Values are data.** The schema accepts `#rrggbb` and the token names only (a strict object): `red;}body{…}`, `</style>`, a
+  `url(…)` or an unknown name is a 422 at save. The maths and the token list are one module shared with the web app and the
+  admin screen, `@scorpion/contracts/theme-colors`.
+- **Contrast is checked on save** (WCAG AA), per theme, inside the transaction of the save: a set with a failing pair is a 422
+  naming the theme and the pair (`In the dark theme, error-content on error is 1.00:1, needs 4.5:1 (WCAG AA).`, at
+  `values.branding.colors.dark`) and nothing of the save is written. The pairs are `CONTRAST_PAIRS`: each content colour on its
+  colour, `base-content` on `base-100`, `-200` and `-300`, `primary`, `error` and `warning` as text (4.5:1), and the primary
+  focus ring on `base-200` and `base-300` (3:1). A save that leaves the colours as they were is not measured again, so a later
+  change of the built-in colours never blocks a save of another setting. `seedSettings` and `seedSettingKey` are checked too.
+  The check is not in the schema on purpose: a read drops a stored key the schema refuses, and that would drop all of `branding`.
+- **Derived text colours.** A content token left unset whose colour is set (for `base-content`: any of the three surfaces) is
+  black or white, whichever reads better on the worst of its surfaces. The check measures the derived colour.
+- **Reading.** `getBranding()` (and `GET /branding`) carries `colors` (what was set plus the derived text colours, per theme)
+  and `themeVersion`, a hash of the stylesheet that is `null` when nothing is set. The web app serves them as `GET /theme.css`.
 
 ## Events
 

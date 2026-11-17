@@ -9,9 +9,9 @@
 // The username need not exist: an unknown name is counted exactly like a known one, so nothing here
 // tells them apart, and the table holds neither a name nor an address.
 import { createHash } from 'node:crypto';
-import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { DbTx, ModuleContext } from '@scorpion/kernel';
-import { loginThrottle } from '../db/schema.ts';
+import { loginFailure, loginThrottle } from '../db/schema.ts';
 import { TooManyRequests } from './errors.ts';
 import type { IdentitySettings, IdentitySettingsValues } from './settings.ts';
 
@@ -27,6 +27,21 @@ export function throttleKeys(username: string, address?: string): string[] {
   return keys;
 }
 
+/** The key of the account alone, the one the audit counts by: the hash of the lower-case username. */
+export const accountKey = (username: string): string =>
+  sha256(`account:${username.trim().toLowerCase()}`);
+
+/** What a counted failure was: a sign-in, or a password check of a signed-in session. */
+export type FailureContext = 'sign-in' | 're-authentication' | 'password-change';
+/** The key that counts the failures of names beyond the cap of a window together. Not a hash, so it cannot be a name's. */
+export const OVERFLOW_KEY = 'overflow';
+
+/** The start of the window `now` is in: windows are aligned to the epoch, so they need no state of their own. */
+export function windowStart(now: Date, windowSeconds: number): Date {
+  const length = windowSeconds * 1000;
+  return new Date(Math.floor(now.getTime() / length) * length);
+}
+
 /** Seconds a key stays blocked after its `failures`-th failure; 0 while it still has free attempts. */
 export function delaySeconds(failures: number, free: number, throttle: Throttle): number {
   if (failures <= free) return 0;
@@ -40,12 +55,18 @@ export interface LoginThrottle {
    * indexed read. Call it before the password is looked at.
    */
   assertOpen(username: string, address: string | undefined, now?: Date): Promise<void>;
-  /** Counts one failed attempt on both keys, in the caller's transaction or its own. */
+  /**
+   * Counts one failed attempt on both keys, in the caller's transaction or its own. With `counted` the
+   * failure is also added to the count of its audit window in the same transaction (a failed sign-in,
+   * of a signed-in session's password check counts too): `userId` is the account the name belongs to, or `null`,
+   * and `context` says what was refused (`sign-in` when left out).
+   */
   recordFailure(
     username: string,
     address: string | undefined,
     now?: Date,
     tx?: DbTx,
+    counted?: { userId: string | null; context?: FailureContext },
   ): Promise<void>;
   /** Forgets the keys of a successful login. Run it in the transaction that starts the session. */
   reset(tx: Pick<DbTx, 'delete'>, username: string, address: string | undefined): Promise<void>;
@@ -72,6 +93,55 @@ export function createLoginThrottle(
       `Too many failed sign-in attempts. Try again in ${seconds} seconds.`,
       seconds,
     );
+  }
+
+  /** One more failure in the window of `now` for this name: an upsert, so a flood is one row with a count. */
+  async function countForAudit(
+    tx: DbTx,
+    username: string,
+    userId: string | null,
+    context: FailureContext,
+    now: Date,
+    throttle: Throttle,
+  ) {
+    const start = windowStart(now, throttle.auditWindowSeconds);
+    let keyHash = accountKey(username);
+    if (userId === null) {
+      // A spray of unique names that are no account would make a row each. Past the cap of the window a new name is
+      // counted under the one row `overflow`; a name that has its row already, and every account, keeps counting alone.
+      const here = and(
+        eq(loginFailure.windowStart, start),
+        eq(loginFailure.context, context),
+        isNull(loginFailure.userId),
+      );
+      const [own] = await tx
+        .select({ one: sql`1` })
+        .from(loginFailure)
+        .where(and(here, eq(loginFailure.keyHash, keyHash)))
+        .limit(1);
+      if (!own) {
+        const named = await tx
+          .select({ one: sql`1` })
+          .from(loginFailure)
+          .where(and(here, ne(loginFailure.keyHash, OVERFLOW_KEY)))
+          .limit(throttle.auditMaxUnknownNames);
+        if (named.length >= throttle.auditMaxUnknownNames) keyHash = OVERFLOW_KEY;
+      }
+    }
+    await tx
+      .insert(loginFailure)
+      .values({
+        keyHash,
+        windowStart: start,
+        windowSeconds: throttle.auditWindowSeconds,
+        context,
+        failures: 1,
+        userId,
+      })
+      .onConflictDoUpdate({
+        target: [loginFailure.keyHash, loginFailure.windowStart, loginFailure.context],
+        set: { failures: sql`least(${loginFailure.failures} + 1, 1000000)` },
+      });
   }
 
   async function count(tx: DbTx, keys: string[], now: Date, throttle: Throttle) {
@@ -106,11 +176,23 @@ export function createLoginThrottle(
   return {
     assertOpen,
 
-    async recordFailure(username, address, now = new Date(), tx) {
+    async recordFailure(username, address, now = new Date(), tx, counted) {
       const { loginThrottle: throttle } = await deps.settings.get();
       const keys = throttleKeys(username, address);
-      if (tx) return count(tx, keys, now, throttle);
-      await ctx.db.tx((own) => count(own, keys, now, throttle));
+      const write = async (inside: DbTx) => {
+        await count(inside, keys, now, throttle);
+        if (counted)
+          await countForAudit(
+            inside,
+            username,
+            counted.userId,
+            counted.context ?? 'sign-in',
+            now,
+            throttle,
+          );
+      };
+      if (tx) return write(tx);
+      await ctx.db.tx(write);
     },
 
     async reset(tx, username, address) {

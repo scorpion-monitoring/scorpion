@@ -46,8 +46,9 @@ const PUBLIC_PAGES = [
   '/link-sign-in',
   '/login',
   // M7 sprint 6: what a Reviewer made public (registry.services, registry.organisations); anyone may open them.
-  '/public/organisations/:id',
-  '/public/services/:slug',
+  '/catalog/organisations/:id',
+  '/catalog/services',
+  '/catalog/services/:slug',
   '/register',
   '/reset-password',
   '/setup',

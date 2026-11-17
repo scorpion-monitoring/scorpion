@@ -7,6 +7,7 @@
   // live region says the values (Escape stops).
   import { onMount } from 'svelte';
   import { getShell } from './context.ts';
+  import { rasterise, standaloneSvg } from './chart-image.ts';
   import {
     chartProblems,
     createChartController,
@@ -55,6 +56,19 @@
     event.preventDefault();
     active = next;
     controller?.showTip(next);
+  }
+  /**
+   * The chart as a file for an export: `svg` (vector) or `png`, on the page's background. `undefined` while the picture is not drawn (or
+   * cannot be: the table has the same data).
+   */
+  export async function toImage(format: 'svg' | 'png'): Promise<Blob | undefined> {
+    const svg = controller?.toSvg();
+    if (!svg || !element || !theme) return undefined;
+    const { width, height } = element.getBoundingClientRect();
+    const document = standaloneSvg(svg, Math.round(width), Math.round(height), theme.background);
+    return format === 'svg'
+      ? new Blob([document], { type: 'image/svg+xml' })
+      : rasterise(document, Math.round(width), Math.round(height));
   }
   function stop() {
     if (active !== null) controller?.showTip(null);
@@ -105,7 +119,7 @@
   });
 </script>
 
-<figure class="flex flex-col items-stretch justify-start gap-2" class:h-full={size === 'fill'}>
+<figure class="flex flex-col items-stretch justify-start gap-2" class:min-h-full={size === 'fill'}>
   {#if problems.length > 0}
     <p role="alert" class="text-error">{t('kit.chart.invalid')}</p>
   {:else}
@@ -146,7 +160,7 @@
   <div
     id={tableId}
     hidden={!showTable}
-    class="overflow-x-auto"
+    class="max-h-72 shrink-0 overflow-auto"
     role="region"
     aria-label={label}
     tabindex="0"

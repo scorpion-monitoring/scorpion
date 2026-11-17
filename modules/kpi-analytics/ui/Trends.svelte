@@ -15,6 +15,7 @@
   const { t, locale } = getShell();
   const controlsId = $props.id();
   let full = $state(false);
+  let chart = $state<{ toImage(format: 'svg' | 'png'): Promise<Blob | undefined> }>();
 
   function toggle(indicatorId: string, state: SeriesState, on: boolean) {
     const next = toggleState(config, state, indicatorId, on);
@@ -42,7 +43,16 @@
   }
 </script>
 
-<WidgetFrame title={t('analytics.trends.title')} {config} {editing} {setConfig} units exportable>
+<WidgetFrame
+  title={t('analytics.trends.title')}
+  {config}
+  {editing}
+  {setConfig}
+  units
+  exportable
+  chartImage={(format: 'svg' | 'png') => chart?.toImage(format)}
+  imageName="trends"
+>
   {#snippet body(data: Body)}
     {@const { lines, shown, spec } = specOf(data)}
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
@@ -51,8 +61,9 @@
       {:else if shown.length === 0}
         <p class="text-sm" role="status">{t('analytics.trends.allHidden')}</p>
       {:else}
-        <div class="flex min-h-48 flex-1 flex-col">
-          <Chart {spec} label={t('analytics.trends.chart')} size="fill" />
+        <!-- At least 12rem, and as tall as the chart with its table when that is open: a fixed share clipped the table to one line. -->
+        <div class="flex min-h-[max(12rem,min-content)] flex-1 flex-col">
+          <Chart bind:this={chart} {spec} label={t('analytics.trends.chart')} size="fill" />
         </div>
       {/if}
 

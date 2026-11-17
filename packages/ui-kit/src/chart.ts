@@ -42,6 +42,8 @@ export interface ChartHandle {
   resize(): void;
   /** Shows the tooltip of one category (a person reading by keyboard), or hides it with `null`. A library without tooltips may leave it out. */
   showTip?(index: number | null): void;
+  /** The chart as a standalone SVG document (for an export); a library that cannot say leaves it out. */
+  toSvg?(): string | undefined;
   dispose(): void;
 }
 
@@ -188,6 +190,8 @@ export interface ChartController {
   resize(): void;
   /** Shows or hides the tooltip of a category (see `ChartHandle.showTip`). */
   showTip(index: number | null): void;
+  /** The chart as an SVG document, or `undefined` while the library is loading or when it cannot say. */
+  toSvg(): string | undefined;
   /** Stops the chart. A chart that was still loading is disposed as soon as it arrives. */
   destroy(): void;
 }
@@ -227,6 +231,7 @@ export function createChartController(
     },
     resize: () => handle?.resize(),
     showTip: (index) => handle?.showTip?.(index),
+    toSvg: () => handle?.toSvg?.(),
     destroy() {
       destroyed = true;
       handle?.dispose();

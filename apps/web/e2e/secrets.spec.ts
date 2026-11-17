@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { permissionBox } from './support/profile.ts';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { activeUser, adminApi, newPerson, unique } from './support/admin.ts';
@@ -99,7 +100,7 @@ test('no password, token or reset secret is anywhere but in the one request or r
   await page.goto(at('/profile'));
   const tokens = page.getByRole('region', { name: 'Access tokens' });
   await tokens.getByLabel('Name').fill('secret token');
-  await tokens.getByRole('checkbox', { name: 'core.identity.me.read' }).check();
+  await (await permissionBox(tokens, 'core.identity.me.read')).check();
   await tokens.getByRole('button', { name: 'Create the token' }).click();
   const pat = (await page.getByTestId('token-secret').textContent())!;
   await page.getByRole('button', { name: 'I have copied it' }).click();

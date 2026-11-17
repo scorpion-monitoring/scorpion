@@ -25,7 +25,7 @@ describe('the pages of registry.organisations', () => {
   it('need a permission the module declares, except the one public page, which says why it is public', () => {
     const declared = new Set(Object.keys(manifest.permissions ?? {}));
     const open = ORGANISATION_ROUTES.filter((route) => route.public === true);
-    expect(open.map((route) => route.path)).toEqual(['/public/organisations/:id']);
+    expect(open.map((route) => route.path)).toEqual(['/catalog/organisations/:id']);
     expect(open[0]!.publicReason).toMatch(/draws nothing from a session or a role/);
     for (const route of ORGANISATION_ROUTES.filter((entry) => entry.public !== true)) {
       expect(declared.has(route.permission!), route.path).toBe(true);

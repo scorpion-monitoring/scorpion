@@ -39,6 +39,8 @@
       imprintUrl: null,
       logos: { light: null, dark: null },
       legalPages: [],
+      colors: { light: {}, dark: {} },
+      themeVersion: null,
     }),
     locale: () => locale,
     localPath: (candidate) =>
@@ -48,6 +50,7 @@
       history.replaceState(null, '', address);
       return Promise.resolve();
     },
+    navigating: () => false,
     replaceUrl: (address) => history.replaceState(null, '', address),
     withReauth: (action) => action(),
     takeIntent: () => undefined,

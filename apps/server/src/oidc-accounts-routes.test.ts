@@ -289,8 +289,10 @@ describe('nothing secret is kept in events or logs when accounts are made and li
       name: string;
       payload: unknown;
     }[];
+    // The sign-in of `alice` (a password) is on the list since M12a sprint 5; the OIDC callbacks above made no session.
     expect(events.map((e) => e.name).sort()).toEqual([
       'identity.authMethod.linked@1',
+      'identity.session.created@1',
       'identity.user.registered@1',
     ]);
     const dump = JSON.stringify(events) + logText();

@@ -9,14 +9,15 @@
     "./client": "./src/client.ts",
     "./icons": "./src/icons.ts",
     "./url": "./src/url.ts",
-    "./dashboard-layout": "./src/dashboard-layout.ts"
+    "./dashboard-layout": "./src/dashboard-layout.ts",
+    "./theme-colors": "./src/theme-colors.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
-    "hono": "^4.13.13",
+    "hono": "^4.13.18",
     "openapi-fetch": "^0.17.0",
     "zod": "^4.6.7"
   }

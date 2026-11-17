@@ -1,5 +1,5 @@
 import { expect, signInThroughPage, test } from './support/fixtures.ts';
-import { profileOf } from './support/profile.ts';
+import { permissionBox, profileOf } from './support/profile.ts';
 
 // The profile page: details, the picture, the password, access tokens, sessions and preferences.
 
@@ -143,7 +143,15 @@ test.describe('the language', () => {
 
     // Signed out, nobody is known and the English browser decides; signed in again, it is German.
     await page.getByRole('button', { name: 'Kontomenü' }).click();
+    // The session ends with the answer of the sign-out call; a `goto` that starts before it is back can reach the login page of a
+    // person who is still signed in, and that page sends them on. Wait for the answer, not for time.
+    const signedOut = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/auth/logout') && response.request().method() === 'POST',
+    );
     await page.getByRole('button', { name: 'Abmelden', exact: true }).click();
+    expect((await signedOut).ok()).toBe(true);
+    await expect(page.getByRole('button', { name: 'Kontomenü' })).toHaveCount(0);
     await page.goto(at('/login'));
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await page.getByLabel('Username').fill(who.username);
@@ -157,4 +165,28 @@ test.describe('the language', () => {
     await page.getByRole('button', { name: 'Speichern' }).last().click();
     await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
   });
+});
+
+test.describe('the token that was just made', () => {
+  // The secret sat in a narrow column of daisyUI's alert grid and wrapped letter by letter on a phone.
+  for (const width of [360, 768, 1440]) {
+    test(`fills the width of its box and never overflows at ${width} px`, async ({ page, at }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await profileOf(page, at, `wide${width}`);
+      const tokens = page.getByRole('region', { name: 'Access tokens' });
+      await tokens.getByLabel('Name').fill('a token with quite a long name for the box to show');
+      await (await permissionBox(tokens, 'core.identity.me.read')).check();
+      await tokens.getByRole('button', { name: 'Create the token' }).click();
+      const secret = page.getByTestId('token-secret');
+      const box = page.locator('.alert-warning', { has: secret });
+      await expect(secret).toBeVisible();
+      const [outer, inner] = [await box.boundingBox(), await secret.boundingBox()];
+      expect(inner!.width).toBeGreaterThan(outer!.width * 0.85);
+      // A token of 40 to 50 characters needs two lines on a phone at most, never one per letter.
+      expect(inner!.height).toBeLessThan(110);
+      expect(inner!.x + inner!.width).toBeLessThanOrEqual(outer!.x + outer!.width);
+      // The header of the shell is wider than a phone today (backlog); this box must not add to that.
+      expect(outer!.x + outer!.width).toBeLessThanOrEqual(width);
+    });
+  }
 });

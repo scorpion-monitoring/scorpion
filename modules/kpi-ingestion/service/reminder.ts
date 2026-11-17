@@ -23,6 +23,7 @@ import { SUBMIT_PATH } from '../ui/routes.ts';
 import { MANDATORY_NECESSITY } from './necessity.ts';
 import {
   previousMonth,
+  reminderDue,
   selectMissing,
   type MissingService,
   type ReminderCandidate,
@@ -40,8 +41,8 @@ const MAX_NAME = 200;
 
 /** What a run did, as counts: the job-run history shows it. Never a name, an id or a value. */
 export interface ReminderReport {
-  /** Why nothing was done: `disabled` or `not-the-day`; absent when the run looked at the providers. */
-  skipped?: 'disabled' | 'not-the-day';
+  /** Why nothing was done: `disabled` or `before-the-day`; absent when the run looked at the providers. */
+  skipped?: 'disabled' | 'before-the-day';
   /** The month reminded, `YYYY-MM` (absent when skipped). */
   month?: string;
   providers: number;
@@ -218,9 +219,10 @@ export function createReminderService(ctx: ModuleContext, deps: ReminderDeps): R
       };
       if (!settings.reminders.enabled) return { ...report, skipped: 'disabled' };
       const now = deps.clock();
-      // The day is the UTC day of the injected clock, as the cron is UTC.
-      if (now.getUTCDate() !== settings.reminders.dayOfMonth)
-        return { ...report, skipped: 'not-the-day' };
+      // The UTC day of the injected clock, as the cron is UTC: on the day or after it, so a node that was down on the
+      // day still sends; `kpii_reminder_sent` stops a second mail for a provider that was reminded already.
+      if (!reminderDue(now, settings.reminders.dayOfMonth))
+        return { ...report, skipped: 'before-the-day' };
 
       const { month, period } = previousMonth(now);
       report.month = month;

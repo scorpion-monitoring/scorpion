@@ -10,12 +10,17 @@
     range,
     category,
     slug,
+    image,
+    imageName = 'chart',
   }: {
     service: string;
     range: string;
     category: string;
     /** The abbreviation of the service, for the name of the file when the server names none. */
     slug: string;
+    /** The chart as a picture; without it the menu offers only the files of the numbers. */
+    image?: (format: 'svg' | 'png') => Promise<Blob | undefined> | undefined;
+    imageName?: string;
   } = $props();
 
   const { t, api } = getShell();
@@ -24,6 +29,11 @@
   const FORMATS = [
     { id: 'csv', label: 'analytics.export.csv' },
     { id: 'xlsx', label: 'analytics.export.xlsx' },
+  ] as const;
+
+  const PICTURES = [
+    { id: 'png', label: 'analytics.export.png' },
+    { id: 'svg', label: 'analytics.export.svg' },
   ] as const;
 
   let open = $state(false);
@@ -35,6 +45,25 @@
   function close(refocus: boolean) {
     open = false;
     if (refocus) trigger?.focus();
+  }
+
+  async function picture(format: (typeof PICTURES)[number]) {
+    close(true);
+    if (busy || !image) return;
+    busy = true;
+    failed = false;
+    done = '';
+    try {
+      const blob = await image(format.id);
+      if (!blob) throw new Error('no picture');
+      const name = `${slug}-${imageName}-${range}.${format.id}`;
+      saveBlob(blob, name);
+      done = t('analytics.export.done', { name });
+    } catch {
+      failed = true;
+    } finally {
+      busy = false;
+    }
   }
 
   async function choose(format: (typeof FORMATS)[number]) {
@@ -84,7 +113,7 @@
   {#if open}
     <ul
       id={menuId}
-      class="menu bg-base-100 border-base-300 absolute end-0 z-10 mt-1 w-40 rounded border p-1 shadow"
+      class="menu bg-base-100 border-base-300 absolute end-0 z-10 mt-1 w-56 rounded border p-1 shadow"
       aria-label={t('analytics.export.menu')}
     >
       {#each FORMATS as format (format.id)}
@@ -92,6 +121,13 @@
           <button type="button" onclick={() => choose(format)}>{t(format.label)}</button>
         </li>
       {/each}
+      {#if image}
+        {#each PICTURES as format (format.id)}
+          <li>
+            <button type="button" onclick={() => picture(format)}>{t(format.label)}</button>
+          </li>
+        {/each}
+      {/if}
     </ul>
   {/if}
   <p class="sr-only" role="status">

@@ -1,7 +1,7 @@
 // The HTTP routes of registry.services (internal API). Thin: Zod parses, one service call, the result is
 // mapped. Every route has a permission; the service checks it again (CLAUDE.md, security rules). The
 // delegated routes (`PATCH /services/{id}` and the icon) carry the plain `…service.read` and the service
-// decides with the policy `service.member` (ADR-0034, ADR-0036). The public routes (`/public/…`) read only what a Reviewer made public (ADR-0036 part 2).
+// decides with the policy `service.member` (ADR-0034, ADR-0036). The public routes (`/catalog/…`) read only what a Reviewer made public (ADR-0036 part 2).
 import {
   createRoute,
   NotFound,
@@ -18,6 +18,7 @@ import { serializeJsonLd } from '@scorpion/registry-organisations/public';
 import type { CatalogueRow } from './service/catalogue.ts';
 import { MAX_CREATE_BODY_BYTES } from './service/create-schema.ts';
 import { CONTRIBUTABLE_PROPERTIES } from './service/schema-org.ts';
+import { CATALOGUE_FILTERS } from './settings-schema.ts';
 import {
   PERMISSION_CREATE,
   PERMISSION_PUBLISH,
@@ -239,6 +240,17 @@ export const publicServiceSchema = z.object({
 export const PUBLIC_MAX_AGE_SECONDS = 60;
 export const PUBLIC_CACHE_CONTROL = `public, max-age=${PUBLIC_MAX_AGE_SECONDS}`;
 
+/** A row of the public list (`GET /catalog/services`): the public record without the description, the links and the licence. */
+export const publicServiceRowSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  logoUrl: z.string().optional().describe('Below the base path. Absent without an icon.'),
+  stage: z.string().describe('A term of the `stage` vocabulary; the facet gives its label.'),
+  provider: publicOrganisationRefSchema,
+  consortia: z.array(publicOrganisationRefSchema),
+});
+
 const publicRefParam = z.object({
   ref: z.string().max(200).describe('The id or the slug (an old slug works) of a public service.'),
 });
@@ -314,6 +326,35 @@ const catalogueQuery = z.looseObject({
 
 const facetsQuery = z.looseObject(filtersShape);
 
+/** A facet of the public list: what a visitor needs to draw it. Its `options` are the values of the facet; the name keeps it clear of a configured field's `values`. */
+const publicFacetSchema = z.object({
+  id: z.string().describe('`stage` or `consortium`; also the name of its filter.'),
+  label: z.string(),
+  options: z.array(
+    z.object({
+      key: z.string().describe('What to send as the filter.'),
+      label: z.string(),
+      count: z.number().int(),
+      selected: z.boolean(),
+    }),
+  ),
+});
+
+const publicListQuery = z.looseObject({
+  ...paginationQuery({ defaultPageSize: 20, maxPageSize: 50 }).shape,
+  q: z.string().max(100).optional().describe('Matches the slug or the name, without case.'),
+  consortium: filterParam.describe('Organisation ids; repeat to choose several (OR).'),
+  stage: filterParam.describe('Terms of the `stage` vocabulary; repeat to choose several (OR).'),
+  locale: z.string().max(35).optional().describe('The locale of the labels. Default `en`.'),
+});
+
+/** Additive on both list answers (sprint 3 of M12a, decision Q1): the page learns the look from the list it reads. */
+const filterStyleSchema = z
+  .enum(CATALOGUE_FILTERS)
+  .describe(
+    'The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).',
+  );
+
 export const listServicesRoute = createRoute({
   method: 'get',
   path: '/services',
@@ -324,7 +365,7 @@ export const listServicesRoute = createRoute({
   responses: {
     200: ok(
       'Services in the order asked for, then by id; each service once, with its provider and its consortia (none, one or many).',
-      listEnvelope(catalogueRowSchema),
+      listEnvelope(catalogueRowSchema).extend({ filterStyle: filterStyleSchema }),
     ),
     422: {
       description:
@@ -387,9 +428,39 @@ export const getServiceSchemaOrgRoute = createRoute({
   },
 });
 
+export const listPublicServicesRoute = createRoute({
+  method: 'get',
+  path: '/catalog/services',
+  public: true,
+  publicReason: PUBLIC_REASON,
+  // The default group: a burst of 120 per address, then 120 a minute (the same bucket as every other route of an anonymous reader).
+  rateLimit: 'default',
+  request: { query: publicListQuery },
+  responses: {
+    200: {
+      description: `The published services by name, then id, one page, with the facets \`stage\` and \`consortium\` counted over the published services that the search and the other facet leave. \`Cache-Control: ${PUBLIC_CACHE_CONTROL}\`.`,
+      content: {
+        'application/json': {
+          schema: listEnvelope(publicServiceRowSchema).extend({
+            facets: z.array(publicFacetSchema),
+            filterStyle: filterStyleSchema,
+          }),
+        },
+      },
+    },
+    404: {
+      description:
+        'Public reads are switched off (`service.allowPublic`): the same 404 as for a service that is not public.',
+    },
+    422: {
+      description: 'A filter that is not `stage` or `consortium`, or a value that names nothing.',
+    },
+  },
+});
+
 export const getPublicServiceRoute = createRoute({
   method: 'get',
-  path: '/public/services/{ref}',
+  path: '/catalog/services/{ref}',
   public: true,
   publicReason: PUBLIC_REASON,
   request: { params: publicRefParam },
@@ -407,7 +478,7 @@ export const getPublicServiceRoute = createRoute({
 
 export const getPublicServiceSchemaOrgRoute = createRoute({
   method: 'get',
-  path: '/public/services/{ref}/schema-org',
+  path: '/catalog/services/{ref}/schema-org',
   public: true,
   publicReason: PUBLIC_REASON,
   request: { params: publicRefParam },
@@ -747,13 +818,19 @@ const roleOut = (r: RoleView) => ({
 export function registerServiceRoutes(r: RouteRegistrar, service: ServicesService) {
   r.internal(listServicesRoute, (async (c) => {
     const { page, pageSize, locale, q, sort, dir, ...rest } = c.req.valid('query');
-    const { services, total } = await service.list(
-      c.get('actor'),
-      { q, sort, dir, filters: filtersOf(rest) },
-      { page, pageSize },
-      locale,
+    const [{ services, total }, filterStyle] = await Promise.all([
+      service.list(
+        c.get('actor'),
+        { q, sort, dir, filters: filtersOf(rest) },
+        { page, pageSize },
+        locale,
+      ),
+      service.catalogueFilters(),
+    ]);
+    return c.json(
+      { ...paginate({ page, pageSize }, total, services.map(rowOut)), filterStyle },
+      200,
     );
-    return c.json(paginate({ page, pageSize }, total, services.map(rowOut)), 200);
   }) satisfies RouteHandler<typeof listServicesRoute, AppEnv>);
 
   r.internal(listServiceFacetsRoute, (async (c) => {
@@ -810,6 +887,37 @@ export function registerServiceRoutes(r: RouteRegistrar, service: ServicesServic
       },
     });
   }) satisfies RouteHandler<typeof getServiceSchemaOrgRoute, AppEnv>);
+
+  r.internal(listPublicServicesRoute, (async (c) => {
+    const { page, pageSize, locale, q, ...rest } = c.req.valid('query');
+    const found = await service.listPublicAsSystem({
+      q,
+      filters: filtersOf(rest),
+      page,
+      pageSize,
+      locale,
+    });
+    if (!found) throw new NotFound(PUBLIC_NOT_FOUND);
+    const filterStyle = await service.catalogueFilters();
+    return c.json(
+      {
+        ...paginate({ page, pageSize }, found.total, found.services),
+        filterStyle,
+        facets: found.facets.map((facet) => ({
+          id: facet.id,
+          label: facet.label,
+          options: facet.values.map(({ key, label, count, selected }) => ({
+            key,
+            label,
+            count,
+            selected,
+          })),
+        })),
+      },
+      200,
+      { 'cache-control': PUBLIC_CACHE_CONTROL },
+    );
+  }) satisfies RouteHandler<typeof listPublicServicesRoute, AppEnv>);
 
   r.internal(getPublicServiceRoute, (async (c) => {
     const record = await service.getPublicAsSystem(c.req.valid('param').ref);

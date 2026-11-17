@@ -138,10 +138,10 @@ for (const scheme of ['light', 'dark'] as const) {
         colorScheme: scheme,
       });
       const anon = await visitor.newPage();
-      await anon.goto(at(`/public/services/${service.slug}`));
+      await anon.goto(at(`/catalog/services/${service.slug}`));
       await expect(anon.getByRole('img', { name: `Icon of ${service.name}` })).toBeVisible();
       await clean(anon, 'the public service page');
-      await anon.goto(at(`/public/organisations/${w.provider.id}`));
+      await anon.goto(at(`/catalog/organisations/${w.provider.id}`));
       await expect(anon.getByRole('heading', { name: w.provider.name, level: 1 })).toBeVisible();
       await clean(anon, 'the public organisation page');
       await visitor.close();

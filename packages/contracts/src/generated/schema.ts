@@ -1600,6 +1600,17 @@ export interface paths {
                                 dark: string | null;
                             };
                             legalPages: ("terms" | "privacy" | "imprint")[];
+                            /** @description The theme colours the web app writes into `/theme.css`, by daisyUI token (`#rrggbb`): the ones set and the text colours derived for them. Empty when none is set. */
+                            colors: {
+                                light: {
+                                    [key: string]: string;
+                                };
+                                dark: {
+                                    [key: string]: string;
+                                };
+                            };
+                            /** @description Changes with `colors`; null when no colour is set. */
+                            themeVersion: string | null;
                         };
                     };
                 };
@@ -7806,7 +7817,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/organisations/{id}": {
+    "/catalog/organisations/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -7885,7 +7896,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/organisations/{id}/schema-org": {
+    "/catalog/organisations/{id}/schema-org": {
         parameters: {
             query?: never;
             header?: never;
@@ -9193,6 +9204,11 @@ export interface paths {
                                     name: string;
                                 }[];
                             }[];
+                            /**
+                             * @description The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).
+                             * @enum {string}
+                             */
+                            filterStyle: "sidebar" | "bar" | "combined";
                         };
                     };
                 };
@@ -10344,7 +10360,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/services/{ref}": {
+    "/catalog/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 50. */
+                    pageSize?: string;
+                    /** @description Matches the slug or the name, without case. */
+                    q?: string;
+                    /** @description Organisation ids; repeat to choose several (OR). */
+                    consortium?: string | string[];
+                    /** @description Terms of the `stage` vocabulary; repeat to choose several (OR). */
+                    stage?: string | string[];
+                    /** @description The locale of the labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The published services by name, then id, one page, with the facets `stage` and `consortium` counted over the published services that the search and the other facet leave. `Cache-Control: public, max-age=60`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @description Below the base path. Absent without an icon. */
+                                logoUrl?: string;
+                                /** @description A term of the `stage` vocabulary; the facet gives its label. */
+                                stage: string;
+                                provider: {
+                                    id: string;
+                                    name: string;
+                                    /**
+                                     * @description An organisation of a public service is public.
+                                     * @enum {boolean}
+                                     */
+                                    public: true;
+                                };
+                                consortia: {
+                                    id: string;
+                                    name: string;
+                                    /**
+                                     * @description An organisation of a public service is public.
+                                     * @enum {boolean}
+                                     */
+                                    public: true;
+                                }[];
+                            }[];
+                            facets: {
+                                /** @description `stage` or `consortium`; also the name of its filter. */
+                                id: string;
+                                label: string;
+                                options: {
+                                    /** @description What to send as the filter. */
+                                    key: string;
+                                    label: string;
+                                    count: number;
+                                    selected: boolean;
+                                }[];
+                            }[];
+                            /**
+                             * @description The look of the catalogue’s search and filters that the administrator chose (setting `catalogueFilters`).
+                             * @enum {string}
+                             */
+                            filterStyle: "sidebar" | "bar" | "combined";
+                        };
+                    };
+                };
+                /** @description Public reads are switched off (`service.allowPublic`): the same 404 as for a service that is not public. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description A filter that is not `stage` or `consortium`, or a value that names nothing. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog/services/{ref}": {
         parameters: {
             query?: never;
             header?: never;
@@ -10438,7 +10576,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/services/{ref}/schema-org": {
+    "/catalog/services/{ref}/schema-org": {
         parameters: {
             query?: never;
             header?: never;
@@ -12585,7 +12723,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/kpi/rimo.ttl": {
+    "/catalog/kpi/rimo.ttl": {
         parameters: {
             query?: never;
             header?: never;
@@ -12649,7 +12787,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/kpi/rimo.jsonld": {
+    "/catalog/kpi/rimo.jsonld": {
         parameters: {
             query?: never;
             header?: never;
@@ -14162,6 +14300,328 @@ export interface paths {
                 };
                 /** @description Not allowed. */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/impact/consortia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The consortia the impact picker offers
+         * @description The organisations of the type `consortium`, by name without case then id, at most 500, as one page of the list envelope. `Cache-Control: no-store`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The consortia. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                id: string;
+                                name: string;
+                                abbreviation: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/impact/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The impact tiles of a consortium
+         * @description Counted live on every request: the services of the consortium (once each, however many consortia they have), how many are open source and the number per stage of the vocabulary. By default only published services are counted; `includeUnpublished=true` counts every linked service. A consortium that is not an id, names no organisation or names one that is not a consortium is 422 naming `consortium`. `Cache-Control: no-store`. The answer names no person and no contact point.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The id of the consortium. */
+                    consortium: string;
+                    /** @description Count the unpublished services too. Default `false`. */
+                    includeUnpublished?: "true" | "false";
+                    /** @description The language of the stage labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The tiles. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description The services counted: the published ones, or all with `includeUnpublished`. */
+                            total: number;
+                            /** @description An OSI-approved licence that is not deprecated. */
+                            openSource: number;
+                            /** @description A deprecated SPDX id: not open source. */
+                            licenceDeprecated: number;
+                            /** @description No licence, or an id the SPDX list does not know: not open source. */
+                            licenceUnknown: number;
+                            /** @description A current licence that is not OSI-approved. `total` is the sum of these four counts. */
+                            otherLicence: number;
+                            /** @description One line per term of the vocabulary `stage`, deactivated terms included, in the vocabulary’s order; zero counts are listed. */
+                            stages: {
+                                /** @description A term of the vocabulary `stage`. */
+                                key: string;
+                                /** @description The vocabulary’s label in the requested language. */
+                                label: string;
+                                /** @description `false` for a term that was deactivated; services may still hold it. */
+                                active: boolean;
+                                count: number;
+                            }[];
+                            /** @description A stage key that services hold and the vocabulary does not list, by key; never dropped. */
+                            otherStages: {
+                                key: string;
+                                count: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kpi/impact/table": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The yearly impact table of a consortium
+         * @description One row per service of the consortium for one calendar year, computed live from the evaluation of its KPI set and its measurements: a page of services by name without case, then id (default 50, at most 200). By default only published services; `includeUnpublished=true` adds the others. The current evaluation applies to every year. A `consortium` that is not a consortium and a `year` outside the years offered are 422 naming the parameter; a consortium with no services is an empty list. `Cache-Control: no-store`. The answer names no person.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 200. */
+                    pageSize?: string;
+                    /** @description The id of the consortium. */
+                    consortium: string;
+                    /** @description A calendar year of the years offered. */
+                    year: string;
+                    /** @description Include the unpublished services. Default `false`. */
+                    includeUnpublished?: "true" | "false";
+                    /** @description The language of the aggregate labels. Default `en`. */
+                    locale?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The table. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                serviceId: string;
+                                name: string;
+                                slug: string;
+                                /**
+                                 * @description `ok`: the year has a value. `no-data`: the service has a headline and no value in the year. `no-evaluation`: it has no KPI set, or its set has no headline. `error`: the headline cannot be read. Exclusive.
+                                 * @enum {string}
+                                 */
+                                state: "ok" | "no-data" | "no-evaluation" | "error";
+                                /**
+                                 * @description Why the row is in its state, as a code a page can translate.
+                                 * @enum {string}
+                                 */
+                                reason: "ok" | "no-values" | "no-set" | "no-headline" | "not-numeric" | "value-type-unknown" | "aggregate-not-allowed" | "aggregate-unknown" | "read-failed";
+                                /** @description What to do about the state, in English; empty for `ok`. Never a person, never a value. */
+                                advice: string;
+                                /** @description The headline of the set the service has now (the current evaluation applies to every year); `null` when there is none. */
+                                headline: {
+                                    indicatorId: string;
+                                    name: string;
+                                    unit: string | null;
+                                    /** @description A term of the vocabulary `aggregate`. */
+                                    aggregate: string;
+                                    /** @description The vocabulary’s label of the aggregate in the requested language. */
+                                    label: string;
+                                } | null;
+                                /** @description January first: the stored value of the month, `null` for a month with no value (never zero). A duration is in seconds. */
+                                months: (number | null)[];
+                                /** @description The aggregate of the headline over the months that have a value; `null` when none has. */
+                                yearly: number | null;
+                                /** @description The months `yearly` is over: "n of 12". */
+                                monthsWithValue: number;
+                                /** @description The same figures written for reading in the requested language by the value type of the headline (a duration is `HH:MM:SS`, another number has at most two decimals); `null` where the number is `null`. The numbers stay the data. */
+                                shown: {
+                                    months: (string | null)[];
+                                    yearly: string | null;
+                                };
+                            }[];
+                            year: number;
+                            /** @description The years offered: the current year and the nine before it, newest first. */
+                            years: number[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The input is not valid. */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };

@@ -108,6 +108,8 @@ export interface Kernel {
    * (filled by `core.identity`), or one that leaves every caller anonymous (ADR 0006).
    */
   readonly authenticator: Authenticator;
+  /** The cookie name the authenticator declares for a session (`undefined` when it reads none); the rate limiter looks for its presence only. */
+  readonly sessionCookie: string | undefined;
   /**
    * Where the pipeline sends the audit entry of a request (`kernel.auditSink`, filled by
    * `core.audit`), or a sink that does nothing (ADR 0021).
@@ -436,6 +438,8 @@ export function createKernel(options: KernelOptions): Kernel {
   const authenticator: Authenticator = authenticatorEntry
     ? (authenticatorEntry.value as { authenticate: Authenticator }).authenticate
     : anonymousOnly;
+  const sessionCookie = (authenticatorEntry?.value as { sessionCookie?: string } | undefined)
+    ?.sessionCookie;
 
   return {
     profile,
@@ -445,6 +449,7 @@ export function createKernel(options: KernelOptions): Kernel {
     },
     authorizer,
     authenticator,
+    sessionCookie,
     audit: auditSink,
     commands: commands.map(({ module, command }) => ({
       module: module.id,

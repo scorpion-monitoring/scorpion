@@ -24,6 +24,8 @@ let providersOnlyToken = '';
 const world: {
   p1?: { id: string; abbreviation: string };
   p2?: { id: string; abbreviation: string };
+  p3?: { id: string; abbreviation: string };
+  comma?: { id: string; slug: string };
   zero?: { id: string; slug: string };
   one?: { id: string; slug: string };
   two?: { id: string; slug: string };
@@ -50,6 +52,8 @@ beforeAll(async () => {
   const pool = started.kernel.pool;
   const p1 = await makeOrganisation(pool, { abbreviation: 'Sp1', name: 'Provider one' });
   const p2 = await makeOrganisation(pool, { abbreviation: 'Sp2', name: 'Provider two' });
+  // An abbreviation that contains a comma: reachable only through the repeated form of the parameter.
+  const p3 = await makeOrganisation(pool, { abbreviation: 'Comma,Co', name: 'Provider three' });
   const c1 = await makeOrganisation(pool, {
     type: 'consortium',
     abbreviation: 'Sc1',
@@ -62,6 +66,7 @@ beforeAll(async () => {
   });
   world.p1 = p1;
   world.p2 = p2;
+  world.p3 = p3;
   world.consortia = [c1, c2];
   world.zero = await makeService(pool, {
     slug: 'sv-zero',
@@ -88,7 +93,8 @@ beforeAll(async () => {
   });
   // Enough rows that the paging cases of the harness have pages to walk.
   for (let i = 0; i < 6; i++) await makeService(pool, { slug: `sv-fill-${i}`, provider: p2.id });
-  world.count = 9;
+  world.comma = await makeService(pool, { slug: 'sv-comma', provider: p3.id });
+  world.count = 10;
 }, 120_000);
 
 const call: V1ContractContext['call'] = async ({ method, path, headers }) => {
@@ -146,6 +152,48 @@ describe('GET /services', () => {
     const both = await get('/services?provider=Sp2&stage=DEV&license=MIT');
     expect(rows(both).map((r) => r.id)).toEqual([world.two!.id]);
     expect(metadata(both).totalCount).toBe(1);
+  });
+
+  it('takes a filter repeated as well as comma-separated, and the two give the same answer', async () => {
+    const commaForm = await get('/services?provider=Sp1,Sp2&pageSize=100');
+    const repeated = await get('/services?provider=Sp1&provider=Sp2&pageSize=100');
+    expect(repeated.status).toBe(200);
+    expect(rows(repeated).map((r) => r.id)).toEqual(rows(commaForm).map((r) => r.id));
+    expect(metadata(repeated).totalCount).toBe(metadata(commaForm).totalCount);
+    expect(metadata(repeated).totalCount).toBe(world.count - 1);
+    // Without case, as the comma form; the same value twice is one value.
+    const twice = await get('/services?provider=sp1&provider=SP1');
+    expect(metadata(twice).totalCount).toBe(2);
+    // Another filter repeated, and the two filters combined with AND.
+    const services = await get('/services?service=sv-zero&service=SV-ONE&provider=Sp1');
+    expect(rows(services).map((r) => r.abbreviation)).toEqual(['Sv-one', 'sv-zero']);
+  });
+
+  it('reaches a provider whose abbreviation contains a comma: each repeated value is taken as it is', async () => {
+    const reply = await get('/services?provider=Comma,Co&provider=Sp1&pageSize=100');
+    expect(reply.status).toBe(200);
+    expect(metadata(reply).totalCount).toBe(3);
+    expect(rows(reply).map((r) => r.abbreviation)).toContain('sv-comma');
+    // Given once, the comma still splits (the legacy form): "Comma" and "Co" name no provider.
+    const once = await get('/services?provider=Comma,Co');
+    expect(once.status).toBe(422);
+    // The value given twice is the way to ask for this one provider alone.
+    const alone = await get('/services?provider=Comma,Co&provider=Comma,Co');
+    expect(alone.status).toBe(200);
+    expect(rows(alone).map((r) => r.id)).toEqual([world.comma!.id]);
+  });
+
+  it('is 422 for a repeated filter that is empty, too long or too long a list, never 500', async () => {
+    for (const query of [
+      '?provider=Sp1&provider=',
+      '?provider=Sp1&provider=nobody-sp',
+      `?provider=Sp1&provider=${'x'.repeat(65)}`,
+      `?${Array.from({ length: 51 }, (_, i) => `service=s${i}`).join('&')}`,
+    ]) {
+      const reply = await get(`/services${query}`);
+      expect(reply.status, query).toBe(422);
+      expect(reply.res.headers.get('content-type')).toContain('application/problem+json');
+    }
   });
 
   it('is 422 for an unknown provider or service abbreviation, a bad filter and an unknown parameter, never 500', async () => {

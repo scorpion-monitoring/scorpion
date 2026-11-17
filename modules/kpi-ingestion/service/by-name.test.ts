@@ -259,29 +259,43 @@ describe('upsertByName: who may use it', () => {
     expect(await count(w.pool, 'kpii_measurement')).toBe(1);
   });
 
-  it('needs the scope of the route and an owner who may submit: a token with only one of the two is refused [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+  it('needs the scope of the route and an owner who may submit: the route scope is enough for an owner who may, never for one who may not [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
     const w = await world();
-    const item = [{ kpi: w.ind.downloads.name, value: 1, date: '2026-01' }];
-    const call = (who: Actor) => w.ingestion.measurements.upsertByName(who, w.svc.id, item);
-    // the owner is a member: the scopes decide
+    const item = (value: number) => [{ kpi: w.ind.downloads.name, value, date: `2026-0${value}` }];
+    const call = (who: Actor, value = 1) =>
+      w.ingestion.measurements.upsertByName(who, w.svc.id, item(value));
+    // no scope of the route: refused, whatever the owner may do (a scope of `submit` alone is not the route's scope)
     await expect(call(token(w.people.member, []))).rejects.toBeInstanceOf(Forbidden);
-    await expect(call(token(w.people.member, [PERMISSION_V1_WRITE]))).rejects.toBeInstanceOf(
-      Forbidden,
-    );
     await expect(call(token(w.people.member, [PERMISSION_SUBMIT]))).rejects.toBeInstanceOf(
       Forbidden,
     );
-    // both scopes and an owner who may submit: through, with no scope of kpi.framework
+    await expect(call(token(w.people.admin, []))).rejects.toBeInstanceOf(Forbidden);
+    expect(await count(w.pool, 'kpii_measurement')).toBe(0);
+    // the route scope alone is what a member can make (ADR-0015, M12a: `submit` is held through a policy, so it is not on the form):
+    // the owner is a member, so it writes; and so does an Admin's
+    expect((await call(token(w.people.member, [PERMISSION_V1_WRITE]), 1)).inserted).toBe(1);
+    expect((await call(token(w.people.admin, [PERMISSION_V1_WRITE]), 2)).inserted).toBe(1);
+    // both scopes, as the tokens of 0.14 name them: through, as before
     expect(
-      (await call(token(w.people.member, [PERMISSION_V1_WRITE, PERMISSION_SUBMIT]))).inserted,
+      (await call(token(w.people.member, [PERMISSION_V1_WRITE, PERMISSION_SUBMIT]), 3)).inserted,
     ).toBe(1);
-    // both scopes, an owner who may not submit for this service: refused
+    // an owner who may not submit for this service is refused whichever of the scopes the token names
+    for (const scopes of [[PERMISSION_V1_WRITE], [PERMISSION_V1_WRITE, PERMISSION_SUBMIT]]) {
+      for (const who of ['elsewhere', 'plain', 'requested', 'rejected', 'left'] as const) {
+        await expect(call(token(w.people[who], scopes), 4), who).rejects.toBeInstanceOf(Forbidden);
+      }
+    }
+    // `impliedBy` is declared on the permission (ADR-0015, M12a sprint 5 findings), so the scope of the route stands for `submit` wherever
+    // it is asked, not only in this write: the owner still decides, and a token never does more than its owner
     await expect(
-      call(token(w.people.elsewhere, [PERMISSION_V1_WRITE, PERMISSION_SUBMIT])),
+      w.ingestion.measurements.upsertBatch(
+        token(w.people.plain, [PERMISSION_V1_WRITE]),
+        w.svc.id,
+        [],
+        { source: 'test' },
+      ),
     ).rejects.toBeInstanceOf(Forbidden);
-    await expect(
-      call(token(w.people.plain, [PERMISSION_V1_WRITE, PERMISSION_SUBMIT])),
-    ).rejects.toBeInstanceOf(Forbidden);
+    expect(await count(w.pool, 'kpii_measurement')).toBe(3);
   });
 
   it('refuses a member of another provider on this service and lets them write to their own [ASVS-8.2.1]', async () => {

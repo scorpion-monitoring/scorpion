@@ -21,10 +21,14 @@ import type {
   OrganisationsPublic,
   SchemaOrgProfile,
 } from '@scorpion/registry-organisations/public';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { ResolvedConfig } from '../config/validate.ts';
 import { fieldValue, service, serviceOrganisation, slugHistory } from '../db/schema.ts';
-import { settingsSchema } from '../settings-schema.ts';
+import {
+  CATALOGUE_FILTERS_SINCE,
+  settingsSchema,
+  type CatalogueFilters,
+} from '../settings-schema.ts';
 import { dotted, fieldKeysOfInput, validateBody, validatePatch, valueAt } from './body.ts';
 import {
   createCatalogue,
@@ -65,6 +69,7 @@ import {
   type Choice,
   type ChoiceEnv,
   type FacetEntry,
+  type FacetEnv,
   type FieldEnv,
   type FieldSchemaOrgProperty,
   type OrgRoleEntry,
@@ -179,6 +184,27 @@ export interface PublicServiceRecord {
   stage: string;
   provider: PublicOrganisationRef;
   consortia: PublicOrganisationRef[];
+}
+
+/** A row of the public list: the public record without the description, the links and the licence. */
+export interface PublicServiceRow {
+  id: string;
+  slug: string;
+  name: string;
+  /** Below the base path; absent without an icon. */
+  logoUrl?: string;
+  stage: string;
+  provider: PublicOrganisationRef;
+  consortia: PublicOrganisationRef[];
+}
+
+/** What the public list needs to know of the request: the search, the two facets and the page. */
+export interface PublicListQuery {
+  q?: string | undefined;
+  filters?: Readonly<Record<string, readonly string[]>> | undefined;
+  page: number;
+  pageSize: number;
+  locale?: string | undefined;
 }
 
 /** A public service as another module's public page lists it. */
@@ -311,8 +337,33 @@ export interface ServicesService {
   getPublicAsSystem: (ref: string) => Promise<PublicServiceRecord | undefined>;
   /** The profile of a public service; `undefined` exactly when {@link getPublicAsSystem} is. */
   schemaOrgPublicAsSystem: (ref: string) => Promise<ServiceProfile | undefined>;
+  /**
+   * The public list (`GET /catalog/services`): published services only, by name then id, with the facets `stage` and `consortium` counted over
+   * the published services. `undefined` exactly when public reads are switched off (`allowPublic`), so the route answers the one 404. A filter
+   * that is not one of the two facets, or a value that names nothing, is an `Invalid` (422).
+   */
+  listPublicAsSystem: (query: PublicListQuery) => Promise<
+    | {
+        services: PublicServiceRow[];
+        total: number;
+        facets: CatalogueFacet[];
+      }
+    | undefined
+  >;
   /** The public services an organisation is the provider or a consortium of, by name; empty with `allowPublic` off. */
   listPublicByOrganisationAsSystem: (organisationId: string) => Promise<PublicServiceLink[]>;
+  /**
+   * The look of the catalogues' faceted search (setting `catalogueFilters`), for the two list answers. Not a
+   * secret and not a person's: the list routes have checked their caller already, the public one has none.
+   */
+  catalogueFilters: () => Promise<CatalogueFilters>;
+  /**
+   * The upgrade step of sprint 3 of M12a (decision Q4): an instance with a service created before the looks
+   * (`CATALOGUE_FILTERS_SINCE`) keeps the look it had: `sidebar` is stored once, only when the key is not stored, and
+   * an administrator's choice is never overwritten. A new instance writes nothing; the default applies. Trusted code,
+   * run at start (`system.ready`); checks no permission.
+   */
+  upgradeCatalogueFiltersAsSystem: () => Promise<'seeded' | 'kept'>;
   /** The SPDX search for the licence field; needs `…service.read`. */
   searchLicences: (actor: Actor, query: string, limit?: number) => Promise<SpdxLicense[]>;
   listRoles: (actor: Actor, locale?: string) => Promise<RoleView[]>;
@@ -362,6 +413,34 @@ export interface ServicesService {
     memberOf?: string | undefined;
     limit: number;
   }) => Promise<{ id: string; slug: string; name: string }[]>;
+  /**
+   * The minimal rows `kpi.impact` counts (M12 sprint 1): `{ id, name, slug, stage, license, published }` of **every** service linked to the
+   * consortium with the role `consortium`, published or not (the caller filters on `published`), once each however many consortia it has,
+   * by name without case then id. At most {@link MAX_IMPACT_ROWS}: a larger consortium is an `Invalid` (422) naming `organisation` (the caller
+   * names its own parameter), never a silent cut. An id that is no UUID or names no consortium gives an empty list. It names no person, no contact point and no audit column.
+   */
+  listImpactRowsAsSystem: (consortiumId: string) => Promise<ImpactRow[]>;
+  /**
+   * The SPDX facts of licence ids (any case), for a caller that counts open source: the key is the id as asked, lower-cased; a licence
+   * the list does not know is missing from the answer. It answers from the cached list with the bundled fallback (the adapter of this
+   * module); the live fetch is the adapter's own business, at most once a day.
+   */
+  findLicencesAsSystem: (
+    ids: readonly string[],
+  ) => Promise<Record<string, { id: string; osiApproved: boolean; deprecated: boolean }>>;
+}
+
+/** The most services {@link ServicesService.listImpactRowsAsSystem} returns. */
+export const MAX_IMPACT_ROWS = 2000;
+
+/** One row of {@link ServicesService.listImpactRowsAsSystem}. */
+export interface ImpactRow {
+  id: string;
+  name: string;
+  slug: string;
+  stage: string;
+  license: string | null;
+  published: boolean;
 }
 
 const CONSTRAINT_ERRORS = new Set(['svc_service_slug_idx', 'svc_slug_history_slug_idx']);
@@ -380,7 +459,7 @@ function isSlugClash(error: unknown): boolean {
 export interface ServicesDeps {
   authz: Pick<AuthzService, 'require' | 'can'>;
   blob: Pick<BlobService, 'put' | 'setReference'>;
-  settings: Pick<SettingsService, 'validateTerm' | 'listTerms'>;
+  settings: Pick<SettingsService, 'validateTerm' | 'listTerms' | 'seedSettingKey'>;
   organisations: Pick<
     OrganisationsPublic,
     | 'findByIdsAsSystem'
@@ -581,24 +660,37 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
     organisations,
   });
 
+  const catalogueEnv = (locale: string): FacetEnv => ({
+    locale,
+    async organisationNames(wanted) {
+      const found = await deps.organisations.findByIdsAsSystem([...wanted]);
+      return new Map(found.map((organisation) => [organisation.id, organisation.name]));
+    },
+    async termLabels(vocabulary) {
+      const terms = await deps.settings.listTerms(vocabulary, { includeInactive: true, locale });
+      return new Map(terms.map((term) => [term.key, term.label]));
+    },
+    findLicence: (id) => fieldEnv.findLicence(id),
+  });
   const catalogue = createCatalogue({
     db,
     facets: deps.facets ?? [],
     organisationsOf,
     iconPath,
-    env: (locale) => ({
-      locale,
-      async organisationNames(wanted) {
-        const found = await deps.organisations.findByIdsAsSystem([...wanted]);
-        return new Map(found.map((organisation) => [organisation.id, organisation.name]));
-      },
-      async termLabels(vocabulary) {
-        const terms = await deps.settings.listTerms(vocabulary, { includeInactive: true, locale });
-        return new Map(terms.map((term) => [term.key, term.label]));
-      },
-      findLicence: (id) => fieldEnv.findLicence(id),
-    }),
+    env: catalogueEnv,
   });
+
+  // The public list: the same read model, narrowed to what a Reviewer made public and to the two facets a visitor may use.
+  const publicCatalogue = createCatalogue({
+    db,
+    facets: (deps.facets ?? []).filter((facet) => facet.public === true),
+    organisationsOf,
+    iconPath,
+    env: catalogueEnv,
+  });
+  /** Published, and with the owner a public record needs (`getPublicAsSystem` shows nothing without one). */
+  // The table is named outright: Drizzle leaves it off a column of a single-table query, and an unqualified `id` in the subselect would be its own.
+  const publishedOnly = sql`(svc_service.public = true and exists (select 1 from svc_service_organisation so where so.service_id = svc_service.id and so.role = ${OWNER_ROLE}))`;
 
   async function views(actor: Actor, rows: readonly Row[]): Promise<ServiceView[]> {
     const wanted = rows.map((row) => row.id);
@@ -1474,6 +1566,56 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
       return hit && profileOf(hit.row, hit.links, hit.values);
     },
 
+    async catalogueFilters() {
+      return (await settingsNow()).catalogueFilters;
+    },
+
+    async upgradeCatalogueFiltersAsSystem() {
+      // An instance that existed before the looks did has a service from before them. A new instance has none, writes
+      // nothing (the default applies) and never will: its services all come later.
+      const [existing] = await ctx.db
+        .select({ id: service.id })
+        .from(service)
+        .where(lt(service.createdAt, CATALOGUE_FILTERS_SINCE))
+        .limit(1);
+      if (!existing) return 'kept';
+      return deps.settings.seedSettingKey(ctx.moduleId, 'catalogueFilters', 'sidebar');
+    },
+
+    async listPublicAsSystem(query) {
+      if (!(await settingsNow()).allowPublic) return undefined;
+      const locale = query.locale ?? 'en';
+      const request = { q: query.q, filters: query.filters, restrict: publishedOnly };
+      const [{ rows, total }, facets] = await Promise.all([
+        publicCatalogue.rows(request, { page: query.page, pageSize: query.pageSize }, locale),
+        publicCatalogue.facets(request, locale),
+      ]);
+      const reference = (organisation: { id: string; name: string }): PublicOrganisationRef => ({
+        id: organisation.id,
+        name: organisation.name,
+        public: true,
+      });
+      return {
+        services: rows.flatMap((row) =>
+          row.provider
+            ? [
+                {
+                  id: row.id,
+                  slug: row.slug,
+                  name: row.name,
+                  ...(row.iconUrl !== undefined && { logoUrl: row.iconUrl }),
+                  stage: row.stage,
+                  provider: reference(row.provider),
+                  consortia: row.consortia.map(reference),
+                },
+              ]
+            : [],
+        ),
+        total,
+        facets,
+      };
+    },
+
     async listPublicByOrganisationAsSystem(organisationId) {
       if (!z.uuid().safeParse(organisationId).success) return [];
       if (!(await settingsNow()).allowPublic) return [];
@@ -1572,6 +1714,53 @@ export function createServicesService(ctx: ModuleContext, deps: ServicesDeps): S
         )
         .orderBy(asc(service.id));
       return records(rows.map((r) => r.row));
+    },
+
+    async listImpactRowsAsSystem(consortiumId) {
+      if (!z.uuid().safeParse(consortiumId).success) return [];
+      const rows = await db
+        .select({
+          id: service.id,
+          name: service.name,
+          slug: service.slug,
+          stage: service.stage,
+          license: service.license,
+          published: service.public,
+        })
+        .from(service)
+        .innerJoin(serviceOrganisation, eq(serviceOrganisation.serviceId, service.id))
+        // The unique key (service, organisation, role) makes a service appear once.
+        .where(
+          and(
+            eq(serviceOrganisation.organisationId, consortiumId),
+            eq(serviceOrganisation.role, BRAND_ROLE),
+          ),
+        )
+        .orderBy(asc(sql`lower(${service.name})`), asc(service.id))
+        .limit(MAX_IMPACT_ROWS + 1);
+      if (rows.length > MAX_IMPACT_ROWS)
+        throw new Invalid('The request is not valid.', [
+          {
+            in: 'query',
+            path: 'organisation',
+            message: `The organisation links more than ${MAX_IMPACT_ROWS} services.`,
+          },
+        ]);
+      return rows;
+    },
+
+    async findLicencesAsSystem(wanted) {
+      const out: Record<string, { id: string; osiApproved: boolean; deprecated: boolean }> = {};
+      for (const id of new Set(wanted.map((w) => w.trim().toLowerCase()))) {
+        const licence = id ? await deps.spdx.find(id) : undefined;
+        if (licence)
+          out[id] = {
+            id: licence.id,
+            osiApproved: licence.osiApproved,
+            deprecated: licence.deprecated,
+          };
+      }
+      return out;
     },
 
     async isProviderManagerAsSystem(userId, serviceId) {

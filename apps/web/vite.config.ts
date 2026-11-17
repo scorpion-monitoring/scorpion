@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
@@ -12,7 +13,13 @@ import { scorpionFront } from './src/front/vite-plugin.ts';
 // `paths.base` stays empty and paths are relative: the front (src/front) takes BASE_PATH off every
 // request, so one build serves any prefix (ADR-0027). `BASE_PATH` and `API_ORIGIN` are read when the
 // process starts, never at build time.
+// The product version for the footer (`src/lib/software.ts`): the `version` of the root package, which `changeset version` bumps.
+const { version } = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { version: string };
+
 export default defineConfig({
+  define: { __SCORPION_VERSION__: JSON.stringify(version) },
   // The chart library is loaded by the browser when a chart mounts (`ui-kit`'s `chart-echarts.ts`, imported inside `onMount`), never
   // by the server: left out of the server bundle, it would only add its code and source maps (about 10 MB) to every image that has a chart.
   // (`ssr.external` does not reach it: the web app bundles the linked `ui-kit`, whose imports are bundled with it.)

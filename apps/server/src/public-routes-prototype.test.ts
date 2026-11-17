@@ -30,7 +30,7 @@ async function world(options: Parameters<typeof app.start>[0] = {}) {
 describe('a public route behind the real pipeline (prototype)', () => {
   it('answers 200 to an anonymous reader with Cache-Control public, max-age=60 and the strict CSP', async () => {
     const { s, open } = await world();
-    const reply = await s.get(`/public/services/${open.slug}`);
+    const reply = await s.get(`/catalog/services/${open.slug}`);
     expect(reply.status).toBe(200);
     expect(reply.res.headers.get('cache-control')).toBe('public, max-age=60');
     expect(reply.res.headers.get('content-security-policy')).toContain("default-src 'none'");
@@ -40,11 +40,11 @@ describe('a public route behind the real pipeline (prototype)', () => {
 
   it('answers a service that is not public with the exact body of an unknown id, never 403', async () => {
     const { s, closed } = await world();
-    const unknown = await s.get(`/public/services/${ABSENT}`);
-    const unknownSlug = await s.get('/public/services/no-such-slug');
+    const unknown = await s.get(`/catalog/services/${ABSENT}`);
+    const unknownSlug = await s.get('/catalog/services/no-such-slug');
     expect(unknown.status).toBe(404);
     for (const ref of [closed.id, closed.slug]) {
-      const reply = await s.get(`/public/services/${ref}`);
+      const reply = await s.get(`/catalog/services/${ref}`);
       expect(reply.status).toBe(404);
       expect(bodyOf(reply.body)).toEqual(bodyOf(unknown.body));
       expect(reply.res.headers.get('cache-control')).toBeNull();
@@ -57,25 +57,25 @@ describe('a public route behind the real pipeline (prototype)', () => {
       rateLimits: { default: { capacity: 3, refillPerSecond: 0.0001 } },
     });
     const statuses: number[] = [];
-    for (let i = 0; i < 5; i++) statuses.push((await s.get(`/public/services/${open.id}`)).status);
+    for (let i = 0; i < 5; i++) statuses.push((await s.get(`/catalog/services/${open.id}`)).status);
     expect(statuses).toEqual([200, 200, 200, 429, 429]);
   });
 
   it('shows an unpublish at the next request: the server keeps no copy', async () => {
     const { s, open } = await world();
-    expect((await s.get(`/public/services/${open.id}`)).status).toBe(200);
+    expect((await s.get(`/catalog/services/${open.id}`)).status).toBe(200);
     await s.kernel.pool.query(
       'update svc_service set public = false, published_at = null, published_by = null where id = $1',
       [open.id],
     );
-    expect((await s.get(`/public/services/${open.id}`)).status).toBe(404);
+    expect((await s.get(`/catalog/services/${open.id}`)).status).toBe(404);
   });
 
   it('ignores a session cookie, and a stale one does not turn the answer into a 401', async () => {
     const { s, open } = await world();
     const who = await s.signedIn('cookie-reader');
     for (const cookie of [who.cookie, 'not-a-session']) {
-      const reply = await s.get(`/public/services/${open.id}`, { cookie });
+      const reply = await s.get(`/catalog/services/${open.id}`, { cookie });
       expect(reply.status).toBe(200);
       expect(reply.setCookie).toBeUndefined();
     }
@@ -83,7 +83,7 @@ describe('a public route behind the real pipeline (prototype)', () => {
 
   it('writes the JSON-LD with no character that could end a script block', async () => {
     const { s, open } = await world();
-    const reply = await s.get(`/public/services/${open.id}/schema-org`);
+    const reply = await s.get(`/catalog/services/${open.id}/schema-org`);
     expect(reply.status).toBe(200);
     expect(reply.res.headers.get('content-type')).toContain('application/ld+json');
     expect(reply.res.headers.get('cache-control')).toBe('public, max-age=60');

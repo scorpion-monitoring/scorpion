@@ -23,6 +23,7 @@ const WITH_SPECS = [
   'DashboardGrid',
   'DataTable',
   'Facets',
+  'FacetSearch',
   'Pagination',
   'SchemaForm',
   'Tabs',

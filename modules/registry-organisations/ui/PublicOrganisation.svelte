@@ -79,7 +79,7 @@
       <ul class="list-none">
         {#each organisation.services as service (service.id)}
           <li>
-            <a class="link" href={href(`/public/services/${encodeURIComponent(service.slug)}`)}
+            <a class="link" href={href(`/catalog/services/${encodeURIComponent(service.slug)}`)}
               >{service.name}</a
             >
           </li>

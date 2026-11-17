@@ -10,6 +10,7 @@ export const WORKSPACE_MODULES = {
   'core.ui-shell': '@scorpion/core-ui-shell',
   'kpi.analytics': '@scorpion/kpi-analytics',
   'kpi.framework': '@scorpion/kpi-framework',
+  'kpi.impact': '@scorpion/kpi-impact',
   'kpi.ingestion': '@scorpion/kpi-ingestion',
   'public-api': '@scorpion/public-api',
   'registry.organisations': '@scorpion/registry-organisations',

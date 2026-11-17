@@ -10,6 +10,7 @@
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import type { ProfileData } from '../loaders.ts';
+  import PermissionTree from './PermissionTree.svelte';
 
   let {
     tokens,
@@ -100,11 +101,13 @@
     <p>{t('profile.tokens.lead')}</p>
 
     {#if shown}
-      <div class="alert alert-warning flex-col items-start" role="status">
+      <!-- daisyUI's alert is a grid with one column per child, which squeezed the token into a narrow column that
+           wrapped it letter by letter on a phone. A flex column keeps every part at the full width. -->
+      <div class="alert alert-warning flex flex-col items-stretch gap-2 text-start" role="status">
         <p class="font-medium">{t('profile.tokens.secretTitle', { name: shown.name })}</p>
         <p>{t('profile.tokens.secretWarning')}</p>
         <code
-          class="bg-base-100 text-base-content w-full rounded p-2 break-all"
+          class="bg-base-100 text-base-content block w-full min-w-0 rounded p-2 text-sm break-all select-all"
           data-testid="token-secret">{shown.secret}</code
         >
         <div class="flex flex-wrap items-center gap-2">
@@ -223,20 +226,8 @@
       <fieldset class="flex flex-col gap-1">
         <legend class="text-sm font-medium">{t('profile.tokens.scopes')}</legend>
         <p class="text-sm opacity-70">{t('profile.tokens.scopesHint')}</p>
-        {#each permissions as permission (permission.id)}
-          <label class="flex items-start gap-2">
-            <input
-              type="checkbox"
-              class="checkbox checkbox-sm mt-1"
-              value={permission.id}
-              bind:group={scopes}
-            />
-            <span class="flex flex-col">
-              <code class="text-sm">{permission.id}</code>
-              <span class="text-sm opacity-80">{permission.description}</span>
-            </span>
-          </label>
-        {/each}
+        <p class="text-sm opacity-70">{t('profile.tokens.scopesTreeHint')}</p>
+        <PermissionTree {permissions} bind:value={scopes} />
         {#if failure?.fields.scopes}
           <p class="text-error text-sm">{failure.fields.scopes.join(' ')}</p>
         {/if}

@@ -36,6 +36,14 @@ export interface PermissionDef {
   /** What the permission is checked against; `global` when omitted. */
   scope?: string;
   description: string;
+  /**
+   * Permissions of the same module whose scope on a token also passes the scope gate of this one (ADR-0015, "implied by").
+   * Only the token's scope list is widened: the owner must still hold this permission (a role, or the policy of the
+   * resource), so a token never does more than its owner. Needed where this permission is held through a policy, which the
+   * token form cannot offer, and an offerable permission of the same module names it. One level only: an implying permission
+   * has no `impliedBy` of its own.
+   */
+  impliedBy?: readonly string[];
 }
 
 /**
@@ -208,7 +216,11 @@ const manifestSchema = z.strictObject({
     }),
   ).optional(),
   permissions: recordOf(
-    z.strictObject({ scope: z.string().min(1).optional(), description: z.string().min(1) }),
+    z.strictObject({
+      scope: z.string().min(1).optional(),
+      description: z.string().min(1),
+      impliedBy: z.array(z.string().min(1)).min(1).optional(),
+    }),
   ).optional(),
   settings: zodType.optional(),
   schema: fn.optional(),

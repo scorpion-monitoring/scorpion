@@ -200,7 +200,7 @@
       {#if service.public}
         <a
           class="btn btn-sm btn-ghost"
-          href={href(`/public/services/${encodeURIComponent(service.slug)}`)}
+          href={href(`/catalog/services/${encodeURIComponent(service.slug)}`)}
         >
           {t('services.detail.publicPage')}
         </a>

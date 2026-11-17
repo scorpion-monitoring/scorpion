@@ -99,7 +99,7 @@ describe('the settings store', () => {
   it('serves the module’s own settings: the rate limits default to today’s numbers, branding to the product name', async () => {
     const { kernel } = await harness.start();
     expect(await kernel.settingsOf('core.settings').get()).toEqual({
-      branding: { productName: 'Scorpion', logos: {}, legal: {} },
+      branding: { productName: 'Scorpion', logos: {}, colors: { light: {}, dark: {} }, legal: {} },
       rateLimits: {
         default: { burst: 120, perMinute: 120 },
         strict: { burst: 10, perMinute: 10 },

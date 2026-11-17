@@ -1,3 +1,4 @@
+import { CUSTOM_COLOURS } from '../support/theme.ts';
 import { expect, inBothThemes, test } from './support.ts';
 
 // Chart (harness/scenes/chart.svelte): ECharts behind the adapter, with a text alternative.
@@ -62,6 +63,38 @@ test.describe('Chart', () => {
     await expect.poll(textColour).not.toBe(light);
   });
 
+  test('follows a custom set of theme colours (M12a sprint 4): the first series is the primary of each theme', async ({
+    page,
+    scene,
+  }) => {
+    const chart = page.getByRole('img', { name: 'Services and users per year', exact: true });
+    /** The colours the drawing uses, as the library wrote them (`rgb(…)`). */
+    const drawn = () =>
+      chart
+        .locator('svg')
+        .evaluate((svg) => [
+          ...new Set(
+            [...svg.querySelectorAll('path')].flatMap((path) => [
+              path.getAttribute('stroke') ?? '',
+              path.getAttribute('fill') ?? '',
+            ]),
+          ),
+        ]);
+    const rgb = (hex: string) =>
+      `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(',')})`;
+    const compact = (colours: string[]) => colours.map((colour) => colour.replaceAll(' ', ''));
+
+    for (const theme of ['light', 'dark'] as const) {
+      await scene('chart', { theme, query: 'colors=custom' });
+      await expect(chart.locator('svg path').first()).toBeAttached();
+      await expect
+        .poll(async () => compact(await drawn()))
+        .toContain(rgb(CUSTOM_COLOURS[theme].primary));
+      // Not the built-in primary of that theme.
+      expect(compact(await drawn())).not.toContain(rgb(theme === 'light' ? '#006da8' : '#00e5ff'));
+    }
+  });
+
   test('says so, and keeps the table, for a spec that cannot be drawn', async ({ page, scene }) => {
     await scene('chart');
     const figure = page.locator('figure').nth(3);
@@ -116,4 +149,17 @@ test.describe('Chart', () => {
     for (let index = 0; index < 4; index += 1)
       await page.locator('figure button[aria-controls]').nth(index).click();
   });
+
+  inBothThemes(
+    '[component:Chart] axe: charts and tables with a custom set of theme colours',
+    'chart',
+    async (page) => {
+      await expect(
+        page.getByRole('img', { name: 'Maturity per principle' }).locator('svg'),
+      ).toBeVisible();
+      for (let index = 0; index < 4; index += 1)
+        await page.locator('figure button[aria-controls]').nth(index).click();
+    },
+    'colors=custom',
+  );
 });

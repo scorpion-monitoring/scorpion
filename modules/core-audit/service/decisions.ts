@@ -23,6 +23,11 @@ export interface LoggedEvent {
   /** Who caused it. Read from the payload; ids are kept as written. */
   actor: (payload: Payload) => AuditActor;
   subject: (payload: Payload) => Subject | undefined;
+  /**
+   * The event carries the client address in `ip` and the trail keeps it in its `ip` column, where the retention job cuts it to a
+   * network prefix after `ipTruncateAfterDays`. Never stored in the payload (see `PAYLOAD_DROPPED_KEYS`).
+   */
+  address?: true;
 }
 export interface SkippedEvent {
   decision: 'skip';
@@ -86,6 +91,30 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   'identity.password.resetRequested@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.reset@1': log(true, anonymous, subjectOf('user', 'userId')),
   'identity.password.changed@1': log(true, userBy('userId'), subjectOf('user', 'userId')),
+  // A sign-in that made a session: the person is the actor and the subject. Critical, so that turning the admin channel off
+  // does not blind the trail to who signed in (ASVS 6.3.1, M12a).
+  'identity.session.created@1': {
+    ...log(true, userBy('userId'), subjectOf('user', 'userId')),
+    address: true,
+  },
+  // The failed sign-ins of one name in one window, counted (one entry per name and window, written when the window closes).
+  // Nobody was signed in: the actor is anonymous. The subject is the account when the name was one, else the start of the
+  // name's hash, never the name itself.
+  // A failed password check of a signed-in session (`re-authentication`, `password-change`) was made by that session: the
+  // actor is the account, and the entry is how a stolen session guessing the password shows.
+  'identity.login.failed@1': log(
+    true,
+    (payload) =>
+      text(payload, 'context') !== null && text(payload, 'context') !== 'sign-in'
+        ? userBy('userId')(payload)
+        : anonymous(),
+    (payload): Subject => {
+      const userId = text(payload, 'userId');
+      return userId
+        ? { type: 'user', id: userId }
+        : { type: 'sign-in name', id: text(payload, 'nameKey') };
+    },
+  ),
   'identity.session.reauthenticated@1': log(false, userBy('userId'), subjectOf('user', 'userId')),
   'identity.sessions.revoked@1': log(true, userBy('revokedBy'), subjectOf('user', 'userId')),
   'identity.sessions.revokedAll@1': log(true, userBy('revokedBy'), () => ({
@@ -176,5 +205,9 @@ export const EVENT_DECISIONS: Readonly<Record<string, EventDecision>> = {
   ),
 };
 
-/** Keys of an event payload that are not stored: the id is enough, and a name is personal data the trail cannot later erase. */
-export const PAYLOAD_DROPPED_KEYS: readonly string[] = ['username'];
+/**
+ * Keys of an event payload that are not stored: the id is enough, and a name is personal data the trail cannot later erase. An
+ * address (`ip`) goes to the `ip` column of an event that declares `address`, where it is cut after `ipTruncateAfterDays`, and
+ * is never left in the payload, which the retention job does not cut.
+ */
+export const PAYLOAD_DROPPED_KEYS: readonly string[] = ['username', 'ip'];

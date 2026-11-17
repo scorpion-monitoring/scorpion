@@ -39,6 +39,13 @@ export const authenticatorEntrySchema = z.strictObject({
     (value) => typeof value === 'function',
     'expected a function',
   ),
+  /**
+   * The name of the cookie that carries a session, if the authenticator reads one. Only its presence
+   * is used, by the rate limiter (step 2): a request that carries it is charged to the larger address
+   * bucket of a browser, and then to its own session once step 3 has found the session good. The
+   * value of the cookie is never read there.
+   */
+  sessionCookie: z.string().min(1).optional(),
 });
 
 /** The authenticator in force while no module has contributed one: nobody can sign in. */

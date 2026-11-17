@@ -36,6 +36,8 @@ export interface CatalogueQuery {
   filters?: Readonly<Record<string, readonly string[]>> | undefined;
   /** Current slugs, without case (OR): the `service` filter of the public API. Not a facet, so it is not counted. */
   slugs?: readonly string[] | undefined;
+  /** A condition every row and every count must meet, whatever else is chosen (the public list: published services only). */
+  restrict?: SQL | undefined;
   sort?: CatalogueSort | undefined;
   dir?: 'asc' | 'desc' | undefined;
 }
@@ -111,10 +113,14 @@ export function slugCondition(slugs: readonly string[] | undefined): SQL | undef
  */
 export function catalogueCondition(
   facets: readonly FacetEntry[],
-  query: Pick<CatalogueQuery, 'q' | 'filters' | 'slugs'>,
+  query: Pick<CatalogueQuery, 'q' | 'filters' | 'slugs' | 'restrict'>,
   except?: string,
 ): SQL | undefined {
-  const conditions: (SQL | undefined)[] = [searchCondition(query.q), slugCondition(query.slugs)];
+  const conditions: (SQL | undefined)[] = [
+    query.restrict,
+    searchCondition(query.q),
+    slugCondition(query.slugs),
+  ];
   for (const facet of facets) {
     if (facet.id === except) continue;
     const selection = selectionOf(query.filters?.[facet.id] ?? []);

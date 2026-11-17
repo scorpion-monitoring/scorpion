@@ -123,6 +123,9 @@ export const logoutRoute = createRoute({
   method: 'post',
   path: '/auth/logout',
   permission: 'core.identity.session.manage',
+  // On the trail with the caller, the client address and the outcome (ASVS 7.4.1, M12a findings): a sign-out is a security event. The
+  // entry holds no cookie and no session id (the audit of `/auth/` routes never stores a body or a query).
+  audit: true,
   responses: { 204: { description: 'The session is over and its cookie is cleared.' } },
 });
 
@@ -1054,6 +1057,7 @@ export function registerIdentityRoutes(
         error: query.error,
         verifier,
         previousSessionId: readSessionCookie(c),
+        clientIp: c.get('clientIp'),
       });
     } catch (error) {
       // A browser that came from the provider is sent to the sign-in page with a fixed code (ADR 0029);

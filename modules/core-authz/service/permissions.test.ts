@@ -9,6 +9,24 @@ import {
 
 const declared = new Set(['a.read', 'a.write', 'b.read']);
 
+describe('withinScopes with `impliedBy`', () => {
+  const token = (...scopes: string[]) => ({ via: 'token' as const, scopes });
+  it.each([
+    ['a session is not limited by scopes', { via: 'session' as const }, ['x.write'], true],
+    ['the scope of the permission itself passes', token('x.edit'), ['x.write'], true],
+    ['a scope that implies it passes', token('x.write'), ['x.write'], true],
+    ['one of several implying scopes passes', token('x.other'), ['x.write', 'x.other'], true],
+    ['a scope that implies nothing here does not', token('x.read'), ['x.write'], false],
+    ['no scopes pass nothing, whatever is declared', token(), ['x.write'], false],
+    ['without a declaration the implying scope is no scope', token('x.write'), [], false],
+  ])('%s', (_name, caller, impliedBy, expected) => {
+    expect(withinScopes(caller, 'x.edit', impliedBy)).toBe(expected);
+    expect(grants(new Set(['x.edit']), caller, 'x.edit', impliedBy)).toBe(expected);
+    // The owner has to hold it too: the scope alone grants nothing.
+    expect(grants(new Set(), caller, 'x.edit', impliedBy)).toBe(false);
+  });
+});
+
 describe('effectivePermissions', () => {
   it.each([
     ['no roles grant nothing', [], [], []],

@@ -287,7 +287,10 @@ export function createRecoveryService(
       // Guessing the current password through a stolen session is throttled like guessing it at login.
       await throttle.assertOpen(username, undefined);
       if (!(await verifyPassword(currentHash, currentPassword))) {
-        await throttle.recordFailure(username, undefined);
+        await throttle.recordFailure(username, undefined, undefined, undefined, {
+          userId,
+          context: 'password-change',
+        });
         throw new Invalid('The request is not valid.', [
           { path: 'currentPassword', message: 'is not your current password' },
         ]);

@@ -405,6 +405,8 @@ describe('the setting', () => {
       baseDelaySeconds: 15,
       maxDelaySeconds: 900,
       forgetAfterSeconds: 3600,
+      auditWindowSeconds: 3600,
+      auditMaxUnknownNames: 200,
     });
     expect(() =>
       settingsSchema.parse({ loginThrottle: { baseDelaySeconds: 60, maxDelaySeconds: 30 } }),

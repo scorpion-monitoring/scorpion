@@ -82,6 +82,21 @@ export function buildComposition(profile: ResolvedProfile): Composition {
     }
   }
 
+  // `impliedBy`: the implying permission is declared by the same module, is not the permission itself and has no `impliedBy`.
+  for (const permission of permissions.values()) {
+    for (const implying of permission.impliedBy ?? []) {
+      const other = permissions.get(implying);
+      if (!other || other.module !== permission.module || implying === permission.id)
+        problems.push(
+          `${permission.module}: permission "${permission.id}" is implied by "${implying}", which is not another permission of the module`,
+        );
+      else if (other.impliedBy?.length)
+        problems.push(
+          `${permission.module}: permission "${permission.id}" is implied by "${implying}", which is itself implied by another (one level only)`,
+        );
+    }
+  }
+
   // Table prefixes: none may be the prefix of another, so every table has one owner.
   const tablePrefixes = new Map(
     profile.modules.map((module) => [module.id, tablePrefixOf(module)]),

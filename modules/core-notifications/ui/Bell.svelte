@@ -4,7 +4,7 @@
   // minute when it is not (`feed.ts`); the list is fetched through the ordinary route when the menu opens and
   // whenever the count changes while it is open, so the stream itself carries no content.
   import { onMount } from 'svelte';
-  import { getShell } from '@scorpion/ui-kit';
+  import { getShell, Icon } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import { createInboxFeed } from './feed.ts';
   import { linkOf } from './prefs.ts';
@@ -134,19 +134,7 @@
     aria-label={label}
     onclick={toggle}
   >
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0" />
-    </svg>
+    <Icon name="bell" />
     {#if count}
       <span class="badge badge-primary badge-sm absolute -end-1 -top-1" aria-hidden="true">
         {count > 99 ? '99+' : count}

@@ -1,7 +1,12 @@
 // The rule of the reporting reminder as a pure function (plan §9 tests): all present, one missing, no KPI set, a dropped KPI, a
 // service of two providers, a year end. No database, no clock.
 import { describe, expect, it } from 'vitest';
-import { previousMonth, selectMissing, type ReminderCandidate } from './reminder-select.ts';
+import {
+  previousMonth,
+  reminderDue,
+  selectMissing,
+  type ReminderCandidate,
+} from './reminder-select.ts';
 
 const A = '00000000-0000-7000-8000-00000000000a';
 const B = '00000000-0000-7000-8000-00000000000b';
@@ -133,5 +138,31 @@ describe('previousMonth', () => {
     ['2026-02-01T00:00:00Z', '2026-01', '2026-01-31'],
   ])('%s → %s', (now, month, period) => {
     expect(previousMonth(new Date(now))).toEqual({ month, period });
+  });
+});
+
+describe('reminderDue', () => {
+  it.each([
+    // [now, dayOfMonth, due, why]
+    ['2026-10-05T23:59:59Z', 6, false, 'the day before'],
+    ['2026-10-06T00:00:00Z', 6, true, 'on the day, first second (UTC)'],
+    ['2026-10-06T06:00:00Z', 6, true, 'on the day'],
+    ['2026-10-07T06:00:00Z', 6, true, 'the day after (the node was down on the 6th)'],
+    ['2026-10-31T23:59:59Z', 6, true, 'the last day of the month'],
+    ['2026-10-01T00:00:00Z', 1, true, 'the 1st on the 1st'],
+    ['2026-10-20T06:00:00Z', 28, false, 'the 28th has not come'],
+    ['2026-02-28T06:00:00Z', 28, true, 'the 28th in February'],
+    ['2026-11-30T06:00:00Z', 28, true, 'the 28th, run on the 30th'],
+    // The settings stop at the 28th; a stored 31 is the month's last day, never "never".
+    ['2026-02-27T06:00:00Z', 31, false, 'a stored 31, before the end of February'],
+    ['2026-02-28T06:00:00Z', 31, true, 'a stored 31 is the 28th in February'],
+    ['2024-02-28T06:00:00Z', 31, false, 'a stored 31 in a leap year, the 28th'],
+    ['2024-02-29T06:00:00Z', 31, true, 'a stored 31 in a leap year, the 29th'],
+    ['2026-04-29T06:00:00Z', 31, false, 'a stored 31 in a 30-day month'],
+    ['2026-04-30T06:00:00Z', 31, true, 'a stored 31 in a 30-day month, the 30th'],
+    // The day is the UTC one: late on the 5th in UTC is still before the 6th.
+    ['2026-10-05T23:00:00Z', 6, false, 'UTC, not local time'],
+  ])('%s with day %i is due: %s (%s)', (now, day, due) => {
+    expect(reminderDue(new Date(now), day)).toBe(due);
   });
 });

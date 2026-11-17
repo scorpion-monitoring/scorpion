@@ -318,7 +318,10 @@ export function createAccountService(
       // Every refusal that looks like a wrong name or password is counted, so a name that does not
       // exist, a wrong password and a rejected account are slowed alike.
       const refuse = async (): Promise<never> => {
-        await throttle.recordFailure(username, clientIp, now);
+        // Counted for the audit trail in the same transaction as the throttle: one row with a count per name and window.
+        await throttle.recordFailure(username, clientIp, now, undefined, {
+          userId: found?.id ?? null,
+        });
         throw new Unauthorized('The username or password is wrong.');
       };
       if (found === undefined || storedHash === undefined || !passwordOk) return refuse();
@@ -340,6 +343,13 @@ export function createAccountService(
           .set({ lastLoginAt: sql`now()` })
           .where(eq(authMethod.id, method!.id));
         await throttle.reset(tx, username, clientIp);
+        // The sign-in is on the trail in the transaction that makes the session: no session without it, no entry without one.
+        await ctx.events.emit('identity.session.created@1', {
+          userId: found.id,
+          username: found.username,
+          method: 'password',
+          ip: clientIp ?? null,
+        });
         return created;
       });
       // A new login replaces the session the browser held, so an old id cannot be carried over.
@@ -405,7 +415,10 @@ export function createAccountService(
       // Guessing the password through a stolen session is throttled like guessing it at login.
       await throttle.assertOpen(caller.username, undefined);
       if (!(await verifyPassword(method.passwordHash, parsed.data.password))) {
-        await throttle.recordFailure(caller.username, undefined);
+        await throttle.recordFailure(caller.username, undefined, undefined, undefined, {
+          userId: caller.userId,
+          context: 're-authentication',
+        });
         throw new Invalid('The password is wrong.', [
           { path: 'password', message: 'is not your current password' },
         ]);
