@@ -22,7 +22,7 @@
 
   let { view, results, shortcuts = false }: LookProps = $props();
 
-  const listId = `${view.id}-list`;
+  const listId = $derived(`${view.id}-list`);
   const optionId = (index: number) => `${listId}-${index}`;
 
   let input = $state<HTMLInputElement>();
