@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runCli, type CliDeps } from '../src/cli.ts';
-import { discover, seriesIn } from '../src/discover.ts';
+import { discover, missingMonths, seriesIn } from '../src/discover.ts';
 import { parseLegacyDate } from '../src/dates.ts';
 import { readSnapshot } from '../src/snapshot.ts';
 import { pythonTime, startLegacyStub, type StubServer } from './legacy-stub.ts';
@@ -83,6 +83,10 @@ describe('discover', () => {
       notFirstOfMonth: 1,
       servicesNotFirstOfMonth: 1,
       monthsWithSeveralPoints: 1,
+      // GeneFlow users 2019-11 → 2022-01 (24 missing), jobs 2019-11 → 2022-01 (25, the 0 of 2021-12 among them),
+      // LeafDB users 2020-01 → 2023-05 (36); downloads has none.
+      gapMonths: 85,
+      kpiHistoriesWithGaps: 3,
       servicesWithSeveralSeries: [{ abbreviation: 'LeafDB', series: 2 }],
       unknownKpis: [],
     });
@@ -109,6 +113,17 @@ describe('discover', () => {
     }
     expect(text).not.toContain(stub.url);
     expect(text).toContain('# Discovery of a legacy snapshot');
+  });
+
+  it.each([
+    [[], 0],
+    [['2023-01'], 0],
+    [['2023-01', '2023-02', '2023-03'], 0],
+    [['2023-01', '2023-03'], 1],
+    [['2022-11', '2023-02'], 2],
+    [['2023-05', '2020-01'], 39],
+  ])('missingMonths(%j) is %d', (months, missing) => {
+    expect(missingMonths(new Set(months))).toBe(missing);
   });
 
   it('counts series by the API order: time steps back once per InfluxDB table', () => {

@@ -44,6 +44,9 @@ export interface Discovery {
     notFirstOfMonth: number;
     servicesNotFirstOfMonth: number;
     monthsWithSeveralPoints: number;
+    /** Months missing between the first and the last month of a service's KPI: a 0 the API left out, or no report. */
+    gapMonths: number;
+    kpiHistoriesWithGaps: number;
     servicesWithSeveralSeries: { abbreviation: string; series: number }[];
     negativeValues: number;
     futureMonths: number;
@@ -95,6 +98,14 @@ export function seriesIn(points: readonly MeasurementPoint[]): number {
     previous = point.parsed.time;
   }
   return series;
+}
+
+/** How many months between the first and the last of `months` (`YYYY-MM`) are not among them. */
+export function missingMonths(months: ReadonlySet<string>): number {
+  if (months.size === 0) return 0;
+  const index = (month: string) => Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1;
+  const values = [...months].map(index);
+  return Math.max(...values) - Math.min(...values) + 1 - months.size;
 }
 
 const pointKey = (p: MeasurementPoint) => `${p.kpi}\u0000${p.parsed ? p.parsed.time : p.date}`;
@@ -155,6 +166,8 @@ export function discover(snapshot: Snapshot, now: Date = new Date()): Discovery 
   let notFirstOfMonth = 0;
   let servicesNotFirstOfMonth = 0;
   let monthsWithSeveralPoints = 0;
+  let gapMonths = 0;
+  let kpiHistoriesWithGaps = 0;
   let negativeValues = 0;
   let futureMonths = 0;
   let before1900 = 0;
@@ -168,6 +181,16 @@ export function discover(snapshot: Snapshot, now: Date = new Date()): Discovery 
       (p) => `${p.kpi}\u0000${p.parsed!.month}`,
     );
     monthsWithSeveralPoints += [...months.values()].filter((n) => n > 1).length;
+    const monthsByKpi = new Map<string, Set<string>>();
+    for (const point of list) {
+      if (!point.parsed) continue;
+      monthsByKpi.set(point.kpi, (monthsByKpi.get(point.kpi) ?? new Set()).add(point.parsed.month));
+    }
+    for (const present of monthsByKpi.values()) {
+      const missing = missingMonths(present);
+      gapMonths += missing;
+      if (missing > 0) kpiHistoriesWithGaps += 1;
+    }
     for (const point of list) {
       if (!indicators.has(point.kpi)) unknownKpis.add(point.kpi);
       if (point.value < 0) negativeValues += 1;
@@ -287,6 +310,8 @@ export function discover(snapshot: Snapshot, now: Date = new Date()): Discovery 
       notFirstOfMonth,
       servicesNotFirstOfMonth,
       monthsWithSeveralPoints,
+      gapMonths,
+      kpiHistoriesWithGaps,
       servicesWithSeveralSeries,
       negativeValues,
       futureMonths,
@@ -423,6 +448,8 @@ export function discoveryMarkdown(d: Discovery): string {
         ['points not on the first of a month', m.notFirstOfMonth],
         ['services with such points', m.servicesNotFirstOfMonth],
         ['KPI-months with several points', m.monthsWithSeveralPoints],
+        ['months missing inside a KPI history (a 0 left out, or no report)', m.gapMonths],
+        ['KPI histories (service and KPI) with such months', m.kpiHistoriesWithGaps],
         [
           'services whose answer steps back in time (a second series)',
           m.servicesWithSeveralSeries.length,
@@ -440,7 +467,7 @@ export function discoveryMarkdown(d: Discovery): string {
     }`,
     `- KPI names in measurements that no KPI list has: ${list(m.unknownKpis)}`,
     `- Measurement files of a service \`/services\` does not list: ${list(m.filesWithoutService)}`,
-    '- The API leaves out every value of 0 (`if record[label]`); only the S3 backups can show them.',
+    '- The API leaves out every value of 0 (`if record[label]`), and the S3 backups were made through it: a value of 0 is a missing month in both.',
     '',
     '## Users (counts only)',
     '',
