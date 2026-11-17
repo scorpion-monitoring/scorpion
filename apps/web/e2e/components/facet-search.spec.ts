@@ -8,7 +8,7 @@ import type { Page } from '@playwright/test';
 const live = (page: Page) => page.locator('[data-facet-status]');
 const address = async (page: Page) =>
   new URLSearchParams(await page.getByTestId('search').innerText());
-/** The count in a checkbox's name, "de.NBI (7)" → 7. */
+/** The count in a checkbox's name, "BioNet (7)" → 7. */
 const countOf = async (page: Page, name: RegExp) => {
   const label = await page
     .getByRole('checkbox', { name })
@@ -45,16 +45,16 @@ test.describe('FacetSearch, look sidebar', () => {
     scene,
   }) => {
     await open(page, scene, 'page=2');
-    const denbi = await countOf(page, /^de\.NBI/);
-    await page.getByRole('checkbox', { name: /^de\.NBI/ }).check();
-    await expect(live(page)).toHaveText(`${denbi} services match`);
-    expect((await address(page)).getAll('f.consortium')).toEqual(['denbi']);
+    const bionet = await countOf(page, /^BioNet/);
+    await page.getByRole('checkbox', { name: /^BioNet/ }).check();
+    await expect(live(page)).toHaveText(`${bionet} services match`);
+    expect((await address(page)).getAll('f.consortium')).toEqual(['bionet']);
     expect((await address(page)).get('page')).toBeNull();
     // OR within a facet: a second consortium adds services; ticking one never hides its siblings.
-    const nfdi = await countOf(page, /^NFDI4Plants/);
-    await page.getByRole('checkbox', { name: /^NFDI4Plants/ }).check();
+    const plantdata = await countOf(page, /^PlantData/);
+    await page.getByRole('checkbox', { name: /^PlantData/ }).check();
     // The one service in both consortia is counted once.
-    await expect(live(page)).toHaveText(`${denbi + nfdi - 1} services match`);
+    await expect(live(page)).toHaveText(`${bionet + plantdata - 1} services match`);
     await expect(page.getByRole('checkbox', { name: /^No consortium/ })).toBeVisible();
     // AND between facets.
     await page.getByRole('checkbox', { name: /^Production/ }).check();
@@ -68,12 +68,12 @@ test.describe('FacetSearch, look sidebar', () => {
     page,
     scene,
   }) => {
-    await open(page, scene, 'f.consortium=denbi&q=zzz');
+    await open(page, scene, 'f.consortium=bionet&q=zzz');
     await expect(page.getByText('No services match', { exact: true })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'de.NBI (0)' })).toBeChecked();
-    await page.getByRole('checkbox', { name: 'de.NBI (0)' }).click();
+    await expect(page.getByRole('checkbox', { name: 'BioNet (0)' })).toBeChecked();
+    await page.getByRole('checkbox', { name: 'BioNet (0)' }).click();
     // Not chosen any more, and no service has it: the facet no longer lists it (the API's rule).
-    await expect(page.getByRole('checkbox', { name: /^de\.NBI/ })).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: /^BioNet/ })).toHaveCount(0);
     expect((await address(page)).getAll('f.consortium')).toEqual([]);
     await expect(live(page)).toHaveText('No services match');
     await page.getByRole('button', { name: 'Clear all' }).click();
@@ -157,20 +157,20 @@ test.describe('FacetSearch, look bar', () => {
     await expect(consortium).toHaveAttribute('aria-expanded', 'true');
     const list = page.getByRole('listbox', { name: 'Consortium' });
     await expect(list).toBeFocused();
-    const denbi = list.getByRole('option', { name: /^de\.NBI/ });
-    const count = Number(/\((\d+)\)/.exec(await denbi.innerText())?.[1]);
-    await denbi.click();
-    await expect(denbi).toHaveAttribute('aria-selected', 'true');
+    const bionet = list.getByRole('option', { name: /^BioNet/ });
+    const count = Number(/\((\d+)\)/.exec(await bionet.innerText())?.[1]);
+    await bionet.click();
+    await expect(bionet).toHaveAttribute('aria-selected', 'true');
     await expect(live(page)).toHaveText(`${count} services match`);
     // The panel stays open while picking: OR within the facet is several clicks.
-    await list.getByRole('option', { name: /^NFDI4Plants/ }).click();
+    await list.getByRole('option', { name: /^PlantData/ }).click();
     await expect(list).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Remove Consortium: de.NBI, NFDI4Plants' }),
+      page.getByRole('button', { name: 'Remove Consortium: BioNet, PlantData' }),
     ).toBeVisible();
     await expect(consortium).toHaveAccessibleName('Consortium 2 chosen');
     const search = await address(page);
-    expect(search.getAll('f.consortium')).toEqual(['denbi', 'nfdi4plants']);
+    expect(search.getAll('f.consortium')).toEqual(['bionet', 'plantdata']);
     expect(search.get('page')).toBeNull();
     // Escape closes the popover and gives the focus back to its button.
     await page.keyboard.press('Escape');
@@ -183,10 +183,10 @@ test.describe('FacetSearch, look bar', () => {
     page,
     scene,
   }) => {
-    await open(scene, 'f.consortium=denbi&f.stage=PROD');
-    const first = page.getByRole('button', { name: 'Remove Consortium: de.NBI' });
+    await open(scene, 'f.consortium=bionet&f.stage=PROD');
+    const first = page.getByRole('button', { name: 'Remove Consortium: BioNet' });
     await first.click();
-    await expect(live(page)).toHaveText(/^Consortium: de\.NBI removed\. \d+ services? match/);
+    await expect(live(page)).toHaveText(/^Consortium: BioNet removed\. \d+ services? match/);
     await expect(page.getByRole('button', { name: 'Remove Stage: Production' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('searchbox', { name: 'Search services' })).toBeFocused();
@@ -197,7 +197,7 @@ test.describe('FacetSearch, look bar', () => {
     page,
     scene,
   }) => {
-    await open(scene, 'f.consortium=denbi&q=service');
+    await open(scene, 'f.consortium=bionet&q=service');
     await page.getByRole('button', { name: 'Clear all' }).click();
     await expect(page.getByTestId('state')).toHaveText('{"q":"","state":{}}');
     await expect(page.getByRole('searchbox', { name: 'Search services' })).toBeFocused();
@@ -255,9 +255,9 @@ test.describe('FacetSearch, look bar', () => {
   });
 
   test('speaks German when the page does', async ({ page, scene }) => {
-    await open(scene, 'f.consortium=denbi', 'de');
+    await open(scene, 'f.consortium=bionet', 'de');
     await expect(page.getByRole('group', { name: 'Filtern nach' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Consortium: de.NBI entfernen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Consortium: BioNet entfernen' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Alles zurücksetzen' })).toBeVisible();
   });
 
@@ -295,7 +295,7 @@ test.describe('FacetSearch, look bar', () => {
     '[component:FacetSearch] axe (bar): value panel with a choice',
     'facet-search',
     openPanel('Consortium'),
-    'look=bar&f.consortium=denbi',
+    'look=bar&f.consortium=bionet',
   );
   inBothThemes(
     '[component:FacetSearch] axe (bar): 300 values',
@@ -315,6 +315,6 @@ test.describe('FacetSearch, look bar', () => {
     async (page) => {
       await page.setViewportSize({ width: 360, height: 740 });
     },
-    'look=bar&set=6&f.consortium=denbi&f.consortium=nfdi4plants&f.stage=PROD&f.provider=ipk&f.provider=fzj&f.license=MIT&f.topic=genomics',
+    'look=bar&set=6&f.consortium=bionet&f.consortium=plantdata&f.stage=PROD&f.provider=ipk&f.provider=fzj&f.license=MIT&f.topic=genomics',
   );
 });

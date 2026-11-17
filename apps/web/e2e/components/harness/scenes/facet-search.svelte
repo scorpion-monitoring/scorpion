@@ -32,8 +32,8 @@
     id: 'consortium',
     label: 'Consortium',
     options: [
-      option('denbi', 'de.NBI'),
-      option('nfdi4plants', 'NFDI4Plants'),
+      option('bionet', 'BioNet'),
+      option('plantdata', 'PlantData'),
       option(':none', 'No consortium'),
     ],
   };
@@ -103,7 +103,7 @@
       lists.map((facet) => {
         if (facet.id === 'consortium') {
           // One service in two consortia, one in none.
-          if (index === 0) return [facet.id, ['denbi', 'nfdi4plants']];
+          if (index === 0) return [facet.id, ['bionet', 'plantdata']];
           if (index % 5 === 4) return [facet.id, [':none']];
         }
         // Every one of the 300 providers runs a service, so each is listed (a value with none is not).

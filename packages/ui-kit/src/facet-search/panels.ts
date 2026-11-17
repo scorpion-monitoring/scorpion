@@ -31,10 +31,11 @@ export interface PanelHandle {
   focus: () => boolean;
 }
 
-export const PANELS: Record<
-  FacetDefinition['type'],
-  Component<PanelProps, PanelHandle, 'activeId'>
-> = {
-  checkbox: ListPanel,
-  range: RangePanel,
+type Panel = Component<PanelProps, PanelHandle, 'activeId'>;
+
+// `tsc` reads a `.svelte` import as Svelte's legacy component type, which does not carry the exports
+// (`onkey`, `focus`); svelte-check, which knows the files, checks them against `Panel`.
+export const PANELS: Record<FacetDefinition['type'], Panel> = {
+  checkbox: ListPanel as unknown as Panel,
+  range: RangePanel as unknown as Panel,
 };

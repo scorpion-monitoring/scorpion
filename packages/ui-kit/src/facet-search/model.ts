@@ -151,7 +151,7 @@ export function chosenLabels(definition: FacetDefinition, state: FacetState): st
 export const CHIP_FOLD_AT = 32;
 
 /**
- * The words of one facet's chip: `full` names every chosen value (`Consortium: de.NBI, NFDI4Plants`), `short` is
+ * The words of one facet's chip: `full` names every chosen value (`Consortium: BioNet, PlantData`), `short` is
  * what is shown (`Provider: IPK Gatersleben +2` past `CHIP_FOLD_AT` characters), and `name` is for the chip's
  * accessible name: every value, and the shown words in it too (WCAG 2.5.3), so a folded chip is named
  * `Provider: IPK Gatersleben +2 (Forschungszentrum Jülich, IPK Data Hub)`. A range reads `Year: 2018–2022`,

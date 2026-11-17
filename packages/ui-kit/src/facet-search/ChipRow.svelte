@@ -1,6 +1,6 @@
 <script lang="ts">
   // The chips of the look `bar`: one per facet with a choice, then "Clear all". A chip is a button named
-  // "Remove Consortium: de.NBI, NFDI4Plants"; it shows the short text (`Provider: IPK Gatersleben +2`). After a
+  // "Remove Consortium: BioNet, PlantData"; it shows the short text (`Provider: IPK Gatersleben +2`). After a
   // removal the focus goes to the next chip, the one before, or (none left) to `onempty`.
   import { tick } from 'svelte';
   import type { FacetDefinition } from '../facets.ts';

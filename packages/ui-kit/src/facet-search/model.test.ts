@@ -28,8 +28,8 @@ const consortium: FacetDefinition = {
   label: 'Consortium',
   type: 'checkbox',
   options: [
-    { value: 'denbi', label: 'de.NBI', count: 20 },
-    { value: 'nfdi4plants', label: 'NFDI4Plants', count: 4 },
+    { value: 'bionet', label: 'BioNet', count: 20 },
+    { value: 'plantdata', label: 'PlantData', count: 4 },
     { value: ':none', label: 'No consortium', count: 1 },
   ],
 };
@@ -68,7 +68,7 @@ describe('parseShortcut', () => {
     ['provider:"IPK Gatersleben"', definitions, 'provider', 'IPK Gatersleben'],
     ['provider:"IPK Gat', definitions, 'provider', 'IPK Gat'],
     ['provider:IPK Gatersleben', definitions, 'provider', 'IPK Gatersleben'],
-    ['consortium:de.NBI', definitions, 'consortium', 'de.NBI'],
+    ['consortium:BioNet', definitions, 'consortium', 'BioNet'],
     ['"KPI set":core', definitions, 'kpi-set', 'core'],
     ['kpi-set:core', definitions, 'kpi-set', 'core'],
     // The label in the page's language, and the id in any language.
@@ -76,7 +76,7 @@ describe('parseShortcut', () => {
     ['anbieter:ipk', german, 'provider', 'ipk'],
     ['provider:ipk', german, 'provider', 'ipk'],
     ['"KPI-Satz":core', german, 'kpi-set', 'core'],
-    ['Konsortium:nfdi', german, 'consortium', 'nfdi'],
+    ['Konsortium:plant', german, 'consortium', 'plant'],
     // An unknown facet, or no colon, is plain search text.
     ['Anbieter:ipk', definitions, undefined, undefined],
     ['owner:ipk', definitions, undefined, undefined],
@@ -104,12 +104,12 @@ describe('facetSearchParams', () => {
       {},
       'q=new&sort=stage&dir=desc&pageSize=50',
     ],
-    ['', 'page=2', { consortium: ['denbi'] }, 'f.consortium=denbi'],
+    ['', 'page=2', { consortium: ['bionet'] }, 'f.consortium=bionet'],
     [
       'x',
       'f.provider=old&page=1',
-      { consortium: ['denbi', ':none'], year: { min: 2018 } },
-      'q=x&f.consortium=denbi&f.consortium=%3Anone&f.year.min=2018',
+      { consortium: ['bionet', ':none'], year: { min: 2018 } },
+      'q=x&f.consortium=bionet&f.consortium=%3Anone&f.year.min=2018',
     ],
     ['a'.repeat(120), '', {}, `q=${'a'.repeat(100)}`],
   ])('%j over %j', (text, base, state, expected) => {
@@ -187,16 +187,16 @@ describe('chipText', () => {
       [consortium, {}, undefined],
       [
         consortium,
-        { consortium: ['denbi'] },
-        { full: 'Consortium: de.NBI', short: 'Consortium: de.NBI', name: 'Consortium: de.NBI' },
+        { consortium: ['bionet'] },
+        { full: 'Consortium: BioNet', short: 'Consortium: BioNet', name: 'Consortium: BioNet' },
       ],
       [
         consortium,
-        { consortium: ['denbi', 'nfdi4plants'] },
+        { consortium: ['bionet', 'plantdata'] },
         {
-          full: 'Consortium: de.NBI, NFDI4Plants',
-          short: 'Consortium: de.NBI, NFDI4Plants',
-          name: 'Consortium: de.NBI, NFDI4Plants',
+          full: 'Consortium: BioNet, PlantData',
+          short: 'Consortium: BioNet, PlantData',
+          name: 'Consortium: BioNet, PlantData',
         },
       ],
       [
