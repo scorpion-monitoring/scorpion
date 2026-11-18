@@ -1,6 +1,6 @@
 # M13 Sprint Plan: legacy data migration (`tools/migrate-legacy`)
 
-Status: **draft, 2026-11-17. Nothing here is built.** The decisions in §13 are open and need the maintainer's answers before sprint 1 starts; the plan as a whole needs approval. It changes the scope of M13 in `implementation.md` (§12), because the legacy application in use is not the one the source documents describe (§0).
+Status: **approved by the maintainer on 2026-11-18; sprint 1 built** (two stacked pull requests: `fetch` and `discover`, then `plan` and `run` for the registry). Decisions 1, 2, 7, 8 and 14 are answered (§13); the others are open until the sprint that needs them. The §12 changes are applied to `implementation.md`. Earlier: draft of 2026-11-17.
 
 Scope source: [implementation.md](implementation.md) §5, M13, Gate 3 and the risk table; [architecture.md](architecture.md) A5 and "Migration from the current app"; [ADR-0039](adr/0039-gate-2-conditional-pass.md) (the open line of Gate 2); what M6 to M12 hand over (§2); and the source of the legacy application in use, **`ipk-bit/scorpion` at `5a92c31`** (2025-04-17, the tip of `main`; named by the maintainer on 2026-11-17).
 
@@ -107,6 +107,21 @@ One pull request per sprint.
 4. Transform and load for providers, consortia, services and their consortia; the report.
 5. **Tests:** table-driven unit tests for each rule of §3 used here (slug, abbreviation, stage, licence, provider count, consortium links); integration tests against real Postgres (Testcontainers) with a **made-up snapshot** built by factories in `packages/testing` (no real names; rule 9): a dry run writes nothing (row counts before and after), a run creates what the report says, a second run creates nothing, a run stopped halfway and run again ends in the same state, a service the services refuse is reported and does not stop the others.
 
+### Found differently / Amended in sprint 1
+
+- **`fetch` and `discover` came before discovery.** Task 1 needed a real snapshot, and a snapshot needed the fetch: the order became the package, `fetch`, the reader and `discover` (task 2) first, then the maintainer's fetch and discovery (task 1, §14), then the mapping, `plan` and `run`.
+- **The S3 backups are not a source** (decision 2): the API is. `--measurements` stays an optional input of `discover`, since the files have one shape.
+- **The legacy API leaves out every value of 0** (`if record[label]` in `get_measurements_for_service`), and the S3 backups were made through it: a 0 is a missing month in both, and no source holds it. `discover` counts the months missing inside a KPI history; sprint 2's rule for them is decision 13.
+- **`/api/v1/services` lists only services that have a provider and a category**, one row per service and provider. A service without a provider cannot be seen through the API; one with two is two rows (the rule of §3 still applies to them).
+- **The API gives consortia by name.** A name that is a valid abbreviation is used as one; any other needs an abbreviation in the mapping (all three in the discovery did).
+- **`/aai/users` answers an empty list to a key that is not an administrator's**; `fetch` asks it first and stops there.
+- **Several InfluxDB series show only when the answer steps back in time** (tables come in the order of the measurement name). A second, later series cannot be told from one; completeness does not depend on it, since the fetch reads one page larger than any history and checks that the next page is empty.
+- **Every legacy service has an empty stage and an empty licence** (discovery). The stage is required: decision 14 (`PROD` for all, through `missingStage`).
+- **Decision 7 answered differently from the recommendation:** the slug is derived from the abbreviation (`deriveSlug`), and the mapping may override it.
+- **Two changes outside the tool, approved by the maintainer:** `kernel.buildServices()` (start-up announces `system.ready`, whose handler in registry.services writes a setting, and the tool must not write at start-up), and `create` and `update` in `OrganisationsPublic` and `ServicesPublic`, with the field parsers (`parseAbbreviation`, `parseSlug`) exported (ADR-0052). §2 had assumed both were reachable already.
+- **The dry run checks with the modules' parsers and reads, not inside a rolled-back transaction**: the services read through the pool outside the caller's transaction, so a service would not see a provider the same dry run had created. Checks that only `create` makes can still refuse a record in the run; it is reported and the run goes on.
+- **`pnpm migrate-legacy` loads `.env`** like `pnpm dev`, and names the target database (host, port, name) before any work.
+
 ## 7. Sprint 2: KPIs, measurements, people
 
 1. Indicators, KPI sets, service sets and additional KPIs.
@@ -182,3 +197,28 @@ Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; the others are
 ## 14. Discovery and rehearsal results
 
 Filled in by sprint 1 (discovery) and sprint 3 (rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here when the maintainer has run the registry part on staging.
+
+### Discovery (the maintainer's snapshot of 2026-11-17)
+
+| Finding                                                                                      | Count          |
+| -------------------------------------------------------------------------------------------- | -------------- |
+| providers / categories / consortia                                                           | 44 / 7 / 3     |
+| services (rows: one per service and provider)                                                | 36 (36)        |
+| KPIs (distinct names); defined by categories; service-specific                               | 18; 36; 2      |
+| services with no stage / with no licence                                                     | 36 / 36        |
+| provider abbreviations the rule refuses (white space)                                        | 2              |
+| consortia given by name only (need an abbreviation in the mapping)                           | 3              |
+| service abbreviations that are not a valid slug; with two providers                          | 0; 0           |
+| measurement files / services with points / points                                            | 36 / 26 / 1293 |
+| points not on the first of a month; KPI-months with several points                           | 0; 0           |
+| months missing inside a KPI history (a 0 left out, or no report); histories with such months | 563; 20        |
+| services whose answer shows a second InfluxDB series                                         | 20             |
+| points in a future month; before 1900; negative values                                       | 2; 0; 0        |
+| users; administrators; usernames that break the rule; addresses used twice                   | 16; 1; 2; 0    |
+| approved memberships; pending requests                                                       | 17; 0          |
+
+Stage spellings: only the empty one (36). Licence spellings: only the empty one (36). This confirms §0 and §3 for the registry; the corrections are in "Found differently / Amended in sprint 1".
+
+### The registry run on the maintainer's development instance (2026-11-17)
+
+On an empty, migrated database with the mapping of five abbreviations and `missingStage: "PROD"`: the dry run and the run each read 44 providers, 3 consortia and 36 services, and created all of them (0 dropped); a second run kept all 83. This is not yet Gate 2's line, which is the same dry run on **staging**.
