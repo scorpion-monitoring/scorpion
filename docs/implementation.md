@@ -264,7 +264,7 @@ Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [A
 - A registry profile (without KPI modules; added by M6, ADR-0030) runs on staging with real organisation and service data from a partial migration dry run.
 - Catalogue, wizard and edit flows pass E2E. The v1 contract tests pass.
 
-**Status (2026-10-14): conditionally passed** ([ADR-0039](adr/0039-gate-2-conditional-pass.md)). The evidence is in [m8-sprint-plan.md](m8-sprint-plan.md) §12; the one open line, the staging dry run with real data, waits for the migration tool of M13 and is the maintainer's check.
+**Status (2026-11-18): passed.** Conditionally passed on 2026-10-14 ([ADR-0039](adr/0039-gate-2-conditional-pass.md)), with the evidence in [m8-sprint-plan.md](m8-sprint-plan.md) §12; the open line, the dry run with real data, was cleared on 2026-11-18 by the M13 rehearsal on the dev server, the maintainer's decision in place of staging ([m13-sprint-plan.md](m13-sprint-plan.md) §14).
 
 ---
 

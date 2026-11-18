@@ -226,7 +226,7 @@ Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; 14 and 15 duri
 
 ## 14. Discovery and rehearsal results
 
-Filled in by sprint 1 (discovery), sprint 2 (the run on a copy) and sprint 3 (`compare`; the rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here when the maintainer has run the registry part on staging.
+Filled in by sprint 1 (discovery), sprint 2 (the run on a copy) and sprint 3 (`compare`; the rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here: cleared with the rehearsal on 2026-11-18 (below).
 
 ### Discovery (the maintainer's snapshot of 2026-11-17)
 
@@ -313,3 +313,5 @@ Run by the agent on 2026-11-18, at the request of the maintainer, read-only, on 
 | three services' dashboards checked by hand (Gate 3) | **match** for all three (the maintainer, 2026-11-18)                                                                                                                                                                                                                 |
 
 **Gate 3 passed on 2026-11-18** (the maintainer): every line holds.
+
+**Gate 2's open line (ADR-0039) cleared on 2026-11-18**, at the maintainer's request, with the same rehearsal in place of a staging run: the dry run of the registry part above (35 providers, 9 consortia, 27 services, every drop with a decided rule), and the `registry` profile started on the migrated database (`scorpion_gate3`). It started with no error (one warning: the transport `none`), and as the first administrator `GET /api/v1/services` and `GET /api/v1/providers` answered `totalCount` 27 and 35; a KPI route answered 404, as the profile has no KPI module. No gap in the registry modules was found, so nothing is due under ADR-0039 decision 4.
