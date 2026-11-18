@@ -1,6 +1,6 @@
 # ADR-0052: The legacy migration reads a snapshot of the REST API and writes through the services as one account
 
-- Status: Accepted (sprint 1 of M13; amended in sprint 2 and by [ADR-0053](0053-migrated-accounts-are-claimed-at-the-first-sign-in.md))
+- Status: Accepted; implemented in sprints 1 to 3 of M13 (released in 0.16.0); amended in sprints 2 and 3 and by [ADR-0053](0053-migrated-accounts-are-claimed-at-the-first-sign-in.md)
 - Date: 2026-11-18
 - Relates to: [ADR-0039](0039-gate-2-conditional-pass.md) (the open line of Gate 2), [ADR-0046](0046-demo-seed.md) (trusted code
   writes through the services as an account), [ADR-0035](0035-service-model.md) (the slug rule),
@@ -71,3 +71,15 @@ through the same rules as a request (CLAUDE.md rule 5). There is no system actor
   `user`._
 - **Mail.** Membership requests and decisions go through the services, which queue mails and inbox items; the tool starts no
   worker. The runbook keeps the mail transport at `none` until the announcement.
+
+## Amended in sprint 3 (compare)
+
+- **One trusted read in `kpi.ingestion`:** `reads.storedValuesAsSystem(serviceId, fromPeriod, toPeriod)` returns every value of a
+  service in a window of at most 120 months with the `source` that wrote it last (no person, run or file name; no
+  permission, no route). `migrate-legacy compare` needs it to tell a value the migration wrote (`legacy-migration`) from one
+  a person entered after the run. Sprint 3 asked before adding it; the maintainer agreed on 2026-11-18.
+- **`compare` writes nothing and acts as nobody.** It reads with trusted reads only, since the migration account is
+  deactivated at the end of a run, and checks the target against the run's own transform. A difference is expected (a rule
+  of the transform explains it), unexplained (what a run writes is not in the target as written; exit code 1) or reported
+  (what a person may have changed after the run). What the trusted reads cannot answer is listed in the tool's README.
+- **The cutover is Gate 4's final run** (decision 11), in the order of the runbook in the tool's README.

@@ -342,9 +342,10 @@ Additions agreed in [m11-sprint-plan.md](m11-sprint-plan.md) §13 (six sprints; 
 The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxDB 2.7, Keycloak), not the PostgreSQL application of `FEATURES.md` §1; the scope below is the one of the approved [M13 sprint plan](m13-sprint-plan.md) (§0, §12; ADR-0052).
 
 - `tools/migrate-legacy`: reads a **snapshot fetched from the legacy REST API** (`fetch`, GET only, an administrator's key from the environment; a manifest with a SHA-256 per file) and writes **through the new domain services** as one migration account. No legacy database connection, no Neo4j or InfluxDB client.
-- Transformations: measurements one per service, KPI and month (the latest point in the month; a month under two provider names); consortium links checked against the snapshot and reported; users with their OIDC identity (the same issuer); provider memberships mapped to states (`approved` or `requested`). Not applicable to the application in use: data-URL images, plain-text secrets, maturity rows.
+- Transformations: measurements one per service, KPI and month (the latest point in the month; a month under two provider names; a month missing between two points written as 0, since the legacy API leaves out zeros); consortium links checked against the snapshot and reported; users as accounts their owners claim at the first sign-in at the same OIDC provider (the verified address and the legacy username; ADR-0053), all with the role `user` and Admin granted by hand; provider memberships mapped to states (`approved` or `requested`). Not applicable to the application in use: data-URL images, plain-text secrets, maturity rows.
 - API keys are not converted (the legacy API cannot list their holders): every migrated user is listed and emailed to create a new token.
 - `--dry-run` produces a report of every row that is dropped or changed, with reasons. The run is idempotent and can be repeated.
+- `compare` reads every migrated value back through `kpi.ingestion` and checks it against the snapshot (and the other records at the level the target answers); the runbook of the cutover is in the tool's README.
 - Rehearsal on a copy of production data on staging.
 
 ### Gate 3
@@ -394,7 +395,7 @@ The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxD
 
 ### Gate 4: full profile live
 
-- Production cut-over: final migration run (at the cutover the maintainer chooses: M13 plan, decision 11), DNS/proxy switch, old app set to read-only for 30 days, then retired.
+- Production cut-over (M13 plan, decision 11: here, not after Gate 3): old app set to read-only, final fetch and migration run, `compare` clean, DNS/proxy switch; the old app stays read-only for 30 days, then is retired (runbook: `tools/migrate-legacy/README.md`).
 - All tests from FEATURES §4.11 and all defect regression tests pass on the release tag.
 - One real backup restore rehearsed successfully.
 - The ASVS chapter assessments are re-confirmed against the `v1.0.0` release commit (`assessed_commit` updated, second pass recorded).
