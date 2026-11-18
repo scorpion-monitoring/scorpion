@@ -3,6 +3,15 @@
 import { writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import type { CliDeps } from './cli.ts';
+import {
+  COMPARE_FORMAT,
+  compareTarget,
+  EXPECTED_REASONS,
+  REPORTED_REASONS,
+  UNEXPLAINED_REASONS,
+  writeCompareReport,
+  type CompareReport,
+} from './compare.ts';
 import { emptyPrivateDirectory, refuseInsideRepository, RefusedPath } from './files.ts';
 import { loadKpis } from './load-kpis.ts';
 import { loadMeasurements } from './load-measurements.ts';
@@ -567,6 +576,88 @@ export async function usersCommand(args: string[], { env, io, now }: CliDeps): P
         `${notMigrated > 0 ? `; ${notMigrated} legacy user(s) are not migrated (see the report)` : ''}.`,
     );
     return 0;
+  } finally {
+    await target.stop();
+  }
+}
+
+/**
+ * `compare <snapshot> --mapping <file> --report <dir>`: every value the run writes against what the target stores, and the
+ * other records at the level the trusted reads answer (src/compare.ts). Writes nothing to the database. The output has
+ * counts only; names and addresses go only into the report (mode 0600, outside the repository). Exit code 1 when any
+ * difference is unexplained.
+ */
+export async function compareCommand(args: string[], { env, io, now }: CliDeps): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: { mapping: { type: 'string' }, report: { type: 'string' } },
+    strict: true,
+  });
+  const [dir, ...extra] = positionals;
+  if (!dir || !values.mapping || !values.report || extra.length > 0) {
+    io.err('compare needs one snapshot directory, --mapping <file> and --report <dir>.');
+    return 2;
+  }
+  const clock = now ?? (() => new Date());
+  const startedAt = clock().toISOString();
+  const reportDir = refuseInsideRepository(values.report, 'The report directory');
+  await emptyPrivateDirectory(reportDir, 'The report directory');
+  const snapshot = await readSnapshot(dir);
+  const mapping = await readMapping(values.mapping);
+  const database = describeDatabase(env.DATABASE_URL ?? '');
+  io.err(`Target database: ${database} (compare reads only)`);
+  const target = await openTarget(env);
+  try {
+    const at = clock();
+    const plans = buildPlans({
+      snapshot,
+      mapping,
+      facts: await factsOf(target),
+      kpiFacts: await kpiFactsOf(target),
+      providers: await configuredProviders(target),
+      now: at,
+    });
+    const compared = await compareTarget(plans, target, at);
+    const report: CompareReport = {
+      format: COMPARE_FORMAT,
+      startedAt,
+      finishedAt: clock().toISOString(),
+      snapshot: snapshotSummary(snapshot.manifest),
+      mapping: { file: values.mapping, open: mapping.open.length },
+      target: { database },
+      result: compared.unexplained === 0 ? 'clean' : 'unexplained',
+      ...compared,
+    };
+    await writeCompareReport(reportDir, report);
+    for (const record of report.records) {
+      const n = (cls: string) => record.differences.filter((d) => d.class === cls).length;
+      io.out(
+        `${record.kind}: ${record.expected} expected, ${record.found} found, ${record.unchecked} unchecked, ` +
+          `${n('unexplained')} unexplained, ${n('reported')} reported`,
+      );
+    }
+    const t = report.measurements.totals;
+    const list = (reasons: readonly (keyof typeof t)[]) =>
+      reasons.map((reason) => `${t[reason]} ${reason}`).join(', ');
+    io.out(
+      `measurement: ${t.points} points read, ${t.expected} values expected, ${t.matched} equal to a point; ` +
+        `expected: ${list(EXPECTED_REASONS)}; unexplained: ${list(UNEXPLAINED_REASONS)}; reported: ${list(REPORTED_REASONS)}`,
+    );
+    io.out(
+      `Claims: ${report.claims.open} open, ${report.claims.claimed} claimed, ${report.claims.expired} expired.`,
+    );
+    io.out(`Report written to ${reportDir}.`);
+    if (report.result === 'clean') {
+      io.out(
+        `Result: clean (${report.reported} reported difference(s) that a person may have made after the run).`,
+      );
+      return 0;
+    }
+    io.err(
+      `Result: ${report.unexplained} unexplained difference(s); see the report. ${report.reported} reported.`,
+    );
+    return 1;
   } finally {
     await target.stop();
   }

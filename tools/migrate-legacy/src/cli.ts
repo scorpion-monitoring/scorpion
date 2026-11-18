@@ -7,7 +7,7 @@ import { RefusedPath, refuseInsideRepository } from './files.ts';
 import { createLegacyClient, LegacyApiError } from './http.ts';
 import { KernelStartupError } from '@scorpion/kernel';
 import { MappingError } from './mapping.ts';
-import { planCommand, runCommand, usersCommand } from './commands.ts';
+import { compareCommand, planCommand, runCommand, usersCommand } from './commands.ts';
 import { readSnapshot, SnapshotError } from './snapshot.ts';
 import { TargetError } from './target.ts';
 
@@ -44,11 +44,16 @@ Commands:
       the legacy username); everyone gets the role user. The account legacy-migration is deactivated at the end of a
       run; --keep-account leaves it for a rehearsal. --skip-users leaves out users, roles and memberships. Repeating a
       run is safe.
+  compare <snapshot> --mapping <file> --report <dir>
+      Every value the run writes, per service, KPI and month, against what the target stores; and the records (counts,
+      KPI set rows and necessities, each service's set and extras, users and claims, memberships). Reads only. A
+      difference is expected (a rule of the transform), reported (a person may have made it after the run) or
+      unexplained; exit code 1 when any is unexplained.
   users <snapshot> --mapping <file> --out <file>
       The migrated users (username<TAB>address<TAB>claim<TAB>legacy-admin), for the announcement mail and for granting
       Admin by hand.
 
-plan and run need DATABASE_URL (and SECRETS_KEY) of the new instance, migrated (pnpm scorpion migrate); the tool
+plan, run, compare and users need DATABASE_URL (and SECRETS_KEY) of the new instance, migrated (pnpm scorpion migrate); the tool
 never migrates. The snapshot and the report hold personal data: mode 0600, never inside the repository.
 
 `;
@@ -118,6 +123,7 @@ const COMMANDS: Record<string, Command> = {
   discover: discoverCommand,
   plan: planCommand,
   run: runCommand,
+  compare: compareCommand,
   users: usersCommand,
 };
 
