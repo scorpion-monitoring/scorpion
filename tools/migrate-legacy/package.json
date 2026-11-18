@@ -15,6 +15,8 @@
     "@scorpion/core-settings": "workspace:*",
     "@scorpion/integrations": "workspace:*",
     "@scorpion/kernel": "workspace:*",
+    "@scorpion/kpi-framework": "workspace:*",
+    "@scorpion/kpi-ingestion": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
     "@scorpion/server": "workspace:*",

@@ -23,3 +23,24 @@ export async function tablesContaining(db: Queryable, needle: string): Promise<s
   }
   return found;
 }
+
+/**
+ * The number of rows of every table of the database, by table name. For the tests that prove a run wrote nothing (a dry run,
+ * a repeated run): the counts before and after are equal. It reads every table and knows nothing about any module; the
+ * migration journals are skipped.
+ */
+export async function tableCounts(db: Queryable): Promise<Record<string, number>> {
+  const { rows: tables } = await db.query<{ table_name: string }>(
+    `select table_name from information_schema.tables
+      where table_schema = 'public' and table_type = 'BASE TABLE' order by 1`,
+  );
+  const counts: Record<string, number> = {};
+  for (const { table_name } of tables) {
+    if (table_name.startsWith('__drizzle')) continue;
+    const { rows } = await db.query<{ n: number }>(
+      `select count(*)::int as n from "${table_name}"`,
+    );
+    counts[table_name] = rows[0]!.n;
+  }
+  return counts;
+}

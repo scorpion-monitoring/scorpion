@@ -173,6 +173,16 @@ export function createUserService(
       return found;
     },
 
+    async findByIdentityAsSystem(provider, subject) {
+      const [row] = await ctx.db
+        .select(publicColumns)
+        .from(authMethod)
+        .innerJoin(user, eq(user.id, authMethod.userId))
+        .where(and(eq(authMethod.provider, provider), eq(authMethod.subject, subject)))
+        .limit(1);
+      return row ? withAvatar(row) : undefined;
+    },
+
     async findByEmail(email) {
       // At most one row is verified; prefer it, then the oldest.
       const [row] = await ctx.db

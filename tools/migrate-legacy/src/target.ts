@@ -2,11 +2,13 @@
 // and nothing else (no migration, no routes, no `system.ready`, no workers: `kernel.buildServices()`), and the account the
 // tool acts as (ADR-0052). The modules are reached only through their public.ts.
 import { randomBytes } from 'node:crypto';
-import type { UserActor } from '@scorpion/contracts';
+import { Conflict, type UserActor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { IdentityService } from '@scorpion/core-identity/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
+import type { KpiFrameworkPublic } from '@scorpion/kpi-framework/public';
+import type { KpiIngestionPublic } from '@scorpion/kpi-ingestion/public';
 import type { OrganisationsPublic } from '@scorpion/registry-organisations/public';
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { moduleIds, profileName, sources } from '@scorpion/server/src/generated/profile.ts';
@@ -31,6 +33,8 @@ export interface Target {
   kernel: Kernel;
   organisations: OrganisationsPublic;
   services: ServicesPublic;
+  kpi: KpiFrameworkPublic;
+  ingestion: KpiIngestionPublic;
   identity: IdentityService;
   authz: AuthzService;
   settings: SettingsService;
@@ -73,6 +77,8 @@ export async function openTarget(
     kernel,
     organisations: service(kernel, 'registry.organisations'),
     services: service(kernel, 'registry.services'),
+    kpi: service(kernel, 'kpi.framework'),
+    ingestion: service(kernel, 'kpi.ingestion'),
     identity: service(kernel, 'core.identity'),
     authz: service(kernel, 'core.authz'),
     settings: service(kernel, 'core.settings'),
@@ -80,7 +86,7 @@ export async function openTarget(
   };
 }
 
-const actorOf = (user: { id: string; username: string }): UserActor => ({
+export const actorOf = (user: { id: string; username: string }): UserActor => ({
   kind: 'user',
   userId: user.id,
   username: user.username,
@@ -88,36 +94,74 @@ const actorOf = (user: { id: string; username: string }): UserActor => ({
   via: 'session',
 });
 
+/** The name of the n-th migration account: `legacy-migration`, `legacy-migration-2`, … */
+const accountName = (n: number) => (n === 1 ? MIGRATION_USERNAME : `${MIGRATION_USERNAME}-${n}`);
+
 /**
- * The migration account, found by its username or, when `create` is set, created like `create-admin` makes the first
- * administrator: an active account with the Admin role, in one transaction. Its password is random and shown nowhere,
- * so nobody signs in as it. A found account is used as it is: the tool never gives a role to an existing account (one
- * named so by somebody else gains nothing), so one without Admin is refused by the services at the first write.
+ * The migration account: the first of `legacy-migration`, `legacy-migration-2`, … that is active, or, when `create` is set
+ * and there is none, a new one made like `create-admin` makes the first administrator: an active account with the Admin
+ * role, in one transaction. Its password is random and shown nowhere, so nobody signs in as it. A found account is used as
+ * it is: the tool never gives a role to an existing account (one named so by somebody else gains nothing), so one without
+ * Admin is refused by the services at the first write. An account that was deactivated (by the end of an earlier run, or by
+ * somebody) is never reused: nothing reactivates an account, so a run after it uses the next name.
  */
 export async function migrationAccount(
   target: Target,
   options: { create: boolean },
-): Promise<{ actor: UserActor | undefined; state: 'found' | 'created' | 'not created (dry run)' }> {
-  const found = await target.identity.users.findByUsername(MIGRATION_USERNAME);
-  if (found) {
-    if (found.status !== 'active' || found.deletedAt !== null) {
-      throw new TargetError(
-        `The account "${MIGRATION_USERNAME}" exists but is ${found.deletedAt ? 'deleted' : found.status}; activate it or remove it first.`,
-      );
+): Promise<{
+  actor: UserActor | undefined;
+  state: 'found' | 'created' | 'not created (dry run)';
+  username: string;
+}> {
+  for (let n = 1; n <= 50; n += 1) {
+    const username = accountName(n);
+    const found = await target.identity.users.findByUsername(username);
+    if (found) {
+      if (found.status === 'active' && found.deletedAt === null) {
+        return { actor: actorOf(found), state: 'found', username };
+      }
+      continue;
     }
-    return { actor: actorOf(found), state: 'found' };
-  }
-  if (!options.create) return { actor: undefined, state: 'not created (dry run)' };
-  const user = await target.kernel.db.tx(async (tx) => {
-    const created = await target.identity.users.createUser({
-      username: MIGRATION_USERNAME,
-      status: 'active',
-      auth: { provider: 'local', password: randomBytes(32).toString('base64url') },
+    if (!options.create) return { actor: undefined, state: 'not created (dry run)', username };
+    const user = await target.kernel.db.tx(async (tx) => {
+      const created = await target.identity.users.createUser({
+        username,
+        status: 'active',
+        auth: { provider: 'local', password: randomBytes(32).toString('base64url') },
+      });
+      await target.authz.assignRoleAsSystem(tx, { userId: created.id, roleKey: ADMIN_ROLE });
+      return created;
     });
-    await target.authz.assignRoleAsSystem(tx, { userId: created.id, roleKey: ADMIN_ROLE });
-    return created;
-  });
-  return { actor: actorOf(user), state: 'created' };
+    return { actor: actorOf(user), state: 'created', username };
+  }
+  throw new TargetError(
+    `Fifty accounts named "${MIGRATION_USERNAME}…" exist and none is active; remove the closed ones first.`,
+  );
+}
+
+/**
+ * Ends the life of the migration account (plan §4): deactivated, so nobody can use it. The last-Admin rule still applies,
+ * so on an instance with no other active administrator it stays active, and the answer says so (the operator closes it
+ * after the first administrator exists). Returns what to write in the report.
+ */
+export async function endAccount(target: Target, actor: UserActor): Promise<string> {
+  try {
+    await target.identity.deactivateAsSystem(actor.userId);
+    return 'deactivated';
+  } catch (error) {
+    if (error instanceof Conflict) {
+      return `still active: ${error.message} Deactivate it once another administrator exists`;
+    }
+    throw error;
+  }
+}
+
+/** The ids of the OIDC providers configured in the target (the setting "Sign-in providers"). */
+export async function configuredProviders(target: Target): Promise<string[]> {
+  const settings = (await target.kernel.settingsOf('core.identity').get()) as {
+    oidcProviders?: { id: string }[];
+  };
+  return (settings.oidcProviders ?? []).map((provider) => provider.id);
 }
 
 /** What the target already holds of the registry, read through the services: an operator is told before a write. */

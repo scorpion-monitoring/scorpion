@@ -476,6 +476,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       currentCleanup = cleanup;
       const loginFailures = createLoginFailureAudit(ctx);
       currentLoginFailures = loginFailures;
+      const userAdmin = createUserAdminService(ctx, { authz, sessions, avatarHashOf });
       return {
         bootstrap,
         cleanup,
@@ -491,6 +492,9 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         sessionAdmin: createSessionAdminService(ctx, { sessions, users, authz }),
         requireRecentAuth: (actor, maxAgeSeconds) =>
           sessions.requireRecentAuth(actor, maxAgeSeconds),
+        deactivateAsSystem: async (userId) => {
+          await userAdmin.deactivateAsSystem(userId);
+        },
         tokens,
         accounts: createAccountService(ctx, {
           users,
@@ -505,7 +509,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           throttle,
         }),
         approval: createApprovalService(ctx, { sessions, authz, mail, links, avatarHashOf }),
-        userAdmin: createUserAdminService(ctx, { authz, sessions, avatarHashOf }),
+        userAdmin,
       };
     },
 

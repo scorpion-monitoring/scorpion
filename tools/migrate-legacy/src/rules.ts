@@ -2,6 +2,7 @@
 // (the parsers the services use, from the modules' public.ts) and says what it did, so the report can name the rule
 // that decided a record. No database, no network.
 import { bundledSpdxList } from '@scorpion/integrations';
+import { z } from 'zod';
 import { parseAbbreviation, parseName } from '@scorpion/registry-organisations/public';
 import { MAX_SLUG_LENGTH, parseSlug } from '@scorpion/registry-services/public';
 
@@ -150,3 +151,75 @@ export function consortiumKind(name: string): ConsortiumKind {
   const checked = checkAbbreviation(name);
   return checked.ok && !checked.changed ? 'abbreviation' : 'name';
 }
+
+/** The username rule of core.identity: `^[a-z0-9_-]{3,31}$`. */
+export const USERNAME_PATTERN = /^[a-z0-9_-]{3,31}$/;
+const USERNAME_MAX = 31;
+
+/**
+ * A legacy username (the provider's preferred username, which may be an address or hold capitals, accents or dots) made to
+ * fit the username rule (plan §3): lower-cased, accents dropped, every run of other characters one "-", the ends trimmed of
+ * "-" and "_", cut to 31, and padded when shorter than 3 (never empty). `changed` when anything was done to it.
+ */
+export function fitUsername(raw: string): { value: string; changed: boolean } {
+  let value = raw
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-_]+/, '')
+    .slice(0, USERNAME_MAX)
+    .replace(/[-_]+$/, '');
+  if (value === '') value = 'user';
+  while (value.length < 3) value += '0';
+  return { value, changed: value !== raw };
+}
+
+/** `name`, or `name-2`, `name-3`, … (cut to fit 31), whichever is not in `taken` (lower-case usernames). */
+export function uniqueUsername(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name)) return name;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const candidate = `${name.slice(0, USERNAME_MAX - suffix.length)}${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+export type TermResult =
+  | { ok: true; key: string; rule?: 'respelled' | 'mapped' | 'missing-mapped' }
+  | { ok: false; rule: 'unknown' | 'missing' };
+
+/**
+ * A legacy spelling to a key of a vocabulary: the key itself; the mapping's entry for the spelling; the one key that
+ * differs only in case; for no spelling, `missing` (the mapping's default, when it is a key). Anything else is refused.
+ */
+export function resolveTerm(
+  spelling: string | null,
+  terms: readonly string[],
+  spellings: Readonly<Record<string, string | null>>,
+  missing: string | null,
+): TermResult {
+  const value = spelling?.trim() ?? '';
+  if (value === '') {
+    return missing !== null && terms.includes(missing)
+      ? { ok: true, key: missing, rule: 'missing-mapped' }
+      : { ok: false, rule: 'missing' };
+  }
+  if (terms.includes(value)) return { ok: true, key: value };
+  const mapped = spellings[value];
+  if (mapped !== undefined && mapped !== null && terms.includes(mapped)) {
+    return { ok: true, key: mapped, rule: 'mapped' };
+  }
+  const caseless = terms.filter((term) => term.toLowerCase() === value.toLowerCase());
+  if (caseless.length === 1) return { ok: true, key: caseless[0]!, rule: 'respelled' };
+  return { ok: false, rule: 'unknown' };
+}
+
+/** The id of an OIDC provider in core.identity's settings: lower-case letters, digits and "-", not `local`. */
+export const isProviderId = (value: string) =>
+  /^[a-z][a-z0-9-]{0,62}$/.test(value) && value !== 'local';
+
+const emailSchema = z.email().max(254);
+/** An address as core.identity accepts it (its own Zod rule: `z.email()`, at most 254 characters). */
+export const isEmailAddress = (value: string) => emailSchema.safeParse(value).success;

@@ -1175,3 +1175,10 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 
 - **Merge two legacy consortia into one.** The mapping refuses two legacy consortium names mapped to one abbreviation (`consortium.abbreviation-duplicate`); a merge (the second name an alias, its links to the first) would need an outcome of its own in the report. The maintainer's discovery has three distinct names, so nothing needs it yet.
 - **`pnpm scorpion` does not read `.env`.** `pnpm dev`, `pnpm db:studio` and (since M13) `pnpm migrate-legacy` do; `create-admin` and the other commands need the variables exported in the shell. The image sets them itself, so a change would be for local use only (`--env-file-if-exists` in the root script).
+
+## M13 sprint 2 follow-ups
+
+- **Reactivate an account.** Nothing reactivates a deactivated account, so every run of the migration tool after the first uses a new account (`legacy-migration-2`, …). A `core.identity` administration action (or `activateAsSystem`) would let the tool reuse one; not needed while a migration is run a handful of times.
+- **Mails of a migrated membership.** The services queue "requested" and "decided" mails and inbox items; the tool can only keep them from going out (transport `none`) and cannot skip them. A trusted `importAsSystem` of the memberships (no mail, `decided_by` the account) would remove the step from the runbook.
+- **Update an existing indicator or set from the legacy data.** A repeated run keeps what exists and reports a difference; a mapping switch could update the fields the tool sets (description, value type, thematic category, unit).
+- **A dry run that checks everything on an empty target** would need the services to read inside the caller's transaction (see "Found differently", sprint 1).

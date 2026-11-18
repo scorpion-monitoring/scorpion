@@ -1,6 +1,6 @@
 # ADR-0052: The legacy migration reads a snapshot of the REST API and writes through the services as one account
 
-- Status: Accepted (sprint 1 of M13)
+- Status: Accepted (sprint 1 of M13; amended in sprint 2)
 - Date: 2026-11-18
 - Relates to: [ADR-0039](0039-gate-2-conditional-pass.md) (the open line of Gate 2), [ADR-0046](0046-demo-seed.md) (trusted code
   writes through the services as an account), [ADR-0035](0035-service-model.md) (the slug rule),
@@ -51,3 +51,20 @@ through the same rules as a request (CLAUDE.md rule 5). There is no system actor
   uniqueness against a concurrent write) can still refuse a record in the run. The run reports it and goes on.
 - `create` and `update` of the two registry modules are now reachable by every module that declares the dependency. They are the methods a
   request calls, with the same permission check, so this widens no access.
+
+## Amended in sprint 2 (KPIs, measurements, people)
+
+- **Two trusted methods in `core.identity`:** `UserService.findByIdentityAsSystem(provider, subject)` (the natural key of a
+  migrated user) and `IdentityService.deactivateAsSystem(userId)` (the account's end: the same transaction as
+  `POST /users/{id}/deactivate`, no permission, no route, the event names no user as the cause, and the last-Admin rule still
+  applies). In `registry.organisations`, `OrganisationsPublic` widens by `request`, `decide` and `listOwn` of the memberships;
+  they check the caller's permission as a request does. Sprint 2 stopped and asked before adding them; the maintainer's answers
+  of 2026-11-18 are in the plan (§13).
+- **The account's life.** Deactivated at the end of a run (`--keep-account` keeps it). Nothing reactivates an account, so a run
+  after it uses `legacy-migration-2`, `-3`, …; a deactivated account is never reused. On an instance with no other active
+  administrator the last-Admin rule keeps it active, and the report says so.
+- **Kept, not overwritten.** An existing indicator, KPI set, service set or membership is left as it is and a difference is
+  reported, because people edit them after the first run; missing set rows and extras are added.
+- **The subjects file** (decision 12) is the one source of a user's OIDC subject. A user without one is not migrated.
+- **Mail.** Membership requests and decisions go through the services, which queue mails and inbox items; the tool starts no
+  worker. The runbook keeps the mail transport at `none` until the announcement.

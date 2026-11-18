@@ -51,28 +51,87 @@ abbreviation, dates off the first of a month, months with several points, months
 services whose answer shows a second InfluxDB series, and (with `--measurements`) the API against the S3 backups. It
 **names no person**: no username, address or source URL appears in it, so its counts can go into the plan.
 
-### `plan <snapshot> --out <mapping.json>`
+### `plan <snapshot> --out <mapping.json> [--subjects <file>]`
 
-Writes a first mapping file for the snapshot with every gap marked: a `null` where a value is needed, and a line in
-`open` that says what to decide. It reads the stage keys of the target, so it needs `DATABASE_URL` too. The file is
-written with mode 0600, outside the repository, and never over an existing one.
+Writes a first mapping file for the snapshot with every gap marked: a `null` where a value is needed (the thematic
+category of each KPI, the abbreviation of a consortium, a spelling that is not a vocabulary key), and a line in `open`
+that says what to decide. It reads the vocabularies of the target and its configured OIDC providers, so it needs
+`DATABASE_URL` too. With exactly one OIDC provider configured in the target it writes that id as `oidcProvider`. The file
+is written with mode 0600, outside the repository, and never over an existing one.
 
-### `run <snapshot> --mapping <file> --report <dir> [--dry-run] [--yes]`
+### `run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account]`
 
-The registry part: providers, consortia (from the services' links) and services with their provider, consortia, stage
-and licence. Services stay private (decision 8).
+Everything the legacy data holds, in dependency order, through the services as the account `legacy-migration`:
+
+1. **Providers, consortia and services** (their consortia, stage and licence). Services stay private (decision 8).
+2. **KPIs**: indicators (value type `integer`; the thematic category and unit from the mapping), KPI sets from the legacy
+   categories with the necessity of each row (a row with none takes `missingNecessity`, `mandatory`: decision 6), each
+   service's set, its additional KPIs, and every KPI that has a value for the service and is not in its set, as an
+   **optional** extra (decision 9).
+3. **Users and roles**: a user per legacy user that has a subject (below), with the OIDC identity `{ provider, subject }`,
+   active, with the role `admin` (the legacy `is_admin`, decision 4: every administrator is a line in the report) or `user`.
+   The username is lower-cased and made to fit `^[a-z0-9_-]{3,31}$`; a collision gets a suffix (`-2`). An address that is
+   not one, or that two users share, is reported and the user is not migrated (the mapping can give another).
+4. **Memberships**: an approved legacy membership is a request **by the user** decided **by the migration account**; a
+   pending request stays a request (at most 10 per user).
+5. **Measurements**, below.
 
 - It needs `DATABASE_URL` and `SECRETS_KEY` of the new instance, **migrated** (`pnpm scorpion migrate`): the tool never
   migrates, and refuses a database with pending migrations. It names the target database (host, port, name) first.
 - `--dry-run` reads the target and applies the modules' rules, and writes nothing to the database, not even the account.
-- A run that writes needs `--yes`; without it the tool says whether the target is empty and stops.
-- It writes as the account `legacy-migration`, created on the first run like `create-admin` makes an administrator (a
-  random password nobody knows). An existing account of that name is used as it is; without Admin, the first write is
-  refused and the run stops with nothing written.
-- **Idempotent:** an organisation is found by its type and abbreviation, a service by its slug. What exists and matches
-  is kept, what differs is updated. A second run over the same snapshot reports "kept" for everything; a run stopped
-  halfway is finished by running it again.
+  What it cannot read yet (a service, an indicator or the account that does not exist) is checked by the transform's rules
+  only, and the report counts those measurement values as `unchecked`. Run the dry run again after a first run for the
+  full check.
+- A run that writes needs `--yes`; without it the tool says whether the target is empty and stops. It also stops, before
+  writing anything, while the mapping has a gap that a run cannot do without (a KPI with no thematic category).
+- **The migration account.** It writes as `legacy-migration`, created on the first run like `create-admin` makes an
+  administrator (a random password nobody knows). An existing active account of that name is used as it is; without Admin,
+  the first write is refused and the run stops with nothing written. **At the end of a run the account is deactivated**, so
+  nobody can use it; `--keep-account` leaves it for a rehearsal. Nothing reactivates an account, so the next run uses
+  `legacy-migration-2`, then `-3`. The last-Admin rule applies: when the instance has no other active administrator (the
+  snapshot had none, or none was migrated) the account stays active and the report says so; deactivate it once another
+  administrator exists.
+- **Idempotent** by natural keys: an organisation by its type and abbreviation, a service by its slug, an indicator and a KPI
+  set by name, a user by the OIDC identity, a membership by user and provider, a measurement by service, KPI and month
+  (`upsertBatch`). What exists and matches is kept; what differs is updated (organisations, services) or **kept as it is and
+  reported** (KPIs, sets, a service's set): they are edited after the first run, and a repeated run must not undo it. A
+  membership that was rejected or ended after the first run is never reopened. Rows of a set and extras of a service that are
+  missing are added. A second run over the same snapshot reports "kept" for everything; a run stopped halfway is finished by
+  running it again.
 - A record the services refuse is reported and the run goes on; a refusal of the account itself stops it.
+- **Mail.** The membership service queues its mails and inbox items as for any request (a request mails the managers and the
+  administrators, a decision mails the user). The tool starts no worker, so they stay queued until the instance's worker
+  runs. Keep the mail transport at `none` (Settings) until the announcement, or the users get "membership approved" before it.
+
+**The subjects file** (`--subjects <file>`, decision 12): the legacy API does not return the OIDC subject of a user (the
+legacy `USER.id`), which is what lets a person keep their account. Produce it once from where it lives (a Neo4j query,
+`MATCH (u:USER) RETURN u.id, u.username`, or the user list of Keycloak) as a text file, one `subject<TAB>username` per
+line (a comma also separates; empty lines and lines starting with `#` are ignored), outside the repository. It is matched
+to the legacy `user_name` without case. A user without a subject (or with two) is reported and not migrated, with their
+memberships. The mapping's `oidcProvider` is the id of the provider under "Sign-in providers" in the new instance; with
+exactly one configured it is not needed.
+
+**Measurements** (plan §3): one value per service, KPI and month.
+
+- A point is in the month of its instant (UTC); the new application stores the last day of that month. Several points of
+  one KPI in one month: the latest instant wins, for the same instant the later point of the file; the others are dropped
+  (reported).
+- A point before 1900, in a month after the current one, or with a date that does not parse is dropped (reported).
+- **Decision 13:** the legacy API leaves out every value of 0, so a month missing between a KPI's first and last point of a
+  service is written as `0` (reported per service and KPI). `"fillMissingMonths": false` in the mapping leaves them empty.
+  Nothing is written before the first or after the last point.
+- Batches of at most 120 distinct months (and 25 000 rows) per service; each batch is checked with `dryRun` first, the rows
+  the service refuses are reported and left out, and the rest is written with `source: legacy-migration`.
+- A value of a service or a KPI that is not migrated is dropped (reported). In the counts, `measurement` counts **values**:
+  read = the points of the snapshot, created = inserted (zeros filled included), kept = unchanged, changed = updated,
+  merged = points that shared a month, dropped = dropped points, refused values and values of services not migrated.
+
+### `users <snapshot> --mapping <file> --subjects <file> --out <file>`
+
+Writes the users the target holds from this snapshot, `username<TAB>address` per line, for the mail that announces the move
+(sign in as before; create a new token, since the legacy API cannot say who holds a key). A user is listed only when the
+target has an account with their identity, so nobody is mailed about a login that cannot work. The file holds personal
+data: mode 0600, outside the repository, never over an existing file. No address is printed.
 
 ### The mapping
 
@@ -92,12 +151,30 @@ and licence. Services stay private (decision 8).
   "stages": { "<legacy spelling>": "PROD" },
   "missingStage": "PROD",
   "licences": { "<legacy spelling>": "MIT" },
+  "oidcProvider": "ls-login",
+  "indicators": {
+    "<legacy KPI name>": {
+      "thematic": "Usage",
+      "valueType": "integer",
+      "unit": "key",
+      "drop": false
+    }
+  },
+  "kpiSets": { "<legacy category>": { "rimoCategory": "key", "drop": false } },
+  "necessities": { "<legacy spelling>": "mandatory" },
+  "missingNecessity": "mandatory",
+  "fillMissingMonths": true,
+  "users": {
+    "<legacy username>": { "username": "new-name", "email": "other@example.org", "drop": false }
+  },
   "open": ["what plan found to decide"]
 }
 ```
 
 A `null` abbreviation or stage is a gap: the record is reported and not migrated. A `null` licence leaves the licence
 empty. A slug that breaks the rule is derived from the abbreviation (decision 7) unless the mapping gives one.
+**A `null` or missing `thematic` of a KPI that a category, a service or a measurement mentions stops a run that writes**
+(the indicator cannot be created, and its values would be lost): the dry run reports it, `run --yes` refuses.
 
 **The legacy workaround for consortia** (decision 15): the legacy application made a consortium a provider of one
 service named like it. `"type": "consortium"` on a provider migrates it as a consortium; a consortium the API gives by
@@ -109,10 +186,12 @@ with a line in `open` to check.
 ### The report
 
 `report.json` (for the tool) and `report.md` (for people) in a new or empty directory outside the repository, mode
-0600: the snapshot and the mapping it read, the account, the target database and whether it was empty, the counts per
-kind (read, created, kept, changed, merged, dropped), and one line per record that was dropped, updated, or migrated with a value
-a rule changed, with the rule that decided it (`provider.abbreviation-invalid`, `service.two-providers`,
-`service.slug-derived`, `service.stage.missing-mapped`, `service.licence.not-spdx`, `service.refused`, …).
+0600: the snapshot and the mapping it read, the account (and what became of it at the end), the target database and
+whether it was empty, notes for the operator, the counts per kind (read, created, kept, changed, merged, dropped), and one
+line per record that was dropped, updated, or migrated with a value a rule changed, with the rule that decided it
+(`provider.abbreviation-invalid`, `service.two-providers`, `indicator.thematic-open`, `user.email-duplicate`,
+`measurement.gap-filled`, `service-kpis.kpi-added-optional`, `service.refused`, …). It holds names and addresses, so it is
+sensitive; a key value never appears in it.
 
 ## The snapshot
 
@@ -138,13 +217,13 @@ cutover.
 ## What the legacy API does not give
 
 - **Values of 0.** The measurements route leaves out every value of 0 (`if record[label]`), and the S3 backups were made
-  through it, so a 0 is a missing month in both. `discover` counts these months; what sprint 2 writes for them is the
-  plan's decision 13.
+  through it, so a 0 is a missing month in both. The tool writes them back as 0 between a KPI's first and last point
+  (decision 13).
 - **Services without a provider or a category.** `/api/v1/services` lists only services that have both.
 - **Consortium abbreviations.** The API gives the consortium's name; the mapping gives the abbreviation.
-- **The OIDC subjects of users and who holds an API key** (sprint 2; the plan's decisions 12 and 5).
+- **The OIDC subjects of users:** the subjects file (decision 12). **Who holds an API key:** no key is migrated
+  (decision 5); every user is told to create a scoped token.
 
 ## Not yet
 
-`run` migrates the registry only. Sprint 2 of M13 adds the KPI framework, measurements, users, roles and memberships; sprint 3 adds `compare` and the
-runbook of the cutover.
+Sprint 3 of M13 adds `compare` (every migrated value against the snapshot) and the runbook of the cutover.
