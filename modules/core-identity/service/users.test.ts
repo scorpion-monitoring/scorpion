@@ -339,6 +339,32 @@ describe('findByUsername', () => {
   });
 });
 
+describe('findByIdentityAsSystem', () => {
+  it('finds the user of an identity at a provider, and nobody for another provider, another subject or odd input', async () => {
+    const { identity: id } = await identity.start();
+    const created = await id.users.createUser({ username: 'alice', auth: oidc('sub-1') });
+    expect(await id.users.findByIdentityAsSystem('lifescience-aai', 'sub-1')).toEqual(created);
+    for (const [provider, subject] of [
+      ['other-idp', 'sub-1'],
+      ['lifescience-aai', 'sub-2'],
+      ['lifescience-aai', "' or 1=1 --"],
+      ['lifescience-aai', 'SUB-1'],
+      ['local', created.id],
+    ] as const) {
+      expect(await id.users.findByIdentityAsSystem(provider, subject)).toBeUndefined();
+    }
+  });
+
+  it('finds a soft-deleted user and says so', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const gone = await makeUser(kernel.pool, { username: 'gone', deleted: true });
+    await makeAuthMethod(kernel.pool, gone, { provider: 'lifescience-aai', subject: 'sub-9' });
+    expect(
+      (await id.users.findByIdentityAsSystem('lifescience-aai', 'sub-9'))?.deletedAt,
+    ).toBeInstanceOf(Date);
+  });
+});
+
 describe('findByEmail', () => {
   it('finds a user by address in any letter case', async () => {
     const { identity: id } = await identity.start();

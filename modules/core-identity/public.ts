@@ -40,6 +40,12 @@ export interface UserService {
   findByIds(ids: readonly string[]): Promise<Map<string, User>>;
   /** Case-insensitive. `undefined` when no user has this address. */
   findByEmail(email: string): Promise<User | undefined>;
+  /**
+   * The user who signs in with this identity (`provider` is the id of an OIDC provider, `subject` the user's id there), or
+   * `undefined`. A trusted read (ADR-0015): it checks no permission and no route calls it; the migration tool finds a
+   * migrated user by it. Soft-deleted users are found.
+   */
+  findByIdentityAsSystem(provider: string, subject: string): Promise<User | undefined>;
 }
 
 export interface IdentityService {
@@ -52,6 +58,12 @@ export interface IdentityService {
    * Call it in the service, before the work, for a change that ASVS 7.5.1 protects.
    */
   requireRecentAuth(actor: Actor, maxAgeSeconds?: number): Promise<void>;
+  /**
+   * Deactivates an active account with no human caller: **no permission is checked** and no route calls it (ADR-0015). For the
+   * migration tool, which ends the life of its own account; the last-Admin rule still applies (409), so an instance never loses
+   * its last administrator this way. The audit trail shows the system.
+   */
+  deactivateAsSystem(userId: string): Promise<void>;
 }
 
 export type { CreateUserInput };

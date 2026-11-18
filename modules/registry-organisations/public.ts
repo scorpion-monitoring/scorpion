@@ -70,6 +70,11 @@ export type OrganisationsPublic = Pick<
 > &
   Pick<
     MembershipsService,
+    // The migration tool asks to join as the user and decides as its account (ADR-0052); both check the caller's
+    // permission as a request does, and `listOwn` tells it the state of a row it wrote before.
+    | 'request'
+    | 'decide'
+    | 'listOwn'
     | 'isApprovedMemberAsSystem'
     | 'listApprovedOrganisationIdsAsSystem'
     | 'countApprovedMembersAsSystem'

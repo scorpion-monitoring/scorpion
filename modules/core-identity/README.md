@@ -531,6 +531,14 @@ sessions, the provider's session, recent authentication). In short:
 - `findByIds(ids)`: a `Map` of the users found, in one query per 1000 ids; unknown and malformed ids are left out, a repeated id is read once, soft-deleted users are found (M6: lists and fan-outs that would call `findById` per person).
 - `findByUsername(name)` and `findByEmail(address)`: case-insensitive, `undefined` when there is no match,
   soft-deleted users included (the caller refuses their login).
+- `findByIdentityAsSystem(provider, subject)`: the user who signs in with that identity at an OIDC provider, or
+  `undefined`; case-sensitive on the subject, soft-deleted users included. A trusted read (ADR-0015, no permission, no
+  route); the migration tool finds a migrated user by it (M13, ADR-0052).
+
+`IdentityService.deactivateAsSystem(userId)` closes an active account with no human caller: the same transaction as
+`POST /users/{id}/deactivate` (sessions end with the status, one event), but **no permission is checked**, no route calls
+it, and the event names no user as the cause, so the audit trail shows the system. The last-Admin rule still applies
+(409). The migration tool ends the life of its own account with it (M13, ADR-0052).
 
 The register, login, session and approval services are internal to the module; the routes call them through
 `r.service()`. Other modules read users and ask `core.authz` about permissions.

@@ -277,6 +277,10 @@ logo hash; the membership reads answer from ids and name nobody. M7's `service.m
 | `listApprovedManagerIdsAsSystem(organisationId)`   | the user ids of the approved managers, by id (M7: the publication notice)                                                                 |
 | `listApprovedMemberIdsAsSystem(organisationId)`    | the user ids of the approved members, managers included, by id (M10: the reporting reminder of `kpi.ingestion`)                           |
 
+`OrganisationsPublic` also has the **writers**, which are not trusted: `create` and `update` (sprint 1 of M13), and `request`, `decide`
+and `listOwn` of the memberships (sprint 2 of M13). They check the caller's permission as a request does. The migration tool
+(ADR-0052) asks to join as the migrated user and decides as its administrator account; `listOwn` tells it the state of a row it wrote before.
+
 **Who writes which field (Decision 14).** `service/field-rules.ts` is the one table, for both editor groups: `type`,
 `abbreviation` and `name` need `admin` access (`…organisation.manage`, an Admin); `description`, `website`, `sameAs`, `rorId`, the
 contact point and the logo need `edit` (`…organisation.edit` on that organisation: an Admin, or an approved manager of it). One
