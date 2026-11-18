@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../node_modules/.cache/tsc/migrate-legacy"
+  },
+  "include": ["*.ts", "src", "test"],
+  "references": [
+    { "path": "../../apps/server" },
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/integrations" },
+    { "path": "../../packages/testing" },
+    { "path": "../../modules/core-authz" },
+    { "path": "../../modules/core-identity" },
+    { "path": "../../modules/core-settings" },
+    { "path": "../../modules/registry-organisations" },
+    { "path": "../../modules/registry-services" }
+  ]
+}

@@ -77,6 +77,9 @@
       "path": "./tools/eslint-plugin"
     },
     {
+      "path": "./tools/migrate-legacy"
+    },
+    {
       "path": "./tsconfig.config.json"
     }
   ]

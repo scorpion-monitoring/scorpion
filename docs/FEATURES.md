@@ -17,6 +17,8 @@ It was compiled from the code-review-graph (11 code communities, 27 execution fl
 
 ## 1. Domain model
 
+> **Note (M13, 2026-11-18):** this section describes the PostgreSQL application this rebuild started from. The legacy application **in use**, and the source of the data migration, is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxDB 2.7, Keycloak); see the [M13 sprint plan](m13-sprint-plan.md) §0.
+
 ### 1.1 Entities
 
 | Entity | Key fields | Notes |

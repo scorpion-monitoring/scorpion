@@ -30,6 +30,8 @@ export {
   MAX_NAME_LENGTH,
   MAX_SAME_AS,
   MAX_URL_LENGTH,
+  MAX_ABBREVIATION_LENGTH,
+  parseAbbreviation,
   parseContactEmail,
   parseContactType,
   parseDescription,
@@ -44,15 +46,21 @@ export { serializeJsonLd, type SchemaOrgProfile } from './service/schema-org.ts'
 export { getProviderV1Route, listProvidersV1Route } from './routes-v1.ts';
 export type {
   OrganisationRecord,
+  OrganisationView,
   PublicOrganisationRecord,
   TypeView,
 } from './service/organisations.ts';
+export type { CreateOrganisationInput, UpdateOrganisationInput } from './service/input.ts';
 
 import type { MembershipsService } from './service/memberships.ts';
 import type { OrganisationsService } from './service/organisations.ts';
 
+// `create` and `update` check the caller's permission like a request does: the migration tool writes through them as its
+// account (ADR-0052), so every legacy record passes the same rules as one typed into the form.
 export type OrganisationsPublic = Pick<
   OrganisationsService,
+  | 'create'
+  | 'update'
   | 'findByIdsAsSystem'
   | 'findByAbbreviationAsSystem'
   | 'existsAsSystem'

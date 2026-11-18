@@ -335,19 +335,22 @@ Additions agreed in [m11-sprint-plan.md](m11-sprint-plan.md) §13 (six sprints; 
 - A per-service monthly table for the selected year using the evaluation configuration, with the states no-data, no-evaluation and error.
 - Monthly and yearly aggregates, **computed live** per request (one series read per service). The stored read model refreshed on `measurement.recorded` and nightly was planned as sprint 3 and **dropped on 2026-11-05** after the sprint-2 measurement (ADR-0048, decision 22 of the M12 plan); the module has no tables and no job.
 - Stage labels come only from the vocabulary, so they match on every screen (defect 9).
-- **The page** `/services/evaluate` (sprint 4, built): a consortium picker, a year select, the switch for unpublished services, the tiles (total, four licence lines, one line per stage term) and the paged yearly table, in English and German, accessible by keyboard and screen reader, axe-clean in both themes; the nav entry "Impact" for holders of `kpi.impact.read`. **Status:** sprints 1, 2 and 4 are built (sprint 3 dropped); the release `0.15.0` waits for the maintainer. Additions: the field `shown` on the table row, an optional `display` on the `kpi.valueType` entries (the duration shows `HH:MM:SS`), German labels for the `aggregate` terms of a new instance.
+- **The page** `/services/evaluate` (sprint 4, built): a consortium picker, a year select, the switch for unpublished services, the tiles (total, four licence lines, one line per stage term) and the paged yearly table, in English and German, accessible by keyboard and screen reader, axe-clean in both themes; the nav entry "Impact" for holders of `kpi.impact.read`. **Status:** sprints 1, 2 and 4 are built (sprint 3 dropped); released as `0.15.0` on 2026-11-17. Additions: the field `shown` on the table row, an optional `display` on the `kpi.valueType` entries (the duration shows `HH:MM:SS`), German labels for the `aggregate` terms of a new instance.
 
 ### M13: Legacy data migration (M)
 
-- `tools/migrate-legacy`: reads the old database (read-only connection) and writes **through the new domain services**.
-- Transformations: measurement dedup (latest insert wins), repaired consortium links, data-URL images to blobs, plain-text secrets to the secrets store, stable ids for maturity rows, users and OIDC identities preserved, provider memberships mapped to states.
-- PATs cannot be converted: affected users are listed and emailed to create new tokens.
+The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxDB 2.7, Keycloak), not the PostgreSQL application of `FEATURES.md` §1; the scope below is the one of the approved [M13 sprint plan](m13-sprint-plan.md) (§0, §12; ADR-0052).
+
+- `tools/migrate-legacy`: reads a **snapshot fetched from the legacy REST API** (`fetch`, GET only, an administrator's key from the environment; a manifest with a SHA-256 per file) and writes **through the new domain services** as one migration account. No legacy database connection, no Neo4j or InfluxDB client.
+- Transformations: measurements one per service, KPI and month (the latest point in the month; a month under two provider names); consortium links checked against the snapshot and reported; users with their OIDC identity (the same issuer); provider memberships mapped to states (`approved` or `requested`). Not applicable to the application in use: data-URL images, plain-text secrets, maturity rows.
+- API keys are not converted (the legacy API cannot list their holders): every migrated user is listed and emailed to create a new token.
 - `--dry-run` produces a report of every row that is dropped or changed, with reasons. The run is idempotent and can be repeated.
 - Rehearsal on a copy of production data on staging.
 
 ### Gate 3
 
 - The migration dry run on a production copy reports no unexplained drops.
+- `migrate-legacy compare` checks every migrated value against the snapshot, service by service and month by month, before the check by hand below.
 - A KPI profile (added by M9, ADR-0030) runs on staging with migrated data. The dashboard numbers match the old app for three sample services, checked by hand.
 
 ---
@@ -391,7 +394,7 @@ Additions agreed in [m11-sprint-plan.md](m11-sprint-plan.md) §13 (six sprints; 
 
 ### Gate 4: full profile live
 
-- Production cut-over: final migration run, DNS/proxy switch, old app set to read-only for 30 days, then retired.
+- Production cut-over: final migration run (at the cutover the maintainer chooses: M13 plan, decision 11), DNS/proxy switch, old app set to read-only for 30 days, then retired.
 - All tests from FEATURES §4.11 and all defect regression tests pass on the release tag.
 - One real backup restore rehearsed successfully.
 - The ASVS chapter assessments are re-confirmed against the `v1.0.0` release commit (`assessed_commit` updated, second pass recorded).

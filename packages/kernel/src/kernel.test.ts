@@ -431,6 +431,34 @@ describe('module commands', () => {
     expect((await kernel.pool.query(`select 1 from kernel_outbox`)).rows).toEqual([]);
   });
 
+  it('buildServices() refuses pending migrations, then builds the services with no routes, no system.ready and no write', async () => {
+    const ready = vi.fn();
+    const seen: unknown[] = [];
+    const manifest = defineModule<{ greet: () => string }>({
+      id: 'tool',
+      version: '1.0.0',
+      services: () => ({ greet: () => 'hello' }),
+      routes: () => seen.push('routes registered'),
+      events: { on: { 'system.ready': ready } },
+    });
+    const kernel = await inline(manifest);
+    // A fresh database: the kernel's own migrations are pending, and nothing is migrated for it.
+    await expect(kernel.buildServices()).rejects.toThrow(/Migrations are pending/);
+    const { rows } = await kernel.pool.query<{ t: string | null }>(
+      `select to_regclass('kernel_outbox') as t`,
+    );
+    expect(rows[0]?.t).toBeNull();
+    expect(kernel.services.size).toBe(0);
+
+    await kernel.migrate();
+    await kernel.buildServices();
+    expect((kernel.services.get('tool') as { greet(): string }).greet()).toBe('hello');
+    expect(ready).not.toHaveBeenCalled();
+    expect(seen).toEqual([]);
+    expect(kernel.routes).toEqual([]);
+    expect((await kernel.pool.query(`select 1 from kernel_outbox`)).rows).toEqual([]);
+  });
+
   it('treats a command that returns nothing as exit code 0, and refuses an unknown name', async () => {
     const kernel = await inline(
       defineModule({
