@@ -103,6 +103,38 @@ export const authMethod = pgTable(
   ],
 );
 
+/**
+ * An account that trusted code created without a way to sign in, waiting for its owner (ADR 0053): the legacy migration
+ * creates one per legacy user. The first sign-in at `provider` with an unknown subject, a verified address equal to the
+ * account's and a `preferred_username` equal to `username` (case-insensitive) before `expires_at` adds that identity
+ * to the account and signs in. The row is deleted when the account is claimed; one per account.
+ */
+export const accountClaim = pgTable(
+  'identity_account_claim',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The id of the configured provider the owner signs in with. */
+    provider: text().notNull(),
+    /** The `preferred_username` the provider must send, lower-case (the legacy username). */
+    username: text().notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+  },
+  (table) => [
+    index('identity_account_claim_expires_idx').on(table.expiresAt),
+    check(
+      'identity_account_claim_provider_format',
+      sql`${table.provider} ~ '^[a-z][a-z0-9-]{0,62}$' and ${table.provider} <> 'local'`,
+    ),
+    check(
+      'identity_account_claim_username_lower',
+      sql`${table.username} = lower(${table.username})`,
+    ),
+  ],
+);
+
 /** A browser session. The cookie holds the secret; only its hash is here, so a leaked table is no login. */
 export const session = pgTable(
   'identity_session',

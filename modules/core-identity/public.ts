@@ -1,6 +1,6 @@
 // The only file other modules may import. It holds the service interface and nothing else.
 import type { Actor } from '@scorpion/contracts';
-import type { CreateUserInput } from './validation.ts';
+import type { CreateClaimableUserInput, CreateUserInput } from './validation.ts';
 
 export type UserStatus = 'pending' | 'active' | 'rejected' | 'deactivated';
 
@@ -41,11 +41,20 @@ export interface UserService {
   /** Case-insensitive. `undefined` when no user has this address. */
   findByEmail(email: string): Promise<User | undefined>;
   /**
-   * The user who signs in with this identity (`provider` is the id of an OIDC provider, `subject` the user's id there), or
-   * `undefined`. A trusted read (ADR-0015): it checks no permission and no route calls it; the migration tool finds a
-   * migrated user by it. Soft-deleted users are found.
+   * Creates an active account with no way to sign in and the role nobody (the caller gives one), waiting for its owner
+   * (ADR-0053): their first sign-in at `claim.provider` with an unknown subject, a verified address equal to `email` and
+   * a `preferred_username` equal to `claim.username` (without case) before `claim.expiresAt` adds that identity and signs
+   * them in. A trusted write (ADR-0015): no permission, no route; the legacy migration calls it. `Invalid` (422) for bad
+   * input, `Conflict` (409) when the username or the address is taken by any account.
    */
-  findByIdentityAsSystem(provider: string, subject: string): Promise<User | undefined>;
+  createClaimableAsSystem(input: CreateClaimableUserInput): Promise<User>;
+  /**
+   * The open claim of an account (ADR-0053), or `undefined` once it was claimed or for an account that never had one. An
+   * expired claim is returned with its `expiresAt`. A trusted read: the migration tool reports by it.
+   */
+  claimOfAsSystem(
+    userId: string,
+  ): Promise<{ provider: string; username: string; expiresAt: Date } | undefined>;
 }
 
 export interface IdentityService {
@@ -66,7 +75,7 @@ export interface IdentityService {
   deactivateAsSystem(userId: string): Promise<void>;
 }
 
-export type { CreateUserInput };
+export type { CreateClaimableUserInput, CreateUserInput };
 
 // Lets `ctx.deps['core.identity']` be typed in modules that depend on this one.
 declare module '@scorpion/kernel' {

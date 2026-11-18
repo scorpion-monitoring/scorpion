@@ -63,6 +63,23 @@ export const createUserInput = z
 export type CreateUserInput = z.input<typeof createUserInput>;
 
 /**
+ * An account with no way to sign in yet, which its owner claims at their first sign-in (ADR 0053). Trusted callers only
+ * (the legacy migration). `claim.username` is the `preferred_username` the provider must send; it is compared without
+ * case and need not follow the username rule.
+ */
+export const createClaimableUserInput = z.strictObject({
+  username,
+  email,
+  claim: z.strictObject({
+    provider: externalAuth.shape.provider,
+    username: z.string().trim().min(1).max(255),
+    expiresAt: z.date(),
+  }),
+});
+
+export type CreateClaimableUserInput = z.input<typeof createClaimableUserInput>;
+
+/**
  * The language a request asks for its mails in: a tag like `de` or `pt-BR`. Only the form is checked
  * here (422); whether the language is shipped is core.notifications' decision, which falls back to the
  * instance default, so a browser that sends `fr` still registers.
