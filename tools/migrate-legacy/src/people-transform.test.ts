@@ -1,9 +1,8 @@
-// The rules for users, roles and memberships (plan §3) as tables: usernames, addresses, subjects, roles and memberships.
+// The rules for users, roles and memberships (plan §3, ADR-0053) as tables: usernames, addresses, roles and memberships.
 import { describe, expect, it } from 'vitest';
 import { emptyMapping, type Mapping } from './mapping.ts';
 import { MAX_PENDING, transformPeople } from './people-transform.ts';
 import { fitUsername, resolveTerm, uniqueUsername } from './rules.ts';
-import { parseSubjects, SubjectsError } from './subjects.ts';
 
 describe('fitUsername', () => {
   it.each([
@@ -57,23 +56,6 @@ describe('resolveTerm', () => {
   });
 });
 
-describe('parseSubjects', () => {
-  it('reads tab or comma separated pairs, ignores comments and blank lines, and finds ambiguous usernames', () => {
-    const subjects = parseSubjects(
-      '# header\n\nsub-1\tAlice\nsub-2,bob\nsub-3\tbob\nsub-1\tAlice\n',
-    );
-    expect([...subjects.byUsername]).toEqual([
-      ['alice', 'sub-1'],
-      ['bob', 'sub-2'],
-    ]);
-    expect([...subjects.ambiguous]).toEqual(['bob']);
-    expect(subjects.lines).toBe(4);
-  });
-  it.each(['one-column', 'a\tb\tc', '\tname', `${'s'.repeat(256)}\tname`])('refuses %j', (line) => {
-    expect(() => parseSubjects(line)).toThrow(SubjectsError);
-  });
-});
-
 const user = (
   user_name: string,
   email: string,
@@ -84,8 +66,6 @@ const user = (
   is_admin: extra.is_admin ?? false,
   providers: extra.providers ?? [],
 });
-const subjects = (...pairs: [string, string][]) =>
-  parseSubjects(pairs.map(([s, u]) => `${s}\t${u}`).join('\n'));
 const registry = {
   providers: [
     { kind: 'provider' as const, legacy: 'BioNet', abbreviation: 'BioNet', name: 'BioNet' },
@@ -93,7 +73,6 @@ const registry = {
 };
 const plan = (
   users: ReturnType<typeof user>[],
-  known: ReturnType<typeof subjects>,
   options: {
     mapping?: Partial<Mapping>;
     provider?: string | null;
@@ -102,7 +81,6 @@ const plan = (
 ) =>
   transformPeople(
     { users, membershipRequests: options.requests ?? [], providers: [] },
-    known,
     { ...emptyMapping(), ...options.mapping },
     options.provider === undefined ? 'ls-login' : options.provider,
     registry,
@@ -110,40 +88,39 @@ const plan = (
 const rules = (p: ReturnType<typeof plan>) => p.findings.map((f) => `${f.legacy}:${f.rule}`).sort();
 
 describe('transformPeople', () => {
-  it('migrates a user with the identity, the fitted username and the role', () => {
-    const p = plan(
-      [
-        user('Alice.Smith', 'alice@example.org', { is_admin: true }),
-        user('bob', 'bob@example.org'),
-      ],
-      subjects(['s-a', 'alice.smith'], ['s-b', 'bob']),
-    );
+  it('migrates a user as a claimable account with the fitted username, the role user, and reports a legacy admin', () => {
+    const p = plan([
+      user('Alice.Smith', 'alice@example.org', { is_admin: true }),
+      user('bob', 'bob@example.org'),
+    ]);
     expect(p.users).toEqual([
       {
         legacy: 'Alice.Smith',
         username: 'alice-smith',
         email: 'alice@example.org',
         provider: 'ls-login',
-        subject: 's-a',
-        role: 'admin',
+        claimUsername: 'Alice.Smith',
+        role: 'user',
+        legacyAdmin: true,
       },
       {
         legacy: 'bob',
         username: 'bob',
         email: 'bob@example.org',
         provider: 'ls-login',
-        subject: 's-b',
+        claimUsername: 'bob',
         role: 'user',
+        legacyAdmin: false,
       },
     ]);
-    expect(rules(p)).toEqual(['Alice.Smith:user.admin', 'Alice.Smith:user.username-fitted']);
+    expect(rules(p)).toEqual([
+      'Alice.Smith:user.admin-by-hand',
+      'Alice.Smith:user.username-fitted',
+    ]);
   });
 
   it('gives a username that two legacy users end up with a suffix, in the order of the legacy names', () => {
-    const p = plan(
-      [user('bob.x', 'b1@example.org'), user('bob-x', 'b2@example.org')],
-      subjects(['s-1', 'bob.x'], ['s-2', 'bob-x']),
-    );
+    const p = plan([user('bob.x', 'b1@example.org'), user('bob-x', 'b2@example.org')]);
     // "bob-x" sorts before "bob.x" in code-unit order, so it keeps the name.
     expect(p.users.map((u) => [u.legacy, u.username])).toEqual([
       ['bob-x', 'bob-x'],
@@ -158,31 +135,16 @@ describe('transformPeople', () => {
       ['ann:user.email-duplicate', 'ben:user.email-duplicate'],
     ],
     ['an address that is not one', [user('ann', 'not an address')], ['ann:user.email-invalid']],
-    [
-      'no subject',
-      [user('ann', 'a@example.org'), user('nosub', 'n@example.org')],
-      ['nosub:user.subject-missing'],
-    ],
   ])('%s', (_name, users, expected) => {
-    const p = plan(users, subjects(['s-a', 'ann'], ['s-b', 'ben']));
+    const p = plan(users);
     expect(rules(p).filter((r) => !r.includes('username-fitted'))).toEqual(expected);
   });
 
-  it('refuses a subject two usernames share, and a username the file gives two subjects for', () => {
-    const shared = plan(
-      [user('ann', 'a@example.org'), user('ben', 'b@example.org')],
-      subjects(['s', 'ann'], ['s', 'ben']),
-    );
-    expect(rules(shared)).toEqual(['ben:user.subject-duplicate']);
-    const ambiguous = plan([user('ann', 'a@example.org')], parseSubjects('s1\tann\ns2\tann'));
-    expect(rules(ambiguous)).toEqual(['ann:user.subject-ambiguous']);
-  });
-
   it('migrates no one without a provider id, and says where to give one', () => {
-    const p = plan([user('ann', 'a@example.org')], subjects(['s', 'ann']), { provider: null });
+    const p = plan([user('ann', 'a@example.org')], { provider: null });
     expect(p.users).toEqual([]);
     expect(p.findings[0]).toMatchObject({ rule: 'user.provider-open', gap: 'oidcProvider' });
-    const bad = plan([user('ann', 'a@example.org')], subjects(['s', 'ann']), { provider: 'Local' });
+    const bad = plan([user('ann', 'a@example.org')], { provider: 'Local' });
     expect(bad.findings[0]).toMatchObject({ rule: 'user.provider-open' });
   });
 
@@ -193,7 +155,6 @@ describe('transformPeople', () => {
         user('ben', 'dup@example.org'),
         user('cat', 'c@example.org'),
       ],
-      subjects(['s-a', 'ann'], ['s-b', 'ben'], ['s-c', 'cat']),
       {
         mapping: {
           users: {
@@ -214,11 +175,9 @@ describe('transformPeople', () => {
   describe('memberships', () => {
     const base = [user('ann', 'a@example.org', { providers: ['BioNet', 'Gone'] })];
     it('is approved for the user list and requested for a pending request, approved ones first', () => {
-      const p = plan(
-        [...base, user('ben', 'b@example.org')],
-        subjects(['s-a', 'ann'], ['s-b', 'ben']),
-        { requests: [{ id: 'x', mail: 'b@example.org', username: 'ben', provider: 'BioNet' }] },
-      );
+      const p = plan([...base, user('ben', 'b@example.org')], {
+        requests: [{ id: 'x', mail: 'b@example.org', username: 'ben', provider: 'BioNet' }],
+      });
       expect(p.memberships.map((m) => [m.legacy, m.provider, m.state])).toEqual([
         ['ann @ BioNet', 'BioNet', 'approved'],
         ['ben @ BioNet', 'BioNet', 'requested'],
@@ -229,9 +188,8 @@ describe('transformPeople', () => {
       const p = plan(
         [
           user('ann', 'a@example.org', { providers: ['BioNet'] }),
-          user('lost', 'l@example.org', { providers: ['BioNet'] }),
+          user('lost', 'not an address', { providers: ['BioNet'] }),
         ],
-        subjects(['s-a', 'ann']),
         { requests: [{ id: 'x', mail: 'a@example.org', username: 'ann', provider: 'BioNet' }] },
       );
       expect(p.memberships.map((m) => m.legacy)).toEqual(['ann @ BioNet']);
@@ -246,7 +204,6 @@ describe('transformPeople', () => {
       }));
       const p = transformPeople(
         { users: [user('ann', 'a@example.org')], membershipRequests: requests, providers: [] },
-        subjects(['s-a', 'ann']),
         emptyMapping(),
         'ls-login',
         {

@@ -6,13 +6,12 @@ import type { CliDeps } from './cli.ts';
 import { emptyPrivateDirectory, refuseInsideRepository, RefusedPath } from './files.ts';
 import { loadKpis } from './load-kpis.ts';
 import { loadMeasurements } from './load-measurements.ts';
-import { loadMemberships, loadUsers } from './load-people.ts';
+import { isMigratedAccount, loadMemberships, loadUsers } from './load-people.ts';
 import { loadRegistry, RunStopped, type RecordResult } from './load.ts';
 import { emptyMapping, readMapping, type Mapping } from './mapping.ts';
 import { transformMeasurements, type MeasurementPlan } from './measurements.ts';
 import { transformKpis, type KpiFacts, type KpiPlan } from './kpi-transform.ts';
 import { transformPeople, type PeoplePlan } from './people-transform.ts';
-import { noSubjects, readSubjects, type Subjects } from './subjects.ts';
 import {
   THEMATIC_CATEGORY_VOCABULARY,
   UNIT_VOCABULARY,
@@ -79,7 +78,6 @@ export interface Plans {
 export function buildPlans(input: {
   snapshot: Snapshot;
   mapping: Mapping;
-  subjects: Subjects;
   facts: TargetFacts;
   kpiFacts: KpiFacts;
   /** The ids of the OIDC providers the target has configured. */
@@ -105,7 +103,7 @@ export function buildPlans(input: {
     mapping.oidcProvider ?? (input.providers.length === 1 ? input.providers[0]! : null);
   const people: PeoplePlan = input.skipUsers
     ? { read: { user: 0, membership: 0 }, users: [], memberships: [], findings: [] }
-    : transformPeople(snapshot, input.subjects, mapping, oidcProvider, registry);
+    : transformPeople(snapshot, mapping, oidcProvider, registry);
   const findings = [
     ...registry.findings,
     ...kpis.findings,
@@ -206,11 +204,6 @@ export function firstMapping(
       `oidcProvider: the target has ${providers.length === 0 ? 'no OIDC provider' : `${providers.length} OIDC providers`} configured; give the id of the one the migrated users sign in with (Settings, Sign-in providers)`,
     );
   }
-  if (snapshot.users.length > 0) {
-    open.add(
-      'users: pass --subjects <file> (subject and username, one per line) to run and users; a user without a subject is not migrated (decision 12)',
-    );
-  }
   mapping.open = [...open].sort();
   return mapping;
 }
@@ -229,7 +222,7 @@ export async function planCommand(args: string[], { env, io, now }: CliDeps): Pr
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
-    options: { out: { type: 'string' }, subjects: { type: 'string' } },
+    options: { out: { type: 'string' } },
     strict: true,
   });
   const [dir, ...extra] = positionals;
@@ -239,7 +232,6 @@ export async function planCommand(args: string[], { env, io, now }: CliDeps): Pr
   }
   const out = refuseInsideRepository(values.out, 'The mapping file');
   const snapshot = await readSnapshot(dir);
-  const subjects = values.subjects ? await readSubjects(values.subjects) : noSubjects();
   // Named first, so an operator sees which database a .env or the shell pointed to.
   const database = describeDatabase(env.DATABASE_URL ?? '');
   io.err(`Target database: ${database}`);
@@ -252,7 +244,6 @@ export async function planCommand(args: string[], { env, io, now }: CliDeps): Pr
     const plans = buildPlans({
       snapshot,
       mapping: suggested.mapping,
-      subjects,
       facts,
       kpiFacts,
       providers,
@@ -278,7 +269,6 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
     options: {
       mapping: { type: 'string' },
       report: { type: 'string' },
-      subjects: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       yes: { type: 'boolean', default: false },
       'keep-account': { type: 'boolean', default: false },
@@ -299,20 +289,19 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
   await emptyPrivateDirectory(reportDir, 'The report directory');
   const snapshot = await readSnapshot(dir);
   const mapping = await readMapping(values.mapping);
-  const subjects = values.subjects ? await readSubjects(values.subjects) : noSubjects();
 
   // Named first, so an operator sees which database a .env or the shell pointed to.
   const database = describeDatabase(env.DATABASE_URL ?? '');
   io.err(`Target database: ${database}`);
   const target = await openTarget(env);
   try {
+    const providers = await configuredProviders(target);
     const plans = buildPlans({
       snapshot,
       mapping,
-      subjects,
       facts: await factsOf(target),
       kpiFacts: await kpiFactsOf(target),
-      providers: await configuredProviders(target),
+      providers,
       now: clock(),
       skipUsers: values['skip-users'],
     });
@@ -324,7 +313,7 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
     if (!dryRun && !values.yes) {
       io.err(
         `This run writes to ${database}, which is ${state.empty ? 'empty' : `not empty (${state.notes.join('; ')})`}. ` +
-          'Records that exist are kept or updated by their abbreviation, slug and subject. Run it with --dry-run first; pass --yes to write.',
+          'Records that exist are kept or updated by their abbreviation, slug, name and address. Run it with --dry-run first; pass --yes to write.',
       );
       return 2;
     }
@@ -375,7 +364,18 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
       ? undefined
       : skipUsers
         ? { results: [], findings: [], users: new Map() }
-        : await stage(() => loadUsers(people, { ...target, db: target.kernel.db }, { dryRun }));
+        : await stage(() => {
+            const at = clock();
+            return loadUsers(
+              people,
+              { ...target, db: target.kernel.db },
+              {
+                dryRun,
+                now: at,
+                claimUntil: new Date(at.getTime() + mapping.claimDays * 86_400_000),
+              },
+            );
+          });
     const membershipLoad = !peopleLoad
       ? undefined
       : skipUsers
@@ -437,10 +437,8 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
     }
     if (skipUsers) {
       notes.push('--skip-users: no user, role or membership was migrated.');
-    } else if (snapshot.users.length > 0 && !values.subjects) {
-      notes.push(
-        'No --subjects file: no user was migrated (decision 12), and so no role and no membership.',
-      );
+    } else if (peopleLoad && 'claims' in peopleLoad) {
+      notes.push(...claimNotes(peopleLoad.claims, people, plans.oidcProvider, providers, dryRun));
     }
 
     const records = buildRecords(results, findings);
@@ -478,11 +476,42 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
   }
 }
 
+/** What the operator needs to know about the claims (ADR-0053) after the users stage. */
+export function claimNotes(
+  claims: { open: number; claimed: number; expired: number },
+  people: Pick<PeoplePlan, 'users'>,
+  provider: string | null,
+  configured: readonly string[],
+  dryRun: boolean,
+): string[] {
+  const notes: string[] = [];
+  const total = claims.open + claims.claimed + claims.expired;
+  if (total > 0) {
+    notes.push(
+      `${total} migrated account(s) ${dryRun ? 'would wait' : 'wait'} for their owner: ${claims.open} open, ${claims.claimed} claimed, ${claims.expired} expired. ` +
+        'An owner claims an account by signing in at the provider with the same verified address and the legacy username (ADR-0053).',
+    );
+  }
+  if (provider !== null && total > 0 && !configured.includes(provider)) {
+    notes.push(
+      `The provider "${provider}" is not configured in the target: no account can be claimed until it is (Settings, Sign-in providers).`,
+    );
+  }
+  const admins = people.users.filter((op) => op.legacyAdmin).length;
+  if (admins > 0) {
+    notes.push(
+      `${admins} legacy administrator(s) got the role user. Grant Admin by hand once they have signed in (the users list marks them).`,
+    );
+  }
+  return notes;
+}
+
 /**
- * `users <snapshot> --mapping <file> --subjects <file> --out <file>`: the users the target holds from this snapshot, with the
- * address each has there, one `username<TAB>address` per line, for the mail that announces the move. A user is listed only
- * when the target has an account with their identity, so a user that was refused is not mailed about a login that cannot work.
- * The file holds personal data: mode 0600, outside the repository, never over an existing one. No address is printed.
+ * `users <snapshot> --mapping <file> --out <file>`: the users the target holds from this snapshot, one
+ * `username<TAB>address<TAB>claim<TAB>legacy-admin` per line (claim: `open`, `claimed` or `expired`; legacy-admin: `yes` or
+ * `no`), for the mail that announces the move and for granting Admin by hand. A user is listed only when the target has
+ * the migrated account, so a user that was refused is not mailed about a sign-in that cannot work. The file holds personal
+ * data: mode 0600, outside the repository, never over an existing one. No address is printed.
  */
 export async function usersCommand(args: string[], { env, io, now }: CliDeps): Promise<number> {
   const { values, positionals } = parseArgs({
@@ -490,49 +519,50 @@ export async function usersCommand(args: string[], { env, io, now }: CliDeps): P
     allowPositionals: true,
     options: {
       mapping: { type: 'string' },
-      subjects: { type: 'string' },
       out: { type: 'string' },
     },
     strict: true,
   });
   const [dir, ...extra] = positionals;
-  if (!dir || !values.mapping || !values.subjects || !values.out || extra.length > 0) {
-    io.err(
-      'users needs one snapshot directory, --mapping <file>, --subjects <file> and --out <file>.',
-    );
+  if (!dir || !values.mapping || !values.out || extra.length > 0) {
+    io.err('users needs one snapshot directory, --mapping <file> and --out <file>.');
     return 2;
   }
   const out = refuseInsideRepository(values.out, 'The users file');
   const snapshot = await readSnapshot(dir);
   const mapping = await readMapping(values.mapping);
-  const subjects = await readSubjects(values.subjects);
   io.err(`Target database: ${describeDatabase(env.DATABASE_URL ?? '')}`);
   const target = await openTarget(env);
   try {
-    const providers = await configuredProviders(target);
+    const at = now?.() ?? new Date();
     const plans = buildPlans({
       snapshot,
       mapping,
-      subjects,
       facts: await factsOf(target),
       kpiFacts: await kpiFactsOf(target),
-      providers,
-      now: now?.() ?? new Date(),
+      providers: await configuredProviders(target),
+      now: at,
     });
-    const lines: string[] = [];
+    const lines = ['# username\taddress\tclaim\tlegacy-admin'];
+    const counts = { open: 0, claimed: 0, expired: 0, admins: 0 };
     let missing = 0;
     for (const op of plans.people.users) {
-      const found = await target.identity.users.findByIdentityAsSystem(op.provider, op.subject);
-      if (!found || found.email === null) {
+      const found = await target.identity.users.findByEmail(op.email);
+      const claim = found ? await target.identity.users.claimOfAsSystem(found.id) : undefined;
+      if (!found || !isMigratedAccount(found, claim, op) || found.email === null) {
         missing += 1;
         continue;
       }
-      lines.push(`${found.username}\t${found.email}`);
+      const state = !claim ? 'claimed' : claim.expiresAt <= at ? 'expired' : 'open';
+      counts[state] += 1;
+      if (op.legacyAdmin) counts.admins += 1;
+      lines.push(`${found.username}\t${found.email}\t${state}\t${op.legacyAdmin ? 'yes' : 'no'}`);
     }
-    await writeNew(out, `${lines.join('\n')}${lines.length > 0 ? '\n' : ''}`, 'users file');
+    await writeNew(out, `${lines.join('\n')}\n`, 'users file');
     const notMigrated = plans.people.read.user - plans.people.users.length;
     io.out(
-      `Users written to ${out}: ${lines.length} migrated user(s) with their address` +
+      `Users written to ${out}: ${lines.length - 1} migrated user(s) with their address ` +
+        `(${counts.open} open, ${counts.claimed} claimed, ${counts.expired} expired; ${counts.admins} legacy administrator(s))` +
         `${missing > 0 ? `; ${missing} planned user(s) are not in the target (run first)` : ''}` +
         `${notMigrated > 0 ? `; ${notMigrated} legacy user(s) are not migrated (see the report)` : ''}.`,
     );

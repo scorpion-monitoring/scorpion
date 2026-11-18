@@ -10,6 +10,7 @@ import { createKernel, createLogger, loadConfig } from '@scorpion/kernel';
 import { moduleIds, profileName, sources } from '@scorpion/server/src/generated/profile.ts';
 import {
   makeSecretsKey,
+  makeRoleAssignment,
   makeUser,
   startPostgres,
   tableCounts,
@@ -24,7 +25,6 @@ import { loadMeasurements } from '../src/load-measurements.ts';
 import { buildPlans } from '../src/commands.ts';
 import { loadRegistry } from '../src/load.ts';
 import { MAPPING_FORMAT } from '../src/mapping.ts';
-import { parseSubjects } from '../src/subjects.ts';
 import type { Report } from '../src/report.ts';
 import { readMapping } from '../src/mapping.ts';
 import { spdxIndex } from '../src/rules.ts';
@@ -38,7 +38,6 @@ let pg: StartedPostgres;
 let work: string;
 let snapshotDir: string;
 let mappingFile: string;
-let subjectsFile: string;
 let n = 0;
 
 const PROVIDER = 'ls-login';
@@ -127,17 +126,15 @@ const SNAPSHOT = {
     LeafDB: [{ kpi: 'Records', date: at(2025, 5), value: 11 }],
   },
 };
-const SUBJECTS = [
-  ['sub-alice', 'alice'],
-  ['sub-bob', 'Bob.Jones'],
-  ['sub-bob2', 'bob-jones'],
-  ['sub-carol', 'carol'],
-  ['sub-dave', 'dave'],
-  ['sub-erin', 'erin'],
-  ['sub-frank', 'frank'],
-  // gina has none
-  ['sub-hank', 'Hank'],
-  ['sub-ivy', 'ivy'],
+/** The legacy users the run migrates (by legacy username → address); carol and dave share one, frank has none. */
+const MIGRATED: [string, string][] = [
+  ['alice', 'alice@example.org'],
+  ['Bob.Jones', 'bob@example.org'],
+  ['bob-jones', 'bob2@example.org'],
+  ['erin', 'erin@example.org'],
+  ['gina', 'gina@example.org'],
+  ['Hank', 'hank@example.org'],
+  ['ivy', 'ivy@example.org'],
 ];
 const MAPPING = {
   format: MAPPING_FORMAT,
@@ -159,8 +156,6 @@ beforeAll(async () => {
   await writeSnapshot(snapshotDir, SNAPSHOT);
   mappingFile = join(work, 'mapping.json');
   await writeFile(mappingFile, JSON.stringify(MAPPING));
-  subjectsFile = join(work, 'subjects.tsv');
-  await writeFile(subjectsFile, SUBJECTS.map(([s, u]) => `${s}\t${u}`).join('\n'));
 }, 120_000);
 afterAll(async () => {
   await pg?.stop();
@@ -193,22 +188,12 @@ const readReport = async (dir: string) =>
 async function run(
   env: Record<string, string>,
   flags: string[] = [],
-  options: { mapping?: string; subjects?: string } = {},
+  options: { mapping?: string } = {},
 ) {
   const dir = reportDir();
   const c = cli(env);
   const code = await runCli(
-    [
-      'run',
-      snapshotDir,
-      '--mapping',
-      options.mapping ?? mappingFile,
-      '--report',
-      dir,
-      '--subjects',
-      options.subjects ?? subjectsFile,
-      ...flags,
-    ],
+    ['run', snapshotDir, '--mapping', options.mapping ?? mappingFile, '--report', dir, ...flags],
     c.deps,
   );
   return { code, dir, ...c };
@@ -230,21 +215,29 @@ async function inspect(env: Record<string, string>) {
   try {
     const { actor } = await migrationAccount(target, { create: false });
     if (!actor) throw new Error('the migration account is missing (run with --keep-account)');
-    const user = (subject: string) =>
-      target.identity.users.findByIdentityAsSystem(PROVIDER, subject);
+    const byLegacy = new Map(MIGRATED);
+    const user = (legacy: string) => target.identity.users.findByEmail(byLegacy.get(legacy)!);
     const users: Record<
       string,
-      { username: string; email: string | null; roles: string[]; status: string }
+      {
+        username: string;
+        email: string | null;
+        roles: string[];
+        status: string;
+        claim: { provider: string; username: string } | null;
+      }
     > = {};
-    for (const [subject] of SUBJECTS) {
-      if (subject === undefined) continue;
-      const found = await user(subject);
-      if (found) {
-        users[subject] = {
+    for (const [legacy] of MIGRATED) {
+      const found = await user(legacy);
+      const claim = found ? await target.identity.users.claimOfAsSystem(found.id) : undefined;
+      // Only the accounts the run created (a claim; nobody claims in these tests), not another holder of the address.
+      if (found && claim) {
+        users[legacy] = {
           username: found.username,
           email: found.email,
           roles: (await target.authz.rolesOf(actor, found.id)).sort(),
           status: found.status,
+          claim: claim ? { provider: claim.provider, username: claim.username } : null,
         };
       }
     }
@@ -270,11 +263,11 @@ async function inspect(env: Record<string, string>) {
       'provider',
       'PlantData',
     );
-    const member = async (subject: string, org: typeof bioNet) => {
-      const found = await user(subject);
+    const member = async (legacy: string, org: typeof bioNet) => {
+      const found = await user(legacy);
       return found && org ? target.organisations.isApprovedMemberAsSystem(found.id, org.id) : null;
     };
-    const erin = await user('sub-erin');
+    const erin = await user('erin');
     const erinRows = erin
       ? (
           await target.organisations.listOwn(
@@ -287,8 +280,8 @@ async function inspect(env: Record<string, string>) {
       users,
       sets: setRows,
       serviceKpis,
-      alice: [await member('sub-alice', bioNet), await member('sub-alice', plantData)],
-      bob: await member('sub-bob', bioNet),
+      alice: [await member('alice', bioNet), await member('alice', plantData)],
+      bob: await member('Bob.Jones', bioNet),
       erin: erinRows.map((r) => `${r.organisation.abbreviation}:${r.state}`),
     };
   } finally {
@@ -309,7 +302,7 @@ describe('run (KPIs, measurements, people)', () => {
       indicator: { read: 5, created: 5 },
       'kpi-set': { read: 2, created: 2 },
       'service-kpis': { read: 2, created: 2 },
-      user: { read: 10, created: 6, dropped: 4 },
+      user: { read: 10, created: 7, dropped: 3 },
       membership: { read: 4, created: 4 },
       // 121 + 1 + 5 + 1 points read; two dropped (2999, 1899); two Papers points in one month (one merged); 2 zeros filled.
       measurement: { read: 128, created: 127, dropped: 2, merged: 1 },
@@ -317,7 +310,7 @@ describe('run (KPIs, measurements, people)', () => {
     expect(out.join('\n')).toMatch(/dry run: nothing was written/);
   });
 
-  it('a run creates what the report says, with the identity, the roles, the memberships, the sets and the measurements', async () => {
+  it('a run creates what the report says: claimable accounts with the role user, the memberships, the sets and the measurements', async () => {
     const env = await migratedDatabase();
     const empty = await counts(env);
     const first = await run(env, ['--yes', '--keep-account']);
@@ -329,39 +322,29 @@ describe('run (KPIs, measurements, people)', () => {
       Object.keys(written).filter((table) => written[table] !== empty[table]).length,
     ).toBeGreaterThan(8);
     const state = await inspect(env);
-    expect(state.users).toEqual({
-      'sub-alice': {
-        username: 'alice',
-        email: 'alice@example.org',
-        roles: ['admin'],
-        status: 'active',
-      },
-      'sub-bob': {
-        username: 'bob-jones',
-        email: 'bob@example.org',
-        roles: ['user'],
-        status: 'active',
-      },
-      'sub-bob2': {
-        username: 'bob-jones-2',
-        email: 'bob2@example.org',
-        roles: ['user'],
-        status: 'active',
-      },
-      'sub-erin': {
-        username: 'erin',
-        email: 'erin@example.org',
-        roles: ['user'],
-        status: 'active',
-      },
-      'sub-hank': {
-        username: 'hank',
-        email: 'hank@example.org',
-        roles: ['user'],
-        status: 'active',
-      },
-      'sub-ivy': { username: 'ivy', email: 'ivy@example.org', roles: ['user'], status: 'active' },
+    // Every account waits for its owner (ADR-0053): no way to sign in yet, a claim by the legacy username, the role user.
+    const account = (username: string, email: string, claim: string) => ({
+      username,
+      email,
+      roles: ['user'],
+      status: 'active',
+      claim: { provider: PROVIDER, username: claim },
     });
+    expect(state.users).toEqual({
+      alice: account('alice', 'alice@example.org', 'alice'),
+      'Bob.Jones': account('bob-jones', 'bob@example.org', 'bob.jones'),
+      'bob-jones': account('bob-jones-2', 'bob2@example.org', 'bob-jones'),
+      erin: account('erin', 'erin@example.org', 'erin'),
+      gina: account('gina', 'gina@example.org', 'gina'),
+      Hank: account('hank', 'hank@example.org', 'hank'),
+      ivy: account('ivy', 'ivy@example.org', 'ivy'),
+    });
+    const target = await openTarget(env);
+    try {
+      expect(await tableCounts(target.kernel.pool)).toMatchObject({ identity_auth_method: 1 }); // the migration account's
+    } finally {
+      await target.stop();
+    }
     expect(state.sets).toEqual({
       Tools: ['Papers:optional', 'Users:mandatory'],
       // No necessity in the legacy data: the default of decision 6.
@@ -381,8 +364,11 @@ describe('run (KPIs, measurements, people)', () => {
     expect(rules('user', 'carol')).toEqual(['user.email-duplicate']);
     expect(rules('user', 'dave')).toEqual(['user.email-duplicate']);
     expect(rules('user', 'frank')).toEqual(['user.email-invalid']);
-    expect(rules('user', 'gina')).toEqual(['user.subject-missing']);
-    expect(rules('user', 'alice')).toEqual(['user.admin']);
+    expect(rules('user', 'gina')).toEqual([]);
+    expect(rules('user', 'alice')).toEqual(['user.admin-by-hand']);
+    expect(report.notes.join(' ')).toMatch(/7 migrated account\(s\) wait for their owner: 7 open/);
+    expect(report.notes.join(' ')).toMatch(/1 legacy administrator\(s\) got the role user/);
+    expect(report.notes.join(' ')).toMatch(/"ls-login" is not configured in the target/);
     expect(rules('user', 'bob-jones')).toEqual(['user.username-suffixed']);
     expect(rules('service-kpis', 'GeneFlow')).toEqual(['service-kpis.kpi-added-optional']);
     expect(report.counts.measurement).toMatchObject({
@@ -405,7 +391,7 @@ describe('run (KPIs, measurements, people)', () => {
 
   it('--skip-users migrates the registry, the KPIs and the measurements without users, roles or memberships', async () => {
     const env = await migratedDatabase();
-    // No --subjects and no provider needed: the users part is left out, not reported user by user.
+    // The users part is left out, not reported user by user.
     const dir = reportDir();
     const c = cli(env);
     const code = await runCli(
@@ -438,7 +424,7 @@ describe('run (KPIs, measurements, people)', () => {
     expect(state.serviceKpis.GeneFlow).toEqual({ set: 'Tools', extras: ['Citations', 'Orphan'] });
     // The users part can be added later by a run without the flag.
     expect((await run(env, ['--yes', '--keep-account'])).code).toBe(0);
-    expect(Object.keys((await inspect(env)).users)).toHaveLength(6);
+    expect(Object.keys((await inspect(env)).users)).toHaveLength(7);
   });
 
   it('a second run creates nothing: the same table counts and every record kept', async () => {
@@ -454,7 +440,7 @@ describe('run (KPIs, measurements, people)', () => {
       report.records.filter((r) => r.outcome === 'created' || r.outcome === 'changed'),
     ).toEqual([]);
     expect(report.counts.measurement).toMatchObject({ created: 0, changed: 0, kept: 127 });
-    expect(report.counts.user).toMatchObject({ created: 0, kept: 6 });
+    expect(report.counts.user).toMatchObject({ created: 0, kept: 7 });
     expect(report.counts.membership).toMatchObject({ created: 0, kept: 4 });
   });
 
@@ -469,7 +455,6 @@ describe('run (KPIs, measurements, people)', () => {
       const plans = buildPlans({
         snapshot: await readSnapshot(snapshotDir),
         mapping: await readMapping(mappingFile),
-        subjects: parseSubjects(SUBJECTS.map(([s, u]) => `${s}\t${u}`).join('\n')),
         facts: { stageTerms: ['PROD', 'DEV', 'TERM'], spdx: spdxIndex() },
         kpiFacts: {
           valueTypes: ['integer'],
@@ -500,7 +485,6 @@ describe('run (KPIs, measurements, people)', () => {
       const plans = buildPlans({
         snapshot: await readSnapshot(snapshotDir),
         mapping: await readMapping(mappingFile),
-        subjects: parseSubjects(''),
         facts: { stageTerms: ['PROD'], spdx: spdxIndex() },
         kpiFacts: {
           valueTypes: ['integer'],
@@ -535,7 +519,6 @@ describe('run (KPIs, measurements, people)', () => {
       const plans = buildPlans({
         snapshot: await readSnapshot(snapshotDir),
         mapping: await readMapping(mappingFile),
-        subjects: parseSubjects(''),
         facts: { stageTerms: ['PROD'], spdx: spdxIndex() },
         kpiFacts: {
           valueTypes: ['integer'],
@@ -603,11 +586,12 @@ describe('run (KPIs, measurements, people)', () => {
     expect(hank.rules.map((r) => r.rule)).toContain('user.username-taken');
     const state = await inspect(env);
     expect(Object.keys(state.users).sort()).toEqual([
-      'sub-alice',
-      'sub-bob',
-      'sub-bob2',
-      'sub-erin',
-      'sub-hank',
+      'Bob.Jones',
+      'Hank',
+      'alice',
+      'bob-jones',
+      'erin',
+      'gina',
     ]);
     expect(report.counts.measurement.created).toBe(127);
   });
@@ -677,6 +661,19 @@ describe('run (KPIs, measurements, people)', () => {
 
   it('deactivates the account at the end of a run, uses the next one on the next run, and says when it cannot', async () => {
     const env = await migratedDatabase();
+    // The administrator `create-admin` made: no migrated user gets Admin (ADR-0053), so without one the account stays.
+    {
+      const target = await openTarget(env);
+      try {
+        const admin = await makeUser(target.kernel.pool, {
+          username: 'operator',
+          status: 'active',
+        });
+        await makeRoleAssignment(target.kernel.pool, admin, 'admin');
+      } finally {
+        await target.stop();
+      }
+    }
     const first = await run(env, ['--yes']);
     expect((await readReport(first.dir)).account).toMatchObject({
       username: 'legacy-migration',
@@ -702,45 +699,44 @@ describe('run (KPIs, measurements, people)', () => {
       report.records.filter((r) => r.outcome === 'created' || r.outcome === 'changed'),
     ).toEqual([]);
 
-    // No administrator in the snapshot: the last-Admin rule keeps the account active, and the report says so.
+    // No other administrator: the last-Admin rule keeps the account active, and the report says so.
     const lone = await migratedDatabase();
-    const file = join(work, `mapping-lone-${n++}.json`);
-    await writeFile(file, JSON.stringify({ ...MAPPING, users: { alice: { drop: true } } }));
-    const loneRun = await run(lone, ['--yes'], { mapping: file });
+    const loneRun = await run(lone, ['--yes']);
     expect(loneRun.code).toBe(0);
     const loneReport = await readReport(loneRun.dir);
     expect(loneReport.account.after).toMatch(/^still active: .*last Admin/i);
     expect(loneReport.notes.join(' ')).toMatch(/still active/);
   });
 
-  it('lists the migrated users and addresses for the announcement, never to the output', async () => {
+  it('lists the migrated users, addresses, claims and legacy administrators, never to the output', async () => {
     const env = await migratedDatabase();
     await run(env, ['--yes', '--keep-account']);
     const out = join(work, `users-${n++}.tsv`);
     const c = cli(env);
     const code = await runCli(
-      ['users', snapshotDir, '--mapping', mappingFile, '--subjects', subjectsFile, '--out', out],
+      ['users', snapshotDir, '--mapping', mappingFile, '--out', out],
       c.deps,
     );
     expect(code).toBe(0);
     expect((await readFile(out, 'utf8')).trim().split('\n').sort()).toEqual([
-      'alice\talice@example.org',
-      'bob-jones\tbob@example.org',
-      'bob-jones-2\tbob2@example.org',
-      'erin\terin@example.org',
-      'hank\thank@example.org',
-      'ivy\tivy@example.org',
+      '# username\taddress\tclaim\tlegacy-admin',
+      'alice\talice@example.org\topen\tyes',
+      'bob-jones\tbob@example.org\topen\tno',
+      'bob-jones-2\tbob2@example.org\topen\tno',
+      'erin\terin@example.org\topen\tno',
+      'gina\tgina@example.org\topen\tno',
+      'hank\thank@example.org\topen\tno',
+      'ivy\tivy@example.org\topen\tno',
     ]);
     expect((await stat(out)).mode & 0o777).toBe(0o600);
     expect([...c.out, ...c.err].join('\n')).not.toMatch(/@example\.org/);
-    expect(c.out.join('\n')).toMatch(/6 migrated user/);
+    expect(c.out.join('\n')).toMatch(
+      /7 migrated user\(s\) with their address \(7 open, 0 claimed, 0 expired; 1 legacy administrator/,
+    );
     // Never over an existing file, never inside the repository.
     const again = cli(env);
     expect(
-      await runCli(
-        ['users', snapshotDir, '--mapping', mappingFile, '--subjects', subjectsFile, '--out', out],
-        again.deps,
-      ),
+      await runCli(['users', snapshotDir, '--mapping', mappingFile, '--out', out], again.deps),
     ).toBe(1);
     const inside = cli(env);
     expect(
@@ -750,8 +746,6 @@ describe('run (KPIs, measurements, people)', () => {
           snapshotDir,
           '--mapping',
           mappingFile,
-          '--subjects',
-          subjectsFile,
           '--out',
           join(REPOSITORY_ROOT, 'users.tsv'),
         ],

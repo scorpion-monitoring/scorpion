@@ -48,6 +48,11 @@ export const mappingSchema = z.strictObject({
    * providers". `null` takes the only provider configured in the target; none or several is a gap that stops the users part.
    */
   oidcProvider: z.string().max(63).nullable().default(null),
+  /**
+   * How many days a migrated user has to claim their account at the first sign-in (ADR-0053); after that the claim is
+   * closed and an administrator has to help. Counted from the run that created the account.
+   */
+  claimDays: z.number().int().min(1).max(366).default(90),
   /** By the legacy KPI name. `thematic` is required for a run that writes (§3); a `null` is a gap. */
   indicators: z
     .record(

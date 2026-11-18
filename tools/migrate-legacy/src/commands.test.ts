@@ -1,6 +1,8 @@
-// What `plan` suggests for the legacy workaround of consortia (decision 15) and for the category it lived in.
+// What `plan` suggests for the legacy workaround of consortia (decision 15) and for the category it lived in, and how a run
+// recognises the account it created for a user (ADR-0053).
 import { describe, expect, it } from 'vitest';
 import { workaroundSuggestions } from './commands.ts';
+import { isMigratedAccount } from './load-people.ts';
 import type { Snapshot } from './snapshot.ts';
 
 const row = (abbreviation: string, provider: string, category: string) => ({
@@ -37,5 +39,43 @@ describe('workaroundSuggestions', () => {
       services: [row('PlantHub', 'PlantHub', 'Mixed'), row('GeneFlow', 'BioNet', 'Mixed')],
     } as unknown as Snapshot;
     expect(workaroundSuggestions(snapshot).mapping.kpiSets).toEqual({});
+  });
+});
+
+describe('isMigratedAccount', () => {
+  const op = { provider: 'ls-login', claimUsername: 'Ann.Legacy', username: 'ann-legacy' };
+  it.each([
+    [
+      'the claim this user would get',
+      { username: 'x' },
+      { provider: 'ls-login', username: 'ann.legacy' },
+      true,
+    ],
+    [
+      'a claim at another provider',
+      { username: 'ann-legacy' },
+      { provider: 'other', username: 'ann.legacy' },
+      false,
+    ],
+    [
+      'a claim for another name',
+      { username: 'ann-legacy' },
+      { provider: 'ls-login', username: 'ann' },
+      false,
+    ],
+    [
+      'claimed, with the username the migration gave it',
+      { username: 'ann-legacy' },
+      undefined,
+      true,
+    ],
+    [
+      'no claim and another username (someone else holds the address)',
+      { username: 'someone' },
+      undefined,
+      false,
+    ],
+  ])('%s → %s', (_name, found, claim, expected) => {
+    expect(isMigratedAccount(found, claim, op)).toBe(expected);
   });
 });
