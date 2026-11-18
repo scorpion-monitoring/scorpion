@@ -54,6 +54,8 @@ export interface AuditEventView {
   payload: unknown;
   /** The username of `userId` now, or `null` when there is no user id or the account no longer exists (purged). */
   userName: string | null;
+  /** The SHA-256 of the person's profile picture, or `null` (none, or the account is gone). */
+  userAvatarHash: string | null;
 }
 
 export interface ExportResult {
@@ -162,21 +164,31 @@ export interface ViewerDeps {
   authz: Pick<AuthzService, 'require'>;
   settings: () => Promise<AuditSettings>;
   store: Store;
-  /** Usernames by id for the ids that still have an account; an id without one is left out. */
-  usernames: (ids: string[]) => Promise<Map<string, string>>;
+  /** Usernames and profile pictures by id for the ids that still have an account; an id without one is left out. */
+  people: (ids: string[]) => Promise<Map<string, Person>>;
 }
 
-type Row = Omit<AuditEventView, 'userName'>;
+/** The name and picture shown beside an event; the event itself keeps only the id. */
+interface Person {
+  username: string;
+  avatarHash: string | null;
+}
 
-export function createViewer({ db, authz, settings, store, usernames }: ViewerDeps): ViewerService {
+type Row = Omit<AuditEventView, 'userName' | 'userAvatarHash'>;
+
+export function createViewer({ db, authz, settings, store, people }: ViewerDeps): ViewerService {
   /** The events carry ids, never names (a purge cannot erase an append-only table); the name is joined when read. */
   async function named(rows: Row[]): Promise<AuditEventView[]> {
     const ids = [...new Set(rows.map((row) => row.userId).filter((id): id is string => !!id))];
-    const names = ids.length > 0 ? await usernames(ids) : new Map<string, string>();
-    return rows.map((row) => ({
-      ...row,
-      userName: row.userId ? (names.get(row.userId) ?? null) : null,
-    }));
+    const names = ids.length > 0 ? await people(ids) : new Map<string, Person>();
+    return rows.map((row) => {
+      const person = row.userId ? names.get(row.userId) : undefined;
+      return {
+        ...row,
+        userName: person?.username ?? null,
+        userAvatarHash: person?.avatarHash ?? null,
+      };
+    });
   }
 
   return {

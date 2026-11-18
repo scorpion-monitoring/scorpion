@@ -32,10 +32,14 @@ export function createAuditService(
       authz: deps.authz,
       settings,
       store,
-      usernames: async (ids) => {
+      people: async (ids) => {
         const found = await Promise.all(ids.map((id) => deps.identity.users.findById(id)));
         return new Map(
-          found.flatMap((user, i) => (user ? [[ids[i]!, user.username] as const] : [])),
+          found.flatMap((user, i) =>
+            user
+              ? [[ids[i]!, { username: user.username, avatarHash: user.avatarHash }] as const]
+              : [],
+          ),
         );
       },
     }),

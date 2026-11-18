@@ -13,6 +13,7 @@
     getShell,
     Time,
     type Column,
+    UserAvatar,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import type { LogEntry, LogsData } from './loaders.ts';
@@ -269,9 +270,12 @@
   {/snippet}
   {#snippet userCell(row: LogEntry)}
     {#if row.userId && row.userName}
-      <a class="link link-hover font-medium" href={href(`/admin/users/${row.userId}`)}
-        >{row.userName}</a
-      >
+      <span class="inline-flex items-center gap-2 align-middle">
+        <UserAvatar hash={row.userAvatarHash} />
+        <a class="link link-hover font-medium" href={href(`/admin/users/${row.userId}`)}
+          >{row.userName}</a
+        >
+      </span>
     {:else if row.userId}
       <span>{t('admin.logs.deletedAccount')}</span>
       <span class="ms-1 font-mono text-xs opacity-80">{row.userId.slice(0, 8)}</span>

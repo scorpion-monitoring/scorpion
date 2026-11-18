@@ -1,7 +1,7 @@
 <script lang="ts">
   // Administration, one entry of the trail. The query, the body and the payload are shown as they were
   // stored: secrets were replaced by `[redacted]` and long values cut when the entry was written.
-  import { Breadcrumb, getShell, Time } from '@scorpion/ui-kit';
+  import { Breadcrumb, getShell, Time, UserAvatar } from '@scorpion/ui-kit';
   import type { LogEntry } from './loaders.ts';
 
   let { data }: { data: { entry: LogEntry } } = $props();
@@ -29,7 +29,10 @@
     <dt class="font-medium">{t('admin.logs.col.user')}</dt>
     <dd>
       {#if entry.userId && entry.userName}
-        <a class="link" href={href(`/admin/users/${entry.userId}`)}>{entry.userName}</a>
+        <span class="inline-flex items-center gap-2 align-middle">
+          <UserAvatar hash={entry.userAvatarHash} />
+          <a class="link" href={href(`/admin/users/${entry.userId}`)}>{entry.userName}</a>
+        </span>
       {:else if entry.userId}
         {t('admin.logs.deletedAccount')}
       {:else}
