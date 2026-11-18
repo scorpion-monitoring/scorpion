@@ -221,7 +221,13 @@ describe('listPending', () => {
 
     expect(one.total).toBe(3);
     expect([...one.users, ...two.users].map((u) => u.id)).toEqual([first.id, second.id, third.id]);
-    expect(Object.keys(one.users[0]!).sort()).toEqual(['createdAt', 'email', 'id', 'username']);
+    expect(Object.keys(one.users[0]!).sort()).toEqual([
+      'avatarHash',
+      'createdAt',
+      'email',
+      'id',
+      'username',
+    ]);
   });
 
   it('refuses an anonymous caller (denied)', async () => {

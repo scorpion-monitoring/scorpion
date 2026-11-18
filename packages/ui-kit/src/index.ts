@@ -46,6 +46,7 @@ export { default as SubmitButton } from './SubmitButton.svelte';
 export { default as TextArea } from './TextArea.svelte';
 export { default as TextField } from './TextField.svelte';
 export { default as Time } from './Time.svelte';
+export { default as UserAvatar } from './UserAvatar.svelte';
 export { default as Breadcrumb } from './Breadcrumb.svelte';
 export { default as Chart } from './Chart.svelte';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';

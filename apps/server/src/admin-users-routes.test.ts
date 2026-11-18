@@ -42,10 +42,15 @@ describe('GET /users', () => {
     expect(list(paged).result.map((u) => u.username)).toEqual(['root']);
   });
 
-  it('never carries a hash, a secret or a profile text', async () => {
+  it('never carries a hash, a secret or a profile text; the picture only as its public file hash', async () => {
     const s = await start();
     const admin = await s.signedIn('root', { roles: ['admin'] });
-    const text = JSON.stringify((await s.get('/users', as(admin))).body);
+    const reply = await s.get('/users', as(admin));
+    expect(list(reply).result.map((u) => u.avatarHash)).toEqual([null]);
+    // `avatarHash` is the one field allowed to say hash or avatar; the blob id and the rest may not appear.
+    const text = JSON.stringify(reply.body, (key, value: unknown) =>
+      key === 'avatarHash' ? undefined : value,
+    );
     expect(text).not.toMatch(/argon2|password|secret|hash|bio|avatar/i);
   });
 

@@ -13,6 +13,7 @@
     Time,
     type Column,
     type Sort,
+    UserAvatar,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import type { AdminUser, UsersData } from './loaders.ts';
@@ -103,7 +104,11 @@
   </div>
 
   {#snippet nameCell(row: AdminUser)}
-    <a class="link link-hover font-medium" href={href(`/admin/users/${row.id}`)}>{row.username}</a>
+    <span class="inline-flex items-center gap-2 align-middle">
+      <UserAvatar hash={row.avatarHash} />
+      <a class="link link-hover font-medium" href={href(`/admin/users/${row.id}`)}>{row.username}</a
+      >
+    </span>
     {#if row.displayName}<span class="ms-2 opacity-70">{row.displayName}</span>{/if}
   {/snippet}
   {#snippet mailCell(row: AdminUser)}

@@ -4,7 +4,7 @@
 // defect-01.privilege-escalation.test.ts (the matrix) and defect-01.membership.test.ts (the self
 // cases); the service rules are in modules/registry-organisations/service/memberships.*.test.ts.
 import { generateOpenApiDocument, type AppRoute } from '@scorpion/contracts';
-import { makeMembership, makeOrganisation } from '@scorpion/testing';
+import { makeMembership, makeOrganisation, makePng } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { SURFACE_PREFIX } from './app.ts';
 import { useIdentityApp, type Reply } from './testing/identity-app.ts';
@@ -151,6 +151,30 @@ describe('the membership journey through the routes', () => {
     expect(withdrawn.status).toBe(200);
     conforms(s, withdrawn, 'DELETE', '/organisations/{id}/membership');
     expect(withdrawn.body).toMatchObject({ state: 'left' });
+  });
+
+  it('shows the profile picture beside the username, and null without one', async () => {
+    const { s, org, manager, member } = await world();
+    const set = await s.call('PUT', '/account/avatar', { ...as(member), body: makePng(24) });
+    const { avatarHash } = set.body as { avatarHash: string };
+    expect(avatarHash).toMatch(/^[0-9a-f]{64}$/);
+
+    const members = await s.get(`/organisations/${org.id}/members`, as(member));
+    conforms(s, members, 'GET', '/organisations/{id}/members');
+    const pictures = Object.fromEntries(
+      (members.body as Page<{ username: string; avatarHash: string | null }>).result.map((m) => [
+        m.username,
+        m.avatarHash,
+      ]),
+    );
+    expect(pictures).toEqual({ [member.user.username]: avatarHash, [manager.user.username]: null });
+
+    const managed = await s.get('/memberships', as(manager));
+    conforms(s, managed, 'GET', '/memberships');
+    const row = (managed.body as Page<{ username: string; avatarHash: string | null }>).result.find(
+      (m) => m.username === member.user.username,
+    );
+    expect(row!.avatarHash).toBe(avatarHash);
   });
 
   it('never puts an email address in an answer', async () => {

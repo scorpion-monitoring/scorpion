@@ -55,6 +55,12 @@ const managedSchema = z.object({
     .string()
     .nullable()
     .describe('`null` for an account that is gone; its rows are removed by the purge.'),
+  avatarHash: z
+    .string()
+    .nullable()
+    .describe(
+      "The SHA-256 of the person's profile picture (`/api/internal/files/{hash}`), or `null`.",
+    ),
   state: stateSchema,
   role: roleSchema,
   requestedAt: z.iso.datetime(),
@@ -69,6 +75,12 @@ const managedSchema = z.object({
 
 const memberSchema = z.object({
   username: z.string(),
+  avatarHash: z
+    .string()
+    .nullable()
+    .describe(
+      "The SHA-256 of the member's profile picture (`/api/internal/files/{hash}`), or `null`.",
+    ),
   since: z.iso.datetime(),
 });
 
@@ -246,6 +258,7 @@ const managedOut = (m: ManagedMembership) => ({
   organisation: m.organisation,
   userId: m.userId,
   username: m.username,
+  avatarHash: m.avatarHash,
   state: m.state,
   role: m.role,
   requestedAt: m.requestedAt.toISOString(),
@@ -254,7 +267,11 @@ const managedOut = (m: ManagedMembership) => ({
   allowedActions: m.allowedActions,
 });
 
-const memberOut = (m: Member) => ({ username: m.username, since: m.since.toISOString() });
+const memberOut = (m: Member) => ({
+  username: m.username,
+  avatarHash: m.avatarHash,
+  since: m.since.toISOString(),
+});
 
 export function registerMembershipRoutes(r: RouteRegistrar, service: MembershipsService) {
   r.internal(requestRoute, (async (c) => {

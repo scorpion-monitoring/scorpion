@@ -311,8 +311,8 @@ describe('the contact point of an organisation', () => {
 
 // The field table of a membership (docs/security/authorization.md, section Membership; M6 sprint 5). What each
 // membership route may return is pinned name by name, so a new field has to pass through this list and the
-// table. The member list shows a username and a date, nothing else: no state, no role, no address, no id of
-// the person. An address of a person is in no membership answer; `decidedBy` and `endedBy` are stored and are
+// table. The member list shows a username, its profile picture (`avatarHash`, the file's public hash) and a date,
+// nothing else: no state, no role, no address, no id of the person. An address of a person is in no membership answer; `decidedBy` and `endedBy` are stored and are
 // returned by no route (the audit trail holds who acted).
 const ENVELOPE = ['metadata', 'currentPage', 'pageSize', 'totalCount', 'totalPages', 'result'];
 const ORGANISATION_REF = ['id', 'type', 'abbreviation', 'name'];
@@ -322,6 +322,7 @@ const MANAGED_ROW = [
   ...ORGANISATION_REF.slice(1), // `id` is already there
   'userId',
   'username',
+  'avatarHash',
   'state',
   'role',
   'requestedAt',
@@ -330,7 +331,7 @@ const MANAGED_ROW = [
   'allowedActions',
 ];
 const MEMBERSHIP_ANSWERS: Record<string, readonly string[]> = {
-  'GET /organisations/{id}/members': ['username', 'since'],
+  'GET /organisations/{id}/members': ['username', 'avatarHash', 'since'],
   'GET /account/memberships': [
     'id',
     'organisation',

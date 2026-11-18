@@ -14,6 +14,11 @@ export interface User {
   /** Set for a soft-deleted account, which cannot sign in. */
   deletedAt: Date | null;
   createdAt: Date;
+  /**
+   * The SHA-256 of the profile picture the person chose (served at `/api/internal/files/{hash}`), or `null` without one.
+   * Whoever may see the person's username may show it next to the name.
+   */
+  avatarHash: string | null;
 }
 
 export interface UserService {

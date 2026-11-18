@@ -75,6 +75,12 @@ const userSchema = z.object({
   status: z.enum(['pending', 'active', 'rejected', 'deactivated']),
 });
 
+/** The SHA-256 of a person's profile picture (`/api/internal/files/{hash}`), or `null`: the UI shows it beside the name. */
+const avatarHashSchema = z.string().nullable();
+
+/** The caller of `/auth/me`, with the picture for the header. */
+const meUserSchema = userSchema.extend({ avatarHash: avatarHashSchema });
+
 const idParam = z.object({ id: z.uuid() });
 const json = <T extends z.ZodType>(schema: T) => ({
   required: true as const,
@@ -146,7 +152,7 @@ export const meRoute = createRoute({
     200: ok(
       'The caller.',
       z.object({
-        user: userSchema,
+        user: meUserSchema,
         roles: z.array(z.string()),
         csrfToken: z.string().nullable(),
       }),
@@ -159,6 +165,7 @@ const pendingUserSchema = z.object({
   username: z.string(),
   email: z.string().nullable(),
   createdAt: z.iso.datetime(),
+  avatarHash: avatarHashSchema,
 });
 
 export const listPendingRoute = createRoute({
@@ -177,6 +184,7 @@ const adminUserSchema = z.object({
   emailVerified: z.boolean(),
   status: z.enum(['pending', 'active', 'rejected', 'deactivated']),
   createdAt: z.iso.datetime(),
+  avatarHash: avatarHashSchema,
 });
 
 export const listUsersRoute = createRoute({
@@ -801,6 +809,7 @@ const adminUserView = (found: AdminUser) => ({
   emailVerified: found.emailVerified,
   status: found.status,
   createdAt: found.createdAt.toISOString(),
+  avatarHash: found.avatarHash,
 });
 
 const tokenView = (token: TokenInfo) => ({
@@ -921,7 +930,7 @@ export function registerIdentityRoutes(
   r.internal(meRoute, (async (c) => {
     const { user, roles, csrfToken } = await accounts.me(c.get('actor'), readSessionCookie(c));
     c.header('cache-control', 'no-store');
-    return c.json({ user: view(user), roles, csrfToken }, 200);
+    return c.json({ user: { ...view(user), avatarHash: user.avatarHash }, roles, csrfToken }, 200);
   }) satisfies RouteHandler<typeof meRoute, AppEnv>);
 
   r.internal(listPendingRoute, (async (c) => {

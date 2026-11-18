@@ -53,6 +53,12 @@ const eventSchema = z.object({
     .describe(
       'The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only).',
     ),
+  userAvatarHash: z
+    .string()
+    .nullable()
+    .describe(
+      'The SHA-256 of the profile picture of `userId` now (`/api/internal/files/{hash}`), or `null`.',
+    ),
 });
 
 const filterShape = {
@@ -212,6 +218,7 @@ const eventView = (e: AuditEventView) => ({
   subjectId: e.subjectId,
   payload: e.payload ?? null,
   userName: e.userName,
+  userAvatarHash: e.userAvatarHash,
 });
 
 export function registerAuditRoutes(r: RouteRegistrar, service: AuditInternals) {

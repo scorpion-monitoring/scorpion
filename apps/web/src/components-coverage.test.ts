@@ -65,6 +65,10 @@ const THROUGH_PAGES = [
   'TextArea',
   'TextField',
   'Time',
+  // A person's picture beside their name: decorative (`alt=""`), with no control and nothing to focus.
+  // `e2e/avatar.spec.ts` checks the picture, the stand-in icon and the fall-back on a file that does not load in the
+  // header and the user table, and `e2e/accessibility-admin.spec.ts` runs axe over the admin pages that hold it.
+  'UserAvatar',
 ];
 
 const specs = globSync('apps/web/e2e/components/*.spec.ts', { cwd: repo })

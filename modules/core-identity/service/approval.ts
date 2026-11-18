@@ -5,6 +5,7 @@
 // `core.authz` and the approval resource, so nobody approves or rejects their own account, Admin
 // included. The mail to the person is queued in the same transaction, before the event, so a
 // rollback sends nothing (core.notifications, ADR 0019).
+import type { AvatarHashOf } from './users.ts';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { Conflict, NotFound, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
@@ -24,6 +25,8 @@ export interface PendingUser {
   username: string;
   email: string | null;
   createdAt: Date;
+  /** The profile picture's SHA-256, or `null`. */
+  avatarHash: string | null;
 }
 
 export interface ApprovalService {
@@ -44,9 +47,16 @@ export interface ApprovalService {
 
 export function createApprovalService(
   ctx: ModuleContext,
-  deps: { sessions: SessionService; authz: AuthzService; mail: IdentityMail; links: MailLinks },
+  deps: {
+    sessions: SessionService;
+    authz: AuthzService;
+    mail: IdentityMail;
+    links: MailLinks;
+    avatarHashOf?: AvatarHashOf;
+  },
 ): ApprovalService {
   const { authz, mail, links } = deps;
+  const avatarHashOf = deps.avatarHashOf ?? (() => Promise.resolve(null));
 
   async function decide(
     actor: Actor,
@@ -136,6 +146,7 @@ export function createApprovalService(
           username: user.username,
           email: user.email,
           createdAt: user.createdAt,
+          avatarBlobId: user.avatarBlobId,
         })
         .from(user)
         .where(waiting)
@@ -143,7 +154,15 @@ export function createApprovalService(
         .limit(pageSize)
         .offset(page * pageSize);
       const [total] = await ctx.db.select({ value: count() }).from(user).where(waiting);
-      return { users, total: total?.value ?? 0 };
+      return {
+        users: await Promise.all(
+          users.map(async ({ avatarBlobId, ...row }) => ({
+            ...row,
+            avatarHash: avatarBlobId ? await avatarHashOf(avatarBlobId) : null,
+          })),
+        ),
+        total: total?.value ?? 0,
+      };
     },
     approve: (actor, userId, options) => decide(actor, userId, 'approve', options?.role),
     reject: (actor, userId) => decide(actor, userId, 'reject'),

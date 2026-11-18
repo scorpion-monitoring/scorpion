@@ -6,6 +6,7 @@
 // Deactivating closes the account without deleting it: it cannot sign in, its sessions end in the same
 // transaction (ASVS 7.4.2), its access tokens stop working (a token of a user who is not active is
 // refused), and its data stays. It is not a soft delete, so the purge job leaves it alone.
+import type { AvatarHashOf } from './users.ts';
 import { and, asc, count, desc, eq, ilike, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { Conflict, Forbidden, NotFound, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
@@ -32,6 +33,8 @@ export interface AdminUser {
   emailVerified: boolean;
   status: UserStatus;
   createdAt: Date;
+  /** The profile picture's SHA-256, or `null`. */
+  avatarHash: string | null;
 }
 
 export interface UserListQuery {
@@ -70,6 +73,7 @@ const columns = {
   emailVerifiedAt: user.emailVerifiedAt,
   status: user.status,
   createdAt: user.createdAt,
+  avatarBlobId: user.avatarBlobId,
 };
 
 type Row = {
@@ -80,9 +84,10 @@ type Row = {
   emailVerifiedAt: Date | null;
   status: string;
   createdAt: Date;
+  avatarBlobId: string | null;
 };
 
-const toAdminUser = (row: Row): AdminUser => ({
+const toAdminUser = (row: Row, avatarHash: string | null): AdminUser => ({
   id: row.id,
   username: row.username,
   displayName: row.displayName,
@@ -90,6 +95,7 @@ const toAdminUser = (row: Row): AdminUser => ({
   emailVerified: row.emailVerifiedAt !== null,
   status: row.status as UserStatus,
   createdAt: row.createdAt,
+  avatarHash,
 });
 
 const sortColumn = {
@@ -101,15 +107,18 @@ const sortColumn = {
 
 export function createUserAdminService(
   ctx: ModuleContext,
-  deps: { authz: AuthzService; sessions: SessionService },
+  deps: { authz: AuthzService; sessions: SessionService; avatarHashOf?: AvatarHashOf },
 ): UserAdminService {
   const { authz, sessions } = deps;
+  const avatarHashOf = deps.avatarHashOf ?? (() => Promise.resolve(null));
+  const withAvatar = async (row: Row) =>
+    toAdminUser(row, row.avatarBlobId ? await avatarHashOf(row.avatarBlobId) : null);
 
   async function found(userId: string): Promise<AdminUser> {
     if (!UUID.test(userId)) throw new NotFound('There is no such user.');
     const [row] = await ctx.db.select(columns).from(user).where(eq(user.id, userId)).limit(1);
     if (!row) throw new NotFound('There is no such user.');
-    return toAdminUser(row);
+    return withAvatar(row);
   }
 
   return {
@@ -140,7 +149,7 @@ export function createUserAdminService(
         .limit(query.pageSize)
         .offset(query.page * query.pageSize);
       const [total] = await ctx.db.select({ value: count() }).from(user).where(where);
-      return { users: rows.map(toAdminUser), total: total?.value ?? 0 };
+      return { users: await Promise.all(rows.map(withAvatar)), total: total?.value ?? 0 };
     },
 
     async get(actor, userId) {
@@ -187,7 +196,7 @@ export function createUserAdminService(
           deactivatedBy: caller.userId,
           count: ended,
         });
-        return toAdminUser(changed!);
+        return withAvatar(changed!);
       });
       // After the commit, so a request that raced with the transaction cannot refill the cache.
       await sessions.revokeAll(userId);
