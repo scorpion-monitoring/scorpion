@@ -59,7 +59,7 @@ that says what to decide. It reads the vocabularies of the target and its config
 `DATABASE_URL` too. With exactly one OIDC provider configured in the target it writes that id as `oidcProvider`. The file
 is written with mode 0600, outside the repository, and never over an existing one.
 
-### `run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account]`
+### `run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account] [--skip-users]`
 
 Everything the legacy data holds, in dependency order, through the services as the account `legacy-migration`:
 
@@ -76,6 +76,9 @@ Everything the legacy data holds, in dependency order, through the services as t
    pending request stays a request (at most 10 per user).
 5. **Measurements**, below.
 
+- **`--skip-users`** leaves out steps 3 and 4 (users, roles, memberships): for an instance whose OIDC provider is not
+  configured yet, or while there is no subjects file. Neither `--subjects` nor `oidcProvider` is needed. A later run without
+  the flag adds the users and memberships; nothing else changes.
 - It needs `DATABASE_URL` and `SECRETS_KEY` of the new instance, **migrated** (`pnpm scorpion migrate`): the tool never
   migrates, and refuses a database with pending migrations. It names the target database (host, port, name) first.
 - `--dry-run` reads the target and applies the modules' rules, and writes nothing to the database, not even the account.

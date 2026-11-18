@@ -394,6 +394,44 @@ describe('run (KPIs, measurements, people)', () => {
     expect(geneFlow.values).toMatchObject({ inserted: 126, updated: 0, unchanged: 0, filled: 2 });
   });
 
+  it('--skip-users migrates the registry, the KPIs and the measurements without users, roles or memberships', async () => {
+    const env = await migratedDatabase();
+    // No --subjects and no provider needed: the users part is left out, not reported user by user.
+    const dir = reportDir();
+    const c = cli(env);
+    const code = await runCli(
+      [
+        'run',
+        snapshotDir,
+        '--mapping',
+        mappingFile,
+        '--report',
+        dir,
+        '--skip-users',
+        '--yes',
+        '--keep-account',
+      ],
+      c.deps,
+    );
+    expect(code).toBe(0);
+    const report = await readReport(dir);
+    expect(report.counts).toMatchObject({
+      indicator: { created: 5 },
+      'kpi-set': { created: 2 },
+      measurement: { read: 128, created: 127 },
+      user: { read: 0, created: 0 },
+      membership: { read: 0, created: 0 },
+    });
+    expect(report.records.filter((r) => r.kind === 'user' || r.kind === 'membership')).toEqual([]);
+    expect(report.notes.join(' ')).toMatch(/--skip-users/);
+    const state = await inspect(env);
+    expect(state.users).toEqual({});
+    expect(state.serviceKpis.GeneFlow).toEqual({ set: 'Tools', extras: ['Citations', 'Orphan'] });
+    // The users part can be added later by a run without the flag.
+    expect((await run(env, ['--yes', '--keep-account'])).code).toBe(0);
+    expect(Object.keys((await inspect(env)).users)).toHaveLength(6);
+  });
+
   it('a second run creates nothing: the same table counts and every record kept', async () => {
     const env = await migratedDatabase();
     await run(env, ['--yes', '--keep-account']);
