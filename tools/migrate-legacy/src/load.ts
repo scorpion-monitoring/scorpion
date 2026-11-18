@@ -27,13 +27,22 @@ export interface RecordResult {
   outcome: Outcome;
   /** For `changed`: the fields that were updated. */
   fields?: string[];
+  /** For a measurement record: the values that were inserted, updated, left as they were, dropped or refused. */
+  values?: Record<string, number>;
 }
 
 export class RunStopped extends Error {
   readonly results: RecordResult[];
-  constructor(message: string, results: RecordResult[], options?: { cause?: unknown }) {
+  /** What the stage had found before it stopped. */
+  readonly findings: Finding[];
+  constructor(
+    message: string,
+    results: RecordResult[],
+    options?: { cause?: unknown; findings?: Finding[] },
+  ) {
     super(message, options);
     this.results = results;
+    this.findings = options?.findings ?? [];
   }
 }
 
@@ -43,6 +52,42 @@ const isFatal = (error: unknown) => error instanceof Forbidden || error instance
 function describe(error: DomainError): string {
   const fields = (error.errors ?? []).map((e) => `${e.path}: ${e.message}`).join('; ');
   return fields ? `${error.message} (${fields})` : error.message;
+}
+
+/**
+ * The guard around one write of the load stage: what the services refuse with a domain error is a finding
+ * (`<kind>.refused`) and the record is `dropped`, and the run goes on; a refusal of the account itself (403, 401) stops the
+ * run, since every other write would be refused too. Anything else is a bug and is thrown.
+ */
+export function attemptWith(results: RecordResult[], findings: Finding[]) {
+  return async function attempt<T>(
+    kind: Kind,
+    legacy: string,
+    target: string | null,
+    work: () => Promise<T>,
+  ): Promise<{ ok: true; value: T } | { ok: false }> {
+    try {
+      return { ok: true as const, value: await work() };
+    } catch (error) {
+      if (isFatal(error)) {
+        throw new RunStopped(
+          `The services refused the migration account at ${kind} ${JSON.stringify(legacy)}: ${(error as Error).message} Nothing after it was written.`,
+          results,
+          { cause: error, findings },
+        );
+      }
+      if (!(error instanceof DomainError)) throw error;
+      findings.push({
+        kind,
+        legacy,
+        rule: `${kind}.refused`,
+        effect: 'dropped',
+        detail: describe(error),
+      });
+      results.push({ kind, legacy, target, outcome: 'dropped' });
+      return { ok: false as const };
+    }
+  };
 }
 
 export async function loadRegistry(
@@ -59,29 +104,7 @@ export async function loadRegistry(
   // In a dry run, what would be created has no id; services that point to it compare as changed.
   const planned = { provider: new Set<string>(), consortium: new Set<string>() };
 
-  async function attempt<T>(kind: Kind, legacy: string, target: string, work: () => Promise<T>) {
-    try {
-      return { ok: true as const, value: await work() };
-    } catch (error) {
-      if (isFatal(error)) {
-        throw new RunStopped(
-          `The services refused the migration account at ${kind} ${JSON.stringify(legacy)}: ${(error as Error).message} Nothing after it was written.`,
-          results,
-          { cause: error },
-        );
-      }
-      if (!(error instanceof DomainError)) throw error;
-      findings.push({
-        kind,
-        legacy,
-        rule: `${kind}.refused`,
-        effect: 'dropped',
-        detail: describe(error),
-      });
-      results.push({ kind, legacy, target, outcome: 'dropped' });
-      return { ok: false as const };
-    }
-  }
+  const attempt = attemptWith(results, findings);
 
   async function organisation(op: OrganisationOp) {
     const existing = await ports.organisations.findByAbbreviationAsSystem(op.kind, op.abbreviation);

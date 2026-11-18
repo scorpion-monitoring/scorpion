@@ -15,8 +15,28 @@ import {
   uniqueSlug,
 } from './rules.ts';
 
-export type Kind = 'provider' | 'consortium' | 'service';
-export const KINDS: readonly Kind[] = ['provider', 'consortium', 'service'];
+export type Kind =
+  | 'provider'
+  | 'consortium'
+  | 'service'
+  | 'indicator'
+  | 'kpi-set'
+  | 'service-kpis'
+  | 'user'
+  | 'membership'
+  | 'measurement';
+/** In the order the load stage writes them. */
+export const KINDS: readonly Kind[] = [
+  'provider',
+  'consortium',
+  'service',
+  'indicator',
+  'kpi-set',
+  'service-kpis',
+  'user',
+  'membership',
+  'measurement',
+];
 
 export interface Finding {
   kind: Kind;
@@ -31,6 +51,8 @@ export interface Finding {
   detail: string;
   /** Where the mapping can decide it (`plan` writes a gap there). */
   gap?: string;
+  /** A gap that stops a run that writes (a KPI with no thematic term, §3): a dry run reports it, `run --yes` refuses. */
+  blocking?: boolean;
 }
 
 export interface OrganisationOp {
@@ -53,7 +75,7 @@ export interface ServiceOp {
 }
 
 export interface RegistryPlan {
-  read: Record<Kind, number>;
+  read: Record<'provider' | 'consortium' | 'service', number>;
   providers: OrganisationOp[];
   consortia: OrganisationOp[];
   services: ServiceOp[];

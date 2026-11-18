@@ -220,7 +220,7 @@ describe('run (registry)', () => {
     const report = await readReport(dir);
     expect(report.mode).toBe('dry-run');
     expect(report.account.state).toBe('not created (dry run)');
-    expect(report.counts).toEqual({
+    expect(report.counts).toMatchObject({
       provider: { read: 4, created: 3, kept: 0, changed: 0, merged: 0, dropped: 1 },
       consortium: { read: 3, created: 2, kept: 0, changed: 0, merged: 0, dropped: 1 },
       service: { read: 6, created: 4, kept: 0, changed: 0, merged: 0, dropped: 2 },
@@ -244,7 +244,9 @@ describe('run (registry)', () => {
     const report = await readReport(first.dir);
     expect(report.account.state).toBe('created');
     const created = report.records
-      .filter((r) => r.outcome === 'created')
+      .filter(
+        (r) => r.outcome === 'created' && ['provider', 'consortium', 'service'].includes(r.kind),
+      )
       .map((r) => `${r.kind}:${r.target}`);
     expect(created.sort()).toEqual([
       'consortium:IMC',
@@ -458,7 +460,7 @@ describe('run (registry)', () => {
       await runCli(['run', dir, '--mapping', mappingPath, '--report', reportPath, '--yes'], c.deps),
     ).toBe(0);
     const report = await readReport(reportPath);
-    expect(report.counts).toEqual({
+    expect(report.counts).toMatchObject({
       provider: { read: 1, created: 1, kept: 0, changed: 0, merged: 0, dropped: 0 },
       consortium: { read: 3, created: 2, kept: 0, changed: 0, merged: 1, dropped: 0 },
       service: { read: 3, created: 1, kept: 0, changed: 0, merged: 0, dropped: 2 },

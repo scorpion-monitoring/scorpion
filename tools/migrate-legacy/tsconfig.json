@@ -14,6 +14,8 @@
     { "path": "../../modules/core-authz" },
     { "path": "../../modules/core-identity" },
     { "path": "../../modules/core-settings" },
+    { "path": "../../modules/kpi-framework" },
+    { "path": "../../modules/kpi-ingestion" },
     { "path": "../../modules/registry-organisations" },
     { "path": "../../modules/registry-services" }
   ]

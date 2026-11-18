@@ -22,7 +22,14 @@ export interface Report {
   stopped?: string;
   snapshot: { source: string; fetchedAt: string; files: number };
   mapping: { file: string; open: number };
-  account: { username: string; state: 'found' | 'created' | 'not created (dry run)' };
+  account: {
+    username: string;
+    state: 'found' | 'created' | 'not created (dry run)';
+    /** What became of it at the end of the run: deactivated, kept (`--keep-account`), still active (with the reason) or nothing to do. */
+    after: string;
+  };
+  /** Things the operator should know that no record carries (mail queued, an account left active, …). */
+  notes: string[];
   /** `database` is `host:port/name`, never the credentials. */
   target: { database: string; empty: boolean; notes: string[] };
   counts: Record<
@@ -59,7 +66,8 @@ export function buildRecords(
         outcome: 'dropped',
         rules: [],
       } satisfies ReportRecord);
-    if (finding.effect === 'dropped') record.outcome = 'dropped';
+    // A measurement record is one service: its values say what was dropped, not its outcome.
+    if (finding.effect === 'dropped' && finding.kind !== 'measurement') record.outcome = 'dropped';
     record.rules.push({ rule: finding.rule, effect: finding.effect, detail: finding.detail });
     records.set(k, record);
   }
@@ -83,17 +91,35 @@ export function buildRecords(
   );
 }
 
+/**
+ * Counts per kind. Every kind counts its records, except `measurement`, which counts **values** (a record is one service):
+ * read = the points of the snapshot; created = inserted; kept = unchanged; changed = updated; merged = points that shared a
+ * month with a later one; dropped = points a rule dropped, values refused, and values of services not migrated. Months
+ * written as 0 (decision 13) are in `created`, so created can exceed read.
+ */
 export function countRecords(
-  read: Record<Kind, number>,
+  read: Partial<Record<Kind, number>>,
   records: readonly ReportRecord[],
 ): Report['counts'] {
   const counts = Object.fromEntries(
     KINDS.map((kind) => [
       kind,
-      { read: read[kind], created: 0, kept: 0, changed: 0, merged: 0, dropped: 0 },
+      { read: read[kind] ?? 0, created: 0, kept: 0, changed: 0, merged: 0, dropped: 0 },
     ]),
   ) as Report['counts'];
-  for (const record of records) counts[record.kind][record.outcome] += 1;
+  for (const record of records) {
+    if (record.kind !== 'measurement') {
+      counts[record.kind][record.outcome] += 1;
+      continue;
+    }
+    const v = record.values ?? {};
+    const c = counts.measurement;
+    c.created += v.inserted ?? 0;
+    c.kept += v.unchanged ?? 0;
+    c.changed += v.updated ?? 0;
+    c.merged += v.merged ?? 0;
+    c.dropped += (v.dropped ?? 0) + (v.rejected ?? 0);
+  }
   return counts;
 }
 
@@ -102,11 +128,11 @@ const code = (value: string | null) => (value === null ? '—' : `\`${value.repl
 export function reportMarkdown(report: Report): string {
   const dry = report.mode === 'dry-run';
   const lines = [
-    `# Migration report: registry${dry ? ' (dry run: nothing was written)' : ''}`,
+    `# Migration report${dry ? ' (dry run: nothing was written)' : ''}`,
     '',
     `- Snapshot: ${report.snapshot.source}, fetched ${report.snapshot.fetchedAt} (${report.snapshot.files} files, checked against the manifest)`,
     `- Mapping: ${report.mapping.file} (${report.mapping.open} open line(s))`,
-    `- Account: \`${report.account.username}\` (${report.account.state})`,
+    `- Account: \`${report.account.username}\` (${report.account.state}; at the end: ${report.account.after})`,
     `- Target: ${report.target.database}, ${report.target.empty ? 'empty' : 'not empty'}${report.target.notes.length ? `; ${report.target.notes.join('; ')}` : ''}`,
     `- From ${report.startedAt} to ${report.finishedAt}`,
     ...(report.stopped ? ['', `**Stopped:** ${report.stopped}`] : []),
@@ -126,11 +152,19 @@ export function reportMarkdown(report: Report): string {
     for (const r of records) {
       const rules = r.rules.map((x) => `${x.rule}: ${x.detail}`).join('; ');
       const fields = r.fields?.length ? `updated ${r.fields.join(', ')}` : '';
+      const values = r.values
+        ? Object.entries(r.values)
+            .filter(([, n]) => n > 0)
+            .map(([name, n]) => `${name} ${n}`)
+            .join(', ')
+        : '';
       lines.push(
-        `- ${r.kind} ${code(r.legacy)} → ${code(r.target)}: ${[fields, rules].filter(Boolean).join('; ')}`,
+        `- ${r.kind} ${code(r.legacy)} → ${code(r.target)}: ${[fields, values, rules].filter(Boolean).join('; ')}`,
       );
     }
   };
+  if (report.notes.length > 0)
+    lines.push('', '## Notes', '', ...report.notes.map((note) => `- ${note}`));
   section(
     'Dropped',
     report.records.filter((r) => r.outcome === 'dropped'),
@@ -147,6 +181,12 @@ export function reportMarkdown(report: Report): string {
     'Migrated with a value a rule changed',
     report.records.filter(
       (r) => r.outcome !== 'dropped' && r.outcome !== 'merged' && r.rules.length > 0,
+    ),
+  );
+  section(
+    'Measurements per service (values)',
+    report.records.filter(
+      (r) => r.kind === 'measurement' && r.outcome !== 'dropped' && r.rules.length === 0,
     ),
   );
   return `${lines.join('\n')}\n`;

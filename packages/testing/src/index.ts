@@ -82,7 +82,7 @@ export {
   type StartedMailpit,
 } from './mailpit.ts';
 export { startSmtpServer, type ReceivedMail, type TestSmtpServer } from './smtp-server.ts';
-export { tablesContaining } from './grep.ts';
+export { tableCounts, tablesContaining } from './grep.ts';
 export {
   expectEnvelope,
   expectReplyMatchesRoute,

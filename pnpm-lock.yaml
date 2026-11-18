@@ -1163,6 +1163,12 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/kpi-framework':
+        specifier: workspace:*
+        version: link:../../modules/kpi-framework
+      '@scorpion/kpi-ingestion':
+        specifier: workspace:*
+        version: link:../../modules/kpi-ingestion
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../../modules/registry-organisations
