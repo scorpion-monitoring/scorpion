@@ -90,6 +90,8 @@ test.describe('a sign-in at a provider', () => {
     // From now on the provider signs wren in.
     await page.getByRole('button', { name: 'Account menu' }).click();
     await page.getByRole('button', { name: 'Log out' }).click();
+    // Signed out only once the page says so: a sign-in page asked for earlier still sees the session.
+    await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
     await page.goto(at('/login'));
     await providerButton(page).click();
     await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
