@@ -92,9 +92,21 @@ describe('createUser', () => {
     const { identity: id } = await identity.start();
     const created = await id.users.createUser({ username: 'alice', auth: local() });
     expect(Object.keys(created).sort()).toEqual(
-      ['createdAt', 'deletedAt', 'email', 'emailVerified', 'id', 'status', 'username'].sort(),
+      [
+        'avatarHash',
+        'createdAt',
+        'deletedAt',
+        'email',
+        'emailVerified',
+        'id',
+        'status',
+        'username',
+      ].sort(),
     );
-    expect(JSON.stringify(created)).not.toMatch(/argon2|hash|bootstrap/i);
+    // The picture's file hash is public by design; everything else may not even mention a hash.
+    const { avatarHash, ...rest } = created;
+    expect(avatarHash).toBeNull();
+    expect(JSON.stringify(rest)).not.toMatch(/argon2|hash|bootstrap|blob/i);
   });
 
   it('cannot create an admin, or smuggle in any other column', async () => {

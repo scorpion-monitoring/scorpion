@@ -412,7 +412,9 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const blob = ctx.deps['core.blob'];
       currentSettings = settings;
       currentSecret = clientSecret;
-      const users = createUserService(ctx);
+      // The profile picture's hash for every read of an account that other people see beside its name.
+      const avatarHashOf = async (blobId: string) => (await blob.describe(blobId))?.hash ?? null;
+      const users = createUserService(ctx, { avatarHashOf });
       currentUsers = users;
       const sessions = createSessionService(
         ctx,
@@ -502,8 +504,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           passwords: policy,
           throttle,
         }),
-        approval: createApprovalService(ctx, { sessions, authz, mail, links }),
-        userAdmin: createUserAdminService(ctx, { authz, sessions }),
+        approval: createApprovalService(ctx, { sessions, authz, mail, links, avatarHashOf }),
+        userAdmin: createUserAdminService(ctx, { authz, sessions, avatarHashOf }),
       };
     },
 

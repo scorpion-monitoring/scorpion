@@ -19,6 +19,7 @@ const publicColumns = {
   status: user.status,
   deletedAt: user.deletedAt,
   createdAt: user.createdAt,
+  avatarBlobId: user.avatarBlobId,
 };
 
 type Row = {
@@ -29,9 +30,13 @@ type Row = {
   status: string;
   deletedAt: Date | null;
   createdAt: Date;
+  avatarBlobId: string | null;
 };
 
-function toUser(row: Row): User {
+/** The hash of a stored file by its id (core.blob's trusted `describe`), for the profile picture. */
+export type AvatarHashOf = (blobId: string) => Promise<string | null>;
+
+function toUser(row: Row, avatarHash: string | null): User {
   return {
     id: row.id,
     username: row.username,
@@ -40,6 +45,7 @@ function toUser(row: Row): User {
     status: row.status as User['status'],
     deletedAt: row.deletedAt,
     createdAt: row.createdAt,
+    avatarHash,
   };
 }
 
@@ -62,7 +68,14 @@ function isUniqueViolation(error: unknown): boolean {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function createUserService(ctx: ModuleContext): UserService {
+export function createUserService(
+  ctx: ModuleContext,
+  deps: { avatarHashOf?: AvatarHashOf } = {},
+): UserService {
+  const avatarHashOf = deps.avatarHashOf ?? (() => Promise.resolve(null));
+  /** One lookup per user who has a picture; most have none. */
+  const withAvatar = async (row: Row) =>
+    toUser(row, row.avatarBlobId ? await avatarHashOf(row.avatarBlobId) : null);
   return {
     async createUser(input) {
       const parsed = createUserInput.safeParse(input);
@@ -120,7 +133,7 @@ export function createUserService(ctx: ModuleContext): UserService {
             subject,
             passwordHash,
           });
-          return toUser(created!);
+          return toUser(created!, null);
         });
       } catch (error) {
         // Two requests passed the check together and the unique index stopped the second one.
@@ -137,13 +150,13 @@ export function createUserService(ctx: ModuleContext): UserService {
         .from(user)
         .where(eq(user.username, username.toLowerCase()))
         .limit(1);
-      return row ? toUser(row) : undefined;
+      return row ? withAvatar(row) : undefined;
     },
 
     async findById(id) {
       if (!UUID.test(id)) return undefined; // a malformed id is "no such user", not a database error
       const [row] = await ctx.db.select(publicColumns).from(user).where(eq(user.id, id)).limit(1);
-      return row ? toUser(row) : undefined;
+      return row ? withAvatar(row) : undefined;
     },
 
     async findByIds(wanted) {
@@ -155,7 +168,7 @@ export function createUserService(ctx: ModuleContext): UserService {
           .select(publicColumns)
           .from(user)
           .where(inArray(user.id, valid.slice(start, start + FIND_BY_IDS_CHUNK)));
-        for (const row of rows) found.set(row.id, toUser(row));
+        for (const row of rows) found.set(row.id, await withAvatar(row));
       }
       return found;
     },
@@ -168,7 +181,7 @@ export function createUserService(ctx: ModuleContext): UserService {
         .where(sql`lower(${user.email}) = lower(${email})`)
         .orderBy(sql`${user.emailVerifiedAt} is null`, asc(user.id))
         .limit(1);
-      return row ? toUser(row) : undefined;
+      return row ? withAvatar(row) : undefined;
     },
   };
 }

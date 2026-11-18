@@ -38,10 +38,11 @@ describe('list', () => {
     expect(pending.users.map((u) => u.username)).toEqual(['carol']);
   });
 
-  it('carries only the fields of the field table: no hash, no bio, no avatar', async () => {
+  it('carries only the fields of the field table: no password hash, no bio, the picture only as its file hash', async () => {
     const { users, adminActor } = await start();
     const [first] = (await users.list(adminActor, { page: 0, pageSize: 1 })).users;
     expect(Object.keys(first!).sort()).toEqual([
+      'avatarHash',
       'createdAt',
       'displayName',
       'email',

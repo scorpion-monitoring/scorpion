@@ -533,7 +533,11 @@ describe('secrets in logs and responses', () => {
       (await get('/users/pending', { cookie: admin.cookie })).body,
       (await post('/auth/login', { body: { username: 'admin', password: PASSWORD } })).body,
     ];
-    const text = JSON.stringify(bodies);
-    expect(text).not.toMatch(/argon2|password|secret|hash|bootstrap/i);
+    // `avatarHash` (the picture's public file hash, null here) is the one field allowed to say hash.
+    expect(JSON.stringify(bodies)).toContain('"avatarHash":null');
+    const text = JSON.stringify(bodies, (key, value: unknown) =>
+      key === 'avatarHash' ? undefined : value,
+    );
+    expect(text).not.toMatch(/argon2|password|secret|hash|bootstrap|blob/i);
   });
 });

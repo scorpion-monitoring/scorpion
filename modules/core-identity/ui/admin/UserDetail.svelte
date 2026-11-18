@@ -10,6 +10,7 @@
     failureOf,
     getShell,
     Time,
+    UserAvatar,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import type { UserDetailData, UserToken } from './loaders.ts';
@@ -150,7 +151,10 @@
       { label: name },
     ]}
   />
-  <h1 class="text-2xl font-bold">{name}</h1>
+  <h1 class="inline-flex items-center gap-3 text-2xl font-bold">
+    <UserAvatar hash={data.user.avatarHash} size="md" />
+    {name}
+  </h1>
 
   {#if failed}<Alert kind="error">{failed}</Alert>{/if}
 
