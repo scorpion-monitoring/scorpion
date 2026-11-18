@@ -10,15 +10,17 @@ const FACTS: KpiFacts = {
   necessities: ['mandatory', 'optional'],
   rimoCategories: [],
 };
+/** `selected` is what the legacy API says: true when the category defines the KPI (it has a necessity there). */
 const kpi = (
   name: string,
   categories: { name: string; necessity: string | null }[] = [],
   description: string | null = null,
+  selected: boolean = categories.some((c) => c.necessity !== null),
 ) => ({
   name,
   description,
   categories,
-  selected: null,
+  selected,
 });
 const service = (abbreviation: string, category = 'Tools') => ({
   abbreviation,
@@ -164,7 +166,6 @@ describe('indicators', () => {
     expect(rules(p)).toEqual([
       'indicator:Extra:indicator.from-measurements',
       'indicator:Users:indicator.name-duplicate',
-      'kpi-set:Tools:kpi-set.necessity-missing-mapped',
       'service-kpis:GeneFlow:service-kpis.kpi-added-optional',
     ]);
   });
@@ -207,11 +208,52 @@ describe('KPI sets (decision 6)', () => {
     ['a spelling the mapping knows', 'required', 'mandatory', 'kpi-set.necessity-mapped'],
   ])('necessity %s', (_name, spelling, key, rule) => {
     const p = run({
-      byCategory: { Tools: [kpi('Users', [{ name: 'Tools', necessity: spelling }])] },
+      byCategory: { Tools: [kpi('Users', [{ name: 'Tools', necessity: spelling }], null, true)] },
       mapping: mapping({ necessities: { required: 'mandatory' } }),
     });
     expect(p.sets[0]!.rows).toEqual([{ indicator: 'Users', necessity: key }]);
     expect(rules(p)).toEqual([`kpi-set:Tools:${rule}`]);
+  });
+
+  it('lists every KPI for every category in the legacy answer, and only the ones the category defines are rows', () => {
+    // As the real route answers: all KPIs under each category; `selected` and a necessity mark the ones it defines.
+    const all = (category: string, defined: Record<string, string>) =>
+      ['Users', 'Papers', 'Records'].map((name) =>
+        kpi(name, [{ name: category, necessity: defined[name] ?? null }]),
+      );
+    const p = run({
+      categories: ['Tools', 'Data', 'Consortia'],
+      byCategory: {
+        Tools: all('Tools', { Users: 'mandatory', Papers: 'optional' }),
+        Data: all('Data', { Records: 'mandatory' }),
+        Consortia: all('Consortia', {}),
+      },
+      mapping: mapping({
+        indicators: {
+          Users: { thematic: 'Usage' },
+          Papers: { thematic: 'Usage' },
+          Records: { thematic: 'Usage' },
+        },
+      }),
+    });
+    expect(
+      Object.fromEntries(
+        p.sets.map((s) => [s.legacy, s.rows.map((r) => `${r.indicator}:${r.necessity}`)]),
+      ),
+    ).toEqual({
+      Tools: ['Papers:optional', 'Users:mandatory'],
+      Data: ['Records:mandatory'],
+      Consortia: [],
+    });
+    expect(p.findings.filter((f) => f.rule.includes('necessity'))).toEqual([]);
+  });
+
+  it('keeps a KPI the API marks selected but gives no necessity (decision 6: the default, reported)', () => {
+    const p = run({
+      byCategory: { Tools: [kpi('Users', [{ name: 'Tools', necessity: null }], null, true)] },
+    });
+    expect(p.sets[0]!.rows).toEqual([{ indicator: 'Users', necessity: 'mandatory' }]);
+    expect(rules(p)).toEqual(['kpi-set:Tools:kpi-set.necessity-missing-mapped']);
   });
 
   it('leaves a row out for a necessity it cannot resolve, and the KPI becomes an extra where it has values', () => {

@@ -42,12 +42,22 @@ let subjectsFile: string;
 let n = 0;
 
 const PROVIDER = 'ls-login';
-const kpi = (name: string, categories: { name: string; necessity: string | null }[] = []) => ({
+/** `selected` as the legacy API sets it: true when the category defines the KPI (it is in `categories` with a necessity or by DEFINES). */
+const kpi = (
+  name: string,
+  categories: { name: string; necessity: string | null }[] = [],
+  selected = false,
+) => ({
   name,
   description: `${name} description`,
   categories,
-  selected: null,
+  selected,
 });
+const LISTED = ['Users', 'Papers', 'Records', 'Citations'];
+const listing = (category: string, defined: Record<string, string | null>) =>
+  LISTED.map((name) =>
+    kpi(name, [{ name: category, necessity: defined[name] ?? null }], name in defined),
+  );
 const at = (year: number, month: number, day = 1) =>
   `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 00:00:00+00:00`;
 
@@ -76,12 +86,11 @@ const SNAPSHOT = {
     service('GeneFlow', { category: 'Tools', stage: '', license: '' }),
     service('LeafDB', { category: 'Data', provider: 'PlantData', stage: '', license: '' }),
   ],
+  // As the real route answers: every KPI under every category; the ones the category defines have a necessity (or are
+  // `selected` without one, decision 6).
   indicatorsByCategory: {
-    Tools: [
-      kpi('Users', [{ name: 'Tools', necessity: 'mandatory' }]),
-      kpi('Papers', [{ name: 'Tools', necessity: 'optional' }]),
-    ],
-    Data: [kpi('Records', [{ name: 'Data', necessity: null }])],
+    Tools: listing('Tools', { Users: 'mandatory', Papers: 'optional' }),
+    Data: listing('Data', { Records: null }),
   },
   indicatorsByService: { GeneFlow: [kpi('Citations')] },
   users: [
