@@ -123,6 +123,8 @@ added. `value` is the **canonical text** the legacy API returned (the value type
 
 `reads.measuredIndicatorsAsSystem(serviceId, fromPeriod, toPeriod)` is its companion: the ids of the indicators that have a value in the window (sorted by id, at most 200, the same bounds and 422), which is how a caller learns of an indicator the service has since dropped. Also trusted, also no route.
 
+**A trusted read with the source, for the legacy migration's `compare` (M13 sprint 3).** `reads.storedValuesAsSystem(serviceId, fromPeriod, toPeriod)` returns every value stored for the service in the window, of every indicator, as `{ indicatorId, period, valueNumber | null, value, source }`, by month, then indicator id. `source` is the adapter or tool that wrote the value last (`form`, `csv`, `api`, `legacy-migration`, …), never a person, run or file name; `compare` uses it to tell a value the migration wrote from one a person entered after it. The same bounds and 422 as `seriesAsSystem` (at most 120 months), at most `MAX_STORED_VALUES` values per call; trusted, no permission, no route. Tested in `service/reads.test.ts`.
+
 The routes are thin: Zod parses, one service call (`reads.list`, `reads.grid`, `reads.coverage`, `measurements.upsertByName`), the row is mapped
 field by field. The write route sets `maxBodyBytes` to 3 MiB: 500 items of the legacy shape are about 60 kB, but a text value may be 4 000 characters, so the
 worst plain-ASCII batch is about 2.1 MB; the server-wide 1 MiB would refuse a batch the schema accepts. The preflight for the path names `GET, POST,
