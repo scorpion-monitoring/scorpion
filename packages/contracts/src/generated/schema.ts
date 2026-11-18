@@ -3563,6 +3563,7 @@ export interface paths {
                                 emailVerified: boolean;
                                 /** @enum {string} */
                                 status: "pending" | "active" | "rejected" | "deactivated";
+                                avatarHash: string | null;
                             };
                             roles: string[];
                             csrfToken: string | null;
@@ -3646,6 +3647,7 @@ export interface paths {
                                 email: string | null;
                                 /** Format: date-time */
                                 createdAt: string;
+                                avatarHash: string | null;
                             }[];
                         };
                     };
@@ -3744,6 +3746,7 @@ export interface paths {
                                 status: "pending" | "active" | "rejected" | "deactivated";
                                 /** Format: date-time */
                                 createdAt: string;
+                                avatarHash: string | null;
                             }[];
                         };
                     };
@@ -3828,6 +3831,7 @@ export interface paths {
                             status: "pending" | "active" | "rejected" | "deactivated";
                             /** Format: date-time */
                             createdAt: string;
+                            avatarHash: string | null;
                         };
                     };
                 };
@@ -4187,6 +4191,7 @@ export interface paths {
                             status: "pending" | "active" | "rejected" | "deactivated";
                             /** Format: date-time */
                             createdAt: string;
+                            avatarHash: string | null;
                         };
                     };
                 };
@@ -6295,6 +6300,8 @@ export interface paths {
                                 payload?: unknown;
                                 /** @description The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only). */
                                 userName: string | null;
+                                /** @description The SHA-256 of the profile picture of `userId` now (`/api/internal/files/{hash}`), or `null`. */
+                                userAvatarHash: string | null;
                             }[];
                         };
                     };
@@ -6395,6 +6402,8 @@ export interface paths {
                             payload?: unknown;
                             /** @description The username of `userId` now. `null` with a `userId` means the account no longer exists (a purged account: the trail keeps the id only). */
                             userName: string | null;
+                            /** @description The SHA-256 of the profile picture of `userId` now (`/api/internal/files/{hash}`), or `null`. */
+                            userAvatarHash: string | null;
                         };
                     };
                 };
@@ -8564,6 +8573,8 @@ export interface paths {
                             };
                             result: {
                                 username: string;
+                                /** @description The SHA-256 of the member's profile picture (`/api/internal/files/{hash}`), or `null`. */
+                                avatarHash: string | null;
                                 /** Format: date-time */
                                 since: string;
                             }[];
@@ -8669,6 +8680,8 @@ export interface paths {
                                 userId: string;
                                 /** @description `null` for an account that is gone; its rows are removed by the purge. */
                                 username: string | null;
+                                /** @description The SHA-256 of the person's profile picture (`/api/internal/files/{hash}`), or `null`. */
+                                avatarHash: string | null;
                                 /** @enum {string} */
                                 state: "requested" | "approved" | "rejected" | "left";
                                 /** @enum {string} */
@@ -8838,6 +8851,8 @@ export interface paths {
                             userId: string;
                             /** @description `null` for an account that is gone; its rows are removed by the purge. */
                             username: string | null;
+                            /** @description The SHA-256 of the person's profile picture (`/api/internal/files/{hash}`), or `null`. */
+                            avatarHash: string | null;
                             /** @enum {string} */
                             state: "requested" | "approved" | "rejected" | "left";
                             /** @enum {string} */
@@ -8953,6 +8968,8 @@ export interface paths {
                             userId: string;
                             /** @description `null` for an account that is gone; its rows are removed by the purge. */
                             username: string | null;
+                            /** @description The SHA-256 of the person's profile picture (`/api/internal/files/{hash}`), or `null`. */
+                            avatarHash: string | null;
                             /** @enum {string} */
                             state: "requested" | "approved" | "rejected" | "left";
                             /** @enum {string} */
@@ -9061,6 +9078,8 @@ export interface paths {
                             userId: string;
                             /** @description `null` for an account that is gone; its rows are removed by the purge. */
                             username: string | null;
+                            /** @description The SHA-256 of the person's profile picture (`/api/internal/files/{hash}`), or `null`. */
+                            avatarHash: string | null;
                             /** @enum {string} */
                             state: "requested" | "approved" | "rejected" | "left";
                             /** @enum {string} */
