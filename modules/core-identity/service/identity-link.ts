@@ -1,11 +1,12 @@
-// Adds an identity at a provider to an account: the one write that both ways of linking use, the
-// profile (signed in, after a recent authentication) and the confirmation of the mail (ADR 0026).
+// Adds an identity at a provider to an account: the one write that every way of linking uses, the
+// profile (signed in, after a recent authentication), the confirmation of the mail (ADR 0026) and the
+// claim of a migrated account (ADR 0053).
 import { and, eq } from 'drizzle-orm';
 import { Conflict } from '@scorpion/contracts';
 import { ids, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
 
-export type LinkedVia = 'email' | 'profile';
+export type LinkedVia = 'email' | 'profile' | 'claim';
 
 /**
  * Inserts the auth method and emits `identity.authMethod.linked@1`, in the caller's transaction. 409

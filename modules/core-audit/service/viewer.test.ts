@@ -99,9 +99,13 @@ describe('the list', () => {
       { page: 0, pageSize: 10 },
     );
     const by = (id: string) => events.find((event) => event.id === id)!;
-    expect(by(keep.id)).toMatchObject({ userId: alive.id, userName: alive.username });
-    expect(by(gone.id)).toMatchObject({ userId: purged, userName: null });
-    expect(by(nobody.id)).toMatchObject({ userId: null, userName: null });
+    expect(by(keep.id)).toMatchObject({
+      userId: alive.id,
+      userName: alive.username,
+      userAvatarHash: null, // no picture uploaded
+    });
+    expect(by(gone.id)).toMatchObject({ userId: purged, userName: null, userAvatarHash: null });
+    expect(by(nobody.id)).toMatchObject({ userId: null, userName: null, userAvatarHash: null });
     expect((await s.audit.viewer.get(admin, keep.id)).userName).toBe(alive.username);
     expect((await s.audit.viewer.get(admin, gone.id)).userName).toBeNull();
   });

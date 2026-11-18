@@ -101,6 +101,8 @@ test.describe('J01: register an account and get approved', () => {
       await signInThroughPage(visitor, at, yes);
       await visitor.getByRole('button', { name: 'Account menu' }).click();
       await visitor.getByRole('button', { name: 'Log out' }).click();
+      // Signed out only once the page says so: a sign-in page asked for earlier still sees the session.
+      await expect(visitor.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
     });
     await test.step('Fail to sign in as the rejected person', async () => {
       await visitor.goto(at('/login'));

@@ -4,7 +4,7 @@
   // the data the API returned (`allowedActions`, `editableFields`); `type`, `abbreviation` and `name` are read
   // only for a manager and the page says why. There is no create and no delete here.
   import { tick } from 'svelte';
-  import { DataTable, getShell, Time, type Column } from '@scorpion/ui-kit';
+  import { DataTable, getShell, Time, type Column, UserAvatar } from '@scorpion/ui-kit';
   import type { TypeChoice } from './form-context.ts';
   import type { FormField } from './form-schema.ts';
   import type { AccountOrganisationsData, ManagedRow } from './loaders.ts';
@@ -75,7 +75,11 @@
         {t('membership.requests.title')}
       </h4>
       {#snippet requestPerson(row: ManagedRow)}
-        <span class="font-medium">{row.username ?? t('membership.unknownPerson')}</span>
+        <span class="inline-flex items-center gap-2 align-middle"
+          ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
+            >{row.username ?? t('membership.unknownPerson')}</span
+          ></span
+        >
       {/snippet}
       {#snippet requestedAt(row: ManagedRow)}<Time iso={row.requestedAt} />{/snippet}
       {#snippet requestActions(row: ManagedRow)}
@@ -110,7 +114,11 @@
         <ul class="list-none text-sm" aria-label={t('membership.decided.title')}>
           {#each decided as row (row.id)}
             <li class="flex flex-wrap items-center gap-2">
-              <span class="font-medium">{row.username ?? t('membership.unknownPerson')}</span>
+              <span class="inline-flex items-center gap-2 align-middle"
+                ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
+                  >{row.username ?? t('membership.unknownPerson')}</span
+                ></span
+              >
               <StateBadge state={row.state} role={row.role} />
               {#if row.decidedAt}<Time iso={row.decidedAt} />{/if}
             </li>
@@ -127,7 +135,11 @@
         <p class="text-sm opacity-70">{t('membership.onlyManager')}</p>
       {/if}
       {#snippet memberPerson(row: ManagedRow)}
-        <span class="font-medium">{row.username ?? t('membership.unknownPerson')}</span>
+        <span class="inline-flex items-center gap-2 align-middle"
+          ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
+            >{row.username ?? t('membership.unknownPerson')}</span
+          ></span
+        >
       {/snippet}
       {#snippet memberRole(row: ManagedRow)}<StateBadge
           state={row.state}

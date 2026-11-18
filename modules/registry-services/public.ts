@@ -30,7 +30,9 @@ export {
   type WizardStepEntry,
 } from './service/registries.ts';
 export { fieldValueFacet } from './service/facets.ts';
-export type { ImpactRow, ServiceRecord } from './service/services.ts';
+export type { ImpactRow, ServiceRecord, ServiceView } from './service/services.ts';
+// The slug rule (ADR-0035), pure: the migration tool derives and checks slugs with it before it writes (ADR-0052).
+export { MAX_SLUG_LENGTH, parseSlug, RESERVED_SLUGS } from './service/fields.ts';
 export { MAX_IMPACT_ROWS } from './service/services.ts';
 // The role id of a service's provider (a key of the registry `service.orgRole`), for `listByOrganisationAsSystem(id, PROVIDER_ROLE)`.
 export { OWNER_ROLE as PROVIDER_ROLE } from './service/permissions.ts';
@@ -43,8 +45,12 @@ export { getServiceSchemaOrgV1Route, getServiceV1Route, listServicesV1Route } fr
 /** The slugs of the services `scorpion seed --demo` creates, for the demo seeds of the modules above (ADR-0046). */
 export { DEMO_SERVICE_SLUGS } from './service/demo-seed.ts';
 
+// `create` and `update` check the caller's permission like a request does: the migration tool writes through them as its
+// account (ADR-0052).
 export type ServicesPublic = Pick<
   ServicesService,
+  | 'create'
+  | 'update'
   | 'findByIdsAsSystem'
   | 'findBySlugAsSystem'
   | 'listByOrganisationAsSystem'

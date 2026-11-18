@@ -14,6 +14,8 @@ export interface LogEntry {
   actorKind: 'user' | 'token' | 'anonymous' | 'system';
   userId: string | null;
   userName: string | null;
+  /** The profile picture's SHA-256, or `null`. */
+  userAvatarHash: string | null;
   tokenId: string | null;
   ip: string | null;
   method: string | null;

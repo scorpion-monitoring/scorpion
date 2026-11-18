@@ -15,6 +15,8 @@ export interface AdminUser {
   emailVerified: boolean;
   status: UserStatus;
   createdAt: string;
+  /** The profile picture's SHA-256, or `null`. */
+  avatarHash: string | null;
 }
 
 export interface UsersData {
@@ -34,6 +36,8 @@ export interface PendingUser {
   username: string;
   email: string | null;
   createdAt: string;
+  /** The profile picture's SHA-256, or `null`. */
+  avatarHash: string | null;
 }
 
 export interface RoleOption {

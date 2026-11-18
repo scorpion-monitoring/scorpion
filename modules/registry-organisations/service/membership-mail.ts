@@ -19,6 +19,12 @@ import { membership } from '../db/schema.ts';
 const LOCALE_PREFERENCE = 'notifications.locale';
 const ADMIN_ROLE = 'admin';
 
+/** A person as a list shows them: the username and the profile picture they chose (its SHA-256, or `null`). */
+export interface ListedPerson {
+  username: string;
+  avatarHash: string | null;
+}
+
 export interface MembershipMailDeps {
   authz: Pick<AuthzService, 'listHoldersAsSystem'>;
   identity: Pick<IdentityService, 'users'>;
@@ -43,9 +49,9 @@ export interface MembershipMail {
   /** The page of an organisation, as an absolute URL. */
   organisationUrl(organisationId: string): string;
   /** A person's username, for a screen; `undefined` for an account that is gone. */
-  usernameOf(userId: string): Promise<string | undefined>;
-  /** The usernames of many people in one query; an unknown id is absent from the map. */
-  usernamesOf(userIds: readonly string[]): Promise<Map<string, string>>;
+  personOf(userId: string): Promise<ListedPerson | undefined>;
+  /** The usernames and profile pictures of many people in one query; an unknown id is absent from the map. */
+  peopleOf(userIds: readonly string[]): Promise<Map<string, ListedPerson>>;
   /**
    * A request: the approved managers of the organisation and the administrators, once each, the
    * requester left out. A mail and an inbox item; an administrator's link is the administrators' screen.
@@ -100,13 +106,19 @@ export function createMembershipMail(
   return {
     organisationUrl,
 
-    async usernamesOf(userIds) {
+    async peopleOf(userIds) {
       const users = await deps.identity.users.findByIds(userIds);
-      return new Map([...users].map(([id, user]) => [id, user.username]));
+      return new Map(
+        [...users].map(([id, user]) => [
+          id,
+          { username: user.username, avatarHash: user.avatarHash },
+        ]),
+      );
     },
 
-    async usernameOf(userId) {
-      return (await deps.identity.users.findById(userId))?.username;
+    async personOf(userId) {
+      const found = await deps.identity.users.findById(userId);
+      return found ? { username: found.username, avatarHash: found.avatarHash } : undefined;
     },
 
     async requested(tx, { requesterId, organisation }) {

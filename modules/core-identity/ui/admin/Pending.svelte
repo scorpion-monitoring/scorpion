@@ -11,6 +11,7 @@
     getShell,
     Time,
     type Column,
+    UserAvatar,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import type { PendingData, PendingUser } from './loaders.ts';
@@ -88,7 +89,12 @@
     </div>
   {/if}
 
-  {#snippet account(row: PendingUser)}<span class="font-medium">{row.username}</span>{/snippet}
+  {#snippet account(row: PendingUser)}
+    <span class="inline-flex items-center gap-2 align-middle">
+      <UserAvatar hash={row.avatarHash} />
+      <span class="font-medium">{row.username}</span>
+    </span>
+  {/snippet}
   {#snippet requested(row: PendingUser)}<Time iso={row.createdAt} />{/snippet}
   {#snippet actions(row: PendingUser)}
     <button

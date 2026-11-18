@@ -1,0 +1,30 @@
+{
+  "name": "@scorpion/migrate-legacy",
+  "version": "0.0.0",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "description": "One-time migration from the legacy application (ipk-bit/scorpion): fetch a snapshot of its REST API, discover, plan and run the import through the new services. Not part of any image.",
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@scorpion/contracts": "workspace:*",
+    "@scorpion/core-authz": "workspace:*",
+    "@scorpion/core-identity": "workspace:*",
+    "@scorpion/core-settings": "workspace:*",
+    "@scorpion/integrations": "workspace:*",
+    "@scorpion/kernel": "workspace:*",
+    "@scorpion/kpi-framework": "workspace:*",
+    "@scorpion/kpi-ingestion": "workspace:*",
+    "@scorpion/registry-organisations": "workspace:*",
+    "@scorpion/registry-services": "workspace:*",
+    "@scorpion/server": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.1.8",
+    "@scorpion/testing": "workspace:*",
+    "hono": "^4.13.18"
+  }
+}

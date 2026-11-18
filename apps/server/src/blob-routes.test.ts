@@ -165,6 +165,39 @@ describe('PUT and DELETE /account/avatar', () => {
     expect((await s.kernel.pool.query('select 1 from blob_reference')).rows).toEqual([]);
   });
 
+  it('shows beside the name: in /auth/me, in the user table and in the audit trail', async () => {
+    const s = await start();
+    const alice = await s.signedIn('alice');
+    const admin = await s.signedIn('adminy', { roles: ['admin'] });
+    const set = await s.call('PUT', '/account/avatar', { ...as(alice), body: makePng(24) });
+    const { avatarHash } = set.body as { avatarHash: string };
+
+    const me = (await s.get('/auth/me', as(alice))).body as { user: { avatarHash: string } };
+    expect(me.user.avatarHash).toBe(avatarHash);
+    const users = (await s.get('/users?pageSize=100', as(admin))).body as {
+      result: { username: string; avatarHash: string | null }[];
+    };
+    expect(users.result.find((u) => u.username === 'alice')!.avatarHash).toBe(avatarHash);
+    expect(users.result.find((u) => u.username === 'adminy')!.avatarHash).toBeNull();
+    const user = users.result.find((u) => u.username === 'alice') as unknown as { id: string };
+    expect((await s.get(`/users/${user.id}`, as(admin))).body).toMatchObject({ avatarHash });
+
+    // The upload itself is in the trail, under alice's name and picture.
+    while ((await s.kernel.dispatcher.dispatchOnce()) > 0) {
+      // run until the outbox is quiet
+    }
+    const trail = (await s.get('/audit?pageSize=100', as(admin))).body as {
+      result: { userName: string | null; userAvatarHash: string | null }[];
+    };
+    const mine = trail.result.filter((entry) => entry.userName === 'alice');
+    expect(mine.length).toBeGreaterThan(0);
+    for (const entry of mine) expect(entry.userAvatarHash).toBe(avatarHash);
+
+    // Removed: null everywhere again.
+    await s.call('DELETE', '/account/avatar', as(alice));
+    expect((await s.get('/auth/me', as(alice))).body).toMatchObject({ user: { avatarHash: null } });
+  });
+
   it('has no user id: it changes the caller’s account and nobody else’s', async () => {
     const s = await start();
     const alice = await s.signedIn('alice');

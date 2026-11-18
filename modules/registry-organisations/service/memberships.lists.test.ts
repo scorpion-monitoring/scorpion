@@ -13,7 +13,7 @@ const PAGE = { page: 0, pageSize: 50 };
 const ABSENT = '018f3b7e-0000-7000-8000-000000000000';
 
 describe('listMembers', () => {
-  it('shows an approved member the usernames and join dates of the other approved members, and nothing else', async () => {
+  it('shows an approved member the usernames, profile pictures and join dates of the other approved members, and nothing else', async () => {
     const w = await startWorld(h);
     const viewer = await w.member();
     const manager = await w.manager();
@@ -24,7 +24,8 @@ describe('listMembers', () => {
     expect(total).toBe(2);
     expect(items.map((i) => i.username).sort()).toEqual([viewer.username, manager.username].sort());
     for (const item of items) {
-      expect(Object.keys(item).sort()).toEqual(['since', 'username']); // no state, no role, no id, no address
+      expect(Object.keys(item).sort()).toEqual(['avatarHash', 'since', 'username']); // no state, no role, no id, no address
+      expect(item.avatarHash).toBeNull(); // nobody here has uploaded a picture
       expect(item.since).toBeInstanceOf(Date);
     }
     expect(JSON.stringify(items)).not.toMatch(/@/);

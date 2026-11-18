@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { getShell } from '@scorpion/ui-kit';
+  import { getShell, UserAvatar } from '@scorpion/ui-kit';
   import Icon from './Icon.svelte';
 
   const { t, href, api, session } = getShell();
@@ -53,7 +53,7 @@
       aria-label={`${t('app.account.menu')}: ${who.user.username}`}
       onclick={() => (open = !open)}
     >
-      <Icon name="user" size={18} />
+      <UserAvatar hash={who.user.avatarHash} size="md" />
       <span class="hidden sm:inline">{who.user.username}</span>
       <Icon name="chevronDown" size={14} />
     </button>

@@ -32,7 +32,11 @@ import {
   TooManyPending,
 } from './errors.ts';
 import { requireId } from './input.ts';
-import { createMembershipMail, type MembershipMailDeps } from './membership-mail.ts';
+import {
+  createMembershipMail,
+  type MembershipMailDeps,
+  type ListedPerson,
+} from './membership-mail.ts';
 import { approvedCounts } from './membership-queries.ts';
 import {
   STATES,
@@ -84,6 +88,8 @@ export interface ManagedMembership {
   userId: string;
   /** `null` for an account that is gone and whose rows the purge has not yet removed. */
   username: string | null;
+  /** The profile picture's SHA-256, or `null` (none, or the account is gone). */
+  avatarHash: string | null;
   state: State;
   role: Role;
   requestedAt: Date;
@@ -96,6 +102,8 @@ export interface ManagedMembership {
 /** What a member sees of another member: a username and a date. No state, no role, no address. */
 export interface Member {
   username: string;
+  /** The profile picture's SHA-256, or `null`. */
+  avatarHash: string | null;
   since: Date;
 }
 
@@ -344,13 +352,15 @@ export function createMembershipsService(
     row: Row,
     org: OrganisationRef,
     caller: { userId: string; by: Exclude<By, 'self'> },
-    username?: string | null,
+    known?: ListedPerson | null,
   ): Promise<ManagedMembership> {
+    const person = known === undefined ? ((await mail.personOf(row.userId)) ?? null) : known;
     return {
       id: row.id,
       organisation: org,
       userId: row.userId,
-      username: username === undefined ? ((await mail.usernameOf(row.userId)) ?? null) : username,
+      username: person?.username ?? null,
+      avatarHash: person?.avatarHash ?? null,
       state: row.state as State,
       role: row.role as Role,
       requestedAt: row.requestedAt,
@@ -364,9 +374,9 @@ export function createMembershipsService(
     };
   }
 
-  async function usernames(userIds: readonly string[]): Promise<Map<string, string | null>> {
+  async function people(userIds: readonly string[]): Promise<Map<string, ListedPerson | null>> {
     const unique = [...new Set(userIds)];
-    const found = await mail.usernamesOf(unique);
+    const found = await mail.peopleOf(unique);
     return new Map(unique.map((id) => [id, found.get(id) ?? null]));
   }
 
@@ -392,7 +402,7 @@ export function createMembershipsService(
         .innerJoin(organisation, eq(organisation.id, membership.organisationId))
         .where(where),
     ]);
-    const names = await usernames(rows.map((row) => row.m.userId));
+    const names = await people(rows.map((row) => row.m.userId));
     const items = await Promise.all(
       rows.map((row) =>
         managedView(
@@ -604,12 +614,20 @@ export function createMembershipsService(
           .from(membership)
           .where(where),
       ]);
-      const names = await usernames(rows.map((row) => row.userId));
+      const names = await people(rows.map((row) => row.userId));
       return {
         // An account that is gone (its purge has not run yet) is not shown.
         items: rows.flatMap((row) => {
-          const username = names.get(row.userId);
-          return username ? [{ username, since: row.decidedAt ?? row.requestedAt }] : [];
+          const person = names.get(row.userId);
+          return person
+            ? [
+                {
+                  username: person.username,
+                  avatarHash: person.avatarHash,
+                  since: row.decidedAt ?? row.requestedAt,
+                },
+              ]
+            : [];
         }),
         total: count?.total ?? 0,
       };

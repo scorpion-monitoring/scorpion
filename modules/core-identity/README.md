@@ -163,11 +163,11 @@ right password) to wait; signing in does not tell whether a username exists.
   no session), the address stored **only when the provider sent `email_verified: true`** (the boolean), the username
   derived from `preferred_username`, else the address before `@`, else `user`: lower-cased, accents removed, anything
   else `-`, padded to 3 and cut to 31, made unique with a hash suffix of the identity (`sam`, `sam-1a2b`, …). Claims decide nothing else.
-- **A first sign-in with an address an account holds links nothing** ([below](#linking-a-provider-by-mail-confirmation)). Before 0.6.0 a verified address on both sides linked and signed in; a provider's word for an address is no longer enough to enter that account.
+- **A first sign-in with an address an account holds links nothing** ([below](#linking-a-provider-by-mail-confirmation)), with one exception: an account the legacy migration created, which its owner claims ([below](#claiming-a-migrated-account)). Before 0.6.0 a verified address on both sides linked and signed in; a provider's word for an address is no longer enough to enter that account.
 - **Linking from the profile**: `POST …/link` needs a session (an access token gets 403). The callback adds the identity to
   that user; an identity that belongs to anyone, or a provider the user already has, is a 409.
 - **Events**: provisioning emits `identity.user.registered@1` in the transaction that creates the user and its identity;
-  linking emits `identity.authMethod.linked@1 { userId, username, provider, via: 'email' | 'profile' }` (`email`: the account holder confirmed the mailed link), and a link mail emits
+  linking emits `identity.authMethod.linked@1 { userId, username, provider, via: 'email' | 'profile' }` (`email`: the account holder confirmed the mailed link; `claim`: a migrated account was claimed, ADR-0053), and a link mail emits
   `identity.authMethod.linkRequested@1 { userId, username, provider }`. Signing in emits
   nothing. No subject, address or secret is in either.
 - **Bootstrap**: OIDC provisioning never makes an administrator. "No administrator yet" means "no user holds the Admin
@@ -187,6 +187,28 @@ right password) to wait; signing in does not tell whether a username exists.
 4. An account that has **no password** (it signs in only at providers) confirms the same way: it signs in at a provider it already has, which is the recent authentication.
 
 There is no setting that trusts a provider's `email_verified` for linking. Linking from the profile (`POST …/link`) is unchanged: signed in and recently authenticated.
+
+### Claiming a migrated account
+
+[ADR-0053](../../docs/adr/0053-migrated-accounts-are-claimed-at-the-first-sign-in.md). The legacy migration creates each
+user as an active account with **no way to sign in** and a row in `identity_account_claim` (`createClaimableAsSystem`):
+the provider id, the `preferred_username` that provider must send (the legacy username, lower-cased) and an end (90 days
+by default). A first sign-in (an unknown `(provider, sub)`) whose verified address that account holds **claims** it when
+every one of these holds, and otherwise takes the mail path above:
+
+- the provider is the claim's (another listed provider cannot claim it);
+- the provider sent `email_verified: true` and the same address, without case;
+- its `preferred_username` equals the claim's, without case;
+- the claim has not expired;
+- the account is active, not deleted, and has no way to sign in at all.
+
+The claim is locked, the identity added (`identity.authMethod.linked@1`, `via: 'claim'`), the address marked verified and
+the claim deleted in one transaction; then the person is signed in as at any sign-in. Two sign-ins at once claim once. A
+refused claim is logged with its reason (`claim-other-provider`, `claim-expired`, `claim-username-differs`,
+`claim-address-unverified`, `claim-account-unusable`, `claim-account-has-sign-in`), never a value; the browser's answer is
+the same as for any address match. The migration gives these accounts the role `user` only; an administrator grants Admin
+by hand. **What this trusts:** for these accounts only and once, the claim's provider's word for the address and the
+username (ASVS 6.8.1 and 10.5.2 name it). An expired claim never matches and stays until an administrator acts (backlog).
 
 ### Password reset, password change and email verification
 
@@ -313,7 +335,7 @@ Mail does not ride the events (a token cannot travel in one, ADR-0019). `core.au
 | `identity.user.rejected@1`              | `{ userId, username, rejectedBy }`                                         | reject                                                                                                                                                                      |
 | `identity.user.deactivated@1`           | `{ userId, username, deactivatedBy, count }`                               | an administrator deactivated an account; `count` sessions ended                                                                                                             |
 | `identity.admin.created@1`              | `{ userId, username, origin: 'cli' \| 'first-run' }`                       | `create-admin`, the first-run token                                                                                                                                         |
-| `identity.authMethod.linked@1`          | `{ userId, username, provider, via }`                                      | OIDC link (`via` is `email` or `profile`)                                                                                                                                   |
+| `identity.authMethod.linked@1`          | `{ userId, username, provider, via }`                                      | OIDC link (`via` is `email`, `profile` or `claim`)                                                                                                                          |
 | `identity.authMethod.linkRequested@1`   | `{ userId, username, provider }`                                           | a link mail was queued for the account that holds the address                                                                                                               |
 | `identity.token.created@1` `.revoked@1` | `{ userId, tokenId, name }`                                                | access token create, revoke                                                                                                                                                 |
 | `identity.token.rotated@1`              | `{ userId, tokenId, name, previousTokenId }`                               | access token rotate                                                                                                                                                         |
@@ -427,6 +449,7 @@ so a browser that submits one by itself never puts a password in the address. A 
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `identity_user`            | The person: unique `username`, `email` (a verified address is unique, case-insensitively), `display_name`, `bio` (plain text, length-checked), `status`, soft delete, `avatar_blob_id` (nullable; a file of core.blob, [Avatar](#avatar))                                                                                                                                                                                                                                                                                                    |
 | `identity_auth_method`     | One way to sign in: `(provider, subject)` unique; at most one `local` (password) method per user; the argon2id hash for `local`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `identity_account_claim`   | An account the legacy migration created, waiting for its owner (ADR-0053): `user_id` (primary key), `provider`, the expected `preferred_username` (lower-case), `expires_at`; deleted when the account is claimed                                                                                                                                                                                                                                                                                                                            |
 | `identity_mail_token`      | A mailed single-use token: `purpose` (`password-reset`, `email-verification` or `oidc-link`), the SHA-256 hash, the address a verification confirms, the provider and subject an `oidc-link` token links, `expires_at`, `used_at`                                                                                                                                                                                                                                                                                                            |
 | `identity_session`         | A browser session: SHA-256 of the 256-bit session id, `expires_at` (slides) and `absolute_expires_at` (fixed), `authenticated_at`, `revoked_at`                                                                                                                                                                                                                                                                                                                                                                                              |
 | `identity_login_state`     | An OIDC login in progress: provider id, hashes of `state`, `nonce` and the PKCE challenge, its `purpose` (`login`, `link`, `reauth`), the user id and (for `reauth`) the session id, expiry (10 minutes, single use)                                                                                                                                                                                                                                                                                                                         |
@@ -531,6 +554,17 @@ sessions, the provider's session, recent authentication). In short:
 - `findByIds(ids)`: a `Map` of the users found, in one query per 1000 ids; unknown and malformed ids are left out, a repeated id is read once, soft-deleted users are found (M6: lists and fan-outs that would call `findById` per person).
 - `findByUsername(name)` and `findByEmail(address)`: case-insensitive, `undefined` when there is no match,
   soft-deleted users included (the caller refuses their login).
+- `createClaimableAsSystem({ username, email, claim: { provider, username, expiresAt } })`: an active account with no
+  way to sign in, an unverified address and an open claim (below, [Claiming a migrated account](#claiming-a-migrated-account));
+  422 for bad input, 409 for a taken username or address. No event and no role: the caller gives the role. A trusted
+  write (ADR-0015, no permission, no route); the legacy migration creates its accounts with it (M13, ADR-0053).
+- `claimOfAsSystem(userId)`: the open claim `{ provider, username, expiresAt }` of an account (an expired one too), or
+  `undefined` once it was claimed. A trusted read; the migration tool reports by it.
+
+`IdentityService.deactivateAsSystem(userId)` closes an active account with no human caller: the same transaction as
+`POST /users/{id}/deactivate` (sessions end with the status, one event), but **no permission is checked**, no route calls
+it, and the event names no user as the cause, so the audit trail shows the system. The last-Admin rule still applies
+(409). The migration tool ends the life of its own account with it (M13, ADR-0052).
 
 The register, login, session and approval services are internal to the module; the routes call them through
 `r.service()`. Other modules read users and ask `core.authz` about permissions.

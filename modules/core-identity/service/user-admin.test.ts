@@ -38,10 +38,11 @@ describe('list', () => {
     expect(pending.users.map((u) => u.username)).toEqual(['carol']);
   });
 
-  it('carries only the fields of the field table: no hash, no bio, no avatar', async () => {
+  it('carries only the fields of the field table: no password hash, no bio, the picture only as its file hash', async () => {
     const { users, adminActor } = await start();
     const [first] = (await users.list(adminActor, { page: 0, pageSize: 1 })).users;
     expect(Object.keys(first!).sort()).toEqual([
+      'avatarHash',
       'createdAt',
       'displayName',
       'email',
@@ -232,6 +233,72 @@ describe('deactivate', () => {
     await expect(
       users.deactivate(await actorOf(reader, role.key), target.id),
     ).rejects.toBeInstanceOf(Forbidden);
+    expect(
+      await rows(kernel, 'select status from identity_user where id = $1', [target.id]),
+    ).toEqual([{ status: 'active' }]);
+  });
+});
+
+describe('deactivateAsSystem', () => {
+  it('closes an active account with no caller, ends its sessions and names the system in the event', async () => {
+    const { kernel, identity: id } = await start();
+    const target = await makeMember(kernel.pool, { username: 'target' });
+    await makeSession(kernel.pool, target);
+
+    await id.deactivateAsSystem(target.id);
+
+    expect(
+      await rows(kernel, 'select status from identity_user where id = $1', [target.id]),
+    ).toEqual([{ status: 'deactivated' }]);
+    expect(
+      await rows(
+        kernel,
+        'select 1 from identity_session where user_id = $1 and revoked_at is null',
+        [target.id],
+      ),
+    ).toEqual([]);
+    const events = await rows(
+      kernel,
+      "select payload from kernel_outbox where name = 'identity.user.deactivated@1'",
+    );
+    expect(events.map((e) => e.payload)).toMatchObject([
+      { userId: target.id, deactivatedBy: '', count: 1 },
+    ]);
+  });
+
+  it('refuses an account that is not active and an unknown one, and writes no event', async () => {
+    const { kernel, identity: id } = await start();
+    const pending = await makeUser(kernel.pool, { status: 'pending' });
+    await expect(id.deactivateAsSystem(pending.id)).rejects.toBeInstanceOf(Conflict);
+    await expect(id.deactivateAsSystem(randomUUID())).rejects.toBeInstanceOf(NotFound);
+    await expect(id.deactivateAsSystem('nope')).rejects.toBeInstanceOf(NotFound);
+    expect(
+      await rows(kernel, "select 1 from kernel_outbox where name = 'identity.user.deactivated@1'"),
+    ).toEqual([]);
+  });
+
+  it('keeps the last Admin who can sign in, as deactivate does', async () => {
+    const { kernel, identity: id, admin } = await start();
+    await expect(id.deactivateAsSystem(admin.id)).rejects.toBeInstanceOf(Conflict);
+    expect(
+      await rows(kernel, 'select status from identity_user where id = $1', [admin.id]),
+    ).toEqual([{ status: 'active' }]);
+    // With a second Admin the first may go.
+    const second = await makeUser(kernel.pool, { username: 'second' });
+    await makeRoleAssignment(kernel.pool, second, 'admin');
+    await expect(id.deactivateAsSystem(admin.id)).resolves.toBeUndefined();
+  });
+
+  it('undoes the status change when the event cannot be written', async () => {
+    const { kernel, identity: id } = await start();
+    const target = await makeMember(kernel.pool, { username: 'target' });
+    await makeSession(kernel.pool, target);
+    await kernel.pool.query('alter table kernel_outbox rename to kernel_outbox_away');
+    try {
+      await expect(id.deactivateAsSystem(target.id)).rejects.toThrow();
+    } finally {
+      await kernel.pool.query('alter table kernel_outbox_away rename to kernel_outbox');
+    }
     expect(
       await rows(kernel, 'select status from identity_user where id = $1', [target.id]),
     ).toEqual([{ status: 'active' }]);

@@ -1143,6 +1143,55 @@ importers:
         specifier: ^10.15.0
         version: 10.15.0(jiti@2.7.0)
 
+  tools/migrate-legacy:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-authz':
+        specifier: workspace:*
+        version: link:../../modules/core-authz
+      '@scorpion/core-identity':
+        specifier: workspace:*
+        version: link:../../modules/core-identity
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../../modules/core-settings
+      '@scorpion/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@scorpion/kpi-framework':
+        specifier: workspace:*
+        version: link:../../modules/kpi-framework
+      '@scorpion/kpi-ingestion':
+        specifier: workspace:*
+        version: link:../../modules/kpi-ingestion
+      '@scorpion/registry-organisations':
+        specifier: workspace:*
+        version: link:../../modules/registry-organisations
+      '@scorpion/registry-services':
+        specifier: workspace:*
+        version: link:../../modules/registry-services
+      '@scorpion/server':
+        specifier: workspace:*
+        version: link:../../apps/server
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@hono/node-server':
+        specifier: ^2.1.8
+        version: 2.1.8(hono@4.13.18)
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+      hono:
+        specifier: ^4.13.18
+        version: 4.13.18
+
 packages:
 
   '@ai-sdk/gateway@4.0.115':

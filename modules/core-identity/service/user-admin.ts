@@ -6,6 +6,7 @@
 // Deactivating closes the account without deleting it: it cannot sign in, its sessions end in the same
 // transaction (ASVS 7.4.2), its access tokens stop working (a token of a user who is not active is
 // refused), and its data stays. It is not a soft delete, so the purge job leaves it alone.
+import type { AvatarHashOf } from './users.ts';
 import { and, asc, count, desc, eq, ilike, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { Conflict, Forbidden, NotFound, type Actor } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
@@ -32,6 +33,8 @@ export interface AdminUser {
   emailVerified: boolean;
   status: UserStatus;
   createdAt: Date;
+  /** The profile picture's SHA-256, or `null`. */
+  avatarHash: string | null;
 }
 
 export interface UserListQuery {
@@ -56,6 +59,13 @@ export interface UserAdminService {
    * account is not active or is the last active Admin.
    */
   deactivate(actor: Actor, userId: string): Promise<AdminUser>;
+  /**
+   * The same closing for trusted code with no human caller (the migration tool ends the life of its own account, which
+   * `deactivate` refuses): **no permission is checked** and no route calls it. The last-Admin rule still applies (409), as do 404
+   * for an unknown account and 409 for one that is not active. The event names no user as the cause, so the audit trail shows
+   * the system.
+   */
+  deactivateAsSystem(userId: string): Promise<AdminUser>;
 }
 
 /** `%` and `_` in a search text are letters, not wildcards. */
@@ -70,6 +80,7 @@ const columns = {
   emailVerifiedAt: user.emailVerifiedAt,
   status: user.status,
   createdAt: user.createdAt,
+  avatarBlobId: user.avatarBlobId,
 };
 
 type Row = {
@@ -80,9 +91,10 @@ type Row = {
   emailVerifiedAt: Date | null;
   status: string;
   createdAt: Date;
+  avatarBlobId: string | null;
 };
 
-const toAdminUser = (row: Row): AdminUser => ({
+const toAdminUser = (row: Row, avatarHash: string | null): AdminUser => ({
   id: row.id,
   username: row.username,
   displayName: row.displayName,
@@ -90,6 +102,7 @@ const toAdminUser = (row: Row): AdminUser => ({
   emailVerified: row.emailVerifiedAt !== null,
   status: row.status as UserStatus,
   createdAt: row.createdAt,
+  avatarHash,
 });
 
 const sortColumn = {
@@ -101,15 +114,18 @@ const sortColumn = {
 
 export function createUserAdminService(
   ctx: ModuleContext,
-  deps: { authz: AuthzService; sessions: SessionService },
+  deps: { authz: AuthzService; sessions: SessionService; avatarHashOf?: AvatarHashOf },
 ): UserAdminService {
   const { authz, sessions } = deps;
+  const avatarHashOf = deps.avatarHashOf ?? (() => Promise.resolve(null));
+  const withAvatar = async (row: Row) =>
+    toAdminUser(row, row.avatarBlobId ? await avatarHashOf(row.avatarBlobId) : null);
 
   async function found(userId: string): Promise<AdminUser> {
     if (!UUID.test(userId)) throw new NotFound('There is no such user.');
     const [row] = await ctx.db.select(columns).from(user).where(eq(user.id, userId)).limit(1);
     if (!row) throw new NotFound('There is no such user.');
-    return toAdminUser(row);
+    return withAvatar(row);
   }
 
   return {
@@ -140,7 +156,7 @@ export function createUserAdminService(
         .limit(query.pageSize)
         .offset(query.page * query.pageSize);
       const [total] = await ctx.db.select({ value: count() }).from(user).where(where);
-      return { users: rows.map(toAdminUser), total: total?.value ?? 0 };
+      return { users: await Promise.all(rows.map(withAvatar)), total: total?.value ?? 0 };
     },
 
     async get(actor, userId) {
@@ -155,45 +171,48 @@ export function createUserAdminService(
       if (caller.userId === userId.toLowerCase()) {
         throw new Forbidden('You cannot deactivate your own account.');
       }
-      if (!UUID.test(userId)) throw new NotFound('There is no such user.');
-
-      const deactivated = await ctx.db.tx(async (tx) => {
-        // Deactivations and role removals of Admin take turns, so two administrators cannot each
-        // deactivate the other and leave nobody.
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('identity.admin-set'))`);
-        const [target] = await tx
-          .select(columns)
-          .from(user)
-          .where(eq(user.id, userId))
-          .for('update');
-        if (!target) throw new NotFound('There is no such user.');
-        if (target.status !== 'active') {
-          throw new Conflict('Only an active account can be deactivated.');
-        }
-        if (await isAdmin(tx, userId)) {
-          const others = await countActiveAdmins(authz, tx, userId);
-          if (others === 0) throw new Conflict('The last Admin cannot be deactivated.');
-        }
-        const [changed] = await tx
-          .update(user)
-          .set({ status: 'deactivated', updatedAt: sql`now()` })
-          .where(eq(user.id, userId))
-          .returning(columns);
-        // The sessions end in the transaction that closes the account (ASVS 7.4.2).
-        const ended = await sessions.revokeAll(userId, tx);
-        await ctx.events.emit('identity.user.deactivated@1', {
-          userId,
-          username: target.username,
-          deactivatedBy: caller.userId,
-          count: ended,
-        });
-        return toAdminUser(changed!);
-      });
-      // After the commit, so a request that raced with the transaction cannot refill the cache.
-      await sessions.revokeAll(userId);
-      return deactivated;
+      return close(userId, caller.userId);
     },
+
+    deactivateAsSystem: (userId) => close(userId, ''),
   };
+
+  /** `by` is the id of the administrator, or '' for trusted code (the audit trail then shows the system). */
+  async function close(userId: string, by: string): Promise<AdminUser> {
+    if (!UUID.test(userId)) throw new NotFound('There is no such user.');
+
+    const deactivated = await ctx.db.tx(async (tx) => {
+      // Deactivations and role removals of Admin take turns, so two administrators cannot each
+      // deactivate the other and leave nobody.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('identity.admin-set'))`);
+      const [target] = await tx.select(columns).from(user).where(eq(user.id, userId)).for('update');
+      if (!target) throw new NotFound('There is no such user.');
+      if (target.status !== 'active') {
+        throw new Conflict('Only an active account can be deactivated.');
+      }
+      if (await isAdmin(tx, userId)) {
+        const others = await countActiveAdmins(authz, tx, userId);
+        if (others === 0) throw new Conflict('The last Admin cannot be deactivated.');
+      }
+      const [changed] = await tx
+        .update(user)
+        .set({ status: 'deactivated', updatedAt: sql`now()` })
+        .where(eq(user.id, userId))
+        .returning(columns);
+      // The sessions end in the transaction that closes the account (ASVS 7.4.2).
+      const ended = await sessions.revokeAll(userId, tx);
+      await ctx.events.emit('identity.user.deactivated@1', {
+        userId,
+        username: target.username,
+        deactivatedBy: by,
+        count: ended,
+      });
+      return withAvatar(changed!);
+    });
+    // After the commit, so a request that raced with the transaction cannot refill the cache.
+    await sessions.revokeAll(userId);
+    return deactivated;
+  }
 
   async function isAdmin(tx: DbTx, userId: string) {
     return (await authz.listHoldersAsSystem(tx, ADMIN_ROLE)).includes(userId);

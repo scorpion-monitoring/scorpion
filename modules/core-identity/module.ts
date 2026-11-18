@@ -296,9 +296,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           deactivatedBy: z.string(),
           count: z.number().int().min(0),
         }),
+        // `via`: `profile` (signed in), `email` (the mailed link, ADR 0026) or `claim` (a migrated account's first sign-in, ADR 0053).
         'identity.authMethod.linked@1': userEvent.extend({
           provider: z.string(),
-          via: z.enum(['email', 'profile']),
+          via: z.enum(['email', 'profile', 'claim']),
         }),
         // A first sign-in at a provider found an account that holds the address; its holder was mailed a link (ADR 0026). Nothing was linked.
         'identity.authMethod.linkRequested@1': userEvent.extend({ provider: z.string() }),
@@ -412,7 +413,9 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       const blob = ctx.deps['core.blob'];
       currentSettings = settings;
       currentSecret = clientSecret;
-      const users = createUserService(ctx);
+      // The profile picture's hash for every read of an account that other people see beside its name.
+      const avatarHashOf = async (blobId: string) => (await blob.describe(blobId))?.hash ?? null;
+      const users = createUserService(ctx, { avatarHashOf });
       currentUsers = users;
       const sessions = createSessionService(
         ctx,
@@ -474,6 +477,7 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
       currentCleanup = cleanup;
       const loginFailures = createLoginFailureAudit(ctx);
       currentLoginFailures = loginFailures;
+      const userAdmin = createUserAdminService(ctx, { authz, sessions, avatarHashOf });
       return {
         bootstrap,
         cleanup,
@@ -489,6 +493,9 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         sessionAdmin: createSessionAdminService(ctx, { sessions, users, authz }),
         requireRecentAuth: (actor, maxAgeSeconds) =>
           sessions.requireRecentAuth(actor, maxAgeSeconds),
+        deactivateAsSystem: async (userId) => {
+          await userAdmin.deactivateAsSystem(userId);
+        },
         tokens,
         accounts: createAccountService(ctx, {
           users,
@@ -502,8 +509,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           passwords: policy,
           throttle,
         }),
-        approval: createApprovalService(ctx, { sessions, authz, mail, links }),
-        userAdmin: createUserAdminService(ctx, { authz, sessions }),
+        approval: createApprovalService(ctx, { sessions, authz, mail, links, avatarHashOf }),
+        userAdmin,
       };
     },
 

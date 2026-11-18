@@ -1,10 +1,10 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { Conflict, Invalid } from '@scorpion/contracts';
-import { ids, type ModuleContext } from '@scorpion/kernel';
+import { ids, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
-import { authMethod, user } from '../db/schema.ts';
+import { accountClaim, authMethod, user } from '../db/schema.ts';
 import type { CreateUserInput } from '../validation.ts';
-import { createUserInput } from '../validation.ts';
+import { createClaimableUserInput, createUserInput } from '../validation.ts';
 import { hashPassword } from './password.ts';
 import type { User, UserService } from '../public.ts';
 
@@ -19,6 +19,7 @@ const publicColumns = {
   status: user.status,
   deletedAt: user.deletedAt,
   createdAt: user.createdAt,
+  avatarBlobId: user.avatarBlobId,
 };
 
 type Row = {
@@ -29,9 +30,13 @@ type Row = {
   status: string;
   deletedAt: Date | null;
   createdAt: Date;
+  avatarBlobId: string | null;
 };
 
-function toUser(row: Row): User {
+/** The hash of a stored file by its id (core.blob's trusted `describe`), for the profile picture. */
+export type AvatarHashOf = (blobId: string) => Promise<string | null>;
+
+function toUser(row: Row, avatarHash: string | null): User {
   return {
     id: row.id,
     username: row.username,
@@ -40,6 +45,7 @@ function toUser(row: Row): User {
     status: row.status as User['status'],
     deletedAt: row.deletedAt,
     createdAt: row.createdAt,
+    avatarHash,
   };
 }
 
@@ -62,7 +68,35 @@ function isUniqueViolation(error: unknown): boolean {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function createUserService(ctx: ModuleContext): UserService {
+/**
+ * The duplicate check looks at every user, whatever way they sign in, and at soft-deleted ones too: a username stays
+ * reserved. The unique indexes decide a race.
+ */
+async function assertFree(tx: DbTx, username: string, email: string | undefined): Promise<void> {
+  const [sameUsername] = await tx
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.username, username))
+    .limit(1);
+  if (sameUsername) throw new Conflict('This username is already taken.');
+  if (email !== undefined) {
+    const [sameEmail] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`lower(${user.email}) = lower(${email})`)
+      .limit(1);
+    if (sameEmail) throw new Conflict('This email address is already in use.');
+  }
+}
+
+export function createUserService(
+  ctx: ModuleContext,
+  deps: { avatarHashOf?: AvatarHashOf } = {},
+): UserService {
+  const avatarHashOf = deps.avatarHashOf ?? (() => Promise.resolve(null));
+  /** One lookup per user who has a picture; most have none. */
+  const withAvatar = async (row: Row) =>
+    toUser(row, row.avatarBlobId ? await avatarHashOf(row.avatarBlobId) : null);
   return {
     async createUser(input) {
       const parsed = createUserInput.safeParse(input);
@@ -74,23 +108,7 @@ export function createUserService(ctx: ModuleContext): UserService {
 
       try {
         return await ctx.db.tx(async (tx) => {
-          // The duplicate check looks at every user, whatever way they sign in, and at soft-deleted
-          // ones too: a username stays reserved. The unique indexes decide a race.
-          const [sameUsername] = await tx
-            .select({ id: user.id })
-            .from(user)
-            .where(eq(user.username, username))
-            .limit(1);
-          if (sameUsername) throw new Conflict('This username is already taken.');
-
-          if (email !== undefined) {
-            const [sameEmail] = await tx
-              .select({ id: user.id })
-              .from(user)
-              .where(sql`lower(${user.email}) = lower(${email})`)
-              .limit(1);
-            if (sameEmail) throw new Conflict('This email address is already in use.');
-          }
+          await assertFree(tx, username, email);
 
           const id = ids.uuidv7();
           const [created] = await tx
@@ -120,7 +138,7 @@ export function createUserService(ctx: ModuleContext): UserService {
             subject,
             passwordHash,
           });
-          return toUser(created!);
+          return toUser(created!, null);
         });
       } catch (error) {
         // Two requests passed the check together and the unique index stopped the second one.
@@ -137,13 +155,13 @@ export function createUserService(ctx: ModuleContext): UserService {
         .from(user)
         .where(eq(user.username, username.toLowerCase()))
         .limit(1);
-      return row ? toUser(row) : undefined;
+      return row ? withAvatar(row) : undefined;
     },
 
     async findById(id) {
       if (!UUID.test(id)) return undefined; // a malformed id is "no such user", not a database error
       const [row] = await ctx.db.select(publicColumns).from(user).where(eq(user.id, id)).limit(1);
-      return row ? toUser(row) : undefined;
+      return row ? withAvatar(row) : undefined;
     },
 
     async findByIds(wanted) {
@@ -155,9 +173,51 @@ export function createUserService(ctx: ModuleContext): UserService {
           .select(publicColumns)
           .from(user)
           .where(inArray(user.id, valid.slice(start, start + FIND_BY_IDS_CHUNK)));
-        for (const row of rows) found.set(row.id, toUser(row));
+        for (const row of rows) found.set(row.id, await withAvatar(row));
       }
       return found;
+    },
+
+    async createClaimableAsSystem(input) {
+      const parsed = createClaimableUserInput.safeParse(input);
+      if (!parsed.success) throw invalid(parsed.error);
+      const { username, email, claim } = parsed.data;
+      try {
+        return await ctx.db.tx(async (tx) => {
+          await assertFree(tx, username, email);
+          const id = ids.uuidv7();
+          // Unverified: the address is confirmed when a provider vouches for it at the claim.
+          const [created] = await tx
+            .insert(user)
+            .values({ id, username, email, emailVerifiedAt: null, status: 'active' })
+            .returning(publicColumns);
+          await tx.insert(accountClaim).values({
+            userId: id,
+            provider: claim.provider,
+            username: claim.username.toLowerCase(),
+            expiresAt: claim.expiresAt,
+          });
+          return toUser(created!, null);
+        });
+      } catch (error) {
+        if (isUniqueViolation(error))
+          throw new Conflict('The username or email address is already in use.');
+        throw error;
+      }
+    },
+
+    async claimOfAsSystem(userId) {
+      if (!UUID.test(userId)) return undefined;
+      const [row] = await ctx.db
+        .select({
+          provider: accountClaim.provider,
+          username: accountClaim.username,
+          expiresAt: accountClaim.expiresAt,
+        })
+        .from(accountClaim)
+        .where(eq(accountClaim.userId, userId))
+        .limit(1);
+      return row;
     },
 
     async findByEmail(email) {
@@ -168,7 +228,7 @@ export function createUserService(ctx: ModuleContext): UserService {
         .where(sql`lower(${user.email}) = lower(${email})`)
         .orderBy(sql`${user.emailVerifiedAt} is null`, asc(user.id))
         .limit(1);
-      return row ? toUser(row) : undefined;
+      return row ? withAvatar(row) : undefined;
     },
   };
 }

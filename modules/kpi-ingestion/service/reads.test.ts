@@ -546,3 +546,64 @@ describe('reads.measuredIndicatorsAsSystem: which indicators have values in a wi
     ]);
   });
 });
+
+describe('reads.storedValuesAsSystem: every value of a service with its source (M13 compare)', () => {
+  const stored = (w: IngestionWorld, from: string, to: string, serviceId = w.svc.id) =>
+    w.ingestion.reads.storedValuesAsSystem(serviceId, from, to);
+
+  it('returns every indicator’s values of the window by month, then indicator id, with the source that wrote it and nothing else', async () => {
+    const w = await seeded();
+    await makeMeasurement(w.pool, {
+      serviceId: w.svc.id,
+      indicatorId: w.ind.outside.id,
+      period: '2026-02-28',
+      valueNumeric: 5,
+      source: 'legacy-migration',
+    });
+    const values = await stored(w, '2026-01', '2026-02');
+    expect(values.map((v) => `${v.period}|${v.indicatorId}`)).toEqual(
+      [
+        ...[w.ind.downloads, w.ind.share, w.ind.uptime, w.ind.note].map(
+          (i) => `2026-01-31|${i.id}`,
+        ),
+        ...[w.ind.downloads, w.ind.uptime, w.ind.outside].map((i) => `2026-02-28|${i.id}`),
+      ].sort(),
+    );
+    expect(values.find((v) => v.indicatorId === w.ind.uptime.id)).toEqual({
+      indicatorId: w.ind.uptime.id,
+      period: '2026-01-31',
+      valueNumber: 3661,
+      value: '01-01-01',
+      source: 'test',
+    });
+    expect(values.find((v) => v.indicatorId === w.ind.outside.id)).toMatchObject({
+      value: '5',
+      source: 'legacy-migration',
+    });
+    expect(Object.keys(values[0]!).sort()).toEqual([
+      'indicatorId',
+      'period',
+      'source',
+      'value',
+      'valueNumber',
+    ]);
+  });
+
+  it('holds nothing of another service, an empty window is empty, and it takes no actor', async () => {
+    const w = await seeded();
+    await w.put(w.ind.downloads, '2026-01-31', 999, w.elsewhereSvc.id);
+    expect((await stored(w, '2026-01', '2026-06')).some((v) => v.valueNumber === 999)).toBe(false);
+    expect(await stored(w, '2027-01', '2027-06')).toEqual([]);
+    expect(w.ingestion.reads.storedValuesAsSystem.length).toBe(3);
+  });
+
+  it('has the bounds and the 422 of seriesAsSystem', async () => {
+    const w = await seeded();
+    expect(await stored(w, '2017-01', '2026-12')).toHaveLength(12);
+    expect(paths(await rejection(stored(w, '2026-13', '2026-06')))).toEqual(['query:fromPeriod']);
+    expect(paths(await rejection(stored(w, '2016-12', '2026-12')))).toEqual(['query:toPeriod']);
+    expect(paths(await rejection(stored(w, '2026-01', '2026-06', 'nope')))).toEqual([
+      'query:service',
+    ]);
+  });
+});

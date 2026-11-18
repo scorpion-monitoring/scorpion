@@ -2,8 +2,8 @@ asvs_version: 5.0.0
 level: 2
 chapter: V6
 assessment_type: self
-assessed_commit: 562ed342b8a398189016e8f7dcc73809a859e6e6
-assessed_on: 2026-11-17
+assessed_commit: 70e7845f2432ea8dc343c0dca93fa9b0dadda67b
+assessed_on: 2026-11-18
 assessor: feserm
 second_pass: null
 reviewer: null
@@ -204,7 +204,9 @@ requirements:
       - code: modules/core-identity/service/oidc-link.ts
       - code: modules/core-identity/service/oidc.ts
       - doc: docs/adr/0026-credential-rules-throttling-and-mail-confirmed-linking.md
-    note: 'Identities are keyed by (provider, subject) with a unique index. A provider that asserts the address of an existing account links nothing and signs nobody in: the account own address is mailed a single-use 10-minute link, and the identity is linked only when that account holder, signed in and recently authenticated, confirms it. The tagged tests cover the service, the routes and a real Keycloak (the Keycloak test needs Docker; it ran in the same run). Residual risk: a provider can still trigger the mail (bounded by the mail budget of the address, and harmless unless the holder confirms), and a provider can create new pending accounts with any address it vouches for.'
+      - code: modules/core-identity/service/account-claim.ts
+      - doc: docs/adr/0053-migrated-accounts-are-claimed-at-the-first-sign-in.md
+    note: "Identities are keyed by (provider, subject) with a unique index. A provider that asserts the address of an existing account links nothing and signs nobody in: the account own address is mailed a single-use 10-minute link, and the identity is linked only when that account holder, signed in and recently authenticated, confirms it. The tagged tests cover the service, the routes and a real Keycloak (the Keycloak test needs Docker; it ran in the same run). Residual risk: a provider can still trigger the mail (bounded by the mail budget of the address, and harmless unless the holder confirms), and a provider can create new pending accounts with any address it vouches for. M13 (ADR-0053): one exception, an account the legacy migration created with no way to sign in and an open claim. It is claimed only by the provider named in the claim (another listed provider gets the mail path above), with a verified address equal to the account's and the legacy username as preferred_username, before the claim expires, and only while the account has no way to sign in at all; the claim is locked and deleted in the transaction that adds the identity. Such accounts get the role user only (Admin is granted by hand). Residual risk: whoever holds an identity at that provider with the owner's address and username before the owner signs in gets that user account; service/account-claim.test.ts covers each refusal, two concurrent sign-ins and the rollback."
   - id: v5.0.0-6.8.2
     status: pass
     evidence:
