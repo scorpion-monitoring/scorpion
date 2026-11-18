@@ -27,7 +27,14 @@ export interface Report {
   target: { database: string; empty: boolean; notes: string[] };
   counts: Record<
     Kind,
-    { read: number; created: number; kept: number; changed: number; dropped: number }
+    {
+      read: number;
+      created: number;
+      kept: number;
+      changed: number;
+      merged: number;
+      dropped: number;
+    }
   >;
   records: ReportRecord[];
 }
@@ -56,6 +63,14 @@ export function buildRecords(
     record.rules.push({ rule: finding.rule, effect: finding.effect, detail: finding.detail });
     records.set(k, record);
   }
+  // A record the load step never saw was dropped, unless it was merged into another one and nothing dropped it.
+  const loaded = new Set(results.map((result) => key(result.kind, result.legacy)));
+  for (const [k, record] of records) {
+    if (loaded.has(k)) continue;
+    const effects = record.rules.map((rule) => rule.effect);
+    record.outcome =
+      !effects.includes('dropped') && effects.includes('merged') ? 'merged' : 'dropped';
+  }
   const order = (r: ReportRecord) => KINDS.indexOf(r.kind);
   return [...records.values()].sort((a, b) =>
     order(a) !== order(b)
@@ -73,7 +88,10 @@ export function countRecords(
   records: readonly ReportRecord[],
 ): Report['counts'] {
   const counts = Object.fromEntries(
-    KINDS.map((kind) => [kind, { read: read[kind], created: 0, kept: 0, changed: 0, dropped: 0 }]),
+    KINDS.map((kind) => [
+      kind,
+      { read: read[kind], created: 0, kept: 0, changed: 0, merged: 0, dropped: 0 },
+    ]),
   ) as Report['counts'];
   for (const record of records) counts[record.kind][record.outcome] += 1;
   return counts;
@@ -95,11 +113,11 @@ export function reportMarkdown(report: Report): string {
     '',
     '## Counts',
     '',
-    `| Kind | Read | ${dry ? 'Would be created' : 'Created'} | Kept | ${dry ? 'Would change' : 'Changed'} | Dropped |`,
-    '| --- | --- | --- | --- | --- | --- |',
+    `| Kind | Read | ${dry ? 'Would be created' : 'Created'} | Kept | ${dry ? 'Would change' : 'Changed'} | Merged | Dropped |`,
+    '| --- | --- | --- | --- | --- | --- | --- |',
     ...KINDS.map((kind) => {
       const c = report.counts[kind];
-      return `| ${kind} | ${c.read} | ${c.created} | ${c.kept} | ${c.changed} | ${c.dropped} |`;
+      return `| ${kind} | ${c.read} | ${c.created} | ${c.kept} | ${c.changed} | ${c.merged} | ${c.dropped} |`;
     }),
   ];
   const section = (title: string, records: ReportRecord[]) => {
@@ -118,12 +136,18 @@ export function reportMarkdown(report: Report): string {
     report.records.filter((r) => r.outcome === 'dropped'),
   );
   section(
+    'Merged into another record',
+    report.records.filter((r) => r.outcome === 'merged'),
+  );
+  section(
     dry ? 'Would change in the target' : 'Changed in the target',
     report.records.filter((r) => r.outcome === 'changed'),
   );
   section(
     'Migrated with a value a rule changed',
-    report.records.filter((r) => r.outcome !== 'dropped' && r.rules.length > 0),
+    report.records.filter(
+      (r) => r.outcome !== 'dropped' && r.outcome !== 'merged' && r.rules.length > 0,
+    ),
   );
   return `${lines.join('\n')}\n`;
 }

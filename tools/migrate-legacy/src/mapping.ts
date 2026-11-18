@@ -14,6 +14,8 @@ const organisation = z.strictObject({
   name: z.string().max(400).optional(),
   /** Not migrated (reported). */
   drop: z.boolean().optional(),
+  /** For a legacy provider: migrate it as a consortium (decision 15; the legacy workaround for consortia). */
+  type: z.enum(['provider', 'consortium']).optional(),
 });
 
 export const mappingSchema = z.strictObject({

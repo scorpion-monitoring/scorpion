@@ -20,11 +20,14 @@ export const KINDS: readonly Kind[] = ['provider', 'consortium', 'service'];
 
 export interface Finding {
   kind: Kind;
-  /** The legacy key: provider abbreviation, consortium name, service abbreviation. */
+  /** The legacy key: provider abbreviation, consortium name (or the abbreviation of a provider migrated as one), service abbreviation. */
   legacy: string;
   rule: string;
-  /** `dropped`: not migrated. `adjusted`: migrated with a value a rule changed. */
-  effect: 'dropped' | 'adjusted';
+  /**
+   * `dropped`: not migrated. `adjusted`: migrated with a value a rule changed. `merged`: the same organisation as another
+   * record of the snapshot, migrated as that one.
+   */
+  effect: 'dropped' | 'adjusted' | 'merged';
   detail: string;
   /** Where the mapping can decide it (`plan` writes a gap there). */
   gap?: string;
@@ -67,18 +70,32 @@ export interface TargetFacts {
 const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const quote = (value: string) => JSON.stringify(value);
 
+interface OrganisationInput {
+  key: string;
+  name: string;
+  /** Where the mapping decides it: `providers` (also for a provider migrated as a consortium) or `consortia`. */
+  section: 'providers' | 'consortia';
+}
+
+/**
+ * The organisations of one type. Two records with the same abbreviation **and** the same name (case is ignored) are
+ * one organisation: the later one is merged into the earlier (`merged`), and its legacy key points to it. The same
+ * abbreviation with another name is a duplicate and is dropped. A consortium the API gives by name takes the
+ * abbreviation of a provider migrated as a consortium that has this name (decision 15).
+ */
 function organisations(
   kind: 'provider' | 'consortium',
-  legacy: readonly { key: string; name: string }[],
-  decisions: Mapping['providers'],
+  inputs: readonly OrganisationInput[],
+  mapping: Mapping,
   findings: Finding[],
-): OrganisationOp[] {
+  fromProviders: ReadonlyMap<string, string> = new Map(),
+): { ops: OrganisationOp[]; aliases: Map<string, string> } {
   const ops: OrganisationOp[] = [];
-  const abbreviations = new Map<string, string>();
+  const aliases = new Map<string, string>();
+  const abbreviations = new Map<string, { key: string; name: string }>();
   const names = new Map<string, string>();
-  const section = kind === 'provider' ? 'providers' : 'consortia';
-  for (const { key, name: legacyName } of [...legacy].sort((a, b) => byCode(a.key, b.key))) {
-    const decided = decisions[key];
+  for (const { key, name: legacyName, section } of inputs) {
+    const decided = mapping[section][key];
     const at = `${section}[${quote(key)}]`;
     const drop = (rule: string, detail: string, gap?: string) =>
       findings.push({
@@ -95,8 +112,16 @@ function organisations(
       drop(`${kind}.dropped-by-mapping`, 'the mapping drops it');
       continue;
     }
+    if (section === 'providers' && kind === 'consortium') {
+      adjust(
+        'provider.migrated-as-consortium',
+        'the mapping makes this legacy provider a consortium',
+      );
+    }
 
     let abbreviation: string;
+    const borrowed =
+      section === 'consortia' ? fromProviders.get(legacyName.trim().toLowerCase()) : undefined;
     if (typeof decided?.abbreviation === 'string') {
       const checked = checkAbbreviation(decided.abbreviation);
       if (!checked.ok) {
@@ -117,13 +142,20 @@ function organisations(
         `${at}.abbreviation`,
       );
       continue;
-    } else if (kind === 'consortium' && consortiumKind(key) === 'name') {
-      drop(
-        'consortium.abbreviation-open',
-        'the API gives the consortium by its name, which is not a valid abbreviation; the mapping must give one',
-        `${at}.abbreviation`,
+    } else if (kind === 'consortium' && section === 'consortia' && consortiumKind(key) === 'name') {
+      if (borrowed === undefined) {
+        drop(
+          'consortium.abbreviation-open',
+          'the API gives the consortium by its name, which is not a valid abbreviation; the mapping must give one',
+          `${at}.abbreviation`,
+        );
+        continue;
+      }
+      abbreviation = borrowed;
+      adjust(
+        'consortium.abbreviation-from-provider',
+        `the legacy provider of the same name, migrated as a consortium, gives ${quote(abbreviation)}`,
       );
-      continue;
     } else {
       const checked = checkAbbreviation(key);
       if (!checked.ok) {
@@ -145,11 +177,22 @@ function organisations(
       adjust(`${kind}.name-mapped`, 'the mapping gives the name');
     else if (checkedName.changed) adjust(`${kind}.name-normalised`, 'white space collapsed');
 
-    const sameAbbreviation = abbreviations.get(abbreviation.toLowerCase());
-    if (sameAbbreviation !== undefined) {
+    const same = abbreviations.get(abbreviation.toLowerCase());
+    if (same !== undefined) {
+      if (same.name.toLowerCase() === name.toLowerCase()) {
+        aliases.set(key, abbreviation);
+        findings.push({
+          kind,
+          legacy: key,
+          rule: `${kind}.merged`,
+          effect: 'merged',
+          detail: `the same organisation as ${quote(same.key)} (abbreviation and name)`,
+        });
+        continue;
+      }
       drop(
         `${kind}.abbreviation-duplicate`,
-        `the abbreviation is taken by ${quote(sameAbbreviation)} (case is ignored)`,
+        `the abbreviation is taken by ${quote(same.key)} (case is ignored)`,
         `${at}.abbreviation`,
       );
       continue;
@@ -163,11 +206,12 @@ function organisations(
       );
       continue;
     }
-    abbreviations.set(abbreviation.toLowerCase(), key);
+    abbreviations.set(abbreviation.toLowerCase(), { key, name });
     names.set(name.toLowerCase(), key);
+    aliases.set(key, abbreviation);
     ops.push({ kind, legacy: key, abbreviation, name });
   }
-  return ops;
+  return { ops, aliases };
 }
 
 export function transformRegistry(
@@ -180,23 +224,50 @@ export function transformRegistry(
   for (const row of snapshot.services) {
     rowsByService.set(row.abbreviation, [...(rowsByService.get(row.abbreviation) ?? []), row]);
   }
-  const consortiumNames = [...new Set(snapshot.services.flatMap((row) => row.consortia))];
+  const consortiumNames = [...new Set(snapshot.services.flatMap((row) => row.consortia))].sort(
+    byCode,
+  );
+  // Decision 15: a legacy provider the mapping marks `type: "consortium"` is migrated as a consortium (the legacy
+  // workaround made consortia providers of a service named like them).
+  const asConsortium = (p: LegacyProvider) =>
+    mapping.providers[p.abbreviation]?.type === 'consortium';
+  const sortedProviders = [...snapshot.providers].sort((a, b) =>
+    byCode(a.abbreviation, b.abbreviation),
+  );
 
   const providers = organisations(
     'provider',
-    snapshot.providers.map((p) => ({ key: p.abbreviation, name: p.name })),
-    mapping.providers,
+    sortedProviders
+      .filter((p) => !asConsortium(p))
+      .map((p) => ({ key: p.abbreviation, name: p.name, section: 'providers' as const })),
+    mapping,
     findings,
   );
+  const converted = sortedProviders.filter(asConsortium);
   const consortia = organisations(
     'consortium',
-    consortiumNames.map((name) => ({ key: name, name })),
-    mapping.consortia,
+    [
+      ...converted.map((p) => ({
+        key: p.abbreviation,
+        name: p.name,
+        section: 'providers' as const,
+      })),
+      ...consortiumNames.map((name) => ({ key: name, name, section: 'consortia' as const })),
+    ],
+    mapping,
     findings,
+    new Map(
+      converted.flatMap((p) => {
+        const decided = mapping.providers[p.abbreviation]?.abbreviation;
+        const checked = checkAbbreviation(typeof decided === 'string' ? decided : p.abbreviation);
+        return checked.ok ? [[p.name.trim().toLowerCase(), checked.value] as const] : [];
+      }),
+    ),
   );
-  const providerByLegacy = new Map(providers.map((op) => [op.legacy, op.abbreviation]));
-  const consortiumByLegacy = new Map(consortia.map((op) => [op.legacy, op.abbreviation]));
+  const providerByLegacy = providers.aliases;
+  const consortiumByLegacy = consortia.aliases;
   const legacyProviders = new Set(snapshot.providers.map((p) => p.abbreviation));
+  const convertedProviders = new Set(converted.map((p) => p.abbreviation));
 
   // Services: first the checks that do not depend on the others, then the slugs (kept or mapped ones reserve theirs
   // before derived ones are made unique against them).
@@ -234,6 +305,14 @@ export function transformRegistry(
       continue;
     }
     const provider = providerByLegacy.get(count.provider);
+    if (provider === undefined && convertedProviders.has(count.provider)) {
+      drop(
+        'service.provider-is-consortium',
+        `its provider ${quote(count.provider)} is migrated as a consortium, which cannot provide a service`,
+        `${at}.drop`,
+      );
+      continue;
+    }
     if (provider === undefined) {
       drop(
         legacyProviders.has(count.provider)
@@ -364,13 +443,14 @@ export function transformRegistry(
   services.sort((a, b) => byCode(a.legacy, b.legacy));
 
   return {
+    // Every legacy record counts once, under the kind it is migrated as.
     read: {
-      provider: snapshot.providers.length,
-      consortium: consortiumNames.length,
+      provider: snapshot.providers.length - converted.length,
+      consortium: consortiumNames.length + converted.length,
       service: rowsByService.size,
     },
-    providers,
-    consortia,
+    providers: providers.ops,
+    consortia: consortia.ops,
     services,
     findings,
   };

@@ -16,7 +16,8 @@ export interface RegistryPorts {
   services: Pick<ServicesPublic, 'create' | 'update' | 'findBySlugAsSystem'>;
 }
 
-export type Outcome = 'created' | 'kept' | 'changed' | 'dropped';
+/** `merged`: the same organisation as another record of the snapshot, migrated as that one. */
+export type Outcome = 'created' | 'kept' | 'changed' | 'merged' | 'dropped';
 
 export interface RecordResult {
   kind: Kind;

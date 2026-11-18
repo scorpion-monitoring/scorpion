@@ -221,9 +221,9 @@ describe('run (registry)', () => {
     expect(report.mode).toBe('dry-run');
     expect(report.account.state).toBe('not created (dry run)');
     expect(report.counts).toEqual({
-      provider: { read: 4, created: 3, kept: 0, changed: 0, dropped: 1 },
-      consortium: { read: 3, created: 2, kept: 0, changed: 0, dropped: 1 },
-      service: { read: 6, created: 4, kept: 0, changed: 0, dropped: 2 },
+      provider: { read: 4, created: 3, kept: 0, changed: 0, merged: 0, dropped: 1 },
+      consortium: { read: 3, created: 2, kept: 0, changed: 0, merged: 0, dropped: 1 },
+      service: { read: 6, created: 4, kept: 0, changed: 0, merged: 0, dropped: 2 },
     });
     expect(out.join('\n')).toMatch(/dry run: nothing was written/);
   });
@@ -422,6 +422,75 @@ describe('run (registry)', () => {
     );
     expect(code).toBe(1);
     expect(err.join('\n')).toMatch(/Migrations are pending/);
+  });
+
+  it('decision 15: plan turns the legacy workaround into one consortium, and run migrates it so', async () => {
+    const dir = join(work, 'workaround-snapshot');
+    await writeSnapshot(dir, {
+      providers: [
+        { abbreviation: 'BioNet', name: 'BioNet Services' },
+        { abbreviation: 'GreenHub', name: 'Green Hub Consortium' },
+        { abbreviation: 'SoloHub', name: 'Solo Hub' },
+      ],
+      services: [
+        service('GeneFlow', { consortia: ['Green Hub Consortium'] }),
+        service('GreenHub', { provider: 'GreenHub', category: 'Consortia' }),
+        service('SoloHub', { provider: 'SoloHub', category: 'Consortia' }),
+      ],
+    });
+    const env = await migratedDatabase();
+    const mappingPath = join(work, 'workaround-mapping.json');
+    expect(await runCli(['plan', dir, '--out', mappingPath], cli(env).deps)).toBe(0);
+    const planned = await readMapping(mappingPath);
+    expect(planned.providers).toEqual({
+      GreenHub: { type: 'consortium' },
+      SoloHub: { type: 'consortium' },
+    });
+    expect(planned.services).toEqual({ GreenHub: { drop: true }, SoloHub: { drop: true } });
+    // The consortium given by name borrows the converted provider's abbreviation: no gap for it.
+    expect(planned.consortia).toEqual({});
+    expect(planned.open.filter((line) => line.startsWith('services['))).toHaveLength(2);
+
+    await writeFile(mappingPath, JSON.stringify({ ...planned, missingStage: 'PROD' }));
+    const reportPath = reportDir();
+    const c = cli(env);
+    expect(
+      await runCli(['run', dir, '--mapping', mappingPath, '--report', reportPath, '--yes'], c.deps),
+    ).toBe(0);
+    const report = await readReport(reportPath);
+    expect(report.counts).toEqual({
+      provider: { read: 1, created: 1, kept: 0, changed: 0, merged: 0, dropped: 0 },
+      consortium: { read: 3, created: 2, kept: 0, changed: 0, merged: 1, dropped: 0 },
+      service: { read: 3, created: 1, kept: 0, changed: 0, merged: 0, dropped: 2 },
+    });
+    const target = await openTarget(env);
+    try {
+      expect(
+        await target.organisations.findByAbbreviationAsSystem('provider', 'GreenHub'),
+      ).toBeUndefined();
+      const hub = await target.organisations.findByAbbreviationAsSystem('consortium', 'GreenHub');
+      expect(hub?.name).toBe('Green Hub Consortium');
+      expect(
+        (await target.organisations.listConsortiaAsSystem()).map((x) => x.abbreviation).sort(),
+      ).toEqual(['GreenHub', 'SoloHub']);
+      expect(await target.services.findBySlugAsSystem('GreenHub')).toBeUndefined();
+      const geneflow = await target.services.findBySlugAsSystem('GeneFlow');
+      expect(geneflow?.organisations).toContainEqual({ role: 'consortium', id: hub!.id });
+    } finally {
+      await target.stop();
+    }
+    const again = reportDir();
+    expect(
+      await runCli(
+        ['run', dir, '--mapping', mappingPath, '--report', again, '--yes'],
+        cli(env).deps,
+      ),
+    ).toBe(0);
+    expect((await readReport(again)).counts.consortium).toMatchObject({
+      created: 0,
+      kept: 2,
+      merged: 1,
+    });
   });
 
   it('plan writes a first mapping with every gap marked', async () => {

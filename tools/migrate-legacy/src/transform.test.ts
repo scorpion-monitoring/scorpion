@@ -231,3 +231,63 @@ describe('transformRegistry: services', () => {
     expect(run([...rows].reverse())).toEqual(plan);
   });
 });
+
+describe('transformRegistry: decision 15, the legacy workaround for consortia', () => {
+  const legacy = {
+    providers: [
+      { abbreviation: 'BioNet', name: 'BioNet Services' },
+      { abbreviation: 'GreenHub', name: 'Green Hub Consortium' },
+    ],
+    services: [
+      service('GeneFlow', { consortia: ['Green Hub Consortium'] }),
+      service('GreenHub', { provider: 'GreenHub' }),
+    ],
+  };
+
+  it('migrates a provider marked as a consortium as one, merged with the consortium of its name', () => {
+    const plan = transformRegistry(
+      legacy,
+      mapping({ missingStage: 'PROD', providers: { GreenHub: { type: 'consortium' } } }),
+      facts,
+    );
+    expect(plan.providers.map((p) => p.abbreviation)).toEqual(['BioNet']);
+    expect(plan.consortia).toEqual([
+      {
+        kind: 'consortium',
+        legacy: 'GreenHub',
+        abbreviation: 'GreenHub',
+        name: 'Green Hub Consortium',
+      },
+    ]);
+    expect(plan.services.find((s) => s.legacy === 'GeneFlow')!.consortia).toEqual(['GreenHub']);
+    expect(rulesOf(plan.findings, 'GreenHub')).toEqual([
+      'adjusted:provider.migrated-as-consortium',
+      'dropped:service.provider-is-consortium',
+    ]);
+    expect(rulesOf(plan.findings, 'Green Hub Consortium')).toEqual([
+      'adjusted:consortium.abbreviation-from-provider',
+      'merged:consortium.merged',
+    ]);
+    expect(plan.read).toEqual({ provider: 1, consortium: 2, service: 2 });
+  });
+
+  it('merges only the same organisation: the same abbreviation with another name is a duplicate', () => {
+    const plan = transformRegistry(
+      legacy,
+      mapping({
+        missingStage: 'PROD',
+        providers: { GreenHub: { type: 'consortium', name: 'Another Name' } },
+      }),
+      facts,
+    );
+    expect(rulesOf(plan.findings, 'Green Hub Consortium')).toContain(
+      'dropped:consortium.abbreviation-duplicate',
+    );
+  });
+
+  it('without the mapping, the workaround stays as it was: a provider with its service', () => {
+    const plan = transformRegistry(legacy, mapping({ missingStage: 'PROD' }), facts);
+    expect(plan.providers.map((p) => p.abbreviation)).toEqual(['BioNet', 'GreenHub']);
+    expect(plan.services.map((s) => s.slug)).toEqual(['GeneFlow', 'GreenHub']);
+  });
+});

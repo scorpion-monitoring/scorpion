@@ -13,7 +13,7 @@ import {
   writeReport,
   type Report,
 } from './report.ts';
-import { resolveLicence, spdxIndex } from './rules.ts';
+import { providerCount, resolveLicence, spdxIndex } from './rules.ts';
 import { readSnapshot, type Snapshot } from './snapshot.ts';
 import {
   describeDatabase,
@@ -31,20 +31,44 @@ async function factsOf(target: Target): Promise<TargetFacts> {
 }
 
 /** A first mapping for `snapshot`: every gap the transform found is a `null` and a line in `open`. */
+/**
+ * Decision 15: the legacy workaround made a consortium a provider of one service named like it. Every service named like
+ * its own (single) provider is suggested as not migrated, and that provider as a consortium; `open` asks to check each.
+ */
+export function workaroundSuggestions(snapshot: Snapshot): { mapping: Mapping; open: string[] } {
+  const mapping = emptyMapping();
+  const open: string[] = [];
+  const rows = new Map<string, Snapshot['services']>();
+  for (const row of snapshot.services)
+    rows.set(row.abbreviation, [...(rows.get(row.abbreviation) ?? []), row]);
+  for (const [service, list] of [...rows].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const count = providerCount(list);
+    if (!count.ok || count.provider.toLowerCase() !== service.toLowerCase()) continue;
+    mapping.services[service] = { drop: true };
+    mapping.providers[count.provider] = { type: 'consortium' };
+    open.push(
+      `services[${JSON.stringify(service)}]: named like its provider, the legacy workaround for a consortium: not migrated, and providers[${JSON.stringify(count.provider)}] becomes a consortium. Check it; remove both entries if it is a real service.`,
+    );
+  }
+  return { mapping, open };
+}
+
 export function firstMapping(
   snapshot: Snapshot,
   findings: readonly Finding[],
   facts: TargetFacts,
+  start: { mapping: Mapping; open: readonly string[] } = { mapping: emptyMapping(), open: [] },
 ): Mapping {
-  const mapping = emptyMapping();
-  const open = new Set<string>();
+  const mapping = structuredClone(start.mapping);
+  const open = new Set<string>(start.open);
   for (const finding of findings) {
     if (!finding.gap) continue;
     open.add(`${finding.gap}: ${finding.detail}`);
     const match = /^(providers|consortia)\[(".*")\]\.abbreviation$/.exec(finding.gap);
     if (match) {
       const section = match[1] as 'providers' | 'consortia';
-      mapping[section][JSON.parse(match[2]!) as string] = { abbreviation: null };
+      const key = JSON.parse(match[2]!) as string;
+      mapping[section][key] = { ...mapping[section][key], abbreviation: null };
     }
     const stage = /^stages\[(".*")\]$/.exec(finding.gap);
     if (stage) mapping.stages[JSON.parse(stage[1]!) as string] = null;
@@ -85,8 +109,9 @@ export async function planCommand(args: string[], { env, io }: CliDeps): Promise
   const target = await openTarget(env);
   try {
     const facts = await factsOf(target);
-    const plan = transformRegistry(snapshot, emptyMapping(), facts);
-    const mapping = firstMapping(snapshot, plan.findings, facts);
+    const suggested = workaroundSuggestions(snapshot);
+    const plan = transformRegistry(snapshot, suggested.mapping, facts);
+    const mapping = firstMapping(snapshot, plan.findings, facts, suggested);
     await writeFile(out, `${JSON.stringify(mapping, null, 2)}\n`, {
       mode: 0o600,
       flag: 'wx',
@@ -179,7 +204,7 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
     for (const [kind, c] of Object.entries(report.counts)) {
       io.out(
         `${kind}: ${c.read} read, ${c.created} ${dryRun ? 'would be created' : 'created'}, ${c.kept} kept, ` +
-          `${c.changed} ${dryRun ? 'would change' : 'changed'}, ${c.dropped} dropped`,
+          `${c.changed} ${dryRun ? 'would change' : 'changed'}, ${c.merged} merged, ${c.dropped} dropped`,
       );
     }
     io.out(`Report written to ${reportDir}${dryRun ? ' (dry run: nothing was written)' : ''}.`);
