@@ -19,6 +19,8 @@ export interface MeasurementRow {
   /** `YYYY-MM`. */
   period: string;
   value: number;
+  /** A month missing between two points, written as 0 (decision 13). */
+  filled?: true;
 }
 
 export interface ServiceMeasurements {
@@ -32,6 +34,10 @@ export interface ServiceMeasurements {
   points: { read: number; kept: number; merged: number; dropped: number; filled: number };
   /** The values per KPI, for the report of a KPI added to the service (decision 9). */
   perKpi: Map<string, number>;
+  /** The points rule 1 dropped, per rule and KPI (`compare` explains them with it). */
+  dropped: { rule: string; kpi: string; points: number }[];
+  /** The months of rule 2 with several points, and how many points were left out of each. */
+  merged: { kpi: string; period: string; points: number }[];
 }
 
 export interface MeasurementPlan {
@@ -131,6 +137,7 @@ export function transformService(
   // 2. the latest point of the month, 3. the months a 0 left out
   const rows: MeasurementRow[] = [];
   const perKpi = new Map<string, number>();
+  const merges: ServiceMeasurements['merged'] = [];
   for (const kpi of [...groups.keys()].sort(byCode)) {
     const byMonth = groups.get(kpi)!;
     const months = [...byMonth.keys()].sort(byCode);
@@ -142,6 +149,7 @@ export function transformService(
       rows.push({ kpi, period: month, value: winner.value });
       if (candidates.length > 1) {
         counts.merged += candidates.length - 1;
+        merges.push({ kpi, period: month, points: candidates.length - 1 });
         finding(
           'measurement.duplicate-in-month',
           'dropped',
@@ -160,7 +168,7 @@ export function transformService(
         month = nextMonth(month)
       ) {
         if (present.has(month)) continue;
-        rows.push({ kpi, period: month, value: 0 });
+        rows.push({ kpi, period: month, value: 0, filled: true });
         missing += 1;
       }
       if (missing > 0) {
@@ -181,6 +189,12 @@ export function transformService(
     rows: rows.length,
     points: counts,
     perKpi,
+    dropped: [...dropped]
+      .sort(([a], [b]) => byCode(a, b))
+      .flatMap(([rule, byKpi]) =>
+        [...byKpi].sort(([a], [b]) => byCode(a, b)).map(([kpi, points]) => ({ rule, kpi, points })),
+      ),
+    merged: merges,
   };
 }
 

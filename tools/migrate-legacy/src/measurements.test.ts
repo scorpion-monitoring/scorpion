@@ -83,6 +83,9 @@ describe('month end and the latest point of the month', () => {
     ]);
     expect(plan.points).toEqual({ read: 2, kept: 1, merged: 1, dropped: 0, filled: 0 });
     expect(findings.map((f) => f.rule)).toEqual(['measurement.duplicate-in-month']);
+    // The same facts as data, for `compare`.
+    expect(plan.merged).toEqual([{ kpi: 'Users', period: '2023-01', points: 1 }]);
+    expect(plan.dropped).toEqual([]);
   });
 });
 
@@ -99,6 +102,7 @@ describe('what is dropped, and why', () => {
     expect(rows).toEqual([row('Users', '2023-01', 2)]);
     expect(findings.map((f) => f.rule)).toEqual([rule]);
     expect(plan.points).toMatchObject({ read: 2, kept: 1, dropped: 1 });
+    expect(plan.dropped).toEqual([{ rule, kpi: 'Users', points: 1 }]);
   });
 
   it.each([
@@ -120,8 +124,8 @@ describe('the months a 0 left out (decision 13)', () => {
     const { rows, plan, findings } = run(points, true);
     expect(rows.filter((r) => r.kpi === 'Users')).toEqual([
       row('Users', '2023-01', 5),
-      row('Users', '2023-02', 0),
-      row('Users', '2023-03', 0),
+      { ...row('Users', '2023-02', 0), filled: true },
+      { ...row('Users', '2023-03', 0), filled: true },
       row('Users', '2023-04', 8),
     ]);
     expect(rows.filter((r) => r.kpi === 'Other')).toEqual([row('Other', '2023-02', 1)]);
