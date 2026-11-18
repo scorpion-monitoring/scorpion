@@ -483,6 +483,41 @@ describe('run (KPIs, measurements, people)', () => {
     expect(await inspect(half)).toEqual(await inspect(whole));
   });
 
+  it('a dry run over existing services says their sets and extras would change, not "kept"', async () => {
+    const env = await migratedDatabase();
+    const target = await openTarget(env);
+    try {
+      const { actor } = await migrationAccount(target, { create: true });
+      const plans = buildPlans({
+        snapshot: await readSnapshot(snapshotDir),
+        mapping: await readMapping(mappingFile),
+        subjects: parseSubjects(''),
+        facts: { stageTerms: ['PROD'], spdx: spdxIndex() },
+        kpiFacts: {
+          valueTypes: ['integer'],
+          thematic: ['Usage', 'Bibliographic'],
+          units: [],
+          necessities: ['mandatory', 'optional'],
+          rimoCategories: [],
+        },
+        providers: [PROVIDER],
+        now: new Date(),
+      });
+      await loadRegistry(plans.registry, target, { dryRun: false, actor });
+    } finally {
+      await target.stop();
+    }
+    const before = await counts(env);
+    const { code, dir } = await run(env, ['--dry-run', '--skip-users', '--keep-account']);
+    expect(code).toBe(0);
+    expect(await counts(env)).toEqual(before);
+    expect((await readReport(dir)).counts['service-kpis']).toMatchObject({
+      read: 2,
+      changed: 2,
+      kept: 0,
+    });
+  });
+
   it('cuts ten years and one month into two batches, 120 months and 1', async () => {
     const env = await migratedDatabase();
     const target = await openTarget(env);

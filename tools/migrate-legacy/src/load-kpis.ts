@@ -55,6 +55,9 @@ export async function loadKpis(
   const attempt = attemptWith(results, findings);
   const indicatorIds = new Map<string, string>();
   const setIds = new Map<string, string>();
+  // In a dry run what would be created has no id; a service that would get it still changes.
+  const plannedSets = new Set<string>();
+  const plannedIndicators = new Set<string>();
 
   const existingIndicators: Map<string, IndicatorRow> = actor
     ? new Map(
@@ -126,6 +129,7 @@ export async function loadKpis(
       continue;
     }
     if (done.value) indicatorIds.set(op.legacy, done.value.id);
+    else plannedIndicators.add(op.legacy);
     push('indicator', op.legacy, done.value?.slug ?? op.slug ?? null, 'created');
   }
 
@@ -149,6 +153,7 @@ export async function loadKpis(
       created = true;
     }
     if (id) setIds.set(op.legacy, id);
+    else if (created) plannedSets.add(op.legacy);
     // The rows: the union of what the set has and what the legacy category defines (necessity of an existing row kept).
     let added = 0;
     if (id && actor) {
@@ -207,6 +212,8 @@ export async function loadKpis(
     const haveSet = current.set?.id ?? null;
     const haveExtras = new Set(current.extras.map((e) => e.indicatorId));
     const nextSet = haveSet ?? setId;
+    const setPlanned = haveSet === null && op.set !== null && plannedSets.has(op.set);
+    const extrasPlanned = op.extras.filter((name) => plannedIndicators.has(name)).length;
     if (haveSet !== null && setId !== null && haveSet !== setId) {
       findings.push({
         kind: 'service-kpis',
@@ -218,8 +225,10 @@ export async function loadKpis(
     }
     const extras = new Set([...haveExtras, ...extraIds]);
     const changes = [
-      ...(nextSet !== haveSet ? ['set'] : []),
-      ...(extras.size !== haveExtras.size ? [`${extras.size - haveExtras.size} extra(s)`] : []),
+      ...(nextSet !== haveSet || setPlanned ? ['set'] : []),
+      ...(extras.size !== haveExtras.size || extrasPlanned > 0
+        ? [`${extras.size - haveExtras.size + extrasPlanned} extra(s)`]
+        : []),
     ];
     if (changes.length === 0) {
       push('service-kpis', op.legacy, op.slug, 'kept');
