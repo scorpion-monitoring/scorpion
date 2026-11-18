@@ -80,7 +80,12 @@ and licence. Services stay private (decision 8).
 {
   "format": "scorpion-legacy-mapping/1",
   "providers": {
-    "<legacy abbreviation>": { "abbreviation": "New-Abbr", "name": "…", "drop": false }
+    "<legacy abbreviation>": {
+      "abbreviation": "New-Abbr",
+      "name": "…",
+      "type": "consortium",
+      "drop": false
+    }
   },
   "consortia": { "<legacy name>": { "abbreviation": "ABC" } },
   "services": { "<legacy abbreviation>": { "slug": "my-slug", "stage": "DEV", "drop": false } },
@@ -94,11 +99,18 @@ and licence. Services stay private (decision 8).
 A `null` abbreviation or stage is a gap: the record is reported and not migrated. A `null` licence leaves the licence
 empty. A slug that breaks the rule is derived from the abbreviation (decision 7) unless the mapping gives one.
 
+**The legacy workaround for consortia** (decision 15): the legacy application made a consortium a provider of one
+service named like it. `"type": "consortium"` on a provider migrates it as a consortium; a consortium the API gives by
+name takes the abbreviation of such a provider with the same name, and the two records become one (`merged`). A service
+whose provider became a consortium is not migrated (a consortium cannot provide a service). `plan` suggests every
+service named like its own provider: `"drop": true` for the service and `"type": "consortium"` for the provider, each
+with a line in `open` to check.
+
 ### The report
 
 `report.json` (for the tool) and `report.md` (for people) in a new or empty directory outside the repository, mode
 0600: the snapshot and the mapping it read, the account, the target database and whether it was empty, the counts per
-kind (read, created, kept, changed, dropped), and one line per record that was dropped, updated, or migrated with a value
+kind (read, created, kept, changed, merged, dropped), and one line per record that was dropped, updated, or migrated with a value
 a rule changed, with the rule that decided it (`provider.abbreviation-invalid`, `service.two-providers`,
 `service.slug-derived`, `service.stage.missing-mapped`, `service.licence.not-spdx`, `service.refused`, …).
 
