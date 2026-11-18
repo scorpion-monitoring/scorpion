@@ -51,6 +51,69 @@ abbreviation, dates off the first of a month, months with several points, months
 services whose answer shows a second InfluxDB series, and (with `--measurements`) the API against the S3 backups. It
 **names no person**: no username, address or source URL appears in it, so its counts can go into the plan.
 
+### `plan <snapshot> --out <mapping.json>`
+
+Writes a first mapping file for the snapshot with every gap marked: a `null` where a value is needed, and a line in
+`open` that says what to decide. It reads the stage keys of the target, so it needs `DATABASE_URL` too. The file is
+written with mode 0600, outside the repository, and never over an existing one.
+
+### `run <snapshot> --mapping <file> --report <dir> [--dry-run] [--yes]`
+
+The registry part: providers, consortia (from the services' links) and services with their provider, consortia, stage
+and licence. Services stay private (decision 8).
+
+- It needs `DATABASE_URL` and `SECRETS_KEY` of the new instance, **migrated** (`pnpm scorpion migrate`): the tool never
+  migrates, and refuses a database with pending migrations. It names the target database (host, port, name) first.
+- `--dry-run` reads the target and applies the modules' rules, and writes nothing to the database, not even the account.
+- A run that writes needs `--yes`; without it the tool says whether the target is empty and stops.
+- It writes as the account `legacy-migration`, created on the first run like `create-admin` makes an administrator (a
+  random password nobody knows). An existing account of that name is used as it is; without Admin, the first write is
+  refused and the run stops with nothing written.
+- **Idempotent:** an organisation is found by its type and abbreviation, a service by its slug. What exists and matches
+  is kept, what differs is updated. A second run over the same snapshot reports "kept" for everything; a run stopped
+  halfway is finished by running it again.
+- A record the services refuse is reported and the run goes on; a refusal of the account itself stops it.
+
+### The mapping
+
+```json
+{
+  "format": "scorpion-legacy-mapping/1",
+  "providers": {
+    "<legacy abbreviation>": {
+      "abbreviation": "New-Abbr",
+      "name": "…",
+      "type": "consortium",
+      "drop": false
+    }
+  },
+  "consortia": { "<legacy name>": { "abbreviation": "ABC" } },
+  "services": { "<legacy abbreviation>": { "slug": "my-slug", "stage": "DEV", "drop": false } },
+  "stages": { "<legacy spelling>": "PROD" },
+  "missingStage": "PROD",
+  "licences": { "<legacy spelling>": "MIT" },
+  "open": ["what plan found to decide"]
+}
+```
+
+A `null` abbreviation or stage is a gap: the record is reported and not migrated. A `null` licence leaves the licence
+empty. A slug that breaks the rule is derived from the abbreviation (decision 7) unless the mapping gives one.
+
+**The legacy workaround for consortia** (decision 15): the legacy application made a consortium a provider of one
+service named like it. `"type": "consortium"` on a provider migrates it as a consortium; a consortium the API gives by
+name takes the abbreviation of such a provider with the same name, and the two records become one (`merged`). A service
+whose provider became a consortium is not migrated (a consortium cannot provide a service). `plan` suggests every
+service named like its own provider: `"drop": true` for the service and `"type": "consortium"` for the provider, each
+with a line in `open` to check.
+
+### The report
+
+`report.json` (for the tool) and `report.md` (for people) in a new or empty directory outside the repository, mode
+0600: the snapshot and the mapping it read, the account, the target database and whether it was empty, the counts per
+kind (read, created, kept, changed, merged, dropped), and one line per record that was dropped, updated, or migrated with a value
+a rule changed, with the rule that decided it (`provider.abbreviation-invalid`, `service.two-providers`,
+`service.slug-derived`, `service.stage.missing-mapped`, `service.licence.not-spdx`, `service.refused`, …).
+
 ## The snapshot
 
 ```text
@@ -83,5 +146,5 @@ cutover.
 
 ## Not yet
 
-Sprint 2 of M13 adds the KPI framework, measurements, users, roles and memberships; sprint 3 adds `compare` and the
+`run` migrates the registry only. Sprint 2 of M13 adds the KPI framework, measurements, users, roles and memberships; sprint 3 adds `compare` and the
 runbook of the cutover.

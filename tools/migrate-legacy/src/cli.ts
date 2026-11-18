@@ -5,7 +5,11 @@ import { discover, discoveryMarkdown } from './discover.ts';
 import { fetchSnapshot } from './fetch.ts';
 import { RefusedPath, refuseInsideRepository } from './files.ts';
 import { createLegacyClient, LegacyApiError } from './http.ts';
+import { KernelStartupError } from '@scorpion/kernel';
+import { MappingError } from './mapping.ts';
+import { planCommand, runCommand } from './registry-commands.ts';
 import { readSnapshot, SnapshotError } from './snapshot.ts';
+import { TargetError } from './target.ts';
 
 export interface CliIo {
   out(text: string): void;
@@ -31,8 +35,15 @@ Commands:
       administrator comes from the environment variable ${KEY_VARIABLE}, never from an argument.
   discover <snapshot> [--measurements <S3 backup dir>] [--json]
       Summarise a snapshot: counts, spellings, and what the new rules refuse. Names no person.
+  plan <snapshot> --out <mapping.json>
+      Write a first mapping file with every gap marked (null, and a line in "open"). Reads the target's stage keys.
+  run <snapshot> --mapping <file> --report <dir> [--dry-run] [--yes]
+      The registry part: providers, consortia, services, through the services as the account legacy-migration.
+      --dry-run writes nothing to the database; a run that writes needs --yes. Repeating a run is safe.
 
-The snapshot holds personal data: it is written with mode 0600, never inside the repository.
+plan and run need DATABASE_URL (and SECRETS_KEY) of the new instance, migrated (pnpm scorpion migrate); the tool
+never migrates. The snapshot and the report hold personal data: mode 0600, never inside the repository.
+
 `;
 
 type Command = (args: string[], deps: CliDeps) => Promise<number>;
@@ -98,6 +109,8 @@ const discoverCommand: Command = async (args, { io, now }) => {
 const COMMANDS: Record<string, Command> = {
   fetch: fetchCommand,
   discover: discoverCommand,
+  plan: planCommand,
+  run: runCommand,
 };
 
 export async function runCli(argv: readonly string[], deps: CliDeps): Promise<number> {
@@ -115,7 +128,10 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
     if (
       error instanceof LegacyApiError ||
       error instanceof SnapshotError ||
-      error instanceof RefusedPath
+      error instanceof RefusedPath ||
+      error instanceof MappingError ||
+      error instanceof TargetError ||
+      error instanceof KernelStartupError
     ) {
       deps.io.err(`Stopped: ${error.message}`);
       return 1;
