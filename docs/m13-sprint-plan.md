@@ -221,6 +221,6 @@ Filled in by sprint 1 (discovery) and sprint 3 (rehearsal), counts and property 
 
 Stage spellings: only the empty one (36). Licence spellings: only the empty one (36). This confirms §0 and §3 for the registry; the corrections are in "Found differently / Amended in sprint 1".
 
-### The registry run on the maintainer's development instance (2026-11-17)
+### The registry run on the maintainer's development instance (2026-11-17 and 2026-11-18)
 
-On an empty, migrated database with the mapping of five abbreviations and `missingStage: "PROD"`: the dry run and the run each read 44 providers, 3 consortia and 36 services, and created all of them (0 dropped); a second run kept all 83. This is not yet Gate 2's line, which is the same dry run on **staging**.
+On an empty, migrated database. First run (mapping of five abbreviations and `missingStage: "PROD"`): 44 providers, 3 consortia and 36 services created, 0 dropped; a second run kept all 83. Found then: the consortia were also providers, with a service named like each (decision 15). Run with decision 15 (the mapping `plan` suggested, two provider abbreviations, `missingStage: "PROD"`): 35 providers, 9 consortia (12 read, 3 merged into their centres) and 27 services created, the 9 workaround services dropped; a second run kept everything. This is not yet Gate 2's line, which is the same dry run on **staging**.
