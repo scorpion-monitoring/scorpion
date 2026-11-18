@@ -444,9 +444,10 @@ describe('module commands', () => {
     const kernel = await inline(manifest);
     // A fresh database: the kernel's own migrations are pending, and nothing is migrated for it.
     await expect(kernel.buildServices()).rejects.toThrow(/Migrations are pending/);
-    expect(
-      (await kernel.pool.query(`select to_regclass('kernel_outbox') as t`)).rows[0].t,
-    ).toBeNull();
+    const { rows } = await kernel.pool.query<{ t: string | null }>(
+      `select to_regclass('kernel_outbox') as t`,
+    );
+    expect(rows[0]?.t).toBeNull();
     expect(kernel.services.size).toBe(0);
 
     await kernel.migrate();
