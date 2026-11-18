@@ -301,7 +301,8 @@ describe('run (KPIs, measurements, people)', () => {
     expect(report.counts).toMatchObject({
       indicator: { read: 5, created: 5 },
       'kpi-set': { read: 2, created: 2 },
-      'service-kpis': { read: 2, created: 2 },
+      // The run counts setting a new service's KPIs as a change of that service; the dry run says the same.
+      'service-kpis': { read: 2, created: 0, changed: 2 },
       user: { read: 10, created: 7, dropped: 3 },
       membership: { read: 4, created: 4 },
       // 121 + 1 + 5 + 1 points read; two dropped (2999, 1899); two Papers points in one month (one merged); 2 zeros filled.

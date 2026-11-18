@@ -246,4 +246,24 @@ On an empty, migrated database. First run (mapping of five abbreviations and `mi
 
 ### The full dry run and run on a copy (sprint 2)
 
-To be filled in by the maintainer's runs (counts and spellings only, no names): the report's counts per kind (indicator, kpi-set, service-kpis, user, membership, measurement), the findings by rule (`indicator.thematic-open`, `user.admin-by-hand`, `user.email-duplicate`, `user.username-suffixed`, `measurement.gap-filled`, `measurement.future-month`, `service-kpis.kpi-added-optional`), the number of users migrated against the legacy 16, and whether a second run kept everything. The commands are in the sprint's hand-over message.
+Run by the agent on the maintainer's development instance on 2026-11-18, at the request of the maintainer: the snapshot of 2026-11-17, the mapping `plan` suggested (decision 15, and the KPI set of the workaround's category dropped) with `oidcProvider` set, after ADR-0053 (users claim their account). On an empty, migrated database: a dry run, a run with `--yes --keep-account`, and the same run again. Counts and rule names only.
+
+| Kind         | Read        | Run: created / changed / dropped | Second run: kept |
+| ------------ | ----------- | -------------------------------- | ---------------- |
+| provider     | 35          | 35 / 0 / 0                       | 35               |
+| consortium   | 12          | 9 / 0 / 0 (3 merged)             | 9                |
+| service      | 36          | 27 / 0 / 9                       | 27               |
+| indicator    | 18          | 18 / 0 / 0                       | 18               |
+| kpi-set      | 7           | 6 / 0 / 1                        | 6                |
+| service-kpis | 27          | 0 / 27 / 0                       | 27               |
+| user         | 16          | 16 / 0 / 0                       | 16               |
+| membership   | 17          | 15 / 0 / 2                       | 15               |
+| measurement  | 1293 points | 1832 values / 0 / 2 points       | 1832             |
+
+- **KPI sets:** six, with 9, 8, 6, 5, 5 and 3 rows (10 `mandatory`, 12 `recommended`, 14 `optional`: the legacy necessities, as the cheat sheet of the KPIs says); 284 additional KPIs over the 27 services.
+- **Measurements:** 1293 points read, 2 dropped (`measurement.future-month`), 541 months written as 0 in 20 KPI histories (`measurement.gap-filled`; discovery's 563 counted 22 months up to the two future points), 1832 values inserted. No point merged, none before 1900, none refused by the service. The 9 services not migrated (`measurement.service-not-migrated`) had no points.
+- **Users:** all 16 legacy users migrated as accounts waiting for their owner (16 open claims, no way to sign in yet); 3 usernames fitted to the rule (`user.username-fitted`), none suffixed, no address used twice; 1 legacy administrator got the role `user` (`user.admin-by-hand`). Memberships: 15 created, 2 dropped because their provider is a consortium now (`membership.provider-not-migrated`).
+- **Other rules:** `service.dropped-by-mapping` 9, `service.stage.missing-mapped` 27, `provider.migrated-as-consortium` 9, `consortium.merged` 3, `consortium.abbreviation-from-provider` 3, `provider.abbreviation-mapped` 2, `kpi-set.dropped-by-mapping` 1. No `indicator.thematic-open`, no `user.email-duplicate`.
+- **Second run:** created nothing and changed nothing; every record kept, 1832 values unchanged.
+- **Found:** a dry run before the services exist counted their KPIs as `created`, a run as `changed` (the service is created in the stage before); the dry run now says `changed` too.
+- **Not covered:** a claim at a real provider (the instance has no provider configured; the tests cover the claim against a stub provider), the deactivation of the account (`--keep-account`; no other administrator existed).
