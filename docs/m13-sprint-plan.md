@@ -1,6 +1,6 @@
 # M13 Sprint Plan: legacy data migration (`tools/migrate-legacy`)
 
-Status: **approved by the maintainer on 2026-11-18; sprints 1 to 3 built** (sprint 1: two stacked pull requests, `fetch` and `discover`, then `plan` and `run` for the registry; sprint 2: KPIs, measurements and people; sprint 3: `compare`, the runbook, release `0.16.0`). Every decision is answered (§13; decision 11 on 2026-11-18: the cutover stays at Gate 4). The §12 changes are applied to `implementation.md`. Open: the rehearsal on staging and Gate 3 (§14), the maintainer's. Earlier: draft of 2026-11-17.
+Status: **approved by the maintainer on 2026-11-18; sprints 1 to 3 built** (sprint 1: two stacked pull requests, `fetch` and `discover`, then `plan` and `run` for the registry; sprint 2: KPIs, measurements and people; sprint 3: `compare`, the runbook, release `0.16.0`). Every decision is answered (§13; decision 11 on 2026-11-18: the cutover stays at Gate 4). The §12 changes are applied to `implementation.md`. The rehearsal ran on the dev server and **Gate 3 passed on 2026-11-18** (§14). Earlier: draft of 2026-11-17.
 
 Scope source: [implementation.md](implementation.md) §5, M13, Gate 3 and the risk table; [architecture.md](architecture.md) A5 and "Migration from the current app"; [ADR-0039](adr/0039-gate-2-conditional-pass.md) (the open line of Gate 2); what M6 to M12 hand over (§2); and the source of the legacy application in use, **`ipk-bit/scorpion` at `5a92c31`** (2025-04-17, the tip of `main`; named by the maintainer on 2026-11-17).
 
@@ -226,7 +226,7 @@ Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; 14 and 15 duri
 
 ## 14. Discovery and rehearsal results
 
-Filled in by sprint 1 (discovery), sprint 2 (the run on a copy) and sprint 3 (`compare`; the rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here when the maintainer has run the registry part on staging.
+Filled in by sprint 1 (discovery), sprint 2 (the run on a copy) and sprint 3 (`compare`; the rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here: cleared with the rehearsal on 2026-11-18 (below).
 
 ### Discovery (the maintainer's snapshot of 2026-11-17)
 
@@ -296,19 +296,22 @@ Run by the agent on 2026-11-18, at the request of the maintainer, read-only, on 
 - **KPI sets:** two of the six sets have no migrated service, so `compare` cannot read their rows (`unchecked`; README, "What it does not compare").
 - **Claims:** 16 open, 0 claimed, 0 expired.
 
-### The rehearsal on staging and Gate 3 (the maintainer's)
+### The rehearsal and Gate 3 (2026-11-18)
 
-_To be filled in by the maintainer after the rehearsal on staging with a copy of production (decision 2): counts and rule names only._
+**Where, decided by the maintainer on 2026-11-18:** the snapshot of 2026-11-17 (still current, so no new fetch), and the **dev server with the `full` profile** instead of staging with a production copy; Gate 3's "KPI profile" is the `full` profile (no KPI-only profile was ever added: ADR-0030 left it to M9, which deferred it, and the tool targets `full`). Run by the agent on a new, empty database of the dev Postgres (`scorpion_gate3`), so the sprint 2 database stayed as it was; counts and rule names only.
 
-| Step                                                | Result |
-| --------------------------------------------------- | ------ |
-| fetch (date of the snapshot; counts of `discover`)  |        |
-| plan: open lines decided                            |        |
-| dry run: dropped records and their rules            |        |
-| run: created / changed / dropped per kind           |        |
-| compare: unexplained / reported                     |        |
-| second run: everything kept                         |        |
-| three services' dashboards checked by hand (Gate 3) |        |
-| Gate 2's open line (ADR-0039): the registry dry run |        |
+| Step                                                | Result                                                                                                                                                                                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| prepare                                             | `scorpion migrate`, then `create-admin` (a made-up administrator) **before** the run; mail transport `none` (the default); no OIDC provider configured (the claims wait, and the run says so)                                                                        |
+| plan                                                | 33 open lines on the empty target; the run used the maintainer's decided mapping (`mapping-3`, the one of the sprint 2 run)                                                                                                                                          |
+| dry run: dropped records and their rules            | every drop has a decided rule: `service.dropped-by-mapping` 9 and `kpi-set.dropped-by-mapping` 1 (decision 15), `membership.provider-not-migrated` 2, `measurement.service-not-migrated` 9 (no points), `measurement.future-month` 2 points. **No unexplained drop** |
+| run: created / changed / dropped                    | the numbers of the sprint 2 run (table above): 35 providers, 9 consortia (3 merged), 27 services, 18 indicators, 6 sets, 27 service KPI sets changed, 16 users, 15 memberships, 1832 values; 6.6 s. The account `legacy-migration` was **deactivated** at the end    |
+| compare                                             | **clean** (exit 0): 1832 values found (1291 equal to a point, 541 filled zeros), 2 points dropped by rule; every record found, 2 sets `unchecked`; 0 unexplained, 0 reported; 16 open claims                                                                         |
+| second run                                          | everything kept (1832 values unchanged), as the new account `legacy-migration-2`, also deactivated at the end                                                                                                                                                        |
+| users                                               | 16 migrated users, 16 open claims, 1 legacy administrator                                                                                                                                                                                                            |
+| the `full` profile runs with the migrated data      | the dev server (`scorpion start`, jobs and events) on `scorpion_gate3`; the queued membership mails drain under the transport `none`                                                                                                                                 |
+| three services' dashboards checked by hand (Gate 3) | **match** for all three (the maintainer, 2026-11-18)                                                                                                                                                                                                                 |
 
-**Gate 3** passes when the dry run reports no unexplained drop, `compare` is clean, the KPI profile runs on staging with the migrated data, and the three dashboards match the legacy application.
+**Gate 3 passed on 2026-11-18** (the maintainer): every line holds.
+
+**Gate 2's open line (ADR-0039) cleared on 2026-11-18**, at the maintainer's request, with the same rehearsal in place of a staging run: the dry run of the registry part above (35 providers, 9 consortia, 27 services, every drop with a decided rule), and the `registry` profile started on the migrated database (`scorpion_gate3`). It started with no error (one warning: the transport `none`), and as the first administrator `GET /api/v1/services` and `GET /api/v1/providers` answered `totalCount` 27 and 35; a KPI route answered 404, as the profile has no KPI module. No gap in the registry modules was found, so nothing is due under ADR-0039 decision 4.
