@@ -258,7 +258,11 @@ export function transformKpis(
       byCode(a.name, b.name),
     )) {
       if (!available.has(kpi.name) || rows.some((r) => r.indicator === kpi.name)) continue;
-      const spelling = kpi.categories.find((c) => c.name === legacy)?.necessity ?? null;
+      // The legacy route lists every KPI for every category; the category defines a KPI only when it gives it a
+      // necessity (`DEFINES`), which the API also shows as `selected`. Any other KPI is not a row of this set.
+      const entry = kpi.categories.find((c) => c.name === legacy);
+      if (entry?.necessity == null && kpi.selected !== true) continue;
+      const spelling = entry?.necessity ?? null;
       const resolved = resolveTerm(
         spelling,
         facts.necessities,

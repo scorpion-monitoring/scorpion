@@ -85,6 +85,8 @@ export function buildPlans(input: {
   /** The ids of the OIDC providers the target has configured. */
   providers: readonly string[];
   now: Date;
+  /** Leave users, roles and memberships out (`--skip-users`): an empty people plan, no findings about them. */
+  skipUsers?: boolean;
 }): Plans {
   const { snapshot, mapping } = input;
   const registry = transformRegistry(snapshot, mapping, input.facts);
@@ -101,7 +103,9 @@ export function buildPlans(input: {
   const kpis = transformKpis(snapshot, measured, mapping, input.kpiFacts, registry);
   const oidcProvider =
     mapping.oidcProvider ?? (input.providers.length === 1 ? input.providers[0]! : null);
-  const people = transformPeople(snapshot, input.subjects, mapping, oidcProvider, registry);
+  const people: PeoplePlan = input.skipUsers
+    ? { read: { user: 0, membership: 0 }, users: [], memberships: [], findings: [] }
+    : transformPeople(snapshot, input.subjects, mapping, oidcProvider, registry);
   const findings = [
     ...registry.findings,
     ...kpis.findings,
@@ -137,6 +141,19 @@ export function workaroundSuggestions(snapshot: Snapshot): { mapping: Mapping; o
     mapping.providers[count.provider] = { type: 'consortium' };
     open.push(
       `services[${JSON.stringify(service)}]: named like its provider, the legacy workaround for a consortium: not migrated, and providers[${JSON.stringify(count.provider)}] becomes a consortium. Check it; remove both entries if it is a real service.`,
+    );
+  }
+  // A category whose every service is one of those is the workaround's category (it holds no KPIs): not a KPI set.
+  for (const category of [...new Set(snapshot.services.map((row) => row.category))].sort()) {
+    const services = [
+      ...new Set(
+        snapshot.services.filter((row) => row.category === category).map((r) => r.abbreviation),
+      ),
+    ];
+    if (services.length === 0 || !services.every((name) => mapping.services[name]?.drop)) continue;
+    mapping.kpiSets[category] = { drop: true };
+    open.push(
+      `kpiSets[${JSON.stringify(category)}]: every service in this category is a consortium workaround service, so it is not migrated as a KPI set. Check it; remove the entry if the category is real.`,
     );
   }
   return { mapping, open };
@@ -265,6 +282,7 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
       'dry-run': { type: 'boolean', default: false },
       yes: { type: 'boolean', default: false },
       'keep-account': { type: 'boolean', default: false },
+      'skip-users': { type: 'boolean', default: false },
     },
     strict: true,
   });
@@ -296,6 +314,7 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
       kpiFacts: await kpiFactsOf(target),
       providers: await configuredProviders(target),
       now: clock(),
+      skipUsers: values['skip-users'],
     });
     const { registry, kpis, people, measurements } = plans;
     const state = await targetState(target, {
@@ -351,30 +370,31 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
     const kpiLoad = registryLoad
       ? await stage(() => loadKpis(kpis, target, { dryRun, actor }))
       : undefined;
-    const peopleLoad = kpiLoad
-      ? await stage(() =>
-          loadUsers(people, { ...target, db: target.kernel.db }, { dryRun }).then(
-            (loaded) => loaded,
-          ),
-        )
-      : undefined;
-    const membershipLoad = peopleLoad
-      ? await stage(() =>
-          loadMemberships(people, target, {
-            dryRun,
-            actor,
-            users: peopleLoad.users,
-            refusedProviders: new Set(
-              results
-                .filter(
-                  (r) => r.kind === 'provider' && r.outcome === 'dropped' && r.target !== null,
-                )
-                .map((r) => r.target!),
-            ),
-          }),
-        )
-      : undefined;
-    if (membershipLoad) {
+    const skipUsers = values['skip-users'];
+    const peopleLoad = !kpiLoad
+      ? undefined
+      : skipUsers
+        ? { results: [], findings: [], users: new Map() }
+        : await stage(() => loadUsers(people, { ...target, db: target.kernel.db }, { dryRun }));
+    const membershipLoad = !peopleLoad
+      ? undefined
+      : skipUsers
+        ? { results: [], findings: [] }
+        : await stage(() =>
+            loadMemberships(people, target, {
+              dryRun,
+              actor,
+              users: peopleLoad.users,
+              refusedProviders: new Set(
+                results
+                  .filter(
+                    (r) => r.kind === 'provider' && r.outcome === 'dropped' && r.target !== null,
+                  )
+                  .map((r) => r.target!),
+              ),
+            }),
+          );
+    if (membershipLoad && !skipUsers) {
       const written = results.some(
         (r) => r.kind === 'membership' && r.outcome !== 'kept' && r.outcome !== 'dropped',
       );
@@ -415,7 +435,9 @@ export async function runCommand(args: string[], { env, io, now }: CliDeps): Pro
       after = await endAccount(target, actor!);
       if (after !== 'deactivated') notes.push(`The account ${account.username} is ${after}.`);
     }
-    if (snapshot.users.length > 0 && !values.subjects) {
+    if (skipUsers) {
+      notes.push('--skip-users: no user, role or membership was migrated.');
+    } else if (snapshot.users.length > 0 && !values.subjects) {
       notes.push(
         'No --subjects file: no user was migrated (decision 12), and so no role and no membership.',
       );

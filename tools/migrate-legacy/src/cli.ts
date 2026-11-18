@@ -38,11 +38,12 @@ Commands:
       Summarise a snapshot: counts, spellings, and what the new rules refuse. Names no person.
   plan <snapshot> --out <mapping.json> [--subjects <file>]
       Write a first mapping file with every gap marked (null, and a line in "open"). Reads the target's vocabularies.
-  run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account]
+  run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account] [--skip-users]
       Providers, consortia, services, KPIs and KPI sets, users and roles, memberships and measurements, through the
       services as the account legacy-migration. --dry-run writes nothing to the database; a run that writes needs --yes.
       --subjects is a file of "subject<TAB>username" lines (the OIDC subject of each legacy user). The account is
-      deactivated at the end of a run; --keep-account leaves it for a rehearsal. Repeating a run is safe.
+      deactivated at the end of a run; --keep-account leaves it for a rehearsal. --skip-users leaves out users,
+      roles and memberships (no --subjects or OIDC provider needed). Repeating a run is safe.
   users <snapshot> --mapping <file> --subjects <file> --out <file>
       The users the target holds from this snapshot with their addresses (username<TAB>address), for the announcement mail.
 

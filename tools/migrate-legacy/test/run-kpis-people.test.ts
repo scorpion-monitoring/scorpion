@@ -42,12 +42,22 @@ let subjectsFile: string;
 let n = 0;
 
 const PROVIDER = 'ls-login';
-const kpi = (name: string, categories: { name: string; necessity: string | null }[] = []) => ({
+/** `selected` as the legacy API sets it: true when the category defines the KPI (it is in `categories` with a necessity or by DEFINES). */
+const kpi = (
+  name: string,
+  categories: { name: string; necessity: string | null }[] = [],
+  selected = false,
+) => ({
   name,
   description: `${name} description`,
   categories,
-  selected: null,
+  selected,
 });
+const LISTED = ['Users', 'Papers', 'Records', 'Citations'];
+const listing = (category: string, defined: Record<string, string | null>) =>
+  LISTED.map((name) =>
+    kpi(name, [{ name: category, necessity: defined[name] ?? null }], name in defined),
+  );
 const at = (year: number, month: number, day = 1) =>
   `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 00:00:00+00:00`;
 
@@ -76,12 +86,11 @@ const SNAPSHOT = {
     service('GeneFlow', { category: 'Tools', stage: '', license: '' }),
     service('LeafDB', { category: 'Data', provider: 'PlantData', stage: '', license: '' }),
   ],
+  // As the real route answers: every KPI under every category; the ones the category defines have a necessity (or are
+  // `selected` without one, decision 6).
   indicatorsByCategory: {
-    Tools: [
-      kpi('Users', [{ name: 'Tools', necessity: 'mandatory' }]),
-      kpi('Papers', [{ name: 'Tools', necessity: 'optional' }]),
-    ],
-    Data: [kpi('Records', [{ name: 'Data', necessity: null }])],
+    Tools: listing('Tools', { Users: 'mandatory', Papers: 'optional' }),
+    Data: listing('Data', { Records: null }),
   },
   indicatorsByService: { GeneFlow: [kpi('Citations')] },
   users: [
@@ -394,6 +403,44 @@ describe('run (KPIs, measurements, people)', () => {
     expect(geneFlow.values).toMatchObject({ inserted: 126, updated: 0, unchanged: 0, filled: 2 });
   });
 
+  it('--skip-users migrates the registry, the KPIs and the measurements without users, roles or memberships', async () => {
+    const env = await migratedDatabase();
+    // No --subjects and no provider needed: the users part is left out, not reported user by user.
+    const dir = reportDir();
+    const c = cli(env);
+    const code = await runCli(
+      [
+        'run',
+        snapshotDir,
+        '--mapping',
+        mappingFile,
+        '--report',
+        dir,
+        '--skip-users',
+        '--yes',
+        '--keep-account',
+      ],
+      c.deps,
+    );
+    expect(code).toBe(0);
+    const report = await readReport(dir);
+    expect(report.counts).toMatchObject({
+      indicator: { created: 5 },
+      'kpi-set': { created: 2 },
+      measurement: { read: 128, created: 127 },
+      user: { read: 0, created: 0 },
+      membership: { read: 0, created: 0 },
+    });
+    expect(report.records.filter((r) => r.kind === 'user' || r.kind === 'membership')).toEqual([]);
+    expect(report.notes.join(' ')).toMatch(/--skip-users/);
+    const state = await inspect(env);
+    expect(state.users).toEqual({});
+    expect(state.serviceKpis.GeneFlow).toEqual({ set: 'Tools', extras: ['Citations', 'Orphan'] });
+    // The users part can be added later by a run without the flag.
+    expect((await run(env, ['--yes', '--keep-account'])).code).toBe(0);
+    expect(Object.keys((await inspect(env)).users)).toHaveLength(6);
+  });
+
   it('a second run creates nothing: the same table counts and every record kept', async () => {
     const env = await migratedDatabase();
     await run(env, ['--yes', '--keep-account']);
@@ -443,6 +490,41 @@ describe('run (KPIs, measurements, people)', () => {
     expect((await run(half, ['--yes', '--keep-account'])).code).toBe(0);
     expect(await counts(half)).toEqual(await counts(whole));
     expect(await inspect(half)).toEqual(await inspect(whole));
+  });
+
+  it('a dry run over existing services says their sets and extras would change, not "kept"', async () => {
+    const env = await migratedDatabase();
+    const target = await openTarget(env);
+    try {
+      const { actor } = await migrationAccount(target, { create: true });
+      const plans = buildPlans({
+        snapshot: await readSnapshot(snapshotDir),
+        mapping: await readMapping(mappingFile),
+        subjects: parseSubjects(''),
+        facts: { stageTerms: ['PROD'], spdx: spdxIndex() },
+        kpiFacts: {
+          valueTypes: ['integer'],
+          thematic: ['Usage', 'Bibliographic'],
+          units: [],
+          necessities: ['mandatory', 'optional'],
+          rimoCategories: [],
+        },
+        providers: [PROVIDER],
+        now: new Date(),
+      });
+      await loadRegistry(plans.registry, target, { dryRun: false, actor });
+    } finally {
+      await target.stop();
+    }
+    const before = await counts(env);
+    const { code, dir } = await run(env, ['--dry-run', '--skip-users', '--keep-account']);
+    expect(code).toBe(0);
+    expect(await counts(env)).toEqual(before);
+    expect((await readReport(dir)).counts['service-kpis']).toMatchObject({
+      read: 2,
+      changed: 2,
+      kept: 0,
+    });
   });
 
   it('cuts ten years and one month into two batches, 120 months and 1', async () => {
