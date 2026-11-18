@@ -143,6 +143,19 @@ export function workaroundSuggestions(snapshot: Snapshot): { mapping: Mapping; o
       `services[${JSON.stringify(service)}]: named like its provider, the legacy workaround for a consortium: not migrated, and providers[${JSON.stringify(count.provider)}] becomes a consortium. Check it; remove both entries if it is a real service.`,
     );
   }
+  // A category whose every service is one of those is the workaround's category (it holds no KPIs): not a KPI set.
+  for (const category of [...new Set(snapshot.services.map((row) => row.category))].sort()) {
+    const services = [
+      ...new Set(
+        snapshot.services.filter((row) => row.category === category).map((r) => r.abbreviation),
+      ),
+    ];
+    if (services.length === 0 || !services.every((name) => mapping.services[name]?.drop)) continue;
+    mapping.kpiSets[category] = { drop: true };
+    open.push(
+      `kpiSets[${JSON.stringify(category)}]: every service in this category is a consortium workaround service, so it is not migrated as a KPI set. Check it; remove the entry if the category is real.`,
+    );
+  }
   return { mapping, open };
 }
 
