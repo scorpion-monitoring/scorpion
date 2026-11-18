@@ -13,6 +13,7 @@
     getShell,
     JsonLd,
     Time,
+    UserAvatar,
   } from '@scorpion/ui-kit';
   import { unwrap } from '@scorpion/contracts/client';
   import type { OrganisationData } from './loaders.ts';
@@ -228,7 +229,10 @@
         <ul class="list-none">
           {#each data.members as member (member.username)}
             <li>
-              <span class="font-medium">{member.username}</span>
+              <span class="inline-flex items-center gap-2 align-middle">
+                <UserAvatar hash={member.avatarHash} />
+                <span class="font-medium">{member.username}</span>
+              </span>
               <span class="opacity-70">
                 {t('organisation.memberList.since')}
                 <Time iso={member.since} />

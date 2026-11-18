@@ -4,7 +4,7 @@
   // (approve, reject, promote, demote, remove). Nobody decides on their own request or changes their own role:
   // those rows carry no buttons and say why, as the API would answer 403.
   import { tick } from 'svelte';
-  import { Breadcrumb, DataTable, getShell, Time, type Column } from '@scorpion/ui-kit';
+  import { Breadcrumb, DataTable, getShell, Time, type Column, UserAvatar } from '@scorpion/ui-kit';
   import type { AdminMembershipsData, ManagedRow } from '../loaders.ts';
   import MembershipActions from '../MembershipActions.svelte';
   import {
@@ -128,7 +128,11 @@
   {#if noManager}<p class="text-sm">{t('membership.noManager')}</p>{/if}
 
   {#snippet personCell(row: ManagedRow)}
-    <span class="font-medium">{row.username ?? t('membership.unknownPerson')}</span>
+    <span class="inline-flex items-center gap-2 align-middle"
+      ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
+        >{row.username ?? t('membership.unknownPerson')}</span
+      ></span
+    >
   {/snippet}
   {#snippet organisationCell(row: ManagedRow)}
     <a class="link link-hover" href={href(`/organisations/${row.organisation.id}`)}
