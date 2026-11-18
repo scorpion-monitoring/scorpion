@@ -1,6 +1,6 @@
 # M13 Sprint Plan: legacy data migration (`tools/migrate-legacy`)
 
-Status: **approved by the maintainer on 2026-11-18; sprints 1 and 2 built** (sprint 1: two stacked pull requests, `fetch` and `discover`, then `plan` and `run` for the registry; sprint 2: KPIs, measurements and people). Every decision but 11 is answered (§13). The §12 changes are applied to `implementation.md`. Earlier: draft of 2026-11-17.
+Status: **approved by the maintainer on 2026-11-18; sprints 1 to 3 built** (sprint 1: two stacked pull requests, `fetch` and `discover`, then `plan` and `run` for the registry; sprint 2: KPIs, measurements and people; sprint 3: `compare`, the runbook, release `0.16.0`). Every decision is answered (§13; decision 11 on 2026-11-18: the cutover stays at Gate 4). The §12 changes are applied to `implementation.md`. Open: the rehearsal on staging and Gate 3 (§14), the maintainer's. Earlier: draft of 2026-11-17.
 
 Scope source: [implementation.md](implementation.md) §5, M13, Gate 3 and the risk table; [architecture.md](architecture.md) A5 and "Migration from the current app"; [ADR-0039](adr/0039-gate-2-conditional-pass.md) (the open line of Gate 2); what M6 to M12 hand over (§2); and the source of the legacy application in use, **`ipk-bit/scorpion` at `5a92c31`** (2025-04-17, the tip of `main`; named by the maintainer on 2026-11-17).
 
@@ -157,9 +157,16 @@ One pull request per sprint.
 3. The runbook in the tool's README: the `fetch` and its key, the order of the cutover (legacy read-only, final fetch, run, compare, DNS switch), what to tell users (sign in with the same account; create a new token), how to repeat a run.
 4. ADR-0052; `implementation.md` M13 and Gate 3 updated as approved (§12); changeset (`minor`: operators can migrate from the legacy application); release `0.16.0`.
 
+### Found differently / Amended in sprint 3
+
+- **One public read was missing, and sprint 3 asked before adding it** (maintainer, 2026-11-18): no read of `kpi.ingestion` gave a value's `source`, so `compare` could not tell a value the migration wrote from one a person entered after it. `reads.storedValuesAsSystem(serviceId, from, to)` returns every value of a service in a window of at most 120 months with its source: trusted, no permission, no route (ADR-0052, amended).
+- **`compare` reads with trusted reads only, not as the migration account.** The account is deactivated at the end of a run, and acting as a deactivated account would rely on the permission check not looking at the account's state. The trusted reads that exist answer the records at the level the plan asked for: organisations and services by their keys, each service's effective KPIs (set rows with their necessity, extras) and its set, users by address with their claim, and memberships read as each migrated user (`listOwn`, as the run requests them). What this cannot see is listed in the tool's README (an indicator or a set no migrated service has is `unchecked`; fields beyond the keys; roles).
+- **The classes of a difference.** _Expected_ is what a rule of the transform explains (a filled 0, a dropped or merged point, a service or KPI not migrated); _unexplained_ is what a run writes and the target does not hold as written (exit code 1); _reported_ is what a person may have changed after the run, where a run keeps what exists (a value of another source, a necessity, an added row or extra, a decided membership). The transform now carries its drops and merges as data, and marks a filled row, so `compare` uses the run's transform instead of a copy.
+- **The rehearsal (task 2) is the maintainer's** (decision 2): the exact commands are in the runbook and in §14. The agent ran `compare` on the maintainer's development instance (§14).
+
 ## 9. How complete the migration is
 
-**Complete** for what the legacy application in use stores, apart from the items below: every provider, consortium, service (with its provider, consortia, stage and licence), KPI set (from a category, with its KPIs and their necessity), indicator, service-specific KPI, measurement (one value per service, KPI and month), user (signing in with the same OIDC account), admin role and provider membership.
+**Complete** for what the legacy application in use stores, apart from the items below: every provider, consortium, service (with its provider, consortia, stage and licence), KPI set (from a category, with its KPIs and their necessity), indicator, service-specific KPI, measurement (one value per service, KPI and month; a month missing between two points as 0, decision 13), user (an account that its owner claims at the first sign-in at the same OIDC provider, with the same verified address and the legacy username; ADR-0053) and provider membership. Every migrated user has the role `user`; the legacy administrators are listed and get Admin by hand once they have claimed (decision 4 as amended).
 
 **Not migrated, by design:**
 
@@ -167,6 +174,8 @@ One pull request per sprint.
 | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | API keys                                                                           | Unscoped, stored in plain text in the legacy graph, and the API cannot list their holders; every user is told to create a scoped token (decision 5) |
 | Passwords                                                                          | Not in the legacy data (Keycloak holds them); users sign in through OIDC as before (decision 3)                                                     |
+| OIDC subjects                                                                      | The legacy API does not give them; each account is claimed at its owner's first sign-in instead (ADR-0053)                                          |
+| The admin role                                                                     | Granted by hand after the claim, so a wrong claim never reaches an administrator's account (decision 4 as amended)                                  |
 | Points beyond one per month, future months, years before 1900                      | The new model keeps one value per month and these limits (ADR-0041); each is listed in the report                                                   |
 | Records the new rules refuse (a service with two providers, an address used twice) | Listed in the report; fixed in the legacy data or the mapping and the run repeated                                                                  |
 | The SQLite tables                                                                  | Vestigial, unless discovery shows otherwise (decision 10)                                                                                           |
@@ -197,7 +206,7 @@ A live connection to the legacy stores; importing API keys; a mapping editor in 
 
 ## 13. Decisions
 
-Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; 14 and 15 during sprint 1; 3, 4, 5, 6, 9, 10, 12 and 13 on 2026-11-18 for sprint 2 (the maintainer corrected 3 and 12 and let the recommendations stand for the others); 11 is open until sprint 3.
+Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; 14 and 15 during sprint 1; 3, 4, 5, 6, 9, 10, 12 and 13 on 2026-11-18 for sprint 2 (the maintainer corrected 3 and 12 and let the recommendations stand for the others); 11 on 2026-11-18 for sprint 3 (against the recommendation).
 
 1. **Is `ipk-bit/scorpion` the only source?** Did the PostgreSQL application of `FEATURES.md` ever hold production data? _Recommended:_ the plan assumes not. **Answer (maintainer, 2026-11-17): `ipk-bit/scorpion` is the only source.**
 2. **Snapshots.** Who fetches them (an administrator's API key of the legacy instance), where they stay, and may sprint 1 have one for discovery (only counts and spellings go into the plan)? Are the S3 backups complete and current enough to be the source of the measurements? _Recommended:_ the maintainer fetches one at the start of sprint 1 and one for the rehearsal; the S3 backups are the cross-check. **Answer (maintainer, 2026-11-17): the maintainer fetches; the API is the source of the measurements, and the S3 backups are not needed as a cross-check** (`--measurements` stays an optional input of `discover`, since the files have the same shape).
@@ -209,7 +218,7 @@ Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; 14 and 15 duri
 8. **Publication.** Every service private (M7's rule) or published as in the legacy catalogue? _Recommended:_ published, since the legacy catalogue showed every service; a mapping switch. **Answer (maintainer, 2026-11-17): private, M7's rule; the tool never calls `setPublication`.**
 9. **A value for a KPI the service no longer has.** Add the KPI to the service as optional (the plan), or drop the value? _Recommended:_ add, so no value is lost. **Answer (maintainer, 2026-11-18): as recommended** (an optional extra of the service; `service-kpis.kpi-added-optional` with the number of values).
 10. **SQLite `users.db`.** Ignore it? _Recommended:_ ignore; no route reads it. **Answer (maintainer, 2026-11-18): as recommended.**
-11. **When to cut over.** The legacy application has no maturity, onboarding, bibliometrics or announcements, so nothing waits for M14 to M17. Cut over after Gate 3, or at Gate 4 as planned? _Recommended:_ after Gate 3.
+11. **When to cut over.** The legacy application has no maturity, onboarding, bibliometrics or announcements, so nothing waits for M14 to M17. Cut over after Gate 3, or at Gate 4 as planned? _Recommended:_ after Gate 3. **Answer (maintainer, 2026-11-18): at Gate 4 as planned.** The legacy application stays the one in use until then; Gate 4's final migration run is the cutover (legacy read-only, final fetch, run, compare, DNS switch; the runbook). Rehearsals on staging can be repeated with fresh snapshots meanwhile.
 12. **User subjects.** `GET /aai/users` has no user id, and the OIDC subject is what lets a user keep their account. Options: (a) one read-only query over Neo4j's HTTP endpoint (`MATCH (u:USER) RETURN u.id, u.username`), (b) the user list of Keycloak's admin API (id, username, address), (c) migrate users without an identity and link it at their first sign-in by a verified address (a new feature of `core.identity` and a risk of account takeover; not recommended). _Recommended:_ (a) or (b), whichever the maintainer can run; the tool takes the answer as a two-column file. **Answer (maintainer, 2026-11-18): the legacy user id is the OIDC subject, and the legacy username is the provider's preferred username.** The API still returns neither the id nor a way to read it, so the tool takes the pairs as a file (`--subjects`, one `subject<TAB>username` per line, produced once from Neo4j or Keycloak) and matches them to `user_name` without case; a user without a subject is reported and not migrated. No linking at first sign-in (option c). **Amended (maintainer, 2026-11-18, ADR-0053): option (c) after all**, so that no file is needed and nobody registers again: each account is created with an open claim and claimed at the owner's first sign-in at the provider, by the verified address and the legacy username as `preferred_username`, within `claimDays` (default 90). The risk of option (c) is bounded by the role (`user` only, decision 4 as amended), the one provider, the second check by username and the single use.
 13. **Months missing inside a KPI history.** The legacy API leaves out every value of 0 (`if record[label]` in `get_measurements_for_service`), and the S3 backups were made through it, so a 0 is a missing month in both (maintainer, 2026-11-17). A missing month can also be a month nobody reported. Sprint 2 needs the rule: write 0 for every month missing between a KPI's first and last point of a service (reported per service and KPI), or leave the months empty? `discover` counts them ("months missing inside a KPI history"). _Recommended:_ decide with the count from the discovery; fill only if no other reading of a gap is plausible. **Answer (maintainer, 2026-11-18): as recommended, filled with 0** between a KPI's first and last point of a service, reported per service and KPI; `"fillMissingMonths": false` in the mapping leaves the months empty. The discovery counted 563 such months in 20 histories against 1 293 points, so a third of the values of those services are zeros the tool wrote.
 14. **Services without a stage.** The discovery found an empty stage on every service (and an empty licence), and the new model requires a stage. **Answer (maintainer, 2026-11-17): `PROD` for all** (`missingStage: "PROD"` in the mapping; each one reported as `service.stage.missing-mapped`; a per-service `stage` in the mapping overrides it). An empty licence stays empty.
@@ -217,7 +226,7 @@ Decisions 1, 2, 7 and 8 were answered on 2026-11-17 for sprint 1; 14 and 15 duri
 
 ## 14. Discovery and rehearsal results
 
-Filled in by sprint 1 (discovery) and sprint 3 (rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here when the maintainer has run the registry part on staging.
+Filled in by sprint 1 (discovery), sprint 2 (the run on a copy) and sprint 3 (`compare`; the rehearsal), counts and property names only. **Gate 2's open line** (ADR-0039) is recorded here when the maintainer has run the registry part on staging.
 
 ### Discovery (the maintainer's snapshot of 2026-11-17)
 
@@ -267,3 +276,39 @@ Run by the agent on the maintainer's development instance on 2026-11-18, at the 
 - **Second run:** created nothing and changed nothing; every record kept, 1832 values unchanged.
 - **Found:** a dry run before the services exist counted their KPIs as `created`, a run as `changed` (the service is created in the stage before); the dry run now says `changed` too.
 - **Not covered:** a claim at a real provider (the instance has no provider configured; the tests cover the claim against a stub provider), the deactivation of the account (`--keep-account`; no other administrator existed).
+
+### `compare` on the maintainer's development instance (sprint 3)
+
+Run by the agent on 2026-11-18, at the request of the maintainer, read-only, on the database of the sprint 2 run above: the snapshot of 2026-11-17 and the same mapping. **Clean** (exit code 0), and the numbers of the run hold:
+
+| Kind         | Expected | Found | Unchecked | Unexplained | Reported |
+| ------------ | -------- | ----- | --------- | ----------- | -------- |
+| provider     | 35       | 35    | 0         | 0           | 0        |
+| consortium   | 9        | 9     | 0         | 0           | 0        |
+| service      | 27       | 27    | 0         | 0           | 0        |
+| indicator    | 18       | 18    | 0         | 0           | 0        |
+| kpi-set      | 6        | 4     | 2         | 0           | 0        |
+| service-kpis | 27       | 27    | 0         | 0           | 0        |
+| user         | 16       | 16    | 0         | 0           | 0        |
+| membership   | 15       | 15    | 0         | 0           | 0        |
+
+- **Measurements:** 1293 points read; 1832 values expected and found: 1291 equal to a snapshot point and 541 filled zeros (`filled-zero`); 2 points `dropped-by-rule` (`measurement.future-month`); none merged, none of a service or KPI not migrated. No value missing, different or extra; none entered by a person.
+- **KPI sets:** two of the six sets have no migrated service, so `compare` cannot read their rows (`unchecked`; README, "What it does not compare").
+- **Claims:** 16 open, 0 claimed, 0 expired.
+
+### The rehearsal on staging and Gate 3 (the maintainer's)
+
+_To be filled in by the maintainer after the rehearsal on staging with a copy of production (decision 2): counts and rule names only._
+
+| Step                                                | Result |
+| --------------------------------------------------- | ------ |
+| fetch (date of the snapshot; counts of `discover`)  |        |
+| plan: open lines decided                            |        |
+| dry run: dropped records and their rules            |        |
+| run: created / changed / dropped per kind           |        |
+| compare: unexplained / reported                     |        |
+| second run: everything kept                         |        |
+| three services' dashboards checked by hand (Gate 3) |        |
+| Gate 2's open line (ADR-0039): the registry dry run |        |
+
+**Gate 3** passes when the dry run reports no unexplained drop, `compare` is clean, the KPI profile runs on staging with the migrated data, and the three dashboards match the legacy application.

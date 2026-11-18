@@ -74,6 +74,15 @@ export interface SeriesPoint {
   value: string;
 }
 
+/** One stored value of `storedValuesAsSystem`: a `SeriesPoint` with the `source` that wrote it last. */
+export interface StoredValue extends SeriesPoint {
+  /** The adapter or tool that wrote the value last (`form`, `csv`, `api`, `legacy-migration`, …); never a person. */
+  source: string;
+}
+
+/** The most values one call of `storedValuesAsSystem` returns: 120 months of 200 indicators. */
+export const MAX_STORED_VALUES = MAX_SERIES_MONTHS * MAX_SERIES_INDICATORS;
+
 /** A row of the grid of one month: an indicator of the effective set with the value stored for the month, if any. */
 export interface GridRow {
   indicatorId: string;
@@ -156,6 +165,18 @@ export interface ReadsService {
     fromPeriod: string,
     toPeriod: string,
   ): Promise<string[]>;
+  /**
+   * Every value stored for one service in the months `fromPeriod` to `toPeriod` (the bounds and the 422 of `seriesAsSystem`), of
+   * every indicator, with the `source` that wrote it last: by month, then indicator id. It is how the legacy migration's
+   * `compare` tells a value it wrote from one a person entered after it (M13 sprint 3). At most `MAX_STORED_VALUES` values; a
+   * caller that gets that many asks for fewer months. A trusted read like `seriesAsSystem`: no permission, no route, and no
+   * person's id, run or file name.
+   */
+  storedValuesAsSystem(
+    serviceId: string,
+    fromPeriod: string,
+    toPeriod: string,
+  ): Promise<StoredValue[]>;
 }
 
 export interface ReadsDeps {
@@ -460,6 +481,39 @@ export function createReadsService(ctx: ModuleContext, deps: ReadsDeps): ReadsSe
         .orderBy(asc(measurement.indicatorId))
         .limit(MAX_SERIES_INDICATORS);
       return rows.map((row) => row.id);
+    },
+
+    async storedValuesAsSystem(serviceId, fromPeriod, toPeriod) {
+      const { from, to } = checkSeriesQuery(serviceId, undefined, fromPeriod, toPeriod);
+      const rows = await db
+        .select({
+          indicatorId: measurement.indicatorId,
+          period: measurement.period,
+          valueNumeric: measurement.valueNumeric,
+          valueText: measurement.valueText,
+          source: measurement.source,
+        })
+        .from(measurement)
+        .where(
+          and(
+            eq(measurement.serviceId, serviceId),
+            gte(measurement.period, from),
+            lte(measurement.period, to),
+          ),
+        )
+        .orderBy(asc(measurement.period), asc(measurement.indicatorId))
+        .limit(MAX_STORED_VALUES);
+      if (rows.length === 0) return [];
+      const details = await deps.kpi.indicatorsByIdAsSystem([
+        ...new Set(rows.map((row) => row.indicatorId)),
+      ]);
+      const types = new Map(details.map((row) => [row.id, row.valueType]));
+      return rows.map((row) => ({
+        indicatorId: row.indicatorId,
+        period: row.period,
+        ...present(types.get(row.indicatorId), row),
+        source: row.source,
+      }));
     },
 
     async coverage(actor, serviceId, months = DEFAULT_COVERAGE_MONTHS) {

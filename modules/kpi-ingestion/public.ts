@@ -28,6 +28,7 @@ export {
   MAX_INDICATOR_FILTER,
   MAX_SERIES_INDICATORS,
   MAX_SERIES_MONTHS,
+  MAX_STORED_VALUES,
   type CoverageMonth,
   type GridRow,
   type MeasurementRead,
@@ -35,6 +36,7 @@ export {
   type ReadsService,
   type SeriesPoint,
   type SeriesQuery,
+  type StoredValue,
 } from './service/reads.ts';
 // The route definitions, for their contract tests (`apps/server/src/measurements.contract.test.ts`).
 export {

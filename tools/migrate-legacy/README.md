@@ -131,6 +131,54 @@ claim is open or was used.
   read = the points of the snapshot, created = inserted (zeros filled included), kept = unchanged, changed = updated,
   merged = points that shared a month, dropped = dropped points, refused values and values of services not migrated.
 
+### `compare <snapshot> --mapping <file> --report <dir>`
+
+Reads the target back and checks it against the snapshot: **every value** the run writes, per service, KPI and month, and
+the other records at the level the target answers cheaply. It **writes nothing** to the database and needs no account: it
+uses trusted reads only (the migration account is deactivated at the end of a run). The expected state is the run's own
+transform (`buildPlans`, with `transformMeasurements`), never a copy, so run it with the snapshot and the mapping of the run.
+The values are read with `kpi.ingestion`'s `reads.storedValuesAsSystem`, which gives the `source` of each value, in windows
+of 120 months from 1900 to the current month.
+
+Every difference has a class and a reason:
+
+| Class           | Reason                                           | What it means                                                                                                              |
+| --------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| **expected**    | `filled-zero`                                    | a month missing between two points, written as 0 (decision 13) and found as written                                        |
+|                 | `dropped-by-rule`                                | a point before 1900, in a future month or with a date that does not parse (with the rule's name)                           |
+|                 | `merged-in-month`                                | a point that shared its month with a later one                                                                             |
+|                 | `service-not-migrated`, `indicator-not-migrated` | the points of a service or a KPI the transform or the mapping leaves out                                                   |
+| **unexplained** | `missing`                                        | a value the run writes is not in the target                                                                                |
+|                 | `different-value`                                | the target holds another value, with the source `legacy-migration`                                                         |
+|                 | `extra`                                          | a value with the source `legacy-migration` that the snapshot does not explain (an older snapshot, another mapping)         |
+| **reported**    | `changed-after-run`, `entered-after-run`         | a value of another source (`form`, `csv`, `api`, …): a person changed or entered it after the run. Listed, never a failure |
+
+For the records, a record the run writes and the target lacks is unexplained (a provider, consortium, service or user that
+is missing, a consortium link, a set row or a service's extra KPI that is missing, a set the service should have, an
+approved membership that is still a request). What a person may have changed after the run, where a repeated run keeps
+what exists, is reported (another necessity, a row or extra added, another provider, a membership left or decided, a
+renamed slug, an address held by another account).
+
+**Exit code 1 when any difference is unexplained**, 0 otherwise. The output has counts only (per kind, per class and
+reason, and the claims: open, claimed, expired). The report, in a new or empty directory outside the repository, mode
+0600, is `report.json` and `report.md`: the snapshot and the mapping, the target database, the counts per kind, the counts
+per service, and one line per unexplained or reported difference (at most 200 per service; the rest are counted). It
+names services, KPIs and usernames, so it is sensitive like the run's.
+
+**What it does not compare:**
+
+- The fields of a record beyond its key: names, descriptions, stages and licences of services, organisation names, and the
+  value type, thematic category, unit and description of indicators.
+- **An indicator** is found by its name among the KPIs and values of the migrated services; there is no trusted read by
+  slug, so one that no migrated service has is counted `unchecked`. A KPI set is checked through the services that have it
+  (its rows and their necessities); a set no migrated service has is `unchecked`, and its name, slug and RIMO category are
+  not compared. A renamed indicator shows its values as `missing` and `extra`.
+- **Roles** (every migrated account has `user`; Admin is granted by hand) and the end of a claim.
+- **Memberships of users that are not migrated** (`unchecked`), and the services, users and values of the target that the
+  snapshot does not name.
+- A value refused by the service during the run (`measurement.rejected` in the run's report) is `missing`: fix the cause and
+  run again.
+
 ### `users <snapshot> --mapping <file> --out <file>`
 
 Writes the users the target holds from this snapshot, one `username<TAB>address<TAB>claim<TAB>legacy-admin` per line after a
@@ -233,6 +281,107 @@ cutover.
   holds an API key:** no key is migrated
   (decision 5); every user is told to create a scoped token.
 
-## Not yet
+## The runbook
 
-Sprint 3 of M13 adds `compare` (every migrated value against the snapshot) and the runbook of the cutover.
+The order of a migration, for a rehearsal on staging and for the cutover. Every file the steps write (the snapshot, the
+mappings, the reports, the users list) holds personal data: keep it outside the repository in a directory only you can
+read, for example `~/m13` (`mkdir -m 700 ~/m13`).
+
+### 1. Prepare the new instance
+
+1. Deploy the `full` profile and migrate the database: `pnpm scorpion migrate` (the tool never migrates).
+2. **Create the first administrator before the migration:** `pnpm scorpion create-admin --username <name> --email <address>`.
+   No migrated user becomes an administrator, and the migration account can only be deactivated at the end of a run while
+   another active administrator exists.
+3. **Configure the OIDC provider** the legacy users signed in with (decision 3: LS Login) under Settings, Sign-in
+   providers, with the id the mapping uses as `oidcProvider` (for example `ls-login`), and store its client secret:
+   `pnpm scorpion set-secret oidc.<id>.client-secret`. Register `<ORIGIN><BASE_PATH>/api/internal/auth/oidc/<id>/callback`
+   at the provider. (The tool also runs before the provider exists; the claims then wait for it.)
+4. **Set the mail transport to `none`** (Settings, Notifications, `emailTransport`), so the membership mails the run queues
+   are not sent before the announcement.
+
+`pnpm migrate-legacy` loads `.env` from the repository root; set `DATABASE_URL` and `SECRETS_KEY` of the new instance there
+or in the shell. Every command names the target database first: check it.
+
+### 2. Fetch, plan, dry run, run, compare
+
+```bash
+read -rs LEGACY_API_KEY && export LEGACY_API_KEY      # a legacy administrator's key: never an argument or a file
+pnpm migrate-legacy fetch --from 'https://legacy.example.org/scorpion' --out ~/m13/snapshot
+unset LEGACY_API_KEY
+
+pnpm migrate-legacy discover ~/m13/snapshot              # counts only, for a first look
+pnpm migrate-legacy plan ~/m13/snapshot --out ~/m13/mapping.json
+```
+
+3. **Edit the mapping** until `open` is decided: a thematic category for every KPI, consortium abbreviations, the stage of
+   services without one (`missingStage`), the workaround services and providers `plan` suggests (decision 15), the KPI sets
+   to drop. Keep each version (`mapping-2.json`, …) until the cutover; the mapping is data, not code.
+4. **Dry run until it is clean** (no gap, nothing dropped that is not meant to be; read `report.md`):
+
+   ```bash
+   pnpm migrate-legacy run ~/m13/snapshot --mapping ~/m13/mapping.json --report ~/m13/report-dry --dry-run
+   ```
+
+5. **Run** (on staging add `--keep-account`, so that a later rehearsal step can still act as the account):
+
+   ```bash
+   pnpm migrate-legacy run ~/m13/snapshot --mapping ~/m13/mapping.json --report ~/m13/report-run --yes
+   ```
+
+6. **Compare**, which must be clean (exit code 0):
+
+   ```bash
+   pnpm migrate-legacy compare ~/m13/snapshot --mapping ~/m13/mapping.json --report ~/m13/compare
+   ```
+
+7. **Run again** with the same snapshot and mapping: every record must be `kept` and every value unchanged (a new report
+   directory each time). A run after the account was deactivated uses `legacy-migration-2`.
+
+On staging (Gate 3), also check the dashboard numbers of three services by hand against the legacy application.
+
+### 3. The cutover
+
+Decision 11: the cutover is **Gate 4's** final migration run (`implementation.md`, Gate 4). In this order:
+
+1. Set the legacy application **read-only** (no more submissions; tell the users the day before).
+2. **Final fetch** into a new snapshot directory, then `plan` only if the snapshot brings something new (otherwise reuse the
+   last mapping), a dry run, the **run**, **compare** (clean), and the second run (all kept), as in step 2.
+3. **Switch DNS** (or the proxy) to the new instance. The legacy application stays read-only for 30 days, then is retired.
+
+### 4. After the run
+
+1. **The announcement mail**, from the users list:
+
+   ```bash
+   pnpm migrate-legacy users ~/m13/snapshot --mapping ~/m13/mapping.json --out ~/m13/users.tsv
+   ```
+
+   It says: sign in at the provider (LS Login) **with the same address** as in the legacy application, within the claim's
+   days (`claimDays`, default 90), and you are in your old account with your memberships; **API keys are not migrated**, so
+   create a new token (scoped) in your account and replace the key in your scripts.
+
+2. **Admin by hand:** the users marked `yes` in the `legacy-admin` column get the role `user`. Grant Admin (Administration,
+   Users) once each of them has claimed (their `claim` is `claimed` in a fresh `users` list), after checking it is them.
+3. **The migration account:** a run deactivates it at the end. If the report says it is still active (no other administrator
+   existed, or `--keep-account`), deactivate it under Administration, Users once another administrator exists.
+4. **Turn the mail back on:** start the instance's worker with the transport still at `none`, so the queued membership mails
+   are marked sent without being sent (Administration, Notifications shows the queue), then set `emailTransport` to `smtp`.
+5. **Delete** the snapshots, the reports, the mapping copies and the users list once the cutover is done and Gate 4 is
+   passed: `rm -r ~/m13`.
+
+### Repeat a run
+
+A run can be repeated at any time with the same or a newer snapshot: records are found by their natural keys and kept or
+updated, values by service, KPI and month. A run stopped halfway is finished by running it again. Each run needs a new
+report directory, and a run after the first uses the next migration account. After a newer snapshot, run `compare` with
+that snapshot: values of the older one that the newer no longer has show as `extra`.
+
+### When an owner cannot claim
+
+An owner whose provider sends another address or username than the legacy data, or whose claim expired, cannot claim the
+account: the sign-in takes the usual path for an address the instance knows and links nothing. There is no administrator
+view of the open claims yet (backlog: "Open claims for administrators"). Meanwhile an administrator helps: read the
+`claim` column of `migrate-legacy users`, correct the address in the legacy data or in the mapping (`users.<name>.email`)
+before the final run, or, after the cutover, have the person register an account and request their memberships again,
+which their managers approve.
