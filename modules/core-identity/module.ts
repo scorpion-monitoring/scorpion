@@ -296,9 +296,10 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
           deactivatedBy: z.string(),
           count: z.number().int().min(0),
         }),
+        // `via`: `profile` (signed in), `email` (the mailed link, ADR 0026) or `claim` (a migrated account's first sign-in, ADR 0053).
         'identity.authMethod.linked@1': userEvent.extend({
           provider: z.string(),
-          via: z.enum(['email', 'profile']),
+          via: z.enum(['email', 'profile', 'claim']),
         }),
         // A first sign-in at a provider found an account that holds the address; its holder was mailed a link (ADR 0026). Nothing was linked.
         'identity.authMethod.linkRequested@1': userEvent.extend({ provider: z.string() }),

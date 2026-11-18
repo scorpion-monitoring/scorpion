@@ -1,6 +1,8 @@
 // Load for users, roles and memberships, through the public services of core.identity, core.authz and
-// registry.organisations. A user is found by the OIDC identity `{ provider, subject }` (the natural key), created active with
-// that identity and given a role in one transaction; a username or address that someone else holds is reported. A membership
+// registry.organisations. A user is found by the address (the natural key), created active with no way to sign in and an
+// open claim (ADR-0053: the owner's first sign-in at the provider, with that verified address and the legacy username, adds
+// the identity) and given the role `user` in one transaction; an address that another account holds is reported, a
+// username someone else holds gets a suffix. A membership
 // is requested **as the user** and decided **as the migration account** (the state machine lets `request` be made by the
 // person only, and nobody decides their own); a legacy pending request stays a request. An existing row is never reopened:
 // one that was rejected or ended after the first run stays so, and is reported.
@@ -35,15 +37,36 @@ export interface PeopleLoad {
   findings: Finding[];
   /** The id of each migrated user, by legacy username, and what became of the record. */
   users: Map<string, { id: string | undefined; username: string; outcome: Outcome }>;
+  /** The migrated accounts by the state of their claim (ADR-0053); a dry run counts the ones it would create as open. */
+  claims: { open: number; claimed: number; expired: number };
 }
 
 const quote = (value: string) => JSON.stringify(value);
 const PAGE = 100;
 
+/**
+ * Whether the account that holds a user's address is the one this migration created for them: it holds the claim the user
+ * would get, or, once claimed (the claim is gone), it has the username the migration gave it.
+ */
+export function isMigratedAccount(
+  found: { username: string },
+  claim: { provider: string; username: string } | undefined,
+  op: Pick<UserOp, 'provider' | 'claimUsername' | 'username'>,
+): boolean {
+  return claim
+    ? claim.provider === op.provider && claim.username === op.claimUsername.toLowerCase()
+    : found.username === op.username;
+}
+
 export async function loadUsers(
   plan: Pick<PeoplePlan, 'users'>,
   ports: PeoplePorts,
-  options: { dryRun: boolean },
+  options: {
+    dryRun: boolean;
+    now: Date;
+    /** When an account created by this run can no longer be claimed (now plus the mapping's `claimDays`). */
+    claimUntil: Date;
+  },
 ): Promise<PeopleLoad> {
   const results: RecordResult[] = [];
   const findings: Finding[] = [];
@@ -51,13 +74,28 @@ export async function loadUsers(
   const users: PeopleLoad['users'] = new Map();
   const { dryRun } = options;
   const taken = new Set<string>();
+  const claims = { open: 0, claimed: 0, expired: 0 };
 
   const assignRole = (userId: string, role: string) =>
     ports.db.tx((tx) => ports.authz.assignRoleAsSystem(tx, { userId, roleKey: role }));
 
   for (const op of plan.users) {
-    const existing = await ports.identity.users.findByIdentityAsSystem(op.provider, op.subject);
+    const refuse = (rule: string, detail: string) => {
+      findings.push({ kind: 'user', legacy: op.legacy, rule, effect: 'dropped', detail });
+      results.push({ kind: 'user', legacy: op.legacy, target: op.username, outcome: 'dropped' });
+      users.set(op.legacy, { id: undefined, username: op.username, outcome: 'dropped' });
+    };
+    // The natural key is the address.
+    const existing = await ports.identity.users.findByEmail(op.email);
     if (existing) {
+      const claim = await ports.identity.users.claimOfAsSystem(existing.id);
+      if (!isMigratedAccount(existing, claim, op)) {
+        refuse('user.email-taken', 'another account of the target already has this address');
+        continue;
+      }
+      if (!claim) claims.claimed += 1;
+      else if (claim.expiresAt.getTime() <= options.now.getTime()) claims.expired += 1;
+      else claims.open += 1;
       let changed = false;
       if (!dryRun) {
         const done = await attempt('user', op.legacy, existing.username, async () =>
@@ -87,17 +125,7 @@ export async function loadUsers(
       });
       continue;
     }
-    const refuse = (rule: string, detail: string) => {
-      findings.push({ kind: 'user', legacy: op.legacy, rule, effect: 'dropped', detail });
-      results.push({ kind: 'user', legacy: op.legacy, target: op.username, outcome: 'dropped' });
-      users.set(op.legacy, { id: undefined, username: op.username, outcome: 'dropped' });
-    };
-    const byEmail = await ports.identity.users.findByEmail(op.email);
-    if (byEmail) {
-      refuse('user.email-taken', 'another account of the target already has this address');
-      continue;
-    }
-    // A username someone else holds (an account of the target that is not this identity) gets a suffix.
+    // A username someone else holds (an account of the target with another address) gets a suffix.
     let username = op.username;
     for (let tries = 0; tries < 100; tries += 1) {
       if (taken.has(username) || (await ports.identity.users.findByUsername(username))) {
@@ -116,17 +144,21 @@ export async function loadUsers(
     }
     taken.add(username);
     if (dryRun) {
+      claims.open += 1;
       users.set(op.legacy, { id: undefined, username, outcome: 'created' });
       results.push({ kind: 'user', legacy: op.legacy, target: username, outcome: 'created' });
       continue;
     }
     const created = await attempt('user', op.legacy, username, () =>
       ports.db.tx(async (tx) => {
-        const created = await ports.identity.users.createUser({
+        const created = await ports.identity.users.createClaimableAsSystem({
           username,
           email: op.email,
-          status: 'active',
-          auth: { provider: op.provider, subject: op.subject },
+          claim: {
+            provider: op.provider,
+            username: op.claimUsername,
+            expiresAt: options.claimUntil,
+          },
         });
         await ports.authz.assignRoleAsSystem(tx, { userId: created.id, roleKey: op.role });
         return created;
@@ -136,10 +168,11 @@ export async function loadUsers(
       users.set(op.legacy, { id: undefined, username: op.username, outcome: 'dropped' });
       continue;
     }
+    claims.open += 1;
     users.set(op.legacy, { id: created.value.id, username, outcome: 'created' });
     results.push({ kind: 'user', legacy: op.legacy, target: username, outcome: 'created' });
   }
-  return { results, findings, users };
+  return { results, findings, users, claims };
 }
 
 export async function loadMemberships(

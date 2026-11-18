@@ -1,6 +1,6 @@
 # ADR-0052: The legacy migration reads a snapshot of the REST API and writes through the services as one account
 
-- Status: Accepted (sprint 1 of M13; amended in sprint 2)
+- Status: Accepted (sprint 1 of M13; amended in sprint 2 and by [ADR-0053](0053-migrated-accounts-are-claimed-at-the-first-sign-in.md))
 - Date: 2026-11-18
 - Relates to: [ADR-0039](0039-gate-2-conditional-pass.md) (the open line of Gate 2), [ADR-0046](0046-demo-seed.md) (trusted code
   writes through the services as an account), [ADR-0035](0035-service-model.md) (the slug rule),
@@ -35,7 +35,7 @@ through the same rules as a request (CLAUDE.md rule 5). There is no system actor
    account it found: an account of that name without Admin is refused by the services at the first write, and the run stops with nothing
    written. Every migrated row shows the migration as its author in the audit trail.
 6. **Idempotent by natural keys.** An organisation is found by its type and abbreviation, a service by its slug (sprint 2: an indicator or a
-   KPI set by its slug, a user by the OIDC subject, a measurement by service, indicator and period). What exists and matches is kept, what
+   KPI set by its slug, a user by the OIDC subject (since ADR-0053: by the address), a measurement by service, indicator and period). What exists and matches is kept, what
    differs is updated, the rest is created; a second run over the same snapshot reports "kept" for everything. The tool records no state of
    its own, so a run stopped halfway is finished by running it again.
 7. **A mapping file and a report.** What the legacy data does not say (abbreviations of consortia, the stage of a service without one) is a
@@ -66,5 +66,8 @@ through the same rules as a request (CLAUDE.md rule 5). There is no system actor
 - **Kept, not overwritten.** An existing indicator, KPI set, service set or membership is left as it is and a difference is
   reported, because people edit them after the first run; missing set rows and extras are added.
 - **The subjects file** (decision 12) is the one source of a user's OIDC subject. A user without one is not migrated.
+  _Replaced by [ADR-0053](0053-migrated-accounts-are-claimed-at-the-first-sign-in.md): no subjects file and no
+  `findByIdentityAsSystem`; each account is claimed at its owner's first sign-in, and every migrated user gets the role
+  `user`._
 - **Mail.** Membership requests and decisions go through the services, which queue mails and inbox items; the tool starts no
   worker. The runbook keeps the mail transport at `none` until the announcement.

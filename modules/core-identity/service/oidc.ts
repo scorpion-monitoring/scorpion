@@ -6,6 +6,7 @@ import { Conflict, Forbidden, NotFound, Unauthorized, url, type Actor } from '@s
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { ModuleContext } from '@scorpion/kernel';
 import { authMethod } from '../db/schema.ts';
+import { claimAccount } from './account-claim.ts';
 import { addIdentityIn } from './identity-link.ts';
 import type { OidcLinkService } from './oidc-link.ts';
 import type { User, UserService } from '../public.ts';
@@ -287,11 +288,20 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
       const sameEmail =
         claims.emailVerified && claims.email ? await users.findByEmail(claims.email) : undefined;
       if (sameEmail) {
-        // A provider's word for an address is not enough to enter the account that holds it (ASVS
-        // 6.8.1): nothing is linked and nobody is signed in. The holder is mailed a link and confirms
-        // it signed in. Every case ends the same way, so the browser learns nothing about the account.
-        await deps.linking.request(provider, claims.subject, sameEmail);
-        return { kind: 'check-mail' };
+        // The one exception: an account created by the migration with an open claim, which nobody has
+        // ever signed in to, and whose claim this sign-in meets in every point (ADR 0053).
+        const claim = await claimAccount(ctx, sameEmail, provider.id, claims);
+        if (claim.claimed) {
+          account = await users.findById(sameEmail.id);
+          if (!account) throw new Unauthorized(GENERIC_REFUSAL);
+        } else {
+          if (claim.reason !== 'none') refuse(provider.id, `claim-${claim.reason}`);
+          // A provider's word for an address is not enough to enter the account that holds it (ASVS
+          // 6.8.1): nothing is linked and nobody is signed in. The holder is mailed a link and confirms
+          // it signed in. Every case ends the same way, so the browser learns nothing about the account.
+          await deps.linking.request(provider, claims.subject, sameEmail);
+          return { kind: 'check-mail' };
+        }
       } else {
         account = await provision(provider, claims);
       }

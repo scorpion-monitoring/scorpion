@@ -1,16 +1,16 @@
 // Transform for users, roles and memberships (M13 plan §3, sprint 2). Pure: what the target already holds is the load
 // step's concern (a username taken by someone else gets a suffix there). The rules:
-//   - a user is migrated only with an OIDC subject (the subjects file, decision 12) and a provider id (decision 3);
+//   - a user is migrated as an account its owner claims at the first sign-in at the provider (decision 3), by the
+//     verified address and the legacy username (ADR-0053); no OIDC subject is needed;
 //   - the username is made to fit `^[a-z0-9_-]{3,31}$` and a collision between two legacy users gets a suffix (reported);
 //   - an address that is not an address, or that two users share, is reported and the user is not migrated;
-//   - the role is `admin` for the legacy `is_admin` property (decision 4, every administrator listed in the report), else
-//     the default role `user`;
+//   - the role is `user` for everyone: a legacy administrator is reported, and an administrator of the instance grants
+//     Admin by hand after the claim (ADR-0053; decision 4 as amended);
 //   - an approved legacy membership is a request by the user decided by the migration account; a pending one stays a
 //     request; a user has at most 10 pending requests (the rest are reported).
 import type { Mapping } from './mapping.ts';
 import type { Snapshot } from './snapshot.ts';
 import { fitUsername, isEmailAddress, isProviderId, uniqueUsername } from './rules.ts';
-import type { Subjects } from './subjects.ts';
 import type { Finding, RegistryPlan } from './transform.ts';
 
 /** `MAX_PENDING_PER_USER` of registry.organisations (`membership.maxPendingPerUser`'s default). */
@@ -21,10 +21,14 @@ export interface UserOp {
   legacy: string;
   username: string;
   email: string;
+  /** The provider id the account is claimed at. */
   provider: string;
-  subject: string;
-  /** `admin` or the default role. */
-  role: 'admin' | 'user';
+  /** The `preferred_username` the provider must send at the claim: the legacy username. */
+  claimUsername: string;
+  /** Always the default role (ADR-0053). */
+  role: 'user';
+  /** An administrator in the legacy data: reported, to be granted Admin by hand after the claim. */
+  legacyAdmin: boolean;
 }
 
 export interface MembershipOp {
@@ -49,7 +53,6 @@ const quote = (value: string) => JSON.stringify(value);
 
 export function transformPeople(
   snapshot: Pick<Snapshot, 'users' | 'membershipRequests' | 'providers'>,
-  subjects: Subjects,
   mapping: Mapping,
   /** The provider id: the mapping's, else the only one the target has; `null` is a gap. */
   provider: string | null,
@@ -76,7 +79,6 @@ export function transformPeople(
 
   const users: UserOp[] = [];
   const taken = new Set<string>();
-  const subjectOwner = new Map<string, string>();
   const migrated = new Map<string, UserOp>(); // lower-cased legacy username → op
   for (const user of legacyUsers) {
     const legacy = user.user_name;
@@ -100,21 +102,6 @@ export function transformPeople(
       continue;
     }
     const key = legacy.toLowerCase();
-    if (subjects.ambiguous.has(key)) {
-      drop(
-        'user.subject-ambiguous',
-        'the subjects file gives more than one subject for this username',
-      );
-      continue;
-    }
-    const subject = subjects.byUsername.get(key);
-    if (subject === undefined) {
-      drop(
-        'user.subject-missing',
-        'the subjects file has no subject for this username (decision 12)',
-      );
-      continue;
-    }
     const email = (decided?.email ?? user.email).trim();
     if (!isEmailAddress(email)) {
       drop(
@@ -134,11 +121,6 @@ export function transformPeople(
           .join(', ')}`,
         `${at}.email`,
       );
-      continue;
-    }
-    const owner = subjectOwner.get(subject);
-    if (owner !== undefined) {
-      drop('user.subject-duplicate', `the subject is already used by ${quote(owner)}`);
       continue;
     }
     const fitted = fitUsername(decided?.username ?? legacy);
@@ -170,23 +152,23 @@ export function transformPeople(
       });
     }
     taken.add(username);
-    subjectOwner.set(subject, legacy);
     const op: UserOp = {
       legacy,
       username,
       email,
       provider,
-      subject,
-      role: user.is_admin ? 'admin' : 'user',
+      claimUsername: legacy,
+      role: 'user',
+      legacyAdmin: user.is_admin === true,
     };
-    if (op.role === 'admin') {
+    if (op.legacyAdmin) {
       findings.push({
         kind: 'user',
         legacy,
-        rule: 'user.admin',
+        rule: 'user.admin-by-hand',
         effect: 'adjusted',
         detail:
-          'an administrator in the legacy data gets the role admin (decision 4): check it by eye',
+          'an administrator in the legacy data gets the role user; an administrator grants Admin by hand after the account is claimed (ADR-0053)',
       });
     }
     users.push(op);

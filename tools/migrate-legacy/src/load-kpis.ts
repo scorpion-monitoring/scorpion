@@ -204,8 +204,14 @@ export async function loadKpis(
       return id ? [id] : [];
     });
     if (!service || !actor) {
-      // Nothing to read: in a dry run before the service exists, this is what a run would set.
-      push('service-kpis', op.legacy, op.slug, 'created');
+      // Nothing to read: in a dry run before the service exists. A run creates the service in the registry stage and then
+      // sets its KPIs, which it counts as a change of that service; the dry run says the same.
+      const planned = [
+        ...(op.set !== null ? ['set'] : []),
+        ...(op.extras.length > 0 ? [`${op.extras.length} extra(s)`] : []),
+      ];
+      if (planned.length === 0) push('service-kpis', op.legacy, op.slug, 'kept');
+      else push('service-kpis', op.legacy, op.slug, 'changed', planned);
       continue;
     }
     const current = await ports.kpi.serviceKpis.get(actor, service.id);

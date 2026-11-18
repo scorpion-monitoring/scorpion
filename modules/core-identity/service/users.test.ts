@@ -339,29 +339,78 @@ describe('findByUsername', () => {
   });
 });
 
-describe('findByIdentityAsSystem', () => {
-  it('finds the user of an identity at a provider, and nobody for another provider, another subject or odd input', async () => {
-    const { identity: id } = await identity.start();
-    const created = await id.users.createUser({ username: 'alice', auth: oidc('sub-1') });
-    expect(await id.users.findByIdentityAsSystem('lifescience-aai', 'sub-1')).toEqual(created);
-    for (const [provider, subject] of [
-      ['other-idp', 'sub-1'],
-      ['lifescience-aai', 'sub-2'],
-      ['lifescience-aai', "' or 1=1 --"],
-      ['lifescience-aai', 'SUB-1'],
-      ['local', created.id],
-    ] as const) {
-      expect(await id.users.findByIdentityAsSystem(provider, subject)).toBeUndefined();
-    }
+describe('createClaimableAsSystem and claimOfAsSystem (ADR-0053)', () => {
+  const later = () => new Date(Date.now() + 90 * 86_400_000);
+  const claimable = (over: Record<string, unknown> = {}) => ({
+    username: 'alice',
+    email: 'Alice@Example.org',
+    claim: { provider: 'lifescience-aai', username: 'Alice', expiresAt: later() },
+    ...over,
   });
 
-  it('finds a soft-deleted user and says so', async () => {
+  it('creates an active account with no way to sign in, an unverified address and an open claim', async () => {
     const { kernel, identity: id } = await identity.start();
-    const gone = await makeUser(kernel.pool, { username: 'gone', deleted: true });
-    await makeAuthMethod(kernel.pool, gone, { provider: 'lifescience-aai', subject: 'sub-9' });
-    expect(
-      (await id.users.findByIdentityAsSystem('lifescience-aai', 'sub-9'))?.deletedAt,
-    ).toBeInstanceOf(Date);
+    const input = claimable();
+    const created = await id.users.createClaimableAsSystem(input);
+    expect(created).toMatchObject({
+      username: 'alice',
+      email: 'Alice@Example.org',
+      emailVerified: false,
+      status: 'active',
+      deletedAt: null,
+    });
+    expect(created.id).toMatch(UUID_V7);
+    expect(await rowsOf(kernel, 'identity_auth_method')).toEqual([]);
+    expect(await id.users.claimOfAsSystem(created.id)).toEqual({
+      provider: 'lifescience-aai',
+      username: 'alice',
+      expiresAt: input.claim.expiresAt,
+    });
+    // No event: the caller (the migration) gives the role, and core.audit records that.
+    expect(await rowsOf(kernel, 'kernel_outbox')).toEqual([]);
+  });
+
+  it('refuses a username or an address another account holds (any case), and writes nothing', async () => {
+    const { kernel, identity: id } = await identity.start();
+    await id.users.createUser({ username: 'alice', email: 'alice@example.org', auth: local() });
+    await expect(
+      id.users.createClaimableAsSystem(claimable({ email: 'other@example.org' })),
+    ).rejects.toBeInstanceOf(Conflict);
+    await expect(
+      id.users.createClaimableAsSystem(claimable({ username: 'bob', email: 'ALICE@example.org' })),
+    ).rejects.toBeInstanceOf(Conflict);
+    expect(await rowsOf(kernel, 'identity_user')).toHaveLength(1);
+    expect(await rowsOf(kernel, 'identity_account_claim')).toEqual([]);
+  });
+
+  it('refuses bad input with 422: the password provider, a bad username, no address, unknown fields', async () => {
+    const { kernel, identity: id } = await identity.start();
+    const bad: Record<string, unknown>[] = [
+      claimable({ claim: { provider: 'local', username: 'alice', expiresAt: later() } }),
+      claimable({ claim: { provider: 'Bad Id', username: 'alice', expiresAt: later() } }),
+      claimable({ claim: { provider: 'lifescience-aai', username: '', expiresAt: later() } }),
+      claimable({ username: 'A' }),
+      claimable({ email: 'not an address' }),
+      { username: 'alice', claim: claimable().claim },
+      claimable({ status: 'pending' }),
+      claimable({ auth: oidc('sub-1') }),
+    ];
+    for (const input of bad) {
+      await expect(
+        id.users.createClaimableAsSystem(
+          input as Parameters<typeof id.users.createClaimableAsSystem>[0],
+        ),
+      ).rejects.toBeInstanceOf(Invalid);
+    }
+    expect(await rowsOf(kernel, 'identity_user')).toEqual([]);
+  });
+
+  it('claimOfAsSystem: nothing for an account without a claim, an unknown id or odd input', async () => {
+    const { identity: id } = await identity.start();
+    const plain = await id.users.createUser({ username: 'bob', auth: oidc('sub-1') });
+    for (const value of [plain.id, '019a0000-0000-7000-8000-000000000000', 'nope', "' or 1=1 --"]) {
+      expect(await id.users.claimOfAsSystem(value)).toBeUndefined();
+    }
   });
 });
 

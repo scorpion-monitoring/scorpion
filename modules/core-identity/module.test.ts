@@ -121,13 +121,14 @@ describe('the module', () => {
     expect(() => settings.parse({ localAccounts: 'yes' })).toThrow();
   });
 
-  it('creates exactly its nine tables, all with the module prefix', async () => {
+  it('creates exactly its ten tables, all with the module prefix', async () => {
     const { kernel } = await identity.start();
     const { rows } = await kernel.pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_name like 'identity\\_%' order by 1`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([
+      'identity_account_claim',
       'identity_auth_method',
       'identity_first_run_token',
       'identity_login_failure',
@@ -151,7 +152,7 @@ describe('the module', () => {
     await Promise.all([identity.start({ databaseUrl: url }), identity.start({ databaseUrl: url })]);
     const { kernel } = await identity.start({ databaseUrl: url });
     const journal = await kernel.pool.query(`select * from kernel_migrations_core_identity`);
-    expect(journal.rows).toHaveLength(12); // 0000 to 0011, each once
+    expect(journal.rows).toHaveLength(13); // 0000 to 0012, each once
   });
 
   it('keeps no secret in the clear: every secret or password column is a hash', async () => {

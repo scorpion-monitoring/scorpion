@@ -1,10 +1,10 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { Conflict, Invalid } from '@scorpion/contracts';
-import { ids, type ModuleContext } from '@scorpion/kernel';
+import { ids, type DbTx, type ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
-import { authMethod, user } from '../db/schema.ts';
+import { accountClaim, authMethod, user } from '../db/schema.ts';
 import type { CreateUserInput } from '../validation.ts';
-import { createUserInput } from '../validation.ts';
+import { createClaimableUserInput, createUserInput } from '../validation.ts';
 import { hashPassword } from './password.ts';
 import type { User, UserService } from '../public.ts';
 
@@ -68,6 +68,27 @@ function isUniqueViolation(error: unknown): boolean {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * The duplicate check looks at every user, whatever way they sign in, and at soft-deleted ones too: a username stays
+ * reserved. The unique indexes decide a race.
+ */
+async function assertFree(tx: DbTx, username: string, email: string | undefined): Promise<void> {
+  const [sameUsername] = await tx
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.username, username))
+    .limit(1);
+  if (sameUsername) throw new Conflict('This username is already taken.');
+  if (email !== undefined) {
+    const [sameEmail] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`lower(${user.email}) = lower(${email})`)
+      .limit(1);
+    if (sameEmail) throw new Conflict('This email address is already in use.');
+  }
+}
+
 export function createUserService(
   ctx: ModuleContext,
   deps: { avatarHashOf?: AvatarHashOf } = {},
@@ -87,23 +108,7 @@ export function createUserService(
 
       try {
         return await ctx.db.tx(async (tx) => {
-          // The duplicate check looks at every user, whatever way they sign in, and at soft-deleted
-          // ones too: a username stays reserved. The unique indexes decide a race.
-          const [sameUsername] = await tx
-            .select({ id: user.id })
-            .from(user)
-            .where(eq(user.username, username))
-            .limit(1);
-          if (sameUsername) throw new Conflict('This username is already taken.');
-
-          if (email !== undefined) {
-            const [sameEmail] = await tx
-              .select({ id: user.id })
-              .from(user)
-              .where(sql`lower(${user.email}) = lower(${email})`)
-              .limit(1);
-            if (sameEmail) throw new Conflict('This email address is already in use.');
-          }
+          await assertFree(tx, username, email);
 
           const id = ids.uuidv7();
           const [created] = await tx
@@ -173,14 +178,46 @@ export function createUserService(
       return found;
     },
 
-    async findByIdentityAsSystem(provider, subject) {
+    async createClaimableAsSystem(input) {
+      const parsed = createClaimableUserInput.safeParse(input);
+      if (!parsed.success) throw invalid(parsed.error);
+      const { username, email, claim } = parsed.data;
+      try {
+        return await ctx.db.tx(async (tx) => {
+          await assertFree(tx, username, email);
+          const id = ids.uuidv7();
+          // Unverified: the address is confirmed when a provider vouches for it at the claim.
+          const [created] = await tx
+            .insert(user)
+            .values({ id, username, email, emailVerifiedAt: null, status: 'active' })
+            .returning(publicColumns);
+          await tx.insert(accountClaim).values({
+            userId: id,
+            provider: claim.provider,
+            username: claim.username.toLowerCase(),
+            expiresAt: claim.expiresAt,
+          });
+          return toUser(created!, null);
+        });
+      } catch (error) {
+        if (isUniqueViolation(error))
+          throw new Conflict('The username or email address is already in use.');
+        throw error;
+      }
+    },
+
+    async claimOfAsSystem(userId) {
+      if (!UUID.test(userId)) return undefined;
       const [row] = await ctx.db
-        .select(publicColumns)
-        .from(authMethod)
-        .innerJoin(user, eq(user.id, authMethod.userId))
-        .where(and(eq(authMethod.provider, provider), eq(authMethod.subject, subject)))
+        .select({
+          provider: accountClaim.provider,
+          username: accountClaim.username,
+          expiresAt: accountClaim.expiresAt,
+        })
+        .from(accountClaim)
+        .where(eq(accountClaim.userId, userId))
         .limit(1);
-      return row ? withAvatar(row) : undefined;
+      return row;
     },
 
     async findByEmail(email) {

@@ -7,7 +7,6 @@ import { RefusedPath, refuseInsideRepository } from './files.ts';
 import { createLegacyClient, LegacyApiError } from './http.ts';
 import { KernelStartupError } from '@scorpion/kernel';
 import { MappingError } from './mapping.ts';
-import { SubjectsError } from './subjects.ts';
 import { planCommand, runCommand, usersCommand } from './commands.ts';
 import { readSnapshot, SnapshotError } from './snapshot.ts';
 import { TargetError } from './target.ts';
@@ -36,16 +35,18 @@ Commands:
       administrator comes from the environment variable ${KEY_VARIABLE}, never from an argument.
   discover <snapshot> [--measurements <S3 backup dir>] [--json]
       Summarise a snapshot: counts, spellings, and what the new rules refuse. Names no person.
-  plan <snapshot> --out <mapping.json> [--subjects <file>]
+  plan <snapshot> --out <mapping.json>
       Write a first mapping file with every gap marked (null, and a line in "open"). Reads the target's vocabularies.
-  run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account] [--skip-users]
+  run <snapshot> --mapping <file> --report <dir> [--dry-run] [--yes] [--keep-account] [--skip-users]
       Providers, consortia, services, KPIs and KPI sets, users and roles, memberships and measurements, through the
       services as the account legacy-migration. --dry-run writes nothing to the database; a run that writes needs --yes.
-      --subjects is a file of "subject<TAB>username" lines (the OIDC subject of each legacy user). The account is
-      deactivated at the end of a run; --keep-account leaves it for a rehearsal. --skip-users leaves out users,
-      roles and memberships (no --subjects or OIDC provider needed). Repeating a run is safe.
-  users <snapshot> --mapping <file> --subjects <file> --out <file>
-      The users the target holds from this snapshot with their addresses (username<TAB>address), for the announcement mail.
+      A user becomes an account its owner claims at their first sign-in at the OIDC provider (same verified address,
+      the legacy username); everyone gets the role user. The account legacy-migration is deactivated at the end of a
+      run; --keep-account leaves it for a rehearsal. --skip-users leaves out users, roles and memberships. Repeating a
+      run is safe.
+  users <snapshot> --mapping <file> --out <file>
+      The migrated users (username<TAB>address<TAB>claim<TAB>legacy-admin), for the announcement mail and for granting
+      Admin by hand.
 
 plan and run need DATABASE_URL (and SECRETS_KEY) of the new instance, migrated (pnpm scorpion migrate); the tool
 never migrates. The snapshot and the report hold personal data: mode 0600, never inside the repository.
@@ -137,7 +138,6 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
       error instanceof SnapshotError ||
       error instanceof RefusedPath ||
       error instanceof MappingError ||
-      error instanceof SubjectsError ||
       error instanceof TargetError ||
       error instanceof KernelStartupError
     ) {

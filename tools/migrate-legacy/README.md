@@ -51,7 +51,7 @@ abbreviation, dates off the first of a month, months with several points, months
 services whose answer shows a second InfluxDB series, and (with `--measurements`) the API against the S3 backups. It
 **names no person**: no username, address or source URL appears in it, so its counts can go into the plan.
 
-### `plan <snapshot> --out <mapping.json> [--subjects <file>]`
+### `plan <snapshot> --out <mapping.json>`
 
 Writes a first mapping file for the snapshot with every gap marked: a `null` where a value is needed (the thematic
 category of each KPI, the abbreviation of a consortium, a spelling that is not a vocabulary key), and a line in `open`
@@ -59,7 +59,7 @@ that says what to decide. It reads the vocabularies of the target and its config
 `DATABASE_URL` too. With exactly one OIDC provider configured in the target it writes that id as `oidcProvider`. The file
 is written with mode 0600, outside the repository, and never over an existing one.
 
-### `run <snapshot> --mapping <file> --report <dir> [--subjects <file>] [--dry-run] [--yes] [--keep-account] [--skip-users]`
+### `run <snapshot> --mapping <file> --report <dir> [--dry-run] [--yes] [--keep-account] [--skip-users]`
 
 Everything the legacy data holds, in dependency order, through the services as the account `legacy-migration`:
 
@@ -68,17 +68,17 @@ Everything the legacy data holds, in dependency order, through the services as t
    categories with the necessity of each row (a row with none takes `missingNecessity`, `mandatory`: decision 6), each
    service's set, its additional KPIs, and every KPI that has a value for the service and is not in its set, as an
    **optional** extra (decision 9).
-3. **Users and roles**: a user per legacy user that has a subject (below), with the OIDC identity `{ provider, subject }`,
-   active, with the role `admin` (the legacy `is_admin`, decision 4: every administrator is a line in the report) or `user`.
-   The username is lower-cased and made to fit `^[a-z0-9_-]{3,31}$`; a collision gets a suffix (`-2`). An address that is
-   not one, or that two users share, is reported and the user is not migrated (the mapping can give another).
+3. **Users and roles**: an account per legacy user that its owner **claims** at their first sign-in (below), active, with
+   the role `user`. A legacy administrator gets `user` too and is reported (`user.admin-by-hand`); grant Admin by hand
+   after they have signed in. The username is lower-cased and made to fit `^[a-z0-9_-]{3,31}$`; a collision gets a suffix
+   (`-2`). An address that is not one, or that two users share, is reported and the user is not migrated (the mapping can
+   give another).
 4. **Memberships**: an approved legacy membership is a request **by the user** decided **by the migration account**; a
    pending request stays a request (at most 10 per user).
 5. **Measurements**, below.
 
-- **`--skip-users`** leaves out steps 3 and 4 (users, roles, memberships): for an instance whose OIDC provider is not
-  configured yet, or while there is no subjects file. Neither `--subjects` nor `oidcProvider` is needed. A later run without
-  the flag adds the users and memberships; nothing else changes.
+- **`--skip-users`** leaves out steps 3 and 4 (users, roles, memberships); `oidcProvider` is not needed then. A later run
+  without the flag adds the users and memberships; nothing else changes.
 - It needs `DATABASE_URL` and `SECRETS_KEY` of the new instance, **migrated** (`pnpm scorpion migrate`): the tool never
   migrates, and refuses a database with pending migrations. It names the target database (host, port, name) first.
 - `--dry-run` reads the target and applies the modules' rules, and writes nothing to the database, not even the account.
@@ -91,11 +91,11 @@ Everything the legacy data holds, in dependency order, through the services as t
   administrator (a random password nobody knows). An existing active account of that name is used as it is; without Admin,
   the first write is refused and the run stops with nothing written. **At the end of a run the account is deactivated**, so
   nobody can use it; `--keep-account` leaves it for a rehearsal. Nothing reactivates an account, so the next run uses
-  `legacy-migration-2`, then `-3`. The last-Admin rule applies: when the instance has no other active administrator (the
-  snapshot had none, or none was migrated) the account stays active and the report says so; deactivate it once another
-  administrator exists.
+  `legacy-migration-2`, then `-3`. The last-Admin rule applies: no migrated user is an administrator, so run
+  `scorpion create-admin` before the migration; without another active administrator the account stays active and the
+  report says so.
 - **Idempotent** by natural keys: an organisation by its type and abbreviation, a service by its slug, an indicator and a KPI
-  set by name, a user by the OIDC identity, a membership by user and provider, a measurement by service, KPI and month
+  set by name, a user by the address, a membership by user and provider, a measurement by service, KPI and month
   (`upsertBatch`). What exists and matches is kept; what differs is updated (organisations, services) or **kept as it is and
   reported** (KPIs, sets, a service's set): they are edited after the first run, and a repeated run must not undo it. A
   membership that was rejected or ended after the first run is never reopened. Rows of a set and extras of a service that are
@@ -106,13 +106,15 @@ Everything the legacy data holds, in dependency order, through the services as t
   administrators, a decision mails the user). The tool starts no worker, so they stay queued until the instance's worker
   runs. Keep the mail transport at `none` (Settings) until the announcement, or the users get "membership approved" before it.
 
-**The subjects file** (`--subjects <file>`, decision 12): the legacy API does not return the OIDC subject of a user (the
-legacy `USER.id`), which is what lets a person keep their account. Produce it once from where it lives (a Neo4j query,
-`MATCH (u:USER) RETURN u.id, u.username`, or the user list of Keycloak) as a text file, one `subject<TAB>username` per
-line (a comma also separates; empty lines and lines starting with `#` are ignored), outside the repository. It is matched
-to the legacy `user_name` without case. A user without a subject (or with two) is reported and not migrated, with their
-memberships. The mapping's `oidcProvider` is the id of the provider under "Sign-in providers" in the new instance; with
-exactly one configured it is not needed.
+**Claiming an account** ([ADR-0053](../../docs/adr/0053-migrated-accounts-are-claimed-at-the-first-sign-in.md)): the
+legacy API gives no OIDC subject, so no identity is migrated. Each account is created with no way to sign in and an open
+claim: the provider (`oidcProvider`, the id under "Sign-in providers" in the new instance; with exactly one configured it
+is not needed), the legacy username, and an end (`claimDays`, default 90, counted from the run that created it). The
+owner's first sign-in at that provider claims the account when the provider sends the same address as verified and the
+legacy username as `preferred_username` (both without case); the person is then signed in to their old account with its
+memberships. Otherwise nothing is linked (the instance's usual answer for an address it knows). The provider need not be
+configured when the tool runs; claims wait until it is, and the report says so. A second run keeps an account whether its
+claim is open or was used.
 
 **Measurements** (plan §3): one value per service, KPI and month.
 
@@ -129,12 +131,14 @@ exactly one configured it is not needed.
   read = the points of the snapshot, created = inserted (zeros filled included), kept = unchanged, changed = updated,
   merged = points that shared a month, dropped = dropped points, refused values and values of services not migrated.
 
-### `users <snapshot> --mapping <file> --subjects <file> --out <file>`
+### `users <snapshot> --mapping <file> --out <file>`
 
-Writes the users the target holds from this snapshot, `username<TAB>address` per line, for the mail that announces the move
-(sign in as before; create a new token, since the legacy API cannot say who holds a key). A user is listed only when the
-target has an account with their identity, so nobody is mailed about a login that cannot work. The file holds personal
-data: mode 0600, outside the repository, never over an existing file. No address is printed.
+Writes the users the target holds from this snapshot, one `username<TAB>address<TAB>claim<TAB>legacy-admin` per line after a
+`#` header (`claim`: `open`, `claimed` or `expired`; `legacy-admin`: `yes` or `no`), for the mail that announces the move
+(sign in at the provider with the same address; create a new token, since the legacy API cannot say who holds a key) and
+for granting Admin to the legacy administrators once they have claimed. A user is listed only when the target has the
+account the migration created, so nobody is mailed about a sign-in that cannot work. The file holds personal data: mode
+0600, outside the repository, never over an existing file. No address is printed; the output gives counts only.
 
 ### The mapping
 
@@ -155,6 +159,7 @@ data: mode 0600, outside the repository, never over an existing file. No address
   "missingStage": "PROD",
   "licences": { "<legacy spelling>": "MIT" },
   "oidcProvider": "ls-login",
+  "claimDays": 90,
   "indicators": {
     "<legacy KPI name>": {
       "thematic": "Usage",
@@ -192,7 +197,7 @@ with a line in `open` to check.
 0600: the snapshot and the mapping it read, the account (and what became of it at the end), the target database and
 whether it was empty, notes for the operator, the counts per kind (read, created, kept, changed, merged, dropped), and one
 line per record that was dropped, updated, or migrated with a value a rule changed, with the rule that decided it
-(`provider.abbreviation-invalid`, `service.two-providers`, `indicator.thematic-open`, `user.email-duplicate`,
+(`provider.abbreviation-invalid`, `service.two-providers`, `indicator.thematic-open`, `user.email-duplicate`, `user.admin-by-hand`,
 `measurement.gap-filled`, `service-kpis.kpi-added-optional`, `service.refused`, …). It holds names and addresses, so it is
 sensitive; a key value never appears in it.
 
@@ -224,7 +229,8 @@ cutover.
   (decision 13).
 - **Services without a provider or a category.** `/api/v1/services` lists only services that have both.
 - **Consortium abbreviations.** The API gives the consortium's name; the mapping gives the abbreviation.
-- **The OIDC subjects of users:** the subjects file (decision 12). **Who holds an API key:** no key is migrated
+- **The OIDC subjects of users:** not needed; each account is claimed at its owner's first sign-in (ADR-0053). **Who
+  holds an API key:** no key is migrated
   (decision 5); every user is told to create a scoped token.
 
 ## Not yet
