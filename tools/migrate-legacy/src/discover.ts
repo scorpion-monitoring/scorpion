@@ -35,8 +35,15 @@ export interface Discovery {
     unknownProvider: string[];
     invalidNames: string[];
     differingRows: string[];
+    /** Named like their own provider: the legacy workaround that made a consortium a provider with one service. */
+    namedLikeTheirProvider: string[];
   };
-  consortia: { byAbbreviation: string[]; byName: string[] };
+  consortia: {
+    byAbbreviation: string[];
+    byName: string[];
+    /** Consortium names that are also a provider's name (the same organisation in both lists). */
+    alsoProviders: string[];
+  };
   measurements: {
     servicesWithPoints: number;
     points: number;
@@ -298,10 +305,21 @@ export function discover(snapshot: Snapshot, now: Date = new Date()): Discovery 
       unknownProvider,
       invalidNames: serviceNames.filter((s) => !checkName(first(s).name).ok),
       differingRows,
+      namedLikeTheirProvider: serviceNames.filter((s) => {
+        const count = providerCount(services.get(s)!);
+        return count.ok && count.provider.toLowerCase() === s.toLowerCase();
+      }),
     },
     consortia: {
       byAbbreviation: sorted([...consortia].filter((c) => consortiumKind(c) === 'abbreviation')),
       byName: sorted([...consortia].filter((c) => consortiumKind(c) === 'name')),
+      alsoProviders: sorted(
+        [...consortia].filter((c) =>
+          snapshot.providers.some(
+            (p) => p.name.trim().toLowerCase() === c.trim().toLowerCase() || p.abbreviation === c,
+          ),
+        ),
+      ),
     },
     measurements: {
       servicesWithPoints: [...snapshot.measurements.values()].filter((l) => l.length > 0).length,
@@ -431,11 +449,13 @@ export function discoveryMarkdown(d: Discovery): string {
     `- With a provider that \`/providers\` does not list: ${list(d.services.unknownProvider)}`,
     `- Whose name the rule refuses: ${list(d.services.invalidNames)}`,
     `- Whose rows differ beyond the provider: ${list(d.services.differingRows)}`,
+    `- Named like their own provider (the legacy workaround for a consortium?): ${list(d.services.namedLikeTheirProvider)}`,
     '',
     '## Consortia (the API gives their names)',
     '',
     `- Usable as an abbreviation: ${list(d.consortia.byAbbreviation)}`,
     `- A name only (needs an abbreviation in the mapping): ${list(d.consortia.byName)}`,
+    `- Also in the provider list (by name or abbreviation): ${list(d.consortia.alsoProviders)}`,
     '',
     '## Measurements',
     '',

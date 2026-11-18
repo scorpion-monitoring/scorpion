@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runCli, type CliDeps } from '../src/cli.ts';
-import { discover, missingMonths, seriesIn } from '../src/discover.ts';
+import { discover, discoveryMarkdown, missingMonths, seriesIn } from '../src/discover.ts';
 import { parseLegacyDate } from '../src/dates.ts';
 import { readSnapshot } from '../src/snapshot.ts';
 import { pythonTime, startLegacyStub, type StubServer } from './legacy-stub.ts';
+import { service, writeSnapshot } from './snapshot-factory.ts';
 
 let stub: StubServer;
 let work: string;
@@ -78,7 +79,11 @@ describe('discover', () => {
     expect(d.services.twoProviders).toEqual([
       { abbreviation: 'Root Atlas', providers: ['BioNet', 'PlantData'] },
     ]);
-    expect(d.consortia).toEqual({ byAbbreviation: ['IMC'], byName: ['Imaginary Consortium'] });
+    expect(d.consortia).toEqual({
+      byAbbreviation: ['IMC'],
+      byName: ['Imaginary Consortium'],
+      alsoProviders: [],
+    });
     expect(d.measurements).toMatchObject({
       notFirstOfMonth: 1,
       servicesNotFirstOfMonth: 1,
@@ -124,6 +129,27 @@ describe('discover', () => {
     [['2023-05', '2020-01'], 39],
   ])('missingMonths(%j) is %d', (months, missing) => {
     expect(missingMonths(new Set(months))).toBe(missing);
+  });
+
+  it('finds the legacy workaround: a consortium that is also a provider with one service named like it', async () => {
+    const dir = join(work, 'workaround');
+    await writeSnapshot(dir, {
+      providers: [
+        { abbreviation: 'BioNet', name: 'BioNet Services' },
+        { abbreviation: 'GreenHub', name: 'Green Hub Consortium' },
+      ],
+      services: [
+        service('GeneFlow', { consortia: ['Green Hub Consortium'] }),
+        service('GreenHub', { provider: 'GreenHub', category: 'Consortia' }),
+        service('greenhub2', { provider: 'GreenHub' }),
+      ],
+    });
+    const d = discover(await readSnapshot(dir), now());
+    expect(d.services.namedLikeTheirProvider).toEqual(['GreenHub']);
+    expect(d.consortia.alsoProviders).toEqual(['Green Hub Consortium']);
+    expect(discoveryMarkdown(d)).toContain(
+      'Named like their own provider (the legacy workaround for a consortium?): `GreenHub`',
+    );
   });
 
   it('counts series by the API order: time steps back once per InfluxDB table', () => {
