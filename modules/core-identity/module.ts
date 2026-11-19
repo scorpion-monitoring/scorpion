@@ -456,6 +456,8 @@ export function createIdentityModule(options: IdentityModuleOptions = {}) {
         }),
         clientSecret,
         linking: oidcLink,
+        mail,
+        links,
         exchangeTimeoutMs: options.oidcHttp?.exchangeTimeoutMs,
       });
       const recovery = createRecoveryService(ctx, {
