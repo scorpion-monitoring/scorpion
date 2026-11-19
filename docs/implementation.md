@@ -264,7 +264,7 @@ Additions agreed in [m7-sprint-plan.md](m7-sprint-plan.md) §13 (six sprints, [A
 - A registry profile (without KPI modules; added by M6, ADR-0030) runs on staging with real organisation and service data from a partial migration dry run.
 - Catalogue, wizard and edit flows pass E2E. The v1 contract tests pass.
 
-**Status (2026-10-14): conditionally passed** ([ADR-0039](adr/0039-gate-2-conditional-pass.md)). The evidence is in [m8-sprint-plan.md](m8-sprint-plan.md) §12; the one open line, the staging dry run with real data, waits for the migration tool of M13 and is the maintainer's check.
+**Status (2026-11-18): passed.** Conditionally passed on 2026-10-14 ([ADR-0039](adr/0039-gate-2-conditional-pass.md)), with the evidence in [m8-sprint-plan.md](m8-sprint-plan.md) §12; the open line, the dry run with real data, was cleared on 2026-11-18 by the M13 rehearsal on the dev server, the maintainer's decision in place of staging ([m13-sprint-plan.md](m13-sprint-plan.md) §14).
 
 ---
 
@@ -352,7 +352,9 @@ The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxD
 
 - The migration dry run on a production copy reports no unexplained drops.
 - `migrate-legacy compare` checks every migrated value against the snapshot, service by service and month by month, before the check by hand below.
-- A KPI profile (added by M9, ADR-0030) runs on staging with migrated data. The dashboard numbers match the old app for three sample services, checked by hand.
+- The `full` profile runs with migrated data (the maintainer's decision of 2026-11-18: no KPI-only profile was ever added, and the rehearsal ran on the dev server; M13 plan §14). The dashboard numbers match the old app for three sample services, checked by hand.
+
+**Status (2026-11-18): passed.** The rehearsal ran on the dev server with the `full` profile: the dry run had no unexplained drop, `compare` was clean, a second run kept everything, and the maintainer found the dashboards of three services equal to the old app ([m13-sprint-plan.md](m13-sprint-plan.md) §14).
 
 ---
 

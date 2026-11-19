@@ -1,7 +1,7 @@
 // Creating accounts from OIDC logins and linking identities: provisioning, what a first sign-in does
 // when an account holds the address, linking from the profile, and the rollback of the writes.
 import { ANONYMOUS, Conflict, Forbidden, Unauthorized } from '@scorpion/contracts';
-import { makeAuthMethod } from '@scorpion/testing';
+import { makeAuthMethod, makeRoleAssignment, makeUser } from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { makeMember } from '../test/harness.ts';
 import { failOutbox, tokenFrom } from '../test/mail.ts';
@@ -176,6 +176,65 @@ describe('the first login (provisioning)', () => {
       ),
     ).toHaveLength(1);
     expect(await count(kernel, 'identity_user')).toBe(1);
+  });
+
+  describe('the mail to the administrators', () => {
+    async function withAdmin(options: Parameters<typeof start>[0] = {}) {
+      const started = await start(options);
+      const admin = await makeUser(started.kernel.pool, {
+        username: 'root',
+        email: 'root@example.org',
+        status: 'active',
+      });
+      await makeRoleAssignment(started.kernel.pool, admin, 'admin');
+      return started;
+    }
+
+    it('tells every administrator that a pending account waits for review, as a password registration does', async () => {
+      const { identity: id, mail } = await withAdmin();
+      const login = fresh({ preferredUsername: 'Maria Curie', email: 'maria@example.org' });
+      await expect(id.oidc.complete(await flow(id, login))).rejects.toBeInstanceOf(Forbidden);
+      const [request, ...more] = await mail.of('identity.registration-request');
+      expect(more).toEqual([]);
+      expect(request).toMatchObject({
+        to: 'root@example.org',
+        subject: 'Registration request from maria-curie',
+      });
+      expect(request!.text).toContain('maria-curie (maria@example.org)');
+      expect(request!.text).toContain('/admin/users/pending');
+    });
+
+    it('leaves out the address the provider did not vouch for', async () => {
+      const { identity: id, mail } = await withAdmin();
+      const login = fresh({ preferredUsername: 'anon', emailVerified: false });
+      await expect(id.oidc.complete(await flow(id, login))).rejects.toBeInstanceOf(Forbidden);
+      const [request] = await mail.of('identity.registration-request');
+      expect(request!.text).toContain('anon registered on');
+      expect(request!.text).not.toContain('@example.org)');
+    });
+
+    it('sends nothing when the approval policy activates the account at once', async () => {
+      const policy = {
+        id: 'test.auto',
+        version: '1.0.0',
+        contributes: {
+          'auth.approvalPolicy': [{ id: 'auto', decide: () => ({ status: 'active' }) }],
+        },
+      };
+      const { identity: id, mail } = await withAdmin({
+        settings: settingsWith({ approvalPolicy: 'auto' }),
+        extraModule: { id: 'test.auto', manifest: policy },
+      });
+      await id.oidc.complete(await flow(id, fresh()));
+      expect(await mail.of('identity.registration-request')).toEqual([]);
+    });
+
+    it('sends nothing when the account cannot be written (rollback)', async () => {
+      const { kernel, identity: id, mail } = await withAdmin();
+      await failOutbox(kernel);
+      await expect(id.oidc.complete(await flow(id, fresh()))).rejects.toThrow();
+      expect(await mail.all()).toEqual([]);
+    });
   });
 
   describe('rollback', () => {

@@ -1,6 +1,6 @@
 # ADR-0039: Gate 2 passes conditionally while the staging dry run waits for M13
 
-- Status: Accepted
+- Status: Accepted; the open line was cleared on 2026-11-18 (below)
 - Date: 2026-10-14
 
 ## Context
@@ -30,3 +30,11 @@ same situation for Gate 1.
   table of legacy types ([m9-sprint-plan.md](../m9-sprint-plan.md) §10).
 - The risk is that real data exposes a model gap late. It is accepted: the model of M6 to M8 was built from FEATURES.md, whose data
   shapes come from the old database, and the migration tool is the first thing that can test it against the data itself.
+
+## Cleared (2026-11-18)
+
+The open line was cleared at M13 with the rehearsal of the migration tool, recorded in the [M13 plan](../m13-sprint-plan.md) §14. The
+maintainer decided to run it on the dev server, not on staging, with the snapshot of the legacy API of 2026-11-17 (real organisation and
+service data). The registry part migrated 35 providers, 9 consortia and 27 services, and every record it left out has a decided rule.
+The `registry` profile started on the migrated database and its v1 API listed the 27 services and 35 providers. No gap in the registry
+modules was found, so decision 4 has nothing to fix. Gate 2 has passed.
