@@ -11,6 +11,9 @@ import { addIdentityIn } from './identity-link.ts';
 import type { OidcLinkService } from './oidc-link.ts';
 import type { User, UserService } from '../public.ts';
 import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
+import type { IdentityMail } from './identity-mail.ts';
+import type { MailLinks } from './mail-links.ts';
+import { mailAdministrators } from './registration-notice.ts';
 import {
   challengeOf,
   constantTimeEqual,
@@ -108,6 +111,9 @@ export interface OidcDeps {
   clientSecret: ClientSecretLookup;
   /** What a first sign-in with an address that an account holds does instead of linking (ADR 0026). */
   linking: Pick<OidcLinkService, 'request'>;
+  /** For the mail to the administrators when a first sign-in creates an account that waits for review. */
+  mail: IdentityMail;
+  links: Pick<MailLinks, 'review'>;
   exchangeTimeoutMs?: number;
 }
 
@@ -122,7 +128,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcService {
-  const { authz, users, sessions, settings, states, providers } = deps;
+  const { authz, users, sessions, settings, states, providers, mail, links } = deps;
   const exchangeTimeoutMs = deps.exchangeTimeoutMs ?? TOKEN_EXCHANGE_TIMEOUT_MS;
 
   const redirectUri = (providerId: string): string => {
@@ -241,7 +247,8 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
         provider: provider.id,
       })) ?? { status: 'pending' as const };
       try {
-        // The user, its auth method and the event are one write.
+        // The user, its auth method, the administrators' mail and the event are one write. The mails
+        // are queued before the event so a failing outbox rolls them back with the rest.
         return await ctx.db.tx(async (tx) => {
           const created = await users.createUser({
             username: candidate,
@@ -251,6 +258,9 @@ export function createOidcService(ctx: ModuleContext, deps: OidcDeps): OidcServi
             auth: { provider: provider.id, subject: claims.subject },
           });
           await grantDefaultRole(authz, tx, created);
+          if (created.status === 'pending') {
+            await mailAdministrators(tx, { authz, mail, links }, created);
+          }
           await ctx.events.emit('identity.user.registered@1', {
             userId: created.id,
             username: created.username,

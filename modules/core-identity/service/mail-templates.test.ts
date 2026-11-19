@@ -94,6 +94,20 @@ describe('the identity templates', () => {
     expect(active.text).not.toContain('business days');
   });
 
+  it("names the applicant's address in the registration request, and leaves it out when there is none", () => {
+    const request = IDENTITY_TEMPLATES.find((e) => e.key === 'identity.registration-request')!;
+    const data = samples['identity.registration-request']!('Ada') as Record<string, unknown>;
+    expect(request.render(data as never, 'en', BRANDING).text).toContain('Ada (Ada) registered');
+    const withoutEmail = { ...data };
+    delete withoutEmail.applicantEmail;
+    expect(request.schema.safeParse(withoutEmail).success).toBe(true);
+    for (const locale of ['en', 'de'] as const) {
+      const text = request.render(withoutEmail as never, locale, BRANDING).text;
+      expect(text).toMatch(/Ada (registered|hat sich)/);
+      expect(text).not.toContain('()');
+    }
+  });
+
   it('names the contact address in the rejected mail, or the administrators when there is none', () => {
     const rejected = IDENTITY_TEMPLATES.find((e) => e.key === 'identity.rejected')!;
     const data = { username: 'Ada' };

@@ -71,7 +71,8 @@ export const registrationRequest = defineTemplate({
   // To every administrator: somebody registered and waits for a decision.
   schema: z.strictObject({
     applicantUsername: name,
-    applicantEmail: z.string().min(1).max(254),
+    // Absent for an account without an address (an OIDC sign-in whose provider did not vouch for one).
+    applicantEmail: z.string().min(1).max(254).optional(),
     reviewUrl: url,
   }),
   category: 'administration',
@@ -81,12 +82,14 @@ export const registrationRequest = defineTemplate({
       subject: 'Registration request from {username}',
       heading: 'A registration waits for review',
       body: '{username} ({email}) registered on {instance} and waits for approval.',
+      bodyNoEmail: '{username} registered on {instance} and waits for approval.',
       action: 'Review registrations',
     },
     de: {
       subject: 'Registrierungsanfrage von {username}',
       heading: 'Eine Registrierung wartet auf Prüfung',
       body: '{username} ({email}) hat sich bei {instance} registriert und wartet auf Freigabe.',
+      bodyNoEmail: '{username} hat sich bei {instance} registriert und wartet auf Freigabe.',
       action: 'Registrierungen prüfen',
     },
   },
@@ -94,13 +97,13 @@ export const registrationRequest = defineTemplate({
     const vars = {
       instance: branding.instanceName,
       username: data.applicantUsername,
-      email: data.applicantEmail,
+      email: data.applicantEmail ?? '',
     };
     return {
       subject: t('subject', vars),
       heading: t('heading'),
       blocks: [
-        { kind: 'text', text: t('body', vars) },
+        { kind: 'text', text: t(data.applicantEmail ? 'body' : 'bodyNoEmail', vars) },
         { kind: 'action', label: t('action'), url: data.reviewUrl },
       ],
     };

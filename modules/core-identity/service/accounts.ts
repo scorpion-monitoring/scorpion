@@ -1,6 +1,6 @@
 // Local accounts: register, log in, log out, and who am I. Everything that changes data goes
 // through here; the routes only parse, call one method and map the result.
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   Conflict,
   Forbidden,
@@ -10,9 +10,9 @@ import {
   type Actor,
 } from '@scorpion/contracts';
 import type { AuthzService } from '@scorpion/core-authz/public';
-import type { DbTx, ModuleContext } from '@scorpion/kernel';
+import type { ModuleContext } from '@scorpion/kernel';
 import type { ZodError } from 'zod';
-import { authMethod, user } from '../db/schema.ts';
+import { authMethod } from '../db/schema.ts';
 import type { User, UserService } from '../public.ts';
 import { loginInput, reauthenticateInput, registerInput } from '../validation.ts';
 import { APPROVAL_POLICY_REGISTRY, type ApprovalPolicyEntry } from './approval-policy.ts';
@@ -23,7 +23,8 @@ import { hashPassword, verifyPassword } from './password.ts';
 import type { PasswordPolicy } from './password-policy.ts';
 import type { LoginThrottle } from './login-throttle.ts';
 import { requireSession, requireUser } from './require-user.ts';
-import { ADMIN_ROLE, grantDefaultRole } from './roles.ts';
+import { grantDefaultRole } from './roles.ts';
+import { mailAdministrators } from './registration-notice.ts';
 import { csrfTokenFor } from './session-id.ts';
 import type { RecoveryService } from './recovery.ts';
 import type { SessionService, SessionSummary } from './sessions.ts';
@@ -181,31 +182,6 @@ export function createAccountService(
     return undefined;
   }
 
-  /** One mail to every active administrator who has an address, each in their own language. */
-  async function mailAdministrators(tx: DbTx, applicant: User): Promise<void> {
-    const adminIds = await authz.listHoldersAsSystem(tx, ADMIN_ROLE);
-    if (adminIds.length === 0) return;
-    const admins = await tx
-      .select({ id: user.id, email: user.email })
-      .from(user)
-      .where(and(inArray(user.id, adminIds), eq(user.status, 'active'), isNull(user.deletedAt)))
-      .orderBy(user.id);
-    for (const admin of admins) {
-      if (!admin.email) continue;
-      await mail.send(
-        tx,
-        'identity.registration-request',
-        {
-          applicantUsername: applicant.username,
-          applicantEmail: applicant.email ?? '',
-          reviewUrl: links.review(),
-        },
-        { address: admin.email, userId: admin.id },
-        await mail.preferredLocale(admin.id),
-      );
-    }
-  }
-
   return {
     async register(input) {
       const { localAccounts, approvalPolicy } = await settings.get();
@@ -271,7 +247,9 @@ export function createAccountService(
               locale,
             );
           }
-          if (created.status === 'pending') await mailAdministrators(tx, created);
+          if (created.status === 'pending') {
+            await mailAdministrators(tx, { authz, mail, links }, created);
+          }
           await ctx.events.emit('identity.user.registered@1', {
             userId: created.id,
             username: created.username,
