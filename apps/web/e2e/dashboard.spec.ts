@@ -69,9 +69,9 @@ const tileOf = (page: Page, heading: string) =>
   page.locator('[data-grid-id]').filter({ has: page.getByRole('heading', { name: heading }) });
 
 /**
- * The membership card draws something only when requests wait for a decision, and an administrator is asked about every
- * request of the instance, which the specs that ran before this one may have left. The summary is answered as "nothing
- * waiting", so the layout does not depend on the shared database. (The browser still sends the request; it is counted.)
+ * An administrator's membership card counts every request of the instance, which the specs that ran before this one may
+ * have left. The summary is answered as "nothing waiting", so what the card says does not depend on the shared database.
+ * (The browser still sends the request; it is counted.)
  */
 async function quiet(page: Page) {
   await page.route('**/api/internal/memberships/summary', (route) =>
@@ -130,8 +130,10 @@ test.describe('journey: a person customises their dashboard', () => {
     await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
     await expect(page.getByRole('heading', { name: PENDING })).toBeVisible();
     await expect(page.getByRole('heading', { name: DEAD })).toBeVisible();
-    // The membership card has nothing to say (nothing is waiting), so it takes no room: not a hole.
-    await expect(page.getByRole('heading', { name: MEMBERSHIP })).toHaveCount(0);
+    // The membership card says so when nothing is waiting, rather than leaving an empty tile.
+    await expect(
+      tileOf(page, MEMBERSHIP).getByText('No requests are waiting for your decision.'),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
     await page.waitForTimeout(2500);
     const original = await boxes(page, [PENDING, DEAD]);
@@ -497,7 +499,7 @@ test.describe('journey: a person customises their dashboard', () => {
     await api.dispose();
   });
 
-  test('a person whose widgets have nothing to say sees no heading and no grid, only the button, and finds the grid in edit mode', async ({
+  test('a person with no organisation and no request to decide sees the membership card say so, with the way to find their organisation', async ({
     browser,
     playwright,
     baseURL,
@@ -506,8 +508,8 @@ test.describe('journey: a person customises their dashboard', () => {
     const api = await adminApi(playwright, baseURL, at);
     const credentials = newPerson('dashplain');
     await activeUser(api, at, credentials);
-    // The default dashboard of every signed-in person holds the analytics widgets (M11 sprint 4), which always say something ("Choose a
-    // service"), so this person's dashboard is the one card that has nothing to say, stored as a person would have left it.
+    // Only the membership card, stored as a person would have left it. It used to draw nothing for a person with nothing to decide, which
+    // left the tile empty; it now always says something about the person's own side.
     const own = await apiAs(playwright, baseURL, at, credentials);
     const stored = await own.send('PUT', '/ui/dashboard', {
       items: [
@@ -528,21 +530,19 @@ test.describe('journey: a person customises their dashboard', () => {
     const page = opened.page;
     await quiet(page);
     await page.goto(at('/'));
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(fab(page)).toBeVisible();
-    await page.waitForTimeout(1500);
-    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toHaveCount(0);
-    await expect(page.locator('[data-grid-id]:visible')).toHaveCount(0);
-    // Edit mode shows the grid, with the widget that has nothing to say, so that it can be removed.
-    await fab(page).click();
     await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
-    await expect(page.getByRole('group', { name: MEMBERSHIP, exact: true })).toBeVisible();
-    await expect(page.getByText('This widget has nothing to show right now.')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Customise dashboard' }).focus();
-    await page.keyboard.press('Enter');
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'What needs your attention' })).toHaveCount(0);
+    const card = page.getByRole('region', { name: MEMBERSHIP });
+    await expect(
+      card.getByText('You are not a member of an organisation yet.', { exact: false }),
+    ).toBeVisible();
+    await expect(card.getByRole('link', { name: 'Find your organisation' })).toHaveAttribute(
+      'href',
+      new RegExp('/account/organisations$'),
+    );
+    // A person who decides on nothing sees no count and no link to the requests.
+    await expect(card.getByText(/^\d+$/)).toHaveCount(0);
+    await expect(card.getByRole('link', { name: 'Decide on the requests' })).toHaveCount(0);
+    await expect(page.getByText('This widget has nothing to show right now.')).toHaveCount(0);
     await opened.close();
     await api.dispose();
   });

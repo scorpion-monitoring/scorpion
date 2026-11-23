@@ -4,6 +4,7 @@
 // theme and a screen magnifier can work with, and needs no inline style.
 import {
   radarMax,
+  seriesStyle,
   type ChartAdapter,
   type ChartHandle,
   type ChartSpec,
@@ -18,7 +19,8 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
     color: [...theme.palette],
     backgroundColor: 'transparent',
     textStyle: { color: theme.text },
-    legend: spec.series.length > 1 ? { bottom: 0, textStyle: { color: theme.text } } : undefined,
+    // The legend is HTML beside the chart (`Chart.svelte`): it wraps at any width, where the library's legend drew over the axis once its
+    // entries took more than one line.
     // The tooltip follows the theme too (the legacy chart's did not: a white box with dark text on a dark page).
     tooltip: {
       // Drawn inside the SVG: the HTML tooltip builds its content with `style` attributes, which the page's Content-Security-Policy refuses.
@@ -54,8 +56,8 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
     type: 'value',
     axisLabel: { color: theme.text },
     axisLine: { show: opposite, lineStyle: { color: theme.grid } },
-    // Only the first axis draws grid lines, or the two sets would not line up.
-    splitLine: { show: !opposite, lineStyle: { color: theme.grid } },
+    // Only the first axis draws grid lines, or the two sets would not line up. Dashed and quiet, so the lines of the data stand out.
+    splitLine: { show: !opposite, lineStyle: { color: theme.grid, type: 'dashed' } },
     ...(opposite ? { position: 'right' } : {}),
   });
   return {
@@ -64,7 +66,7 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
       left: 48,
       right: secondary ? 48 : 16,
       top: 24,
-      bottom: spec.series.length > 1 ? 48 : 32,
+      bottom: 32,
     },
     xAxis: {
       type: 'category',
@@ -73,13 +75,25 @@ export function chartOption(spec: ChartSpec, theme: ChartTheme): Record<string, 
       axisLabel: { color: theme.text },
     },
     yAxis: secondary ? [valueAxis(false), valueAxis(true)] : valueAxis(false),
-    series: spec.series.map((series) => ({
-      name: series.name,
-      type: spec.type,
-      data: [...series.values],
-      ...(secondary ? { yAxisIndex: series.secondary === true ? 1 : 0 } : {}),
-      ...(spec.type === 'line' ? { symbolSize: 6 } : {}),
-    })),
+    series: spec.series.map((series, index) => {
+      const style = seriesStyle(series, index, theme.palette);
+      return {
+        name: series.name,
+        type: spec.type,
+        data: [...series.values],
+        color: style.color,
+        ...(secondary ? { yAxisIndex: series.secondary === true ? 1 : 0 } : {}),
+        ...(spec.type === 'line'
+          ? {
+              // The marker is the second cue beside the colour; the line is 2 px, dashed on the second axis.
+              symbol: style.marker,
+              symbolSize: 7,
+              lineStyle: { width: 2, type: style.line },
+              emphasis: { focus: 'series' },
+            }
+          : {}),
+      };
+    }),
   };
 }
 

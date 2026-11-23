@@ -101,6 +101,7 @@ export const componentMessages: MessageBundles = {
     'kit.chart.category': 'Category',
     'kit.chart.showTable': 'Show the data as a table',
     'kit.chart.hideTable': 'Hide the table',
+    'kit.chart.rightAxis': 'right axis',
     'kit.chart.failed': 'The chart could not be drawn. The table has the same data.',
     'kit.chart.invalid': 'The chart data is not valid. The table has what there is.',
     'kit.widget.service': 'Service',
@@ -269,6 +270,7 @@ export const componentMessages: MessageBundles = {
     'kit.chart.category': 'Kategorie',
     'kit.chart.showTable': 'Daten als Tabelle anzeigen',
     'kit.chart.hideTable': 'Tabelle ausblenden',
+    'kit.chart.rightAxis': 'rechte Achse',
     'kit.chart.failed':
       'Das Diagramm konnte nicht gezeichnet werden. Die Tabelle enthält dieselben Daten.',
     'kit.chart.invalid': 'Die Diagrammdaten sind ungültig. Die Tabelle zeigt, was vorhanden ist.',

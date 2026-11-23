@@ -1,3 +1,4 @@
+import { SERIES_PALETTE } from '../../../../packages/ui-kit/src/chart.ts';
 import { CUSTOM_COLOURS } from '../support/theme.ts';
 import { expect, inBothThemes, test } from './support.ts';
 
@@ -63,7 +64,7 @@ test.describe('Chart', () => {
     await expect.poll(textColour).not.toBe(light);
   });
 
-  test('follows a custom set of theme colours (M12a sprint 4): the first series is the primary of each theme', async ({
+  test('follows a custom set of theme colours (M12a sprint 4) for its grid, and draws the series in the fixed palette of each scheme', async ({
     page,
     scene,
   }) => {
@@ -82,16 +83,21 @@ test.describe('Chart', () => {
         ]);
     const rgb = (hex: string) =>
       `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(',')})`;
-    const compact = (colours: string[]) => colours.map((colour) => colour.replaceAll(' ', ''));
+    const compact = (colours: string[]) =>
+      colours.map((colour) => colour.replaceAll(' ', '').toLowerCase());
+    const hexOrRgb = (hex: string) => [hex.toLowerCase(), rgb(hex)];
 
     for (const theme of ['light', 'dark'] as const) {
       await scene('chart', { theme, query: 'colors=custom' });
       await expect(chart.locator('svg path').first()).toBeAttached();
+      // The grid lines are the administrator's base-300, not the built-in one of that theme.
       await expect
         .poll(async () => compact(await drawn()))
-        .toContain(rgb(CUSTOM_COLOURS[theme].primary));
-      // Not the built-in primary of that theme.
-      expect(compact(await drawn())).not.toContain(rgb(theme === 'light' ? '#006da8' : '#00e5ff'));
+        .toContain(rgb(CUSTOM_COLOURS[theme]['base-300']));
+      expect(compact(await drawn())).not.toContain(rgb(theme === 'light' ? '#d0e1f2' : '#192653'));
+      // The series take the first colour of the scheme's fixed palette (`SERIES_PALETTE` in ui-kit's chart.ts), whatever the theme's primary.
+      const first = SERIES_PALETTE[theme][0];
+      expect(compact(await drawn()).some((colour) => hexOrRgb(first).includes(colour))).toBe(true);
     }
   });
 

@@ -86,7 +86,7 @@ test.describe('J05: request membership in a provider', () => {
     await test.step('An administrator opens the membership requests of the organisation', async () => {
       await boss.page
         .getByRole('region', { name: 'Membership requests' })
-        .getByRole('link')
+        .getByRole('link', { name: 'Decide on the requests' })
         .click();
       await expect(boss.page).toHaveURL(new RegExp(`${prefixOf(basePath)}/admin/memberships$`));
       await boss.page.getByLabel('Organisation').selectOption({ value: target.id });

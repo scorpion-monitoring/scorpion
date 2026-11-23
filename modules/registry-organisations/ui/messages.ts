@@ -224,6 +224,21 @@ export const messages: UiMessages = {
     'dash.membership.some.one': '{count} request is waiting for a decision.',
     'dash.membership.some.other': '{count} requests are waiting for a decision.',
     'dash.membership.link': 'Decide on the requests',
+    'dash.membership.none': 'No requests are waiting for your decision.',
+    'dash.membership.open': 'Open the membership requests',
+    'dash.membership.loading': 'Loading the membership requests…',
+    'dash.membership.failed': 'The membership requests could not be loaded.',
+    'dash.membership.retry': 'Try again',
+    'dash.membership.mine.waiting.one':
+      'Your request to join {count} organisation is waiting for a decision:',
+    'dash.membership.mine.waiting.other':
+      'Your requests to join {count} organisations are waiting for a decision:',
+    'dash.membership.mine.member.one': 'You are a member of {count} organisation.',
+    'dash.membership.mine.member.other': 'You are a member of {count} organisations.',
+    'dash.membership.mine.none':
+      'You are not a member of an organisation yet. Members can see and maintain the services of their organisation.',
+    'dash.membership.mine.link': 'Your organisations',
+    'dash.membership.mine.find': 'Find your organisation',
   },
   de: {
     'nav.admin.organisations': 'Organisationen',
@@ -451,5 +466,20 @@ export const messages: UiMessages = {
     'dash.membership.some.one': '{count} Antrag wartet auf eine Entscheidung.',
     'dash.membership.some.other': '{count} Anträge warten auf eine Entscheidung.',
     'dash.membership.link': 'Über die Anträge entscheiden',
+    'dash.membership.none': 'Keine Anträge warten auf Ihre Entscheidung.',
+    'dash.membership.open': 'Mitgliedschaftsanträge öffnen',
+    'dash.membership.loading': 'Die Mitgliedschaftsanträge werden geladen …',
+    'dash.membership.failed': 'Die Mitgliedschaftsanträge konnten nicht geladen werden.',
+    'dash.membership.retry': 'Erneut versuchen',
+    'dash.membership.mine.waiting.one':
+      'Ihr Antrag auf Mitgliedschaft in {count} Organisation wartet auf eine Entscheidung:',
+    'dash.membership.mine.waiting.other':
+      'Ihre Anträge auf Mitgliedschaft in {count} Organisationen warten auf eine Entscheidung:',
+    'dash.membership.mine.member.one': 'Sie sind Mitglied in {count} Organisation.',
+    'dash.membership.mine.member.other': 'Sie sind Mitglied in {count} Organisationen.',
+    'dash.membership.mine.none':
+      'Sie sind noch in keiner Organisation Mitglied. Mitglieder sehen und pflegen die Dienste ihrer Organisation.',
+    'dash.membership.mine.link': 'Ihre Organisationen',
+    'dash.membership.mine.find': 'Ihre Organisation finden',
   },
 };

@@ -133,9 +133,11 @@ test.describe('J12: read the dashboard and export the numbers', () => {
       await expect(
         averages.getByRole('row', { name: new RegExp(w.names.downloads) }),
       ).toContainText('122');
-      await expect(averages.getByRole('row', { name: new RegExp(w.names.notes) })).toContainText(
-        'n/a',
-      );
+      // A text KPI has no average: it is not listed, and the line under the table names it.
+      await expect(averages.getByRole('row', { name: new RegExp(w.names.notes) })).toHaveCount(0);
+      await expect(
+        averages.getByText(`Not shown (no numbers in this range): ${w.names.notes}`),
+      ).toBeVisible();
     });
 
     await test.step('Read the volatility and open its explanation with the keyboard', async () => {
