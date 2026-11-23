@@ -63,9 +63,10 @@ results; the focus never jumps on its own (after a removed chip it goes to the n
    The header text must stay at 4.5:1: DaisyUI's table head dims it, which is why the components force `text-base-content`.
 3. **Metric summary card** (new `ui-kit` component, needed by M13): surface-200 card, top accent line, mono bold primary value (3:1 is enough for display size), Δ% with an arrow _and_ a text
    sign, so direction is not told by colour alone.
-4. **Chart adapter (§5).** Series colours today are primary, secondary, accent, info, success, warning of the theme. The guide wants cyan, neon blue, emerald, amber with dashed, quiet grid lines
-   and a transparent canvas: set `splitLine.lineStyle.type = 'dashed'` and a fixed series palette per theme in `themeFromElement`. Add a second cue (marker shape or dash) per series: four hues are
-   not enough for colour-blind readers. Dark series on `#0E1738` need 3:1 each (cyan, blue, emerald and amber pass; check the "neon blue").
+4. **Chart adapter (§5).** Done: `SERIES_PALETTE` in `packages/ui-kit/src/chart.ts` is a fixed categorical palette of eight hues per theme (validated for
+   colour-blind readers against the card colour of both built-in themes), each series also has a marker shape and a dashed line on the second axis,
+   the grid lines are dashed, and the legend is HTML under the chart so it wraps. Open: the guide's own cyan, neon blue, emerald and amber are not
+   the palette (four hues are too few, and the blues were hard to tell apart); the series colours are not part of the administrator's theme colours.
 5. **Cytoscape graphs (§5).** Not built (M16). Glow borders on nodes are subject to the same 8 px / 0.35 cap, and node state must not rely on glow colour alone.
 6. **Inline errors (§6).** Done as `text-error text-sm` under the field (`FieldShell`); the guide says `text-xs mt-1`. Moving to `text-xs` makes the message smaller than the label's hint and is a loss for
    low vision, so I kept `text-sm`: decide whether the guide or the reader wins.

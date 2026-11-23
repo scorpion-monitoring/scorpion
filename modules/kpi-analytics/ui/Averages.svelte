@@ -11,7 +11,14 @@
   const { t, locale } = getShell();
 </script>
 
-<WidgetFrame title={t('analytics.averages.title')} {config} {editing} {setConfig} units>
+<WidgetFrame
+  title={t('analytics.averages.title')}
+  {config}
+  {editing}
+  {setConfig}
+  needs="number"
+  units
+>
   {#snippet body({ rows, unit }: Body)}
     <!-- A scrolling region must take focus, or a keyboard cannot scroll it (axe: scrollable-region-focusable). -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

@@ -7,12 +7,13 @@
   // live region says the values (Escape stops).
   import { onMount } from 'svelte';
   import { getShell } from './context.ts';
-  import { rasterise, standaloneSvg } from './chart-image.ts';
+  import { DASHES, rasterise, withLegend } from './chart-image.ts';
   import {
     chartProblems,
     createChartController,
     describeCategory,
     nextCategory,
+    seriesStyle,
     tableOf,
     themeFromElement,
     type ChartAdapter,
@@ -65,10 +66,20 @@
     const svg = controller?.toSvg();
     if (!svg || !element || !theme) return undefined;
     const { width, height } = element.getBoundingClientRect();
-    const document = standaloneSvg(svg, Math.round(width), Math.round(height), theme.background);
+    const drawn = withLegend(
+      svg,
+      Math.round(width),
+      Math.round(height),
+      theme.background,
+      theme.text,
+      legend.map((entry) => ({
+        ...entry.look,
+        name: entry.secondary ? `${entry.name} (${t('kit.chart.rightAxis')})` : entry.name,
+      })),
+    );
     return format === 'svg'
-      ? new Blob([document], { type: 'image/svg+xml' })
-      : rasterise(document, Math.round(width), Math.round(height));
+      ? new Blob([drawn.svg], { type: 'image/svg+xml' })
+      : rasterise(drawn.svg, Math.round(width), drawn.height);
   }
   function stop() {
     if (active !== null) controller?.showTip(null);
@@ -77,6 +88,18 @@
 
   let controller: ChartController | undefined;
   let theme = $state<ReturnType<typeof themeFromElement>>();
+
+  // The legend, in HTML under the chart: it wraps at any width (the library's own drew over the axis once it took two lines), and each entry
+  // has the series' colour, marker and line, so a series is never told by colour alone. One series needs none: the label names it.
+  const legend = $derived(
+    theme && spec.series.length > 1
+      ? spec.series.map((series, index) => ({
+          name: series.name,
+          secondary: series.secondary === true && spec.type !== 'radar',
+          look: seriesStyle(series, index, theme!.palette),
+        }))
+      : [],
+  );
 
   onMount(() => {
     const target = element!;
@@ -140,6 +163,41 @@
     >
       <div bind:this={element} role="img" aria-label={label} class="w-full {height[size]}"></div>
     </div>
+    {#if legend.length > 0 && !failed}
+      <!-- The picture is one image for a screen reader and the table has the same names, so the legend is for the eye only. -->
+      <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-hidden="true">
+        {#each legend as entry, index (index)}
+          {@const middle = 6}
+          <li class="flex min-w-0 items-center gap-1.5">
+            <svg width="22" height="12" viewBox="0 0 22 12" class="shrink-0">
+              <line
+                x1="0"
+                y1={middle}
+                x2="22"
+                y2={middle}
+                stroke={entry.look.color}
+                stroke-width="2"
+                stroke-dasharray={DASHES[entry.look.line]}
+              />
+              {#if entry.look.marker === 'rect'}
+                <rect x="7.5" y="2.5" width="7" height="7" fill={entry.look.color} />
+              {:else if entry.look.marker === 'triangle'}
+                <polygon points="11,2 15,9.5 7,9.5" fill={entry.look.color} />
+              {:else if entry.look.marker === 'diamond'}
+                <polygon points="11,1.5 15.5,6 11,10.5 6.5,6" fill={entry.look.color} />
+              {:else}
+                <circle cx="11" cy={middle} r="3.5" fill={entry.look.color} />
+              {/if}
+            </svg>
+            <span class="break-words">
+              {entry.name}{#if entry.secondary}<span class="text-base-content/70">
+                  ({t('kit.chart.rightAxis')})</span
+                >{/if}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <p id={hintId} class="sr-only">{t('kit.chart.keys')}</p>
     <p class="sr-only" role="status" aria-live="polite">{said}</p>
     {#if failed}<p role="alert" class="text-error">{t('kit.chart.failed')}</p>{/if}
