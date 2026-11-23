@@ -55,6 +55,8 @@ export const messages: UiMessages = {
       'The settings of this widget are no longer valid. Customise the dashboard and open its settings to choose again.',
     'analytics.state.noKpis': 'This service has no KPIs.',
     'analytics.state.noValues': 'No values for this range.',
+    'analytics.state.notShown.values': 'Not shown (no values in this range): {names}',
+    'analytics.state.notShown.numbers': 'Not shown (no numbers in this range): {names}',
     'analytics.state.more':
       'Showing the first {shown} of {total} KPIs. Choose a category to see others.',
     'analytics.state.defaultsFailed': 'Your dashboard defaults could not be loaded.',
@@ -139,6 +141,8 @@ export const messages: UiMessages = {
       'Die Einstellungen dieses Widgets sind nicht mehr gültig. Passen Sie das Dashboard an und öffnen Sie die Einstellungen, um neu zu wählen.',
     'analytics.state.noKpis': 'Dieser Dienst hat keine KPIs.',
     'analytics.state.noValues': 'Keine Werte für diesen Zeitraum.',
+    'analytics.state.notShown.values': 'Nicht gezeigt (keine Werte in diesem Zeitraum): {names}',
+    'analytics.state.notShown.numbers': 'Nicht gezeigt (keine Zahlen in diesem Zeitraum): {names}',
     'analytics.state.more':
       'Die ersten {shown} von {total} KPIs werden angezeigt. Wählen Sie eine Kategorie, um andere zu sehen.',
     'analytics.state.defaultsFailed':

@@ -26,7 +26,7 @@
           : '';
 </script>
 
-<WidgetFrame title={t('analytics.volatility.title')} {config} {editing} {setConfig}>
+<WidgetFrame title={t('analytics.volatility.title')} {config} {editing} {setConfig} needs="number">
   {#snippet body({ rows }: Body)}
     <div>
       <button

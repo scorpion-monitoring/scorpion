@@ -15,6 +15,7 @@
     type ServiceName,
   } from '@scorpion/ui-kit';
   import ExportMenu from './ExportMenu.svelte';
+  import { relevantRows, type Needs } from './relevant.ts';
   import { resolveConfig, seeded, type Filter } from './settings.ts';
   import type { Body } from './types.ts';
 
@@ -27,6 +28,7 @@
     exportable = false,
     chartImage,
     imageName = 'chart',
+    needs = 'value',
     body,
   }: {
     /** The widget's name, as the heading and the tile's accessible name. */
@@ -42,6 +44,8 @@
     chartImage?: (format: 'svg' | 'png') => Promise<Blob | undefined> | undefined;
     /** The word in the name of the picture's file (`<service>-<imageName>-<range>.png`). */
     imageName?: string;
+    /** What a KPI needs to be shown: a value of any kind (`value`), or a number (`number`: averages, volatility, the chart). */
+    needs?: Needs;
     body: Snippet<[Body]>;
   } = $props();
 
@@ -138,17 +142,15 @@
   const subtitle = $derived(named ? `${named.name} · ${rangeText}` : rangeText);
   const ready = $derived(read.kind === 'ready' ? read.page : undefined);
   const hasNoKpis = $derived(ready !== undefined && ready.metadata.totalCount === 0);
+  // Only the KPIs of the service's set that have something to show in this window; the others are named in one line under the body.
+  const chosen = $derived(ready ? relevantRows(ready.result, needs) : undefined);
   const hasNoValues = $derived(
-    ready !== undefined &&
-      ready.result.length > 0 &&
-      ready.result.every((row) =>
-        row.points.every((point) => point.value === null && point.text === null),
-      ),
+    ready !== undefined && !hasNoKpis && chosen !== undefined && chosen.shown.length === 0,
   );
   const shown = $derived<Body | undefined>(
-    ready && !hasNoKpis && !hasNoValues
+    ready && chosen && !hasNoKpis && !hasNoValues
       ? {
-          rows: ready.result,
+          rows: chosen.shown,
           total: ready.metadata.totalCount,
           months: ready.result[0]?.points.map((point) => point.period) ?? [],
           unit,
@@ -210,9 +212,16 @@
            small scroller; the body's paragraphs keep their own height (`[&_p]:grow-0` is more specific than `.card-body p`). -->
       <div class="flex min-h-0 flex-1 flex-col gap-2 [&_p]:grow-0">
         {@render body(shown)}
-        {#if shown.total > shown.rows.length}
+        {#if chosen && chosen.empty.length > 0}
+          <p class="text-base-content/70 shrink-0 text-sm">
+            {needs === 'number'
+              ? t('analytics.state.notShown.numbers', { names: chosen.empty.join(', ') })
+              : t('analytics.state.notShown.values', { names: chosen.empty.join(', ') })}
+          </p>
+        {/if}
+        {#if ready && shown.total > ready.result.length}
           <p class="text-base-content/70 text-sm">
-            {t('analytics.state.more', { shown: shown.rows.length, total: shown.total })}
+            {t('analytics.state.more', { shown: ready.result.length, total: shown.total })}
           </p>
         {/if}
       </div>
