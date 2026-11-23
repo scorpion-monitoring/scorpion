@@ -26,6 +26,8 @@
   function specOf(body: Body) {
     const lines = trendSeries(body.rows, config);
     const unitOf = new Map(body.rows.map((row) => [row.indicatorId, row.unit]));
+    // Each KPI keeps its place in the palette among all the lines, so hiding one never repaints the others.
+    const slots = new Map(lines.map((line, index) => [line.indicatorId, index]));
     const shown = lines.filter((line) => !line.hidden);
     const spec: ChartSpec = {
       type: 'line',
@@ -36,6 +38,7 @@
           name: unit ? `${line.name} (${unit})` : line.name,
           values: line.values,
           secondary: line.secondary,
+          slot: slots.get(line.indicatorId),
         };
       }),
     };
@@ -50,6 +53,7 @@
   {setConfig}
   units
   exportable
+  needs="number"
   chartImage={(format: 'svg' | 'png') => chart?.toImage(format)}
   imageName="trends"
 >

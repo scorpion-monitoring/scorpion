@@ -11,6 +11,11 @@ export interface ChartSeries {
   values: readonly (number | null)[];
   /** Draw the series against a second y axis on the right (line and bar charts), for a series of another magnitude. */
   secondary?: boolean;
+  /**
+   * The series' place in the palette (its colour, marker and dash). The colour follows the thing a series stands for, not its position in
+   * the chart: a caller that can hide series gives each its slot among all of them, so hiding one never repaints the others. Default: its index.
+   */
+  slot?: number;
 }
 
 export interface ChartSpec {
@@ -26,7 +31,7 @@ export interface ChartSpec {
 
 export interface ChartTheme {
   colorScheme: 'light' | 'dark';
-  /** Series colours, as `#rrggbb`/`rgb()` strings the library can parse. */
+  /** Series colours in their fixed order, as `#rrggbb`/`rgb()` strings the library can parse. */
   palette: readonly string[];
   /** Text, axes and the lines of the grid. */
   text: string;
@@ -155,14 +160,48 @@ function toRgb(color: string, context: CanvasRenderingContext2D | null): string 
   return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a! / 255).toFixed(2)})`;
 }
 
-const PALETTE_VARIABLES = [
-  '--color-primary',
-  '--color-secondary',
-  '--color-accent',
-  '--color-info',
-  '--color-success',
-  '--color-warning',
-] as const;
+/**
+ * The series colours, one fixed categorical palette per colour scheme (docs/ui-style-guide.md, "Chart adapter"). The theme's own tokens were
+ * the series colours before, and in the built-in themes four of the six were blues, so the lines of a chart could not be told apart. These
+ * eight hues are distinct in hue and lightness, and their order keeps neighbours apart for colour-blind readers: every adjacent pair is
+ * at least ΔE 8 (OKLab ×100) under protan, deutan and tritan simulation and ΔE 19 for normal vision, checked against the card colour of each
+ * built-in theme. In dark every colour is at least 3:1 on the card; in light orange, aqua, yellow and pink are less, which the second cue
+ * (a marker shape per series) and the table of the numbers make up for. A series is never told by colour alone (`seriesStyle`).
+ */
+export const SERIES_PALETTE = {
+  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767'],
+} as const;
+
+/** The marker shapes, the second cue of a series beside its colour. Each is drawn by the library and by the legend (`Chart.svelte`). */
+export const SERIES_MARKERS = ['circle', 'rect', 'triangle', 'diamond'] as const;
+export type SeriesMarker = (typeof SERIES_MARKERS)[number];
+
+/** How a series is drawn: its colour, marker and line. */
+export interface SeriesStyle {
+  color: string;
+  marker: SeriesMarker;
+  /** `dashed` for a series on the second axis (the legend says so too), `dotted` once the colours have all been used, else `solid`. */
+  line: 'solid' | 'dashed' | 'dotted';
+}
+
+/**
+ * The style of a series from its slot. Past the eighth slot a colour comes back, but with another line (dotted) and, as the markers cycle
+ * by four, the pair of colour and line never does within sixteen series.
+ */
+export function seriesStyle(
+  series: ChartSeries,
+  index: number,
+  palette: readonly string[],
+): SeriesStyle {
+  const slot = Math.max(0, Math.trunc(series.slot ?? index));
+  const size = Math.max(1, palette.length);
+  return {
+    color: palette[slot % size] ?? '',
+    marker: SERIES_MARKERS[slot % SERIES_MARKERS.length]!,
+    line: series.secondary === true ? 'dashed' : slot >= size ? 'dotted' : 'solid',
+  };
+}
 
 /**
  * The colours of the page's theme (DaisyUI variables on `element`), so a chart follows light and dark.
@@ -174,9 +213,10 @@ export function themeFromElement(element: Element): ChartTheme {
   const read = (name: string, fallback: string) =>
     toRgb(style.getPropertyValue(name).trim() || fallback, context);
   const text = read('--color-base-content', '#1f2937');
+  const colorScheme = style.colorScheme.includes('dark') ? 'dark' : 'light';
   return {
-    colorScheme: style.colorScheme.includes('dark') ? 'dark' : 'light',
-    palette: PALETTE_VARIABLES.map((name) => read(name, text)),
+    colorScheme,
+    palette: SERIES_PALETTE[colorScheme],
     text,
     grid: read('--color-base-300', '#d1d5db'),
     background: read('--color-base-100', '#ffffff'),

@@ -5,6 +5,8 @@ import {
   describeCategory,
   nextCategory,
   radarMax,
+  SERIES_PALETTE,
+  seriesStyle,
   tableOf,
   type ChartAdapter,
   type ChartHandle,
@@ -30,6 +32,48 @@ const theme: ChartTheme = {
   background: '#000',
   reducedMotion: false,
 };
+
+describe('seriesStyle', () => {
+  const palette = ['#a', '#b', '#c'];
+  it.each<[string, { slot?: number; secondary?: boolean }, number, ReturnType<typeof seriesStyle>]>(
+    [
+      ['the index without a slot', {}, 1, { color: '#b', marker: 'rect', line: 'solid' }],
+      [
+        'the slot before the index',
+        { slot: 2 },
+        0,
+        { color: '#c', marker: 'triangle', line: 'solid' },
+      ],
+      [
+        'a dashed line on the second axis',
+        { secondary: true },
+        0,
+        { color: '#a', marker: 'circle', line: 'dashed' },
+      ],
+      [
+        'a dotted line once the colours come back',
+        { slot: 4 },
+        0,
+        { color: '#b', marker: 'circle', line: 'dotted' },
+      ],
+      [
+        'a negative or broken slot as the first',
+        { slot: -3 },
+        0,
+        { color: '#a', marker: 'circle', line: 'solid' },
+      ],
+    ],
+  )('%s', (_, series, index, expected) => {
+    expect(seriesStyle({ name: 's', values: [], ...series }, index, palette)).toEqual(expected);
+  });
+
+  it('has eight distinct colours in each scheme', () => {
+    for (const colors of [SERIES_PALETTE.light, SERIES_PALETTE.dark]) {
+      expect(new Set(colors).size).toBe(8);
+      for (const color of colors) expect(color).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+});
 
 describe('chartProblems', () => {
   it('accepts a well-formed spec', () => {
@@ -131,7 +175,15 @@ interface Option {
   yAxis: Record<string, unknown> | Record<string, unknown>[];
   grid: { right: number };
   tooltip: { backgroundColor: string; borderColor: string; textStyle: { color: string } };
-  series: { type: string; name?: string; data: unknown[]; yAxisIndex?: number }[];
+  series: {
+    type: string;
+    name?: string;
+    data: unknown[];
+    yAxisIndex?: number;
+    color?: string;
+    symbol?: string;
+    lineStyle?: { type: string };
+  }[];
   color: string[];
   legend?: unknown;
   animation: boolean;
@@ -149,8 +201,26 @@ describe('chartOption', () => {
       ['line', 'Users'],
     ]);
     expect(option.color).toEqual(['#111', '#222']);
-    expect(option.legend).toBeDefined();
+    expect(option.series.map((s) => [s.color, s.symbol, s.lineStyle?.type])).toEqual([
+      ['#111', 'circle', 'solid'],
+      ['#222', 'rect', 'solid'],
+    ]);
+    // The legend is HTML beside the chart (it wraps instead of drawing over the axis).
+    expect(option.legend).toBeUndefined();
     expect(option.animation).toBe(true);
+  });
+
+  it('keeps the colour of a series by its slot, so hiding another series repaints none', () => {
+    const option = optionOf({ ...spec, series: [{ ...spec.series[1]!, slot: 1 }] }, theme);
+    expect(option.series[0]).toMatchObject({ color: '#222', symbol: 'rect' });
+  });
+
+  it('dashes a series on the second axis', () => {
+    const option = optionOf(
+      { ...spec, series: [spec.series[0]!, { ...spec.series[1]!, secondary: true }] },
+      theme,
+    );
+    expect(option.series.map((s) => s.lineStyle?.type)).toEqual(['solid', 'dashed']);
   });
 
   it('has one y axis and no axis index while no series asks for the second', () => {
