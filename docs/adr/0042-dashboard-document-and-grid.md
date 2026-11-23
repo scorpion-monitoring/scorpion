@@ -206,6 +206,9 @@ status), each in its `ui/routes.ts`.
 1. **The Content-Security-Policy.** dnd-kit writes a `<style>` element into the page while something is dragged, and the page's policy has no `'unsafe-inline'` for styles (only the nonce SvelteKit
    puts on its own tags). The harness page, which has the application's policy, reported three `style-src-elem` violations. dnd-kit's style injector takes a `nonce`; `Provider.svelte` gives it the
    nonce of a script or style tag of the page (`element.nonce` stays readable). The harness page now carries one inert nonce-bearing data block, as the application's pages carry their tags.
+   _Addendum (0.16.3):_ the built application put that nonce on `script-src` only (SvelteKit adds a style nonce only when it inlines CSS, and the dev server allows inline styles), so on the
+   deployed instances the `<style>` elements were refused and a dragged tile stayed where it was. The web app's `handle` hook now gives `style-src` the page's nonce (`withStyleNonce`,
+   `apps/web/src/lib/server/csp.ts`); still no `'unsafe-inline'`. The pointer journey in `e2e/dashboard.spec.ts` checks that the tile follows the pointer with no policy violation.
 2. **The `@scorpion/contracts` barrel pulls in zod, which probes `new Function` at load** and so breaks the policy (`script-src: eval`) on a page that has not set zod to `jitless`. The shared layout
    rules (`pack`, `compactUp`) are therefore a subpath, `@scorpion/contracts/dashboard-layout`, which imports nothing; the server's `parseDashboard` and the browser use the same file (the plan's
    "the browser must not reimplement `pack` differently" is met by there being one `pack`).
