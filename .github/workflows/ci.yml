@@ -55,19 +55,20 @@ jobs:
         run: pnpm openapi:diff
 
   # Unit and integration tests, split by file over a fixed number of runners; Testcontainers uses each
-  # runner's Docker daemon. To add a shard, add its number here and change `/4` in the command.
+  # runner's Docker daemon. To add a shard, add its number here and change `/6` in the command. Six, not
+  # four: a shard takes about 5 minutes on a normal runner, which leaves room for a slow one under the limit.
   unit:
-    name: Unit tests (${{ matrix.shard }}/4)
+    name: Unit tests (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: pnpm test --shard=${{ matrix.shard }}/4
+      - run: pnpm test --shard=${{ matrix.shard }}/6
         env:
           # One report per shard; the ASVS job puts them together.
           JUNIT_FILE: reports/vitest-junit-${{ matrix.shard }}.xml
