@@ -10,6 +10,7 @@ import {
 } from './support/admin.ts';
 import { expect, test } from './support/fixtures.ts';
 import { pageAs } from './support/members.ts';
+import { watchCsp } from './support/page-checks.ts';
 
 // M11 sprint 2: the dashboard on the start page. A signed-in person sees the default dashboard (the cards of what they
 // may do), customises it from the FAB menu (add, move and resize with the buttons and with the pointer, remove, reset),
@@ -239,6 +240,7 @@ test.describe('journey: a person customises their dashboard', () => {
     await quiet(opened.page);
     const page = opened.page;
     const seen = watch(page);
+    const csp = await watchCsp(page);
     await page.goto(at('/'));
     await expect(page.getByRole('heading', { name: DEAD })).toBeVisible();
     await fab(page).click();
@@ -263,6 +265,13 @@ test.describe('journey: a person customises their dashboard', () => {
     await page.mouse.down();
     await page.mouse.move(grip.x + 40, grip.y + 60, { steps: 5 });
     await page.mouse.move(grip.x - 300, grip.y + 200, { steps: 12 });
+    // The tile follows the pointer while it is dragged. dnd-kit positions it with a <style> element of its own, which
+    // the page's policy allows by its nonce; refused (as on the deployed 0.16.2), the tile stayed put.
+    const dragging = (await page.locator('[data-dnd-dragging]').boundingBox())!;
+    // The pointer went from the grip's centre (grip + 12) to (grip.x - 300, grip.y + 200): 312 left, 188 down.
+    expect(Math.abs(dragging.x - (start.x - 312))).toBeLessThan(20);
+    expect(Math.abs(dragging.y - (start.y + 188))).toBeLessThan(20);
+    expect(await csp(), 'dragging breaks no rule of the policy').toEqual([]);
     expect(seen.calls, 'a drag sends nothing').toEqual([]);
     await page.mouse.up();
     const moved = (await dead.boundingBox())!;
