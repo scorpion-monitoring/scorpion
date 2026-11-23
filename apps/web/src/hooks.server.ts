@@ -8,12 +8,14 @@ import {
   loadSession,
   once,
 } from '#lib/server/session.ts';
+import { withStyleNonce } from '#lib/server/csp.ts';
 
 const needsFirstAdmin = createBootstrapProbe();
 
 /**
  * Hardening that applies to every response of the web app. The Content-Security-Policy is set by
- * SvelteKit (nonces, no 'unsafe-inline'; see vite.config.ts). `Cache-Control: no-store` keeps a page
+ * SvelteKit (nonces, no 'unsafe-inline'; see vite.config.ts); `withStyleNonce` gives its `style-src` the
+ * page's nonce too, for the `<style>` elements the dashboard's drag library writes. `Cache-Control: no-store` keeps a page
  * that carries the caller's session out of shared caches; built assets keep their own long cache.
  */
 const HEADERS: Readonly<Record<string, string>> = {
@@ -44,6 +46,8 @@ export const handle: Handle = async ({ event, resolve }) => {
         ? html.replace('%lang%', await event.locals.locale().catch(() => 'en'))
         : html,
   });
+  const policy = response.headers.get('content-security-policy');
+  if (policy) response.headers.set('content-security-policy', withStyleNonce(policy));
   for (const [name, value] of Object.entries(HEADERS)) {
     if (!response.headers.has(name)) response.headers.set(name, value);
   }
