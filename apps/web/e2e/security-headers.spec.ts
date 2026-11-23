@@ -28,6 +28,10 @@ test.describe('the security headers of a page', () => {
       expect(csp).not.toContain('unsafe-inline');
       expect(csp).not.toContain('unsafe-eval');
       expect(csp).toMatch(/script-src [^;]*'nonce-[A-Za-z0-9+/=_-]+'/);
+      // The same nonce for the <style> elements dnd-kit writes while a dashboard tile is dragged.
+      const nonce = /script-src [^;]*('nonce-[^']+')/.exec(csp)?.[1];
+      const styleSrc = csp.split(';').find((part) => part.trim().startsWith('style-src '));
+      expect(styleSrc).toContain(nonce!);
       expect(headers['x-content-type-options']).toBe('nosniff');
       expect(headers['x-frame-options']).toBe('DENY');
       expect(headers['referrer-policy']).toBe('no-referrer');
