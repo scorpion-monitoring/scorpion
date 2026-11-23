@@ -293,7 +293,10 @@ test.describe('journey 4: managers decide for their own organisation', () => {
     const page = manager.page;
     await page.goto(at('/'));
     await expect.poll(() => waitingOnCard(page)).toBeGreaterThan(0);
-    await page.getByRole('region', { name: 'Membership requests' }).getByRole('link').click();
+    await page
+      .getByRole('region', { name: 'Membership requests' })
+      .getByRole('link', { name: 'Decide on the requests' })
+      .click();
     await expect(page).toHaveURL(new RegExp(`${prefixOf(basePath)}/account/organisations$`));
 
     // Only their own organisation is in the manager section.
@@ -430,9 +433,15 @@ test.describe('journey 5: a plain User sees nothing of the administration or the
       expect(response?.status(), path).toBe(403);
       await expect(page.getByText('You are not allowed to open this page.'), path).toBeVisible();
     }
-    // And the dashboard draws no card and no error.
+    // And the dashboard's card speaks only of the person's own side: no count to decide, no link to the administration, no error.
     await page.goto(at('/'));
-    await expect(page.getByRole('region', { name: 'Membership requests' })).toHaveCount(0);
+    const card = page.getByRole('region', { name: 'Membership requests' });
+    await expect(
+      card.getByRole('link', { name: /Your organisations|Find your organisation/ }),
+    ).toBeVisible();
+    await expect(card.getByText(/^\d+$/)).toHaveCount(0);
+    await expect(card.locator('a[href*="/admin"]')).toHaveCount(0);
+    await expect(card.getByRole('alert')).toHaveCount(0);
 
     // The API: the lists and every write of the administration answer 403 or an empty summary.
     const mine = await apiAs(playwright, baseURL, at, who);

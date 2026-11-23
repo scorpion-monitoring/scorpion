@@ -147,11 +147,11 @@ export async function auditPayloads(
 export const rowOfTable = (scope: Pick<Page, 'getByRole'>, text: string | RegExp) =>
   scope.getByRole('row').filter({ hasText: text });
 
-/** The card of the dashboard, and the number it shows (`null` when it is not drawn: nothing is waiting). */
+/** The number of requests the dashboard's card shows (`null` while it shows none: still loading, or the person decides on none). */
 export async function waitingOnCard(page: Page): Promise<number | null> {
-  const card = page.getByRole('region', { name: 'Membership requests' });
-  if ((await card.count()) === 0) return null;
-  return Number((await card.getByText(/^\d+$/).textContent())!);
+  const number = page.getByRole('region', { name: 'Membership requests' }).getByText(/^\d+$/);
+  if ((await number.count()) === 0) return null;
+  return Number((await number.textContent())!);
 }
 
 /** The path under the base path of the first link to an organisation page in a mail. */
