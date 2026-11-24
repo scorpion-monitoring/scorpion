@@ -67,8 +67,8 @@
         {definition.label}
         {#if count > 0}
           <span class="badge badge-sm badge-primary">{count}</span><span class="sr-only">
-            {view.t('kit.facetSearch.chosen')}</span
-          >
+            {view.t('kit.facetSearch.chosen')}
+          </span>
         {/if}
         <span aria-hidden="true">▾</span>
       </button>

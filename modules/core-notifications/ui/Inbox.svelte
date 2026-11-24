@@ -87,8 +87,9 @@
 
   {#snippet whatCell(row: InboxItem)}
     <span class:font-semibold={row.readAt === null}>{row.title}</span>
-    {#if row.readAt === null}<span class="badge badge-primary badge-sm ms-2">{t('inbox.new')}</span
-      >{/if}
+    {#if row.readAt === null}<span class="badge badge-primary badge-sm ms-2">
+        {t('inbox.new')}
+      </span>{/if}
     <span class="block text-sm opacity-80 whitespace-pre-line">{row.text}</span>
     {#if linkOf(row.link, origin())}
       {@const link = linkOf(row.link, origin())!}
@@ -96,8 +97,10 @@
         class="link text-sm"
         href={link.href}
         rel={link.external ? 'noopener noreferrer' : undefined}
-        target={link.external ? '_blank' : undefined}>{t('inbox.open')}</a
+        target={link.external ? '_blank' : undefined}
       >
+        {t('inbox.open')}
+      </a>
     {/if}
   {/snippet}
   {#snippet whenCell(row: InboxItem)}<Time iso={row.createdAt} />{/snippet}

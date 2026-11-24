@@ -108,11 +108,14 @@
         <p>{t('profile.tokens.secretWarning')}</p>
         <code
           class="bg-base-100 text-base-content block w-full min-w-0 rounded p-2 text-sm break-all select-all"
-          data-testid="token-secret">{shown.secret}</code
+          data-testid="token-secret"
         >
+          {shown.secret}
+        </code>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-sm" onclick={copy}>{t('profile.tokens.copy')}</button
-          >
+          <button type="button" class="btn btn-sm" onclick={copy}>
+            {t('profile.tokens.copy')}
+          </button>
           <button type="button" class="btn btn-sm btn-ghost" onclick={dismiss}>
             {t('profile.tokens.dismiss')}
           </button>
@@ -154,16 +157,16 @@
                 <th scope="row">{token.name}</th>
                 <td><code>{token.prefix}</code></td>
                 <td class="max-w-xs break-all">{token.scopes.join(', ')}</td>
-                <td
-                  >{#if token.expiresAt}<Time iso={token.expiresAt} />{:else}{t(
+                <td>
+                  {#if token.expiresAt}<Time iso={token.expiresAt} />{:else}{t(
                       'profile.tokens.never',
-                    )}{/if}</td
-                >
-                <td
-                  >{#if token.lastUsedAt}<Time iso={token.lastUsedAt} />{:else}{t(
+                    )}{/if}
+                </td>
+                <td>
+                  {#if token.lastUsedAt}<Time iso={token.lastUsedAt} />{:else}{t(
                       'profile.tokens.unused',
-                    )}{/if}</td
-                >
+                    )}{/if}
+                </td>
                 <td class="whitespace-nowrap">
                   {#if asking === token.id}
                     <button

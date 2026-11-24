@@ -109,11 +109,12 @@
       <p class="flex flex-wrap items-center gap-2">
         <span>{t('services.license.chosen', { name: chosenName ?? '' })}</span>
         {#if known && known.id === chosenId}
-          {#if known.osiApproved}<span class="badge badge-ghost">{t('services.license.osi')}</span
-            >{/if}
-          {#if known.deprecated}<span class="badge badge-warning"
-              >{t('services.license.deprecated')}</span
-            >{/if}
+          {#if known.osiApproved}<span class="badge badge-ghost">
+              {t('services.license.osi')}
+            </span>{/if}
+          {#if known.deprecated}<span class="badge badge-warning">
+              {t('services.license.deprecated')}
+            </span>{/if}
         {/if}
         <button
           type="button"
@@ -151,12 +152,12 @@
             >
               <span class="font-medium">{licence.name}</span>
               <span class="opacity-70">{licence.id}</span>
-              {#if licence.osiApproved}<span class="badge badge-ghost"
-                  >{t('services.license.osi')}</span
-                >{/if}
-              {#if licence.deprecated}<span class="badge badge-warning"
-                  >{t('services.license.deprecated')}</span
-                >{/if}
+              {#if licence.osiApproved}<span class="badge badge-ghost">
+                  {t('services.license.osi')}
+                </span>{/if}
+              {#if licence.deprecated}<span class="badge badge-warning">
+                  {t('services.license.deprecated')}
+                </span>{/if}
             </button>
           </li>
         {/each}

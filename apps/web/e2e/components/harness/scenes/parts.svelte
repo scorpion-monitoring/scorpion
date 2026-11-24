@@ -14,21 +14,21 @@
 <section class="mb-8" aria-labelledby="toast-title">
   <h2 id="toast-title" class="mb-2 text-xl font-semibold">Toasts</h2>
   <div class="flex gap-2">
-    <button type="button" class="btn btn-sm" onclick={() => toaster.success('Saved.')}
-      >Success</button
-    >
+    <button type="button" class="btn btn-sm" onclick={() => toaster.success('Saved.')}>
+      Success
+    </button>
     <button type="button" class="btn btn-sm" onclick={() => toaster.info('Heads up.')}>Info</button>
-    <button type="button" class="btn btn-sm" onclick={() => toaster.error('That failed.')}
-      >Error</button
-    >
+    <button type="button" class="btn btn-sm" onclick={() => toaster.error('That failed.')}>
+      Error
+    </button>
   </div>
 </section>
 
 <section class="mb-8" aria-labelledby="confirm-title">
   <h2 id="confirm-title" class="mb-2 text-xl font-semibold">Confirm dialog</h2>
-  <button type="button" class="btn btn-sm" onclick={() => (confirming = true)}
-    >End every session</button
-  >
+  <button type="button" class="btn btn-sm" onclick={() => (confirming = true)}>
+    End every session
+  </button>
   <p>Confirmed: <span data-testid="confirmed">{confirmed}</span></p>
   <ConfirmDialog
     open={confirming}

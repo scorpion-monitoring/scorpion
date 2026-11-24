@@ -183,11 +183,11 @@
               <tr>
                 <td>{row.name}</td>
                 <td>{unitLabel(row.unit)}</td>
-                <td
-                  ><span class="badge badge-outline"
-                    >{labelOf(necessity, row.necessity, locale())}</span
-                  ></td
-                >
+                <td>
+                  <span class="badge badge-outline">
+                    {labelOf(necessity, row.necessity, locale())}
+                  </span>
+                </td>
                 <td class="opacity-70">
                   {row.source === 'set' ? t('kpi.editor.source.set') : t('kpi.editor.source.extra')}
                 </td>

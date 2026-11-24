@@ -363,9 +363,9 @@
                   <td class={problems.length > 0 ? 'bg-error/10' : ''}>
                     {cell}
                     {#if verdict}
-                      <span class="badge badge-ghost badge-sm block"
-                        >{t(`submit.verdict.${verdict}`)}</span
-                      >
+                      <span class="badge badge-ghost badge-sm block">
+                        {t(`submit.verdict.${verdict}`)}
+                      </span>
                     {/if}
                     {#each problems as problem, at (at)}
                       <span class="text-error block text-xs">

@@ -92,9 +92,9 @@
         onkeydown={key}
       />
     </label>
-    <button type="button" class="btn btn-sm" onclick={apply} onkeydown={key}
-      >{view.t('kit.facetSearch.apply')}</button
-    >
+    <button type="button" class="btn btn-sm" onclick={apply} onkeydown={key}>
+      {view.t('kit.facetSearch.apply')}
+    </button>
   </div>
   {#if problem}
     <p id="{listId}-problem" role="alert" class="text-error text-sm">

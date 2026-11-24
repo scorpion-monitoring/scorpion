@@ -32,9 +32,9 @@
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/testing": "workspace:*",
     "@scorpion/ui-kit": "workspace:*",
-    "fast-check": "4.10.2",
+    "fast-check": "4.10.3",
     "pg": "^8.23.1",
-    "read-excel-file": "9.3.17"
+    "read-excel-file": "9.3.20"
   },
   "peerDependencies": {
     "@scorpion/core-ui-shell": "workspace:*"

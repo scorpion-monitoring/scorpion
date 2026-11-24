@@ -45,9 +45,9 @@
               {#if row.latest}
                 <p class="text-xl font-semibold">
                   {formatLatest(row.latest, locale())}
-                  {#if unit(row.unit)}<span class="text-base-content/70 text-sm font-normal"
-                      >{unit(row.unit)}</span
-                    >{/if}
+                  {#if unit(row.unit)}<span class="text-base-content/70 text-sm font-normal">
+                      {unit(row.unit)}
+                    </span>{/if}
                 </p>
                 {#if row.latest.value !== null}
                   <p class="text-sm">

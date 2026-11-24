@@ -134,9 +134,9 @@
             </th>
           {/each}
           {#if actions}
-            <th scope="col"
-              ><span class="sr-only">{actionsLabel ?? t('kit.table.actions')}</span></th
-            >
+            <th scope="col">
+              <span class="sr-only">{actionsLabel ?? t('kit.table.actions')}</span>
+            </th>
           {/if}
         </tr>
       </thead>

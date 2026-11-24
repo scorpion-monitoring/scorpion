@@ -44,17 +44,17 @@
     {#if organisation.website}
       <dt class="font-medium">{t('organisation.website')}</dt>
       <dd>
-        <a class="link" href={organisation.website} rel="noopener noreferrer"
-          >{organisation.website}</a
-        >
+        <a class="link" href={organisation.website} rel="noopener noreferrer">
+          {organisation.website}
+        </a>
       </dd>
     {/if}
     {#if organisation.rorId}
       <dt class="font-medium">{t('organisation.rorId')}</dt>
       <dd>
-        <a class="link" href={rorLink(organisation.rorId)} rel="noopener noreferrer"
-          >{organisation.rorId}</a
-        >
+        <a class="link" href={rorLink(organisation.rorId)} rel="noopener noreferrer">
+          {organisation.rorId}
+        </a>
       </dd>
     {/if}
     {#if organisation.sameAs.length > 0}
@@ -79,9 +79,9 @@
       <ul class="list-none">
         {#each organisation.services as service (service.id)}
           <li>
-            <a class="link" href={href(`/catalog/services/${encodeURIComponent(service.slug)}`)}
-              >{service.name}</a
-            >
+            <a class="link" href={href(`/catalog/services/${encodeURIComponent(service.slug)}`)}>
+              {service.name}
+            </a>
           </li>
         {/each}
       </ul>

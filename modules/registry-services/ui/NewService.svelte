@@ -248,13 +248,13 @@
       />
       <p class="flex flex-wrap gap-4">
         {#if detailOffered}
-          <a class="btn btn-primary" href={href(`/services/${created.slug}`)}
-            >{t('services.done.open', { name: created.name })}</a
-          >
+          <a class="btn btn-primary" href={href(`/services/${created.slug}`)}>
+            {t('services.done.open', { name: created.name })}
+          </a>
         {/if}
-        <a class="btn" class:btn-primary={!detailOffered} href={href('/services')}
-          >{t('services.done.catalogue')}</a
-        >
+        <a class="btn" class:btn-primary={!detailOffered} href={href('/services')}>
+          {t('services.done.catalogue')}
+        </a>
       </p>
     </section>
   {:else}

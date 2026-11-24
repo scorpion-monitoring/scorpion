@@ -249,13 +249,15 @@
         <button
           type="button"
           class="btn btn-link btn-sm px-0"
-          onclick={() => hint && view.take(hint)}>{hintText}</button
+          onclick={() => hint && view.take(hint)}
         >
+          {hintText}
+        </button>
       {/if}
       {#if total === 0 && filtered}
-        <button type="button" class="btn btn-ghost btn-sm" onclick={() => view.clearAll()}
-          >{t('kit.facetSearch.clearAll')}</button
-        >
+        <button type="button" class="btn btn-ghost btn-sm" onclick={() => view.clearAll()}>
+          {t('kit.facetSearch.clearAll')}
+        </button>
       {/if}
     </div>
   {/if}

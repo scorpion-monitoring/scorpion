@@ -111,9 +111,9 @@
   >
     Simulate errors
   </button>
-  <button type="button" class="btn btn-sm" onclick={() => (conflict = true)}
-    >Simulate conflict</button
-  >
+  <button type="button" class="btn btn-sm" onclick={() => (conflict = true)}>
+    Simulate conflict
+  </button>
 </div>
 <p class="mt-4">Submitted <span data-testid="count">{count}</span> times.</p>
 <pre class="bg-base-200 mt-2 overflow-x-auto p-2 text-xs" data-testid="submitted">{submitted}</pre>

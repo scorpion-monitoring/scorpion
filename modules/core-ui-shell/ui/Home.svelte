@@ -75,8 +75,10 @@
           <li class="flex gap-3">
             <span
               class="bg-primary text-primary-content inline-flex size-8 shrink-0 items-center justify-center rounded-full font-bold"
-              aria-hidden="true">{index + 1}</span
+              aria-hidden="true"
             >
+              {index + 1}
+            </span>
             <div>
               <h3 class="font-semibold">{t(`home.about.step.${step}.title`)}</h3>
               <p>{t(`home.about.step.${step}.text`)}</p>

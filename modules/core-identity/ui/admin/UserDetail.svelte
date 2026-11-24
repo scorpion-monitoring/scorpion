@@ -231,8 +231,9 @@
                 bind:value={roleToAdd}
                 disabled={addable.length === 0}
               >
-                {#each addable as role (role.key)}<option value={role.key}>{role.label}</option
-                  >{/each}
+                {#each addable as role (role.key)}<option value={role.key}>
+                    {role.label}
+                  </option>{/each}
               </select>
             </div>
             <button type="submit" class="btn btn-primary" disabled={busy || roleToAdd === ''}>
