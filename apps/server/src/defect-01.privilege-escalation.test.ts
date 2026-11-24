@@ -533,6 +533,15 @@ const SAMPLES: Record<
     kind: 'self',
     sample: () => ({ method: 'PUT', path: '/ui/dashboard', body: { items: [] } }),
   },
+  // M13c: the import replaces the caller's own dashboard; no user in the route, the write permission is held by every User.
+  'POST /ui/dashboard/import': {
+    kind: 'self',
+    sample: () => ({
+      method: 'POST',
+      path: '/ui/dashboard/import',
+      body: { format: 'scorpion.dashboard', version: 1, items: [] },
+    }),
+  },
 };
 
 const send = (s: Started, sample: Sample, auth: { cookie?: string; csrf?: string } = {}) =>

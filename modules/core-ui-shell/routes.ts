@@ -1,6 +1,7 @@
 // The HTTP route of core.ui-shell. One route: what the caller may see (ADR-0027).
 import { createRoute, z, type AppEnv, type Context, type RouteHandler } from '@scorpion/contracts';
 import type { RouteRegistrar } from '@scorpion/kernel';
+import { DASHBOARD_FILE_FORMAT } from '@scorpion/contracts/dashboard-file';
 import { INSTANCE_ID, MAX_ITEMS, MAX_PACKED_Y } from './grid.ts';
 import { widgetGridSchema } from './registries.ts';
 import type { DashboardItem } from './service/dashboard/document.ts';
@@ -157,6 +158,28 @@ const saveInput = z.strictObject({
     .max(MAX_ITEMS),
 });
 
+// An exported dashboard file (M13c, ADR-0055). The structure only, with the caps of the stored document: whether the
+// format and version are known, and what of the tiles this caller can place, is the service's check. A tile is
+// loose on purpose (a file from another instance may name widgets or sizes this one does not know); the import
+// leaves out what it cannot use and says so.
+const importInput = z.object({
+  format: z.string().max(64).describe(`Always \`${DASHBOARD_FILE_FORMAT}\`.`),
+  version: z.number().int().describe('The version of the dashboard document in the file.'),
+  items: z
+    .array(
+      z.object({
+        id: z.string().max(64),
+        widget: z.string().max(100),
+        x: z.number(),
+        y: z.number(),
+        w: z.number(),
+        h: z.number(),
+        config: z.record(z.string().max(64), z.unknown()),
+      }),
+    )
+    .max(100),
+});
+
 const ok = <T extends z.ZodType>(description: string, schema: T) => ({
   description,
   content: { 'application/json': { schema } },
@@ -185,6 +208,22 @@ export const saveDashboardRoute = createRoute({
   responses: {
     200: ok(
       'The caller’s own dashboard is stored; this is what a read now gives.',
+      dashboardSchema,
+    ),
+  },
+});
+
+export const importDashboardRoute = createRoute({
+  method: 'post',
+  path: '/ui/dashboard/import',
+  permission: PERMISSION_DASHBOARD_WRITE,
+  audit: true,
+  request: {
+    body: { required: true as const, content: { 'application/json': { schema: importInput } } },
+  },
+  responses: {
+    200: ok(
+      'The caller’s own dashboard is replaced by the file’s tiles they can place; `dropped` lists the rest.',
       dashboardSchema,
     ),
   },
@@ -226,4 +265,9 @@ export function registerShellRoutes(
     const { items } = c.req.valid('json');
     return c.json(view(await dashboard.save(c.get('actor'), items as DashboardItem[])), 200);
   }) satisfies RouteHandler<typeof saveDashboardRoute, AppEnv>);
+
+  r.internal(importDashboardRoute, (async (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json(view(await dashboard.importFile(c.get('actor'), c.req.valid('json'))), 200);
+  }) satisfies RouteHandler<typeof importDashboardRoute, AppEnv>);
 }
