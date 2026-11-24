@@ -2,8 +2,8 @@ asvs_version: 5.0.0
 level: 2
 chapter: V8
 assessment_type: self
-assessed_commit: 32631805805c9b6eb2d74154268127bca1c41cf6
-assessed_on: 2026-11-19
+assessed_commit: dca0ca4b895965b07d6c64661b8fea5b1b70caa9
+assessed_on: 2026-11-24
 assessor: feserm
 second_pass: null
 reviewer: null
