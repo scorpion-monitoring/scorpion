@@ -85,9 +85,9 @@
   </div>
 
   {#snippet abbreviationCell(row: Row)}
-    <a class="link link-hover font-medium" href={href(`/admin/organisations/${row.id}`)}
-      >{row.abbreviation}</a
-    >
+    <a class="link link-hover font-medium" href={href(`/admin/organisations/${row.id}`)}>
+      {row.abbreviation}
+    </a>
   {/snippet}
   {#snippet typeCell(row: Row)}
     <span class="badge badge-outline">{typeLabel(row.type)}</span>

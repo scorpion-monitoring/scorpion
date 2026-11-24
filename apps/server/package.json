@@ -10,7 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.8",
+    "@hono/node-server": "^2.1.11",
     "@hono/zod-openapi": "^1.6.3",
     "@scorpion/contracts": "workspace:*",
     "@scorpion/core-audit": "workspace:*",
@@ -26,10 +26,11 @@
     "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/kpi-impact": "workspace:*",
     "@scorpion/kpi-ingestion": "workspace:*",
+    "@scorpion/matomo": "workspace:*",
     "@scorpion/public-api": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
-    "hono": "^4.13.18",
+    "hono": "^4.13.19",
     "prom-client": "^15.1.3",
     "zod": "^4.6.7"
   },
@@ -37,6 +38,6 @@
     "@scorpion/testing": "workspace:*",
     "@types/pg": "^8.23.1",
     "pg": "^8.23.1",
-    "read-excel-file": "9.3.17"
+    "read-excel-file": "9.3.20"
   }
 }

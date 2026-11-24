@@ -136,12 +136,12 @@
             <span class="text-sm">
               <code>{node.label}</code>
               {#if node.children.length > 0}
-                <span class="badge badge-ghost badge-sm ms-1" data-testid="perm-count"
-                  >{t('profile.tokens.count', {
+                <span class="badge badge-ghost badge-sm ms-1" data-testid="perm-count">
+                  {t('profile.tokens.count', {
                     selected: tally.selected,
                     total: tally.total,
-                  })}</span
-                >
+                  })}
+                </span>
               {/if}
             </span>
             {#if node.permission}

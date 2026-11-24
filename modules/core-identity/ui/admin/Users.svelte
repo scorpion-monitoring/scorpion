@@ -106,17 +106,18 @@
   {#snippet nameCell(row: AdminUser)}
     <span class="inline-flex items-center gap-2 align-middle">
       <UserAvatar hash={row.avatarHash} />
-      <a class="link link-hover font-medium" href={href(`/admin/users/${row.id}`)}>{row.username}</a
-      >
+      <a class="link link-hover font-medium" href={href(`/admin/users/${row.id}`)}>
+        {row.username}
+      </a>
     </span>
     {#if row.displayName}<span class="ms-2 opacity-70">{row.displayName}</span>{/if}
   {/snippet}
   {#snippet mailCell(row: AdminUser)}
     {#if row.email}
       {row.email}
-      {#if !row.emailVerified}<span class="badge badge-ghost ms-1"
-          >{t('admin.users.unverified')}</span
-        >{/if}
+      {#if !row.emailVerified}<span class="badge badge-ghost ms-1">
+          {t('admin.users.unverified')}
+        </span>{/if}
     {:else}
       <span class="opacity-70">{t('admin.users.noEmail')}</span>
     {/if}

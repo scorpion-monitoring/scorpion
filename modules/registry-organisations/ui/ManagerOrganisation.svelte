@@ -56,9 +56,9 @@
         {organisation.name}
         <span class="badge badge-outline">{organisation.abbreviation}</span>
       </h3>
-      <a class="link" href={href(`/organisations/${organisation.id}`)}
-        >{t('admin.organisations.view')}</a
-      >
+      <a class="link" href={href(`/organisations/${organisation.id}`)}>
+        {t('admin.organisations.view')}
+      </a>
     </div>
 
     <p
@@ -75,11 +75,11 @@
         {t('membership.requests.title')}
       </h4>
       {#snippet requestPerson(row: ManagedRow)}
-        <span class="inline-flex items-center gap-2 align-middle"
-          ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
-            >{row.username ?? t('membership.unknownPerson')}</span
-          ></span
-        >
+        <span class="inline-flex items-center gap-2 align-middle">
+          <UserAvatar hash={row.avatarHash} /><span class="font-medium">
+            {row.username ?? t('membership.unknownPerson')}
+          </span>
+        </span>
       {/snippet}
       {#snippet requestedAt(row: ManagedRow)}<Time iso={row.requestedAt} />{/snippet}
       {#snippet requestActions(row: ManagedRow)}
@@ -114,11 +114,11 @@
         <ul class="list-none text-sm" aria-label={t('membership.decided.title')}>
           {#each decided as row (row.id)}
             <li class="flex flex-wrap items-center gap-2">
-              <span class="inline-flex items-center gap-2 align-middle"
-                ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
-                  >{row.username ?? t('membership.unknownPerson')}</span
-                ></span
-              >
+              <span class="inline-flex items-center gap-2 align-middle">
+                <UserAvatar hash={row.avatarHash} /><span class="font-medium">
+                  {row.username ?? t('membership.unknownPerson')}
+                </span>
+              </span>
               <StateBadge state={row.state} role={row.role} />
               {#if row.decidedAt}<Time iso={row.decidedAt} />{/if}
             </li>
@@ -135,11 +135,11 @@
         <p class="text-sm opacity-70">{t('membership.onlyManager')}</p>
       {/if}
       {#snippet memberPerson(row: ManagedRow)}
-        <span class="inline-flex items-center gap-2 align-middle"
-          ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
-            >{row.username ?? t('membership.unknownPerson')}</span
-          ></span
-        >
+        <span class="inline-flex items-center gap-2 align-middle">
+          <UserAvatar hash={row.avatarHash} /><span class="font-medium">
+            {row.username ?? t('membership.unknownPerson')}
+          </span>
+        </span>
       {/snippet}
       {#snippet memberRole(row: ManagedRow)}<StateBadge
           state={row.state}

@@ -8,14 +8,18 @@ import {
   loadSession,
   once,
 } from '#lib/server/session.ts';
-import { withStyleNonce } from '#lib/server/csp.ts';
+import { withExtraOrigin, withStyleNonce } from '#lib/server/csp.ts';
+import { createTrackingOrigin } from '#lib/server/tracking.ts';
 
 const needsFirstAdmin = createBootstrapProbe();
+// Without the visitor's cookie: the tracker's origin is the same for everybody (ADR-0054).
+const trackingOrigin = createTrackingOrigin(clientFor(new Request('http://web.invalid/')));
 
 /**
  * Hardening that applies to every response of the web app. The Content-Security-Policy is set by
  * SvelteKit (nonces, no 'unsafe-inline'; see vite.config.ts); `withStyleNonce` gives its `style-src` the
- * page's nonce too, for the `<style>` elements the dashboard's drag library writes. `Cache-Control: no-store` keeps a page
+ * page's nonce too, for the `<style>` elements the dashboard's drag library writes, and `withExtraOrigin` the configured
+ * Matomo origin while usage tracking is on (ADR-0054). `Cache-Control: no-store` keeps a page
  * that carries the caller's session out of shared caches; built assets keep their own long cache.
  */
 const HEADERS: Readonly<Record<string, string>> = {
@@ -47,7 +51,12 @@ export const handle: Handle = async ({ event, resolve }) => {
         : html,
   });
   const policy = response.headers.get('content-security-policy');
-  if (policy) response.headers.set('content-security-policy', withStyleNonce(policy));
+  if (policy) {
+    response.headers.set(
+      'content-security-policy',
+      withExtraOrigin(withStyleNonce(policy), await trackingOrigin()),
+    );
+  }
   for (const [name, value] of Object.entries(HEADERS)) {
     if (!response.headers.has(name)) response.headers.set(name, value);
   }

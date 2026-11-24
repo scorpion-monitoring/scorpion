@@ -30,9 +30,9 @@
         <li class="card bg-base-100 border-base-300 border">
           <div class="card-body gap-1">
             <h3 class="card-title text-base">
-              <a class="link link-hover" href={href(area.path)}
-                >{t(`admin.settings.area.${area.name}`)}</a
-              >
+              <a class="link link-hover" href={href(area.path)}>
+                {t(`admin.settings.area.${area.name}`)}
+              </a>
             </h3>
             <p class="text-sm">{t(`admin.settings.area.${area.name}.lead`)}</p>
           </div>
@@ -48,9 +48,9 @@
         <li class="card bg-base-100 border-base-300 border">
           <div class="card-body gap-1">
             <h3 class="card-title text-base">
-              <a class="link link-hover" href={href(`/admin/settings/${row.module}`)}
-                >{nameOf(row.module)}</a
-              >
+              <a class="link link-hover" href={href(`/admin/settings/${row.module}`)}>
+                {nameOf(row.module)}
+              </a>
             </h3>
             <p class="text-sm opacity-80">
               <code>{row.module}</code>

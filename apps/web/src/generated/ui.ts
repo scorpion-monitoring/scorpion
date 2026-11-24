@@ -11,6 +11,7 @@ import * as ui6 from '@scorpion/kpi-framework/ui';
 import * as ui7 from '@scorpion/kpi-ingestion/ui';
 import * as ui8 from '@scorpion/kpi-analytics/ui';
 import * as ui9 from '@scorpion/kpi-impact/ui';
+import * as ui10 from '@scorpion/matomo/ui';
 
 export const profileName = "full";
 
@@ -28,4 +29,5 @@ export const uiModules: UiModule[] = [
   { package: "@scorpion/kpi-ingestion", routes: ui7.default, messages: ui7.messages, widgets: ui7.widgets, wizardExtensions: wizardExtensionsOf(ui7) },
   { package: "@scorpion/kpi-analytics", routes: ui8.default, messages: ui8.messages, widgets: ui8.widgets, wizardExtensions: wizardExtensionsOf(ui8) },
   { package: "@scorpion/kpi-impact", routes: ui9.default, messages: ui9.messages, widgets: ui9.widgets, wizardExtensions: wizardExtensionsOf(ui9) },
+  { package: "@scorpion/matomo", routes: ui10.default, messages: ui10.messages, widgets: ui10.widgets, wizardExtensions: wizardExtensionsOf(ui10) },
 ];

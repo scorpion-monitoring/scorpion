@@ -8,7 +8,7 @@ import { defineProfile } from '@scorpion/kernel';
 //   Registry: registry.organisations, registry.services
 //   KPIs: kpi.framework, kpi.ingestion, kpi.analytics, kpi.impact
 //   Parity: maturity, onboarding, bibliometrics, network-graph, announcements
-//   Operations: backup, public-api
+//   Operations: backup, public-api, matomo (M13b, ADR-0054; off until an administrator turns it on)
 export default defineProfile({
   name: 'full',
   modules: [
@@ -26,5 +26,6 @@ export default defineProfile({
     'kpi.analytics',
     'kpi.impact',
     'public-api',
+    'matomo',
   ],
 });

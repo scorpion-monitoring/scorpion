@@ -54,7 +54,9 @@
       onclick={() => {
         view.clearAll();
         onempty();
-      }}>{view.t('kit.facetSearch.clearAll')}</button
+      }}
     >
+      {view.t('kit.facetSearch.clearAll')}
+    </button>
   </div>
 {/if}

@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["*.ts", "package.json", "service", "ui"],
+  "references": [
+    {
+      "path": "../../packages/kernel"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/testing"
+    },
+    {
+      "path": "../core-settings"
+    },
+    {
+      "path": "../core-ui-shell"
+    },
+    {
+      "path": "../../packages/ui-kit"
+    }
+  ]
+}

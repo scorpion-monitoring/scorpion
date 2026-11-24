@@ -145,13 +145,15 @@
             'grid size-4 shrink-0 place-items-center rounded border text-xs',
             on ? 'bg-primary text-primary-content border-primary' : 'border-base-content/50',
           ]}
-          aria-hidden="true">{on ? '✓' : ''}</span
+          aria-hidden="true"
         >
+          {on ? '✓' : ''}
+        </span>
         <span class="grow">{option.label}</span>
         {#if option.count !== undefined}
-          <span class="text-sm opacity-70"
-            >{view.t('kit.facets.count', { count: option.count })}</span
-          >
+          <span class="text-sm opacity-70">
+            {view.t('kit.facets.count', { count: option.count })}
+          </span>
         {/if}
       </li>
     {/each}

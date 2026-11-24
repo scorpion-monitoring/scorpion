@@ -48,9 +48,9 @@
         aria-describedby="submit-search-hint"
         bind:value={search}
       />
-      <span id="submit-search-hint" class="text-xs opacity-70"
-        >{t('submit.picker.search.hint')}</span
-      >
+      <span id="submit-search-hint" class="text-xs opacity-70">
+        {t('submit.picker.search.hint')}
+      </span>
     </div>
     <SubmitButton variant="ghost">{t('submit.picker.search.submit')}</SubmitButton>
   </form>

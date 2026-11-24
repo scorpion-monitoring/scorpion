@@ -8,6 +8,16 @@ import type { Translate } from './i18n.ts';
 import type { Intent } from './reauth.ts';
 import type { Toaster } from './toaster.ts';
 
+/** The page on screen as the shell knows it. */
+export interface ShownPage {
+  /** The registered pattern of the page (`/services/:slug`), or `null` for a page outside the table (an error page). */
+  pattern: string | null;
+  /** The address path below `BASE_PATH`, ids included: for comparing pages in the browser, never for sending anywhere. */
+  pathname: string;
+  /** The HTTP status of the page (404, 500 for an error page). */
+  status: number;
+}
+
 export interface Shell {
   /** A path of this application under `BASE_PATH`. */
   href: (path: string) => string;
@@ -60,6 +70,12 @@ export interface Shell {
    * code for the name or loading it fails: the tile then draws nothing, and the page says so.
    */
   Widget: Component<{ name: string; props?: UiWidgetProps; onmissing?: () => void }>;
+  /**
+   * Calls `listener` at once with the page on screen, and again after every navigation (a link inside the application, a
+   * search that changes the query, the back button). Returns the function that stops it (call it when the component goes).
+   * For a widget that follows the pages, such as the usage tracker of ADR-0054.
+   */
+  onNavigated: (listener: (page: ShownPage) => void) => () => void;
 }
 
 const KEY = Symbol('scorpion.shell');

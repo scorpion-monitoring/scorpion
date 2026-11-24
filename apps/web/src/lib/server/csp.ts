@@ -22,3 +22,36 @@ export function withStyleNonce(policy: string): string {
   directives[index] = `${style} ${nonce}`;
   return directives.filter((part) => part !== '').join('; ');
 }
+
+/** The directives the usage tracker needs (ADR-0054): the script, its hits (`sendBeacon`/`fetch`) and its image fallback. */
+const TRACKER_DIRECTIVES = ['script-src', 'connect-src', 'img-src'] as const;
+
+/** An `https:` origin and nothing else (no wildcard), so no value can add a source or a directive to the header. */
+function isHttpsOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.origin === value && !value.includes('*');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Allows one more origin, the configured Matomo's, in `script-src`, `connect-src` and `img-src` of a page's policy (ADR-0054).
+ * Only a page's policy (one with a script nonce) is changed, never with `'unsafe-inline'`, and a directive the policy does
+ * not have is not added (`default-src` stays the fallback). Anything but a plain `https:` origin changes nothing.
+ */
+export function withExtraOrigin(policy: string, origin: string | null): string {
+  if (origin === null || !isHttpsOrigin(origin)) return policy;
+  const directives = policy.split(';').map((part) => part.trim());
+  const script = directives.find((part) => part.startsWith('script-src '));
+  if (!script?.includes("'nonce-")) return policy;
+  return directives
+    .filter((part) => part !== '')
+    .map((part) => {
+      const [name, ...sources] = part.split(/\s+/);
+      if (!TRACKER_DIRECTIVES.includes(name as (typeof TRACKER_DIRECTIVES)[number])) return part;
+      return sources.includes(origin) ? part : `${part} ${origin}`;
+    })
+    .join('; ');
+}
