@@ -1,6 +1,6 @@
 # M13b Plan: usage statistics with Matomo
 
-Status: **decisions answered on 2026-11-24 (§3); ready for approval.** Nothing here is built.
+Status: **built on 2026-11-24** (sprint 1, `feature/m13b-matomo`), decisions in §3. Open: the spike against a real Matomo (§2, "Unique users").
 Why a milestone of its own: the maintainer asked on 2026-11-24 for a way to connect a deployed instance to a Matomo
 instance and see how the instance is used. It is not in the milestone plan. The Matomo item in `implementation.md` §10 and
 the `ingestion.adapter` row of `architecture.md` is a different feature: it pulls Matomo numbers of _registered services_ into
@@ -54,26 +54,35 @@ to it.
 
 ### How it works
 
-1. **Configuration to the page.** `hooks.server.ts` gets `locals.tracking = once(() => loadTracking(api))`. A 404 (the
-   profile has no `matomo`) or `enabled: false` means no tracking, and nothing else changes. The root layout returns it as
-   `data.tracking`.
-2. **CSP.** A new pure function `withExtraOrigin(policy, origin)` in `apps/web/src/lib/server/csp.ts` adds the Matomo
-   origin to `script-src`, `connect-src` and `img-src`, only when tracking is on. It never adds `'unsafe-inline'` and never
-   touches the other directives. The hook applies it after `withStyleNonce`.
-3. **Tracker.** `modules/matomo/ui/Tracker.svelte` is part of the web bundle, so `'self'` already covers it: no inline
-   script and no nonce. It sets up `_paq` in `onMount` and adds `<script src="{url}/matomo.js" async>`. On every
-   `afterNavigate` it pushes `setCustomUrl`, `setDocumentTitle` and `trackPageView`, and on a signed-in page with the option
-   on, `setUserId`.
-4. **Shell.** One new generic slot, `<Widgets slot="page-end" />`, at the end of the root layout. The shell never names
-   Matomo (CLAUDE.md rules 7 and 10).
+As built (sprint 1); the first draft of this section had the configuration in the layout's data, which the widget does
+not need.
+
+1. **CSP.** `hooks.server.ts` asks `GET /matomo/tracker` without the visitor's cookie (`createTrackingOrigin`,
+   `apps/web/src/lib/server/tracking.ts`) and keeps the origin for 5 seconds, the bound of a settings change. A 404 (the
+   profile has no `matomo`), `enabled: false` or an API that does not answer means no origin. A new pure function
+   `withExtraOrigin(policy, origin)` in `apps/web/src/lib/server/csp.ts` adds the origin to `script-src`, `connect-src` and
+   `img-src` of a page's policy (one with a script nonce). It refuses anything but a plain `https:` origin without a
+   wildcard, never adds `'unsafe-inline'` and never touches the other directives. The hook applies it after
+   `withStyleNonce`.
+2. **Tracker.** `modules/matomo/ui/Tracker.svelte` is part of the web bundle, so `'self'` already covers it: no inline
+   script and no nonce. It fetches its configuration with the typed client, sets up `_paq` and adds
+   `<script src="{url}matomo.js" async>`. It sends a page view when the path changes (a new query, such as a search, is
+   not a new page). When somebody signs in or out it asks for the configuration again, for the pseudonymous id.
+3. **Shell.** Two small generic seams; the shell never names Matomo (CLAUDE.md rules 7 and 10):
+   - the slot `<Widgets slot="page-end" />` at the end of the root layout;
+   - `Shell.onNavigated(listener)` (`packages/ui-kit/src/context.ts`). A module's Svelte code cannot import `$app/*`, so
+     the shell tells a widget about each navigation. It calls the listener at once with the page on screen, then after
+     every navigation, with `{ pattern, pathname, status }`. `pattern` is the registered pattern from the catch-all route,
+     or `null` on an error page (`apps/web/src/lib/shown-page.ts`).
 
 ### What reaches Matomo (the rules that need tests)
 
 - **The path only.** `setCustomUrl(origin + basePath + pattern)`: the query and the fragment are always dropped, so a reset
   or sign-in link token never leaves the browser.
-- **The pattern, not the id.** The path is matched against the registered `ui.routes` patterns and sent as the pattern
-  (`/admin/users/:id`, `/services/:slug`). A path that matches no pattern is sent as `/(unknown)`. The page title follows
-  the same rule: the route's label, not a title that holds a name.
+- **The pattern, not the id.** The page's registered `ui.routes` pattern is sent (`/admin/users/:id`, `/services/:slug`).
+  The catch-all route already resolves it. An error page is sent as `/(error)` and a page without a pattern as
+  `/(unknown)`. The page title is the pattern too, because a title can hold a name.
+- **No link or download tracking.** It would send addresses.
 - **Every page is counted** (decision 2), the public catalogue and the signed-in and admin pages alike.
 - **No opt-out iframe.** `frame-src`/`frame-ancestors` would block it, and cookieless mode with DNT/GPC is the stance of this
   milestone. A consent mode is backlog (§4).
@@ -100,18 +109,21 @@ link to earlier ids, which is the way to start over. It is pseudonymous data und
 operator turns it on and mentions it in the privacy text. If the option is on and the secret is missing, the route answers
 without an id and the log says so once (never the value).
 
-The sprint begins with a **spike against a real Matomo** (the operator's or a local container), to confirm the table above
-for the Matomo version in use, in particular whether its config-id salt changes daily. The README states the result.
+**Still open: a spike against a real Matomo** (the operator's or a local container), to confirm the table above for the
+Matomo version in use, in particular whether its config-id salt changes daily. It was not run in sprint 1: the end-to-end
+tests use a stub Matomo. Until it is run, the README presents the table as the expected behaviour (`docs/backlog.md`).
 
 ### Work items
 
-1. `modules/matomo`: `module.ts`, `public.ts`, `settings-schema.ts`, `service/tracker.ts` (`getTrackerConfig(actor?)`, the
-   HMAC), `routes.ts`, `ui/` (route data, `Tracker.svelte`, the pure `scrubUrl()`), `README.md` (manifest, settings, what is
-   sent, unique-user table, privacy-text checklist).
-2. Shell slot `page-end`, `loadTracking`, `withExtraOrigin`, and the hook and layout wiring in `apps/web`.
+1. `modules/matomo`: `module.ts`, `public.ts`, `settings-schema.ts`, `service/tracker.ts` (`tracker(actor)`, the HMAC),
+   `routes.ts`, `ui/` (widget data, `Tracker.svelte`, the pure rules in `tracking.ts`), `README.md` (manifest, settings,
+   what is sent, unique-user table, privacy-text checklist).
+2. Shell slot `page-end`, `Shell.onNavigated`, `createTrackingOrigin`, `withExtraOrigin`, and the hook and layout wiring in
+   `apps/web`. The test harnesses of the web app get a no-op `onNavigated`. `scripts/sync-workspace-modules.ts` quotes a
+   module id only when it must: `matomo` is the first id without a dot or dash, and Prettier would otherwise make the
+   generated file stale.
 3. `pnpm modules:sync`, add the module to `profiles/full.ts`, `pnpm openapi:generate`, `pnpm profile:generate full`.
-4. ADR-0054 moves from Proposed to Accepted. Add a changeset (`minor`: a new module operators can turn on). Add backlog
-   entries (§4).
+4. ADR-0054 is Accepted. A changeset (`minor`: a new module operators can turn on). Backlog entries (§4).
 
 ### Tests
 

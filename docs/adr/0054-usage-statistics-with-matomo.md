@@ -1,6 +1,6 @@
 # ADR-0054: Usage statistics with Matomo
 
-- Status: Proposed (M13b)
+- Status: Accepted (M13b)
 - Date: 2026-11-24
 - Plan: [M13b plan](../matomo-plan.md)
 
@@ -31,15 +31,18 @@ Options considered:
    `cookieless`, `respectDoNotTrack`, `pseudonymousUserId`) are edited in the settings form of `core.settings`. It is in the
    `full` profile and off until an administrator turns it on.
 2. **Option 1, the browser tracker.** The tracker is a component of the module's UI in the web bundle (covered by
-   `'self'`), rendered as a `public` widget in a new generic shell slot `page-end`. It tracks one page view per client-side
-   navigation (`afterNavigate`).
-3. **The page CSP widens at runtime, only to the configured origin, and only when tracking is on.** A pure function next to
-   `withStyleNonce` adds the origin to `script-src`, `connect-src` and `img-src`. Nothing else changes: no
-   `'unsafe-inline'`, no new directive. With tracking off, or without the module, the header is byte for byte what it is
-   today.
+   `'self'`), rendered as a `public` widget in a new generic shell slot `page-end`. It tracks one page view per page,
+   through a new generic `Shell.onNavigated` that tells a widget about each navigation (a module's Svelte code cannot
+   import `$app/*`). A change of the query alone is not a new page.
+3. **The page CSP widens at runtime, only to the configured origin, and only when tracking is on.** The web app asks the
+   tracker route without the visitor's cookie and keeps the origin for 5 seconds. A pure function next to
+   `withStyleNonce` adds it to `script-src`, `connect-src` and `img-src`, and only a plain `https:` origin without a
+   wildcard. Nothing else changes: no `'unsafe-inline'`, no new directive. With tracking off, or without the module, the
+   header is byte for byte what it is today. After tracking is turned off, the origin stays in the header for at most
+   5 seconds.
 4. **Matomo receives the route pattern, never the address.** The URL sent is the base path plus the matched `ui.routes`
-   pattern (`/admin/users/:id`). Query and fragment are always dropped, and the title is the route's label. No name, e-mail,
-   role or raw user id is sent.
+   pattern (`/admin/users/:id`), `/(error)` on an error page. Query and fragment are always dropped, the title is the
+   pattern too, and link and download tracking stay off. No name, e-mail, role or raw user id is sent.
 5. **Cookieless by default, honouring Do Not Track and Global Privacy Control.** No consent banner. Without a cookie,
    unique visitors are a good estimate per day but too high over longer periods. For signed-in people the opt-in
    `pseudonymousUserId` sends `HMAC-SHA256(secret, userId)` as Matomo's user id, with the key in the secrets store
