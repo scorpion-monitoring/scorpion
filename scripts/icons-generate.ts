@@ -36,6 +36,7 @@ export const ICONS: Readonly<Record<string, string>> = {
   // Sliders: for a place that adjusts values, not for "settings" in general (that is `cog`).
   settings: 'adjustments-horizontal',
   upload: 'upload',
+  download: 'download',
   plus: 'plus',
   check: 'check',
   edit: 'pencil',

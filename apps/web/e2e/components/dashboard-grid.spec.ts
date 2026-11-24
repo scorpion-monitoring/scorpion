@@ -417,6 +417,12 @@ test.describe('DashboardGrid', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(gear).toBeFocused();
+    // Closed by the form itself (its Apply or Cancel), focus goes back too (M13c).
+    await gear.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close the settings' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(gear).toBeFocused();
   });
 
   test('says what the page asks it to say in the live region', async ({ page, scene }) => {
