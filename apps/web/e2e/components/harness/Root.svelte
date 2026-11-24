@@ -53,6 +53,7 @@
     navigating: () => false,
     replaceUrl: (address) => history.replaceState(null, '', address),
     withReauth: (action) => action(),
+    onNavigated: () => () => {},
     takeIntent: () => undefined,
     toaster,
     Widgets: NoWidgets,
