@@ -69,9 +69,9 @@
 
   <form class="flex flex-wrap items-end gap-4" onsubmit={(event) => event.preventDefault()}>
     <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium" for="memberships-state"
-        >{t('admin.memberships.state')}</label
-      >
+      <label class="text-sm font-medium" for="memberships-state">
+        {t('admin.memberships.state')}
+      </label>
       <select
         id="memberships-state"
         class="select select-bordered"
@@ -101,9 +101,9 @@
       </select>
     </div>
     <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium" for="memberships-type"
-        >{t('admin.organisations.type')}</label
-      >
+      <label class="text-sm font-medium" for="memberships-type">
+        {t('admin.organisations.type')}
+      </label>
       <select
         id="memberships-type"
         class="select select-bordered"
@@ -128,16 +128,16 @@
   {#if noManager}<p class="text-sm">{t('membership.noManager')}</p>{/if}
 
   {#snippet personCell(row: ManagedRow)}
-    <span class="inline-flex items-center gap-2 align-middle"
-      ><UserAvatar hash={row.avatarHash} /><span class="font-medium"
-        >{row.username ?? t('membership.unknownPerson')}</span
-      ></span
-    >
+    <span class="inline-flex items-center gap-2 align-middle">
+      <UserAvatar hash={row.avatarHash} /><span class="font-medium">
+        {row.username ?? t('membership.unknownPerson')}
+      </span>
+    </span>
   {/snippet}
   {#snippet organisationCell(row: ManagedRow)}
-    <a class="link link-hover" href={href(`/organisations/${row.organisation.id}`)}
-      >{row.organisation.abbreviation}</a
-    >
+    <a class="link link-hover" href={href(`/organisations/${row.organisation.id}`)}>
+      {row.organisation.abbreviation}
+    </a>
   {/snippet}
   {#snippet stateCell(row: ManagedRow)}<StateBadge state={row.state} role={row.role} />{/snippet}
   {#snippet requestedCell(row: ManagedRow)}<Time iso={row.requestedAt} />{/snippet}

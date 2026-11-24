@@ -228,11 +228,11 @@
         <dd>
           {data.licence.name}
           {#if data.licence.name !== data.licence.id}<span class="opacity-70">
-              ({data.licence.id})</span
-            >{/if}
-          {#if data.licence.deprecated}<span class="badge badge-warning ms-1"
-              >{t('services.detail.licenseDeprecated')}</span
-            >{/if}
+              ({data.licence.id})
+            </span>{/if}
+          {#if data.licence.deprecated}<span class="badge badge-warning ms-1">
+              {t('services.detail.licenseDeprecated')}
+            </span>{/if}
         </dd>
       {/if}
       {#each groups as group (group.id)}
@@ -241,9 +241,9 @@
           <ul class="list-none">
             {#each group.organisations as organisation (organisation.id)}
               <li>
-                <a class="link" href={href(`/organisations/${organisation.id}`)}
-                  >{organisation.name}</a
-                >
+                <a class="link" href={href(`/organisations/${organisation.id}`)}>
+                  {organisation.name}
+                </a>
                 <span class="opacity-70">({organisation.abbreviation})</span>
               </li>
             {/each}

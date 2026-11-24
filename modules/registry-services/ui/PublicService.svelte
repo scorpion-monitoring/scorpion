@@ -65,9 +65,9 @@
         <ul class="list-none">
           {#each group.organisations as organisation (organisation.id)}
             <li>
-              <a class="link" href={href(`/catalog/organisations/${organisation.id}`)}
-                >{organisation.name}</a
-              >
+              <a class="link" href={href(`/catalog/organisations/${organisation.id}`)}>
+                {organisation.name}
+              </a>
             </li>
           {/each}
         </ul>

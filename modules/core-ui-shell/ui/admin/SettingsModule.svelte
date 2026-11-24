@@ -94,8 +94,9 @@
   {#if own}
     <p>
       {t('admin.settings.brandingElsewhere')}
-      <a class="link" href={href('/admin/settings/branding')}>{t('admin.settings.area.branding')}</a
-      >
+      <a class="link" href={href('/admin/settings/branding')}>
+        {t('admin.settings.area.branding')}
+      </a>
     </p>
   {/if}
   {#if general}<p role="alert" class="text-error">{general}</p>{/if}

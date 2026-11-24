@@ -232,8 +232,9 @@
             <div class="flex flex-col gap-1">
               <label class="text-sm font-medium" for={id}>
                 {row.name}
-                {#if isMandatory(row)}<span class="opacity-70">({t('submit.form.required')})</span
-                  >{/if}
+                {#if isMandatory(row)}<span class="opacity-70">
+                    ({t('submit.form.required')})
+                  </span>{/if}
               </label>
               <div class="flex items-center gap-2">
                 <input

@@ -97,9 +97,9 @@
             />
           {/if}
           {#if detailOffered}
-            <a class="link link-hover font-medium" href={href(`/services/${row.slug}`)}
-              >{row.name}</a
-            >
+            <a class="link link-hover font-medium" href={href(`/services/${row.slug}`)}>
+              {row.name}
+            </a>
           {:else}
             <span class="font-medium">{row.name}</span>
           {/if}
@@ -120,8 +120,8 @@
                 {consortium.abbreviation || consortium.name}{#if consortium.abbreviation}<span
                     class="sr-only"
                   >
-                    ({consortium.name})</span
-                  >{/if}
+                    ({consortium.name})
+                  </span>{/if}
               </li>
             {/each}
           </ul>

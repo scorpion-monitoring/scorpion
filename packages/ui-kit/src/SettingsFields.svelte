@@ -72,8 +72,9 @@
       </div>
     {:else if field.kind === 'category'}
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium" for="{id}-{field.name}">{t('kit.widget.category')}</label
-        >
+        <label class="text-sm font-medium" for="{id}-{field.name}">
+          {t('kit.widget.category')}
+        </label>
         <select
           id="{id}-{field.name}"
           class="select select-bordered w-full"

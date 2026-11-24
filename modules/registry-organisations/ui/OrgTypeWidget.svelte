@@ -31,8 +31,9 @@
       onchange={(event) => onchange(event.currentTarget.value || undefined)}
     >
       <option value="">{t('organisation.form.type.choose')}</option>
-      {#if unknown}<option value={current}>{t('organisation.type.unknown', { id: current })}</option
-        >{/if}
+      {#if unknown}<option value={current}>
+          {t('organisation.type.unknown', { id: current })}
+        </option>{/if}
       {#each choices as choice (choice.id)}
         <option value={choice.id}>{choice.label}</option>
       {/each}

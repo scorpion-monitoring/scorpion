@@ -35,9 +35,9 @@
       onchange={(event) =>
         onchange(event.currentTarget.value === '' ? undefined : event.currentTarget.value)}
     >
-      {#if !node.required}<option value="" selected={value === undefined || value === ''}
-          >{t('services.choice.none')}</option
-        >{/if}
+      {#if !node.required}<option value="" selected={value === undefined || value === ''}>
+          {t('services.choice.none')}
+        </option>{/if}
       {#each choices as choice (choice.value)}
         <option value={choice.value} selected={value === choice.value}>{text(choice)}</option>
       {/each}

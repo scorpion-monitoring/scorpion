@@ -72,9 +72,9 @@
       {/if}
     </div>
     {#if tooBig}
-      <Alert kind="error"
-        >{t('profile.avatar.tooBig', { count: Math.floor(MAX_AVATAR_BYTES / 1048576) })}</Alert
-      >
+      <Alert kind="error">
+        {t('profile.avatar.tooBig', { count: Math.floor(MAX_AVATAR_BYTES / 1048576) })}
+      </Alert>
     {/if}
     {#if failure}
       {#if failure.status === 413}

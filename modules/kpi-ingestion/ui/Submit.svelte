@@ -53,9 +53,9 @@
         <h2 id="submit-service-title" class="text-xl font-semibold">
           {t('submit.reporting', { name: selected.service.name })}
         </h2>
-        <a class="link" href={href(`/services/${selected.service.slug}`)}
-          >{t('submit.service.link')}</a
-        >
+        <a class="link" href={href(`/services/${selected.service.slug}`)}>
+          {t('submit.service.link')}
+        </a>
       </div>
       <Tabs {tabs} bind:selected={tab} label={t('submit.tabs.label')}>
         {#snippet children(id: string)}

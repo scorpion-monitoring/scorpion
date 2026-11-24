@@ -38,8 +38,8 @@
   <fieldset class="flex flex-col gap-1" aria-describedby={describedBy}>
     <legend class="text-sm font-medium">
       {node.label}{#if node.required}<span class="opacity-70">
-          ({t('kit.form.required')})</span
-        >{/if}
+          ({t('kit.form.required')})
+        </span>{/if}
     </legend>
     {#each options as option (option.id)}
       <label class="flex items-center gap-2">
@@ -86,9 +86,9 @@
         onchange={(event) =>
           onchange(event.currentTarget.value === '' ? undefined : event.currentTarget.value)}
       >
-        <option value="" selected={value === undefined || value === ''}
-          >{t('services.choice.choose')}</option
-        >
+        <option value="" selected={value === undefined || value === ''}>
+          {t('services.choice.choose')}
+        </option>
         {#each options as option (option.id)}
           <option value={option.id} selected={value === option.id}>{text(option)}</option>
         {/each}

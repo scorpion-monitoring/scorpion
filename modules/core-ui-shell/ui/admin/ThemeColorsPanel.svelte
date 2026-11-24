@@ -148,25 +148,26 @@
       aria-label={t('admin.colors.preview', { theme: t(`admin.colors.mode.${mode}`) })}
     >
       <rect width="320" height="156" fill={colors['base-100']} />
-      <text x="12" y="20" font-size="12" fill={colors['base-content']}
-        >{t('admin.colors.sample.page')}</text
-      >
+      <text x="12" y="20" font-size="12" fill={colors['base-content']}>
+        {t('admin.colors.sample.page')}
+      </text>
       <text x="12" y="36" font-size="12" fill={colors.primary} text-decoration="underline">
         {t('admin.colors.sample.link')}
       </text>
-      <text x="120" y="36" font-size="12" fill={colors.error}>{t('admin.colors.sample.error')}</text
-      >
+      <text x="120" y="36" font-size="12" fill={colors.error}>
+        {t('admin.colors.sample.error')}
+      </text>
       <rect x="8" y="46" width="148" height="44" rx="6" fill={colors['base-200']} />
-      <text x="16" y="66" font-size="12" fill={colors['base-content']}
-        >{t('admin.colors.sample.card')}</text
-      >
-      <text x="16" y="82" font-size="11" fill={colors.warning}
-        >{t('admin.colors.sample.warning')}</text
-      >
+      <text x="16" y="66" font-size="12" fill={colors['base-content']}>
+        {t('admin.colors.sample.card')}
+      </text>
+      <text x="16" y="82" font-size="11" fill={colors.warning}>
+        {t('admin.colors.sample.warning')}
+      </text>
       <rect x="164" y="46" width="148" height="44" rx="6" fill={colors['base-300']} />
-      <text x="172" y="66" font-size="12" fill={colors['base-content']}
-        >{t('admin.colors.sample.raised')}</text
-      >
+      <text x="172" y="66" font-size="12" fill={colors['base-content']}>
+        {t('admin.colors.sample.raised')}
+      </text>
       <rect
         x="170"
         y="72"

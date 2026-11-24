@@ -81,9 +81,9 @@
     actionsLabel="Actions"
   >
     {#snippet actions(row: Person)}
-      <button type="button" class="btn btn-ghost btn-xs" aria-label={`Open ${row.name}`}
-        >Open</button
-      >
+      <button type="button" class="btn btn-ghost btn-xs" aria-label={`Open ${row.name}`}>
+        Open
+      </button>
       <button
         type="button"
         class="btn btn-ghost btn-xs"

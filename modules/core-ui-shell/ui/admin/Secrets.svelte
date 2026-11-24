@@ -86,9 +86,9 @@
   };
 </script>
 
-<svelte:head
-  ><title>{t('admin.settings.area.secrets')} · {t('admin.settings.title')}</title></svelte:head
->
+<svelte:head>
+  <title>{t('admin.settings.area.secrets')} · {t('admin.settings.title')}</title>
+</svelte:head>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-6">
   <Breadcrumb

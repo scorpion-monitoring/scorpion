@@ -93,9 +93,9 @@
     <Alert kind="warning">
       <span>{t('kit.form.conflict')}</span>
       {#if onreload}
-        <button type="button" class="btn btn-sm ms-3" onclick={onreload}
-          >{t('kit.form.reload')}</button
-        >
+        <button type="button" class="btn btn-sm ms-3" onclick={onreload}>
+          {t('kit.form.reload')}
+        </button>
       {/if}
     </Alert>
   {/if}
