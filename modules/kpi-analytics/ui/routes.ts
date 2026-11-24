@@ -59,7 +59,8 @@ export const ANALYTICS_WIDGETS: WidgetEntry[] = [
     label: 'analytics.volatility.title',
     description: 'analytics.volatility.about',
     icon: 'chart',
-    grid: { w: 4, h: 4, minW: 3, minH: 3, maxW: 12, maxH: 12 },
+    // In the default dashboard since M13c, beside the actions card.
+    grid: { w: 4, h: 4, minW: 3, minH: 3, maxW: 12, maxH: 12, default: { x: 4, y: 8, w: 4, h: 4 } },
     configSchema: filterConfigSchema,
   },
   {

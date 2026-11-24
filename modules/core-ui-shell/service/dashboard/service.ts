@@ -6,8 +6,10 @@ import { Invalid, Unauthorized, type Actor, type UserActor } from '@scorpion/con
 import type { AuthzService } from '@scorpion/core-authz/public';
 import type { SettingsService } from '@scorpion/core-settings/public';
 import type { ModuleContext } from '@scorpion/kernel';
+import { DASHBOARD_FILE_FORMAT } from '@scorpion/contracts/dashboard-file';
 import {
   COLUMNS,
+  CURRENT_VERSION,
   DASHBOARD_SLOT,
   INSTANCE_ID,
   MAX_CONFIG_BYTES,
@@ -18,6 +20,7 @@ import {
 import type { WidgetEntry } from '../../registries.ts';
 import {
   defaultDashboard,
+  migrate,
   pack,
   parseDashboard,
   serialiseDashboard,
@@ -55,6 +58,29 @@ export interface DashboardService {
    * a read now gives.
    */
   save(actor: Actor, items: readonly DashboardItem[]): Promise<DashboardView>;
+  /**
+   * Needs `core.ui-shell.dashboard.write`. Replaces the caller's own dashboard with the tiles of an exported file
+   * (M13c, ADR-0055). Unlike `save`, it is lenient about the tiles: the file may come from someone with other
+   * permissions or another profile, so what this caller cannot place is left out and listed in `dropped`, and the
+   * rest is repaired as a read repairs it. The file itself is refused (`Invalid`) when it is no dashboard file,
+   * was made by a newer build, or has more than 20 tiles; the stored dashboard is then unchanged.
+   */
+  importFile(actor: Actor, file: DashboardImport): Promise<DashboardView>;
+}
+
+/** The file as the route checked its structure; the semantics are `importFile`'s. */
+export interface DashboardImport {
+  format: string;
+  version: number;
+  items: readonly {
+    id: string;
+    widget: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    config: Record<string, unknown>;
+  }[];
 }
 
 export interface Problem {
@@ -228,6 +254,42 @@ export function createDashboardService(
       }
       await deps.settings.setUserPreference(actor, DASHBOARD_PREFERENCE, document);
       return { version: 1, ...parseDashboard(document, context), isDefault: false };
+    },
+
+    async importFile(actor, file) {
+      await deps.authz.require(actor, PERMISSION_DASHBOARD_WRITE);
+      owner(actor);
+      const refuse = (path: string, message: string): never => {
+        throw new Invalid('The file is not a dashboard this instance can import.', [
+          { path, message },
+        ]);
+      };
+      if (file.format !== DASHBOARD_FILE_FORMAT) refuse('format', 'Is not a dashboard file.');
+      if (!Number.isInteger(file.version) || file.version < 1) {
+        refuse('version', 'Is not a version of a dashboard file.');
+      }
+      if (file.version > CURRENT_VERSION) {
+        refuse('version', 'Was made by a newer version than this instance runs.');
+      }
+      if (file.items.length > MAX_ITEMS) refuse('items', `Must have at most ${MAX_ITEMS} tiles.`);
+      const document = { version: file.version, items: file.items };
+      if (!migrate(file.version, document)) refuse('version', 'Cannot be read by this version.');
+      const context = await contextFor(actor);
+      // The same repair as a read: what this caller cannot place is dropped and listed, the rest made valid.
+      const parsed = parseDashboard(document, context);
+      if (parsed.reset) refuse('items', 'Is not a list of dashboard tiles.');
+      await deps.settings.setUserPreference(
+        actor,
+        DASHBOARD_PREFERENCE,
+        serialiseDashboard(parsed.items),
+      );
+      return {
+        version: 1,
+        items: parsed.items,
+        dropped: parsed.dropped,
+        reset: false,
+        isDefault: false,
+      };
     },
   };
 }

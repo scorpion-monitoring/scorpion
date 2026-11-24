@@ -187,6 +187,14 @@
   // ---- the settings dialog (the shell of it: a widget fills it) -------------------------------------------------
   let settingsFor = $state<string>();
   const settingsTile = $derived(tiles.find((tile) => tile.id === settingsFor));
+
+  /** Opens a tile's settings from outside the edit bar (a widget's own gear, M13c); `false` when it has none. */
+  export function openSettings(id: string): boolean {
+    if (settings === undefined || !(hasSettings?.(id) ?? false)) return false;
+    if (!tiles.some((tile) => tile.id === id)) return false;
+    settingsFor = id;
+    return true;
+  }
 </script>
 
 <!-- The page's tiles; a tile with a settings snippet gets a dialog. Focus returns to the gear on close. -->
@@ -263,12 +271,17 @@
 
 <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
 
-{#if settings && settingsTile}
+<!-- The dialog stays mounted and follows `open`, so every way of closing it (Escape, a Cancel or Apply of the form) goes
+     through the dialog's `close` and gives focus back to the gear that opened it. Unmounting an open dialog would drop
+     focus on the page. -->
+{#if settings}
   <Dialog
-    open={true}
-    title={t('kit.dashboard.settingsTitle', { name: nameOf(settingsTile.id) })}
+    open={settingsTile !== undefined}
+    title={settingsTile ? t('kit.dashboard.settingsTitle', { name: nameOf(settingsTile.id) }) : ''}
     onclose={() => (settingsFor = undefined)}
   >
-    {@render settings(settingsTile, () => (settingsFor = undefined))}
+    {#if settingsTile}
+      {@render settings(settingsTile, () => (settingsFor = undefined))}
+    {/if}
   </Dialog>
 {/if}

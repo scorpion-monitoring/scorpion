@@ -99,10 +99,12 @@ sends **two** reads, none on a move, a resize or a toggle of a chart's series, a
 | `kpi.analytics.cards` (`cards`)           | per KPI the latest value with its unit, the change as ▲ ▼ **and the words "up", "down", "unchanged"**, an SVG sparkline with a text alternative; a text KPI shows its text and no change. A scrolling list with the count announced            | `0,3` 4×5      |
 | `kpi.analytics.trends` (`trends`)         | one line per KPI through the chart adapter (theme-aware lines, text and tooltip); per KPI **running total**, **show/hide** and **second axis**, kept in the tile's `config`; the table of the numbers; the arrow keys read it                  | `4,3` 8×5      |
 | `kpi.analytics.averages` (`averages`)     | a compact table of the average of each KPI ("n/a" where it is not defined)                                                                                                                                                                     | placeable only |
-| `kpi.analytics.volatility` (`volatility`) | a bar per KPI with the value and the **band in words** (low, medium, high); the explanation is a disclosure button (keyboard and touch). Bands keep their edges: below `low` is low, from `low` to below `high` is medium, from `high` is high | placeable only |
+| `kpi.analytics.volatility` (`volatility`) | a bar per KPI with the value and the **band in words** (low, medium, high); the explanation is a disclosure button (keyboard and touch). Bands keep their edges: below `low` is low, from `low` to below `high` is medium, from `high` is high | `4,8` 4×4      |
 | `kpi.analytics.actions` (`actions`)       | links to Report data (the Data Submission page, when the person may open it), Services and Notification preferences, built with the base path, and the **Dashboard defaults** dialog. A `singleton`, no settings                               | `0,8` 4×3      |
 
-The cards, the trends chart and the quick actions are in the **default dashboard** (the places are below the three cards of earlier milestones); the other two are added from the FAB menu.
+The cards, the trends chart, the volatility bars (since M13c) and the quick actions are in the **default dashboard** (the places are below the three cards of earlier milestones); the averages are added from the FAB menu. A changed default reaches new dashboards and "Reset to default" only; saved dashboards keep their tiles.
+
+**The gear without edit mode (M13c).** Every widget with settings draws a gear in its heading (beside the Export menu) while the dashboard is not edited, through the shell's `openSettings`; it opens the same settings dialog as the edit bar's gear, and the change is saved at once. The states "Choose a service" and "settings are no longer valid" point at it.
 
 **Configuration** (`service/widget-config.ts`, `config` of a tile, at most 400 bytes as JSON; the JSON Schema of each is listed in `GET /ui/navigation` and draws the settings form):
 

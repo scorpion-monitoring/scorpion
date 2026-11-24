@@ -32,10 +32,10 @@ describe('the widgets of kpi.analytics', () => {
     }
   });
 
-  it('put the cards, the trends chart and the quick actions in the default dashboard, in places that do not overlap the cards of earlier milestones', () => {
+  it('put the cards, the trends chart, the volatility bars (M13c) and the quick actions in the default dashboard, in places that do not overlap the cards of earlier milestones', () => {
     const placed = ANALYTICS_WIDGETS.filter((widget) => widget.grid?.default);
     expect(placed.map((widget) => widget.id).sort()).toEqual(
-      [WIDGET_IDS.actions, WIDGET_IDS.cards, WIDGET_IDS.trends].sort(),
+      [WIDGET_IDS.actions, WIDGET_IDS.cards, WIDGET_IDS.trends, WIDGET_IDS.volatility].sort(),
     );
     for (const widget of placed) {
       const at = widget.grid!.default!;

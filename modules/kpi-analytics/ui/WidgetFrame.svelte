@@ -10,6 +10,7 @@
   import {
     Alert,
     getAnalyticsReads,
+    Icon,
     getShell,
     RANGE_KEYS,
     type ServiceName,
@@ -24,6 +25,8 @@
     config,
     editing,
     setConfig,
+    openSettings,
+    label,
     units = false,
     exportable = false,
     chartImage,
@@ -36,6 +39,10 @@
     config: Record<string, unknown>;
     editing: boolean;
     setConfig: (next: Record<string, unknown>) => void;
+    /** Opens the tile's settings dialog (the dashboard's); drawn as a gear while the dashboard is not edited (M13c). */
+    openSettings?: (() => void) | undefined;
+    /** The tile's name on the dashboard (`Trends (2)`), for the gear's accessible name; the title when absent. */
+    label?: string | undefined;
     /** The widget shows units: read the vocabulary of units once for the dashboard. */
     units?: boolean;
     /** The widget offers the Export menu (CSV, XLSX) of what it shows. */
@@ -168,17 +175,30 @@
           <p class="text-base-content/70 text-sm">{subtitle}</p>
         {/if}
       </div>
-      <!-- Only when there is something to export; the file is the window the tile shows, in every category the tile shows. -->
-      {#if exportable && shown && service !== null}
-        <ExportMenu
-          {service}
-          {range}
-          {category}
-          slug={named?.slug ?? 'service'}
-          image={chartImage}
-          {imageName}
-        />
-      {/if}
+      <div class="flex shrink-0 items-start gap-1">
+        <!-- Only when there is something to export; the file is the window the tile shows, in every category the tile shows. -->
+        {#if exportable && shown && service !== null}
+          <ExportMenu
+            {service}
+            {range}
+            {category}
+            slug={named?.slug ?? 'service'}
+            image={chartImage}
+            {imageName}
+          />
+        {/if}
+        <!-- The settings without edit mode (M13c): switching the service is one dialog. In edit mode the tile's edit bar has the gear. -->
+        {#if openSettings && !editing}
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label={t('analytics.settings', { name: label ?? title })}
+            onclick={openSettings}
+          >
+            <Icon name="cog" size={16} />
+          </button>
+        {/if}
+      </div>
     </div>
 
     {#if defaultsFailed && fresh}

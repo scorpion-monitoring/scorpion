@@ -142,6 +142,14 @@ const read = (app: App, who: { cookie: string }) =>
   app.get('/ui/dashboard', { cookie: who.cookie });
 const save = (app: App, who: { cookie: string; csrf: string }, items: unknown[]) =>
   app.call('PUT', '/ui/dashboard', { cookie: who.cookie, csrf: who.csrf, body: { items } });
+const importFile = (app: App, who: { cookie: string; csrf: string }, body: unknown) =>
+  app.call('POST', '/ui/dashboard/import', { cookie: who.cookie, csrf: who.csrf, body });
+const file = (items: Tile[], over: Record<string, unknown> = {}) => ({
+  format: 'scorpion.dashboard',
+  version: 1,
+  items,
+  ...over,
+});
 const stored = async (app: App, userId: string) =>
   (
     await app.kernel.pool.query(
@@ -562,6 +570,131 @@ describe('PUT /ui/dashboard', () => {
     };
     const row = list.result.find((entry) => entry.key === KEY);
     expect(row?.value.items.map((item) => item.id)).toEqual(['aaaa']);
+  });
+});
+
+describe('POST /ui/dashboard/import (M13c)', () => {
+  it('replaces the caller’s dashboard with the file another person exported, and answers what a read now gives', async () => {
+    const app = await start();
+    const alice = await person(app);
+    const bob = await person(app);
+    const items = [
+      tile({ id: 'aaaa', config: { range: '3m', hidden: ['x'] } }),
+      tile({ id: 'bbbb', widget: SINGLE, x: 6, w: 3, h: 2, config: {} }),
+    ];
+    expect((await save(app, alice, items)).status).toBe(200);
+    expect(
+      (await save(app, bob, [tile({ id: 'cccc', widget: NOTES, w: 2, h: 1, config: {} })])).status,
+    ).toBe(200);
+    // What the page exports is the read's items in a file.
+    const exported = file(((await read(app, alice)).body as View).items);
+    const reply = await importFile(app, bob, exported);
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
+    const body = reply.body as View;
+    expect(body).toMatchObject({ version: 1, dropped: [], reset: false, isDefault: false });
+    expect(body.items).toEqual(items);
+    expect((await read(app, bob)).body).toEqual(body);
+    expect(await stored(app, bob.user.id)).toEqual([{ version: 1, items }]);
+    // The exporter's own dashboard is untouched.
+    expect(await stored(app, alice.user.id)).toEqual([{ version: 1, items }]);
+  });
+
+  it('leaves out what the importer cannot place and repairs the rest, instead of refusing the file [ASVS-8.2.3]', async () => {
+    const app = await start();
+    const alice = await person(app);
+    const reply = await importFile(
+      app,
+      alice,
+      file([
+        tile({ id: 'keep', config: { range: 'forever' } }),
+        tile({ id: 'admn', widget: ADMIN, y: 4, config: {} }),
+        tile({ id: 'gone', widget: 'other.instance.widget', y: 8 }),
+        tile({ id: 'sng1', widget: SINGLE, y: 12, w: 99, h: 2, config: {} }),
+        tile({ id: 'sng2', widget: SINGLE, y: 14, w: 3, h: 2, config: {} }),
+      ]),
+    );
+    expect(reply.status).toBe(200);
+    const body = reply.body as View;
+    expect(body.items.map((item) => [item.id, item.widget, item.w])).toEqual([
+      ['keep', TRENDS, 6],
+      ['sng1', SINGLE, 12],
+    ]);
+    expect(body.items[0]!.config).toEqual({ range: '1y', hidden: [] });
+    expect(body.dropped).toEqual([
+      { id: 'admn', reason: 'not-permitted' },
+      { id: 'gone', reason: 'unknown-widget' },
+      { id: 'sng2', reason: 'singleton-repeated' },
+    ]);
+    expect(await stored(app, alice.user.id)).toEqual([{ version: 1, items: body.items }]);
+  });
+
+  it('refuses a file that is no dashboard file, one of a newer version or one of more than 20 tiles, and keeps the dashboard', async () => {
+    const app = await start();
+    const alice = await person(app);
+    const items = [tile({ id: 'aaaa' })];
+    expect((await save(app, alice, items)).status).toBe(200);
+    const cases: [unknown, string][] = [
+      [file([tile()], { format: 'something.else' }), 'format'],
+      [file([tile()], { version: 2 }), 'version'],
+      [file([tile()], { version: 0 }), 'version'],
+      [file(Array.from({ length: 21 }, (_, i) => tile({ id: `tile${i}`, y: i * 4 }))), 'items'],
+    ];
+    for (const [body, path] of cases) {
+      const reply = await importFile(app, alice, body);
+      expect(reply.status, path).toBe(422);
+      expect(reply.res.headers.get('content-type')).toContain('application/problem+json');
+      expect((reply.body as Problem).errors?.map((error) => error.path)).toEqual([path]);
+    }
+    // No structure at all: the route's check, a 422 and never a 500.
+    for (const body of [{}, { format: 'scorpion.dashboard', version: 1 }, { items: 'no' }, []]) {
+      expect((await importFile(app, alice, body)).status).toBe(422);
+    }
+    expect(await stored(app, alice.user.id)).toEqual([{ version: 1, items }]);
+  });
+
+  it('stores an empty dashboard from an empty file', async () => {
+    const app = await start();
+    const alice = await person(app);
+    const body = (await importFile(app, alice, file([]))).body as View;
+    expect(body).toMatchObject({ items: [], isDefault: false });
+    expect(await stored(app, alice.user.id)).toEqual([{ version: 1, items: [] }]);
+  });
+
+  it('records the call in the audit trail, with no body', async () => {
+    const app = await start();
+    const alice = await person(app);
+    await importFile(
+      app,
+      alice,
+      file([tile({ id: 'aaaa', config: { range: '3m', hidden: ['secret-looking-text'] } })]),
+    );
+    const rows = (
+      await app.kernel.pool.query(
+        "select user_id, outcome, body from audit_event where path like '%/ui/dashboard/import'",
+      )
+    ).rows as { user_id: string; outcome: string; body: unknown }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ user_id: alice.user.id, outcome: 'ok', body: null });
+    expect(JSON.stringify(rows)).not.toContain('secret-looking-text');
+  });
+
+  it('turns away an anonymous caller and one without the write permission, in the route and in the service [ASVS-8.3.1]', async () => {
+    const anonymous = await start();
+    expect((await anonymous.call('POST', '/ui/dashboard/import', { body: file([]) })).status).toBe(
+      401,
+    );
+    await expect(
+      shellOf(anonymous).dashboard.importFile({ kind: 'anonymous' }, file([])),
+    ).rejects.toThrow(Unauthorized);
+
+    const readOnly = await start({ permissions: [READ] });
+    const reader = await person(readOnly);
+    expect((await importFile(readOnly, reader, file([tile()]))).status).toBe(403);
+    await expect(shellOf(readOnly).dashboard.importFile(reader.actor, file([]))).rejects.toThrow(
+      Forbidden,
+    );
+    expect(await stored(readOnly, reader.user.id)).toEqual([]);
   });
 });
 

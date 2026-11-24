@@ -9,7 +9,7 @@
   import type { Body } from './types.ts';
   import WidgetFrame from './WidgetFrame.svelte';
 
-  let { config, editing, setConfig }: UiWidgetProps = $props();
+  let { config, editing, setConfig, openSettings, label }: UiWidgetProps = $props();
   const { t, locale } = getShell();
   const direction = (kind: string) =>
     kind === 'up'
@@ -21,7 +21,16 @@
           : t('analytics.change.none');
 </script>
 
-<WidgetFrame title={t('analytics.cards.title')} {config} {editing} {setConfig} units exportable>
+<WidgetFrame
+  title={t('analytics.cards.title')}
+  {config}
+  {editing}
+  {setConfig}
+  {openSettings}
+  {label}
+  units
+  exportable
+>
   {#snippet body({ rows, unit }: Body)}
     <p class="text-base-content/70 text-sm" role="status">
       {t('analytics.cards.count', { count: rows.length })}

@@ -184,3 +184,4 @@ export {
   RANGE_KEYS,
   type SettingsField,
 } from './widget-settings.ts';
+export { saveBlob } from './download.ts';

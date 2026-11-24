@@ -1192,3 +1192,10 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **Same-origin proxy.** The module serves `matomo.js` and forwards hits with `token_auth` and `cip` from the secrets store: the CSP stays `'self'`, blockers cannot block it, and the address can be shortened before it leaves (ADR-0054, option 2).
 - **Matomo events.** Exports, searches and wizard steps as events, through a small client-side port other modules can call without naming Matomo.
 - **Tracker settings form.** The secret `matomo.user-id-key` is set with the CLI or the secrets screen; the settings form of the module could say whether it is set, next to `pseudonymousUserId`.
+
+## M13c dashboard sharing follow-ups
+
+- **Sharing inside the instance.** A link to a dashboard or a gallery of templates, so people need no file (decision 6 of the [M13c plan](m13c-plan.md)).
+- **An administrator's default dashboard.** Today the default comes from the widgets' `grid.default`; an administrator may want to set one for the instance.
+- **Service ids between instances.** An imported tile keeps the service id of the file; on another instance it shows "settings are no longer valid". Mapping by slug on import would make files portable.
+- **Adding a file's tiles** to the current dashboard instead of replacing it (decision 1 said replace; adding needs new instance ids and runs into singletons and the 20-tile cap).

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@scorpion/contracts/client';
+import { readDashboardFile } from '@scorpion/contracts/dashboard-file';
 import {
   applyTiles,
   canAdd,
   createAutosave,
   defaultItems,
+  exportText,
+  importProblemOf,
   newItem,
   placeable,
   problemOf,
@@ -126,10 +129,10 @@ describe('the default dashboard', () => {
   });
 });
 
-describe('what a failed save means', () => {
-  const failure = (status: number, errors: { path: string; message: string }[] = []) =>
-    new ApiError(status, { type: 'about:blank', title: 't', status, errors });
+const failure = (status: number, errors: { path: string; message: string }[] = []) =>
+  new ApiError(status, { type: 'about:blank', title: 't', status, errors });
 
+describe('what a failed save means', () => {
   it.each([
     ['a missing permission', failure(403), 'forbidden'],
     [
@@ -152,6 +155,33 @@ describe('what a failed save means', () => {
     ['no network', new TypeError('fetch failed'), 'failed'],
   ])('%s', (_name, error, expected) => {
     expect(problemOf(error)).toBe(expected);
+  });
+});
+
+describe('export and import (M13c)', () => {
+  it('exports the tiles as a file the import reads back to the same tiles', () => {
+    const items = [
+      item('aaaa', 'one', 0, 0),
+      { ...item('bbbb', 'two', 4, 0), config: { range: '3m' } },
+    ];
+    const text = exportText(items);
+    expect(text.endsWith('\n')).toBe(true);
+    const read = readDashboardFile(text);
+    expect(read).toMatchObject({
+      ok: true,
+      file: { format: 'scorpion.dashboard', version: 1, items },
+    });
+  });
+
+  it.each([
+    ['a newer version', failure(422, [{ path: 'version', message: 'newer' }]), 'newer-version'],
+    ['another refusal', failure(422, [{ path: 'format', message: 'no' }]), 'refused'],
+    ['a 422 that names nothing', failure(422), 'refused'],
+    ['a refused permission', failure(403), 'failed'],
+    ['a server error', failure(500), 'failed'],
+    ['no network', new TypeError('fetch failed'), 'failed'],
+  ])('reads %s as the import problem it is', (_name, error, expected) => {
+    expect(importProblemOf(error)).toBe(expected);
   });
 });
 
