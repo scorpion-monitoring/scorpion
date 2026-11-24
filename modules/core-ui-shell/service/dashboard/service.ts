@@ -269,7 +269,7 @@ export function createDashboardService(
         refuse('version', 'Is not a version of a dashboard file.');
       }
       if (file.version > CURRENT_VERSION) {
-        refuse('version', 'Was made by a newer version of Scorpion.');
+        refuse('version', 'Was made by a newer version than this instance runs.');
       }
       if (file.items.length > MAX_ITEMS) refuse('items', `Must have at most ${MAX_ITEMS} tiles.`);
       const document = { version: file.version, items: file.items };

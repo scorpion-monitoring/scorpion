@@ -90,7 +90,7 @@ const shellMessages: UiMessages = {
       'The file could not be read. Choose an exported dashboard file (.json).',
     'dashboard.import.error.not-dashboard': 'The file is not an exported dashboard.',
     'dashboard.import.error.newer-version':
-      'The file was made by a newer version of Scorpion and cannot be imported here.',
+      'The file was made by a newer version than this instance runs and cannot be imported here.',
     'dashboard.import.error.refused':
       'The file is not a dashboard that can be imported. Your dashboard was not changed.',
     'dashboard.import.error.failed':
@@ -227,7 +227,7 @@ const shellMessages: UiMessages = {
       'Die Datei konnte nicht gelesen werden. Wählen Sie eine exportierte Dashboard-Datei (.json).',
     'dashboard.import.error.not-dashboard': 'Die Datei ist kein exportiertes Dashboard.',
     'dashboard.import.error.newer-version':
-      'Die Datei stammt aus einer neueren Version von Scorpion und kann hier nicht importiert werden.',
+      'Die Datei stammt aus einer neueren Version, als diese Instanz verwendet, und kann hier nicht importiert werden.',
     'dashboard.import.error.refused':
       'Die Datei ist kein Dashboard, das importiert werden kann. Ihr Dashboard wurde nicht geändert.',
     'dashboard.import.error.failed':
