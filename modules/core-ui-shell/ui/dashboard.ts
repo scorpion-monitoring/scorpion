@@ -4,6 +4,7 @@
 // what is shown; nothing here decides what a person may see.
 import { newInstanceId, type GridTile } from '@scorpion/ui-kit/dashboard-layout';
 import type { Navigation } from '@scorpion/contracts/client';
+import { dashboardFile } from '@scorpion/contracts/dashboard-file';
 import { failureOf } from '@scorpion/ui-kit/forms';
 import { DASHBOARD_SLOT, DEFAULT_SIZE, MAX_ITEMS } from '../grid.ts';
 import { defaultDashboard, type PlaceableWidget } from '../service/dashboard/document.ts';
@@ -102,6 +103,24 @@ export function defaultItems(entries: readonly Entry[]): Item[] {
     grid: entry.grid,
   }));
   return defaultDashboard(placeables, () => true);
+}
+
+// ---- export and import (M13c) ----------------------------------------------------------------------------------
+
+/** The exported file of these tiles, as the bytes the person saves: indented, so a person can read it. */
+export function exportText(items: readonly Item[]): string {
+  return `${JSON.stringify(dashboardFile(items), null, 2)}\n`;
+}
+
+/** Why an import was refused, as the key of its message: what the page found itself, or what the server answered. */
+export type ImportProblem =
+  'too-large' | 'not-json' | 'not-dashboard' | 'newer-version' | 'refused' | 'failed';
+
+/** The server's answer to an import, as a problem: a 422 is a file it will not read, anything else a failure. */
+export function importProblemOf(error: unknown): ImportProblem {
+  const failure = failureOf(error);
+  if (failure.status === 422) return failure.fields.version ? 'newer-version' : 'refused';
+  return 'failed';
 }
 
 // ---- a failed save -------------------------------------------------------------------------------------------

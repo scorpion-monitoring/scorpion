@@ -69,6 +69,32 @@ const shellMessages: UiMessages = {
       'Your saved dashboard could not be read, so the default dashboard is shown.',
     'dashboard.notice.missing.one': '{count} widget could not be shown on this page.',
     'dashboard.notice.missing.other': '{count} widgets could not be shown on this page.',
+    'dashboard.export': 'Export dashboard',
+    'dashboard.export.done': 'Your dashboard was saved as a file.',
+    'dashboard.import': 'Import dashboard',
+    'dashboard.import.title': 'Import a dashboard',
+    'dashboard.import.confirm.one':
+      'This replaces your dashboard with the one in the file ({count} widget).',
+    'dashboard.import.confirm.other':
+      'This replaces your dashboard with the one in the file ({count} widgets).',
+    'dashboard.import.keep': 'To keep your current dashboard, export it first.',
+    'dashboard.import.exportFirst': 'Export current dashboard',
+    'dashboard.import.replace': 'Replace',
+    'dashboard.import.done': 'The dashboard from the file is shown and saved.',
+    'dashboard.import.dropped.one':
+      '{count} widget of the file is not available to you and was left out.',
+    'dashboard.import.dropped.other':
+      '{count} widgets of the file are not available to you and were left out.',
+    'dashboard.import.error.too-large': 'The file is too large to be a dashboard.',
+    'dashboard.import.error.not-json':
+      'The file could not be read. Choose an exported dashboard file (.json).',
+    'dashboard.import.error.not-dashboard': 'The file is not an exported dashboard.',
+    'dashboard.import.error.newer-version':
+      'The file was made by a newer version of Scorpion and cannot be imported here.',
+    'dashboard.import.error.refused':
+      'The file is not a dashboard that can be imported. Your dashboard was not changed.',
+    'dashboard.import.error.failed':
+      'The dashboard could not be imported. Your dashboard was not changed.',
     'legal.terms': 'Terms of use',
     'legal.privacy': 'Privacy policy',
     'legal.imprint': 'Imprint',
@@ -179,6 +205,33 @@ const shellMessages: UiMessages = {
       '{count} Widget konnte auf dieser Seite nicht angezeigt werden.',
     'dashboard.notice.missing.other':
       '{count} Widgets konnten auf dieser Seite nicht angezeigt werden.',
+    'dashboard.export': 'Dashboard exportieren',
+    'dashboard.export.done': 'Ihr Dashboard wurde als Datei gespeichert.',
+    'dashboard.import': 'Dashboard importieren',
+    'dashboard.import.title': 'Dashboard importieren',
+    'dashboard.import.confirm.one':
+      'Ihr Dashboard wird durch das aus der Datei ersetzt ({count} Widget).',
+    'dashboard.import.confirm.other':
+      'Ihr Dashboard wird durch das aus der Datei ersetzt ({count} Widgets).',
+    'dashboard.import.keep':
+      'Exportieren Sie Ihr aktuelles Dashboard zuerst, wenn Sie es behalten möchten.',
+    'dashboard.import.exportFirst': 'Aktuelles Dashboard exportieren',
+    'dashboard.import.replace': 'Ersetzen',
+    'dashboard.import.done': 'Das Dashboard aus der Datei wird angezeigt und ist gespeichert.',
+    'dashboard.import.dropped.one':
+      '{count} Widget der Datei steht Ihnen nicht zur Verfügung und wurde weggelassen.',
+    'dashboard.import.dropped.other':
+      '{count} Widgets der Datei stehen Ihnen nicht zur Verfügung und wurden weggelassen.',
+    'dashboard.import.error.too-large': 'Die Datei ist zu groß für ein Dashboard.',
+    'dashboard.import.error.not-json':
+      'Die Datei konnte nicht gelesen werden. Wählen Sie eine exportierte Dashboard-Datei (.json).',
+    'dashboard.import.error.not-dashboard': 'Die Datei ist kein exportiertes Dashboard.',
+    'dashboard.import.error.newer-version':
+      'Die Datei stammt aus einer neueren Version von Scorpion und kann hier nicht importiert werden.',
+    'dashboard.import.error.refused':
+      'Die Datei ist kein Dashboard, das importiert werden kann. Ihr Dashboard wurde nicht geändert.',
+    'dashboard.import.error.failed':
+      'Das Dashboard konnte nicht importiert werden. Ihr Dashboard wurde nicht geändert.',
     'legal.terms': 'Nutzungsbedingungen',
     'legal.privacy': 'Datenschutzerklärung',
     'legal.imprint': 'Impressum',
