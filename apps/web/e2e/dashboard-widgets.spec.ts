@@ -344,7 +344,7 @@ test.describe('calls: a dashboard of eight widgets over two (service, range) pai
 });
 
 test.describe('calls: the default dashboard of a person with no service', () => {
-  test('reads the defaults once for all its tiles, and no numbers, no names and no vocabulary', async ({
+  test('shows the cards, the trends and the volatility, reads the defaults once for all its tiles, and no numbers, no names and no vocabulary', async ({
     browser,
     playwright,
     baseURL,
@@ -363,6 +363,10 @@ test.describe('calls: the default dashboard of a person with no service', () => 
     ).toBeVisible();
     await expect(
       tileOf(page, 'Trends').getByRole('status').filter({ hasText: 'Choose a service.' }),
+    ).toBeVisible();
+    // M13c: the volatility bars are on the default dashboard too, and read through the same defaults.
+    await expect(
+      tileOf(page, 'Volatility').getByRole('status').filter({ hasText: 'Choose a service.' }),
     ).toBeVisible();
     await page.waitForTimeout(1000);
     const mine = seen.calls.filter((call) => /\/kpi\/|\/services\/|\/vocabularies\//.test(call));

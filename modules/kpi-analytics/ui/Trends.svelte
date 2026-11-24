@@ -11,7 +11,7 @@
   import type { Body } from './types.ts';
   import WidgetFrame from './WidgetFrame.svelte';
 
-  let { config, editing, setConfig }: UiWidgetProps = $props();
+  let { config, editing, setConfig, openSettings, label }: UiWidgetProps = $props();
   const { t, locale } = getShell();
   const controlsId = $props.id();
   let full = $state(false);
@@ -51,6 +51,8 @@
   {config}
   {editing}
   {setConfig}
+  {openSettings}
+  {label}
   units
   exportable
   needs="number"

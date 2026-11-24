@@ -46,13 +46,14 @@ export const messages: UiMessages = {
     'analytics.actions.defaults': 'Dashboard defaults',
 
     'analytics.state.loading': 'Loading…',
+    'analytics.settings': 'Settings of {name}',
     'analytics.state.chooseService': 'Choose a service.',
     'analytics.state.chooseService.how':
-      'Customise the dashboard, then open the settings of this widget.',
+      'Open the settings of this widget (the gear) to choose one.',
     'analytics.state.failed': 'The numbers could not be loaded.',
     'analytics.state.retry': 'Try again',
     'analytics.state.badSettings':
-      'The settings of this widget are no longer valid. Customise the dashboard and open its settings to choose again.',
+      'The settings of this widget are no longer valid. Open its settings (the gear) to choose again.',
     'analytics.state.noKpis': 'This service has no KPIs.',
     'analytics.state.noValues': 'No values for this range.',
     'analytics.state.notShown.values': 'Not shown (no values in this range): {names}',
@@ -132,13 +133,14 @@ export const messages: UiMessages = {
     'analytics.actions.defaults': 'Dashboard-Voreinstellungen',
 
     'analytics.state.loading': 'Wird geladen …',
+    'analytics.settings': 'Einstellungen von {name}',
     'analytics.state.chooseService': 'Wählen Sie einen Dienst.',
     'analytics.state.chooseService.how':
-      'Passen Sie das Dashboard an und öffnen Sie dann die Einstellungen dieses Widgets.',
+      'Öffnen Sie dazu die Einstellungen dieses Widgets (Zahnrad).',
     'analytics.state.failed': 'Die Zahlen konnten nicht geladen werden.',
     'analytics.state.retry': 'Erneut versuchen',
     'analytics.state.badSettings':
-      'Die Einstellungen dieses Widgets sind nicht mehr gültig. Passen Sie das Dashboard an und öffnen Sie die Einstellungen, um neu zu wählen.',
+      'Die Einstellungen dieses Widgets sind nicht mehr gültig. Öffnen Sie die Einstellungen (Zahnrad), um neu zu wählen.',
     'analytics.state.noKpis': 'Dieser Dienst hat keine KPIs.',
     'analytics.state.noValues': 'Keine Werte für diesen Zeitraum.',
     'analytics.state.notShown.values': 'Nicht gezeigt (keine Werte in diesem Zeitraum): {names}',
