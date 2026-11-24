@@ -77,7 +77,13 @@ const sourcesOf = (policy: string, directive: string): string[] => {
 
 /** Whether any directive of the policy names the Matomo origin as a source. */
 const namesMatomo = (policy: string): boolean =>
-  policy.split(';').some((part) => part.trim().split(/\s+/).slice(1).includes(MATOMO));
+  policy.split(';').some((part) =>
+    part
+      .trim()
+      .split(/\s+/)
+      .slice(1)
+      .some((source) => source === MATOMO),
+  );
 
 test.describe('usage statistics with Matomo', () => {
   test.describe.configure({ mode: 'serial' });
@@ -113,10 +119,16 @@ test.describe('usage statistics with Matomo', () => {
     await policyAllowsMatomo(page, at, true);
     const policy = await policyOf(page, at('/login'));
     for (const directive of ['script-src', 'connect-src', 'img-src']) {
-      expect(sourcesOf(policy, directive), directive).toContain(MATOMO);
+      expect(
+        sourcesOf(policy, directive).filter((source) => source === MATOMO),
+        directive,
+      ).toHaveLength(1);
     }
     for (const directive of ['default-src', 'style-src', 'frame-ancestors', 'form-action']) {
-      expect(sourcesOf(policy, directive), directive).not.toContain(MATOMO);
+      expect(
+        sourcesOf(policy, directive).filter((source) => source === MATOMO),
+        directive,
+      ).toHaveLength(0);
     }
     expect(policy).not.toContain('unsafe-inline');
     expect(policy).not.toContain('unsafe-eval');
