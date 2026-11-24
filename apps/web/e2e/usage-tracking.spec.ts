@@ -65,6 +65,20 @@ async function stubMatomo(page: Page): Promise<{ hits: Hit[]; scripts: () => num
 const policyOf = async (page: Page, address: string) =>
   (await page.request.get(address)).headers()['content-security-policy'] ?? '';
 
+/** The sources of one directive, as whole tokens: an origin is compared exactly, never as a part of a longer host. */
+const sourcesOf = (policy: string, directive: string): string[] => {
+  const [, ...sources] =
+    policy
+      .split(';')
+      .map((part) => part.trim().split(/\s+/))
+      .find(([name]) => name === directive) ?? [];
+  return sources;
+};
+
+/** Whether any directive of the policy names the Matomo origin as a source. */
+const namesMatomo = (policy: string): boolean =>
+  policy.split(';').some((part) => part.trim().split(/\s+/).slice(1).includes(MATOMO));
+
 test.describe('usage statistics with Matomo', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -77,7 +91,7 @@ test.describe('usage statistics with Matomo', () => {
   /** The web app keeps the tracker's origin for a few seconds (TRACKING_TTL_MS): wait until its pages say what is set. */
   const policyAllowsMatomo = async (page: Page, at: (path: string) => string, allowed: boolean) =>
     expect
-      .poll(async () => (await policyOf(page, at('/'))).includes(MATOMO), { timeout: 15_000 })
+      .poll(async () => namesMatomo(await policyOf(page, at('/'))), { timeout: 15_000 })
       .toBe(allowed);
 
   test.beforeAll(async ({ playwright, baseURL }, info) => {
@@ -99,12 +113,10 @@ test.describe('usage statistics with Matomo', () => {
     await policyAllowsMatomo(page, at, true);
     const policy = await policyOf(page, at('/login'));
     for (const directive of ['script-src', 'connect-src', 'img-src']) {
-      const part = policy.split(';').find((entry) => entry.trim().startsWith(`${directive} `));
-      expect(part, directive).toContain(MATOMO);
+      expect(sourcesOf(policy, directive), directive).toContain(MATOMO);
     }
     for (const directive of ['default-src', 'style-src', 'frame-ancestors', 'form-action']) {
-      const part = policy.split(';').find((entry) => entry.trim().startsWith(`${directive} `));
-      expect(part ?? '', directive).not.toContain(MATOMO);
+      expect(sourcesOf(policy, directive), directive).not.toContain(MATOMO);
     }
     expect(policy).not.toContain('unsafe-inline');
     expect(policy).not.toContain('unsafe-eval');
