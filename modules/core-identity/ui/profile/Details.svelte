@@ -130,8 +130,9 @@
       maxlength={254}
     />
     {#if profile.pendingEmail}
-      <Alert kind="info">{t('profile.details.pendingEmail', { email: profile.pendingEmail })}</Alert
-      >
+      <Alert kind="info">
+        {t('profile.details.pendingEmail', { email: profile.pendingEmail })}
+      </Alert>
     {:else if profile.email && !profile.emailVerified}
       <Alert kind="warning">
         <span>{t('profile.details.unverified')}</span>

@@ -40,9 +40,9 @@
     {:else}
       <p>{t('profile.providers.lead')}</p>
       {#if failed}
-        <Alert kind="error"
-          >{t(failed === 'none' ? 'profile.providers.unknown' : 'profile.providers.failed')}</Alert
-        >
+        <Alert kind="error">
+          {t(failed === 'none' ? 'profile.providers.unknown' : 'profile.providers.failed')}
+        </Alert>
       {/if}
       <ul class="flex flex-wrap gap-2">
         {#each providers as provider (provider.id)}

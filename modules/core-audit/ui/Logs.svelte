@@ -154,9 +154,9 @@
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium" for="logs-endpoint"
-          >{t('admin.logs.filter.endpoint')}</label
-        >
+        <label class="text-sm font-medium" for="logs-endpoint">
+          {t('admin.logs.filter.endpoint')}
+        </label>
         <input
           id="logs-endpoint"
           class="input input-bordered"
@@ -190,9 +190,9 @@
         </select>
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium" for="logs-outcome"
-          >{t('admin.logs.filter.outcome')}</label
-        >
+        <label class="text-sm font-medium" for="logs-outcome">
+          {t('admin.logs.filter.outcome')}
+        </label>
         <select
           id="logs-outcome"
           class="select select-bordered"
@@ -265,16 +265,17 @@
   {#if failed}<Alert kind="error">{failed}</Alert>{/if}
 
   {#snippet timeCell(row: LogEntry)}
-    <a class="link link-hover" href={href(`/admin/logs/${row.id}`)}><Time iso={row.occurredAt} /></a
-    >
+    <a class="link link-hover" href={href(`/admin/logs/${row.id}`)}>
+      <Time iso={row.occurredAt} />
+    </a>
   {/snippet}
   {#snippet userCell(row: LogEntry)}
     {#if row.userId && row.userName}
       <span class="inline-flex items-center gap-2 align-middle">
         <UserAvatar hash={row.userAvatarHash} />
-        <a class="link link-hover font-medium" href={href(`/admin/users/${row.userId}`)}
-          >{row.userName}</a
-        >
+        <a class="link link-hover font-medium" href={href(`/admin/users/${row.userId}`)}>
+          {row.userName}
+        </a>
       </span>
     {:else if row.userId}
       <span>{t('admin.logs.deletedAccount')}</span>
@@ -282,9 +283,9 @@
     {:else}
       <span class="opacity-80">{t(`admin.logs.actor.${row.actorKind}`)}</span>
     {/if}
-    {#if row.actorKind === 'token'}<span class="badge badge-ghost ms-1"
-        >{t('admin.logs.viaToken')}</span
-      >{/if}
+    {#if row.actorKind === 'token'}<span class="badge badge-ghost ms-1">
+        {t('admin.logs.viaToken')}
+      </span>{/if}
   {/snippet}
   {#snippet whatCell(row: LogEntry)}
     <span class="font-mono text-sm">{row.method ?? ''} {row.path ?? row.action}</span>

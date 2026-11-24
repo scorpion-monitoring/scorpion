@@ -36,9 +36,9 @@
     <li>{t('docs.token.scopes')}</li>
     <li>
       {t('docs.token.send')}
-      {#each headers as header, index (header)}{index > 0 ? ', ' : ''}<code class="num"
-          >{header}</code
-        >{/each}
+      {#each headers as header, index (header)}{index > 0 ? ', ' : ''}<code class="num">
+          {header}
+        </code>{/each}
     </li>
   </ol>
 </section>

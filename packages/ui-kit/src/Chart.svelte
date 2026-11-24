@@ -191,8 +191,8 @@
             </svg>
             <span class="break-words">
               {entry.name}{#if entry.secondary}<span class="text-base-content/70">
-                  ({t('kit.chart.rightAxis')})</span
-                >{/if}
+                  ({t('kit.chart.rightAxis')})
+                </span>{/if}
             </span>
           </li>
         {/each}

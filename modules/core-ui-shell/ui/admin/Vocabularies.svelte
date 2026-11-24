@@ -174,9 +174,9 @@
       : (failure?.fields[prefix] ?? []);
 </script>
 
-<svelte:head
-  ><title>{t('admin.settings.area.vocabularies')} · {t('admin.settings.title')}</title></svelte:head
->
+<svelte:head>
+  <title>{t('admin.settings.area.vocabularies')} · {t('admin.settings.title')}</title>
+</svelte:head>
 
 <div class="flex flex-col gap-6">
   <Breadcrumb
@@ -216,8 +216,9 @@
 
     {#snippet keyCell(row: TermRow)}
       <code>{row.key}</code>
-      {#if row.seeded}<span class="badge badge-ghost ms-2">{t('admin.vocabularies.seeded')}</span
-        >{/if}
+      {#if row.seeded}<span class="badge badge-ghost ms-2">
+          {t('admin.vocabularies.seeded')}
+        </span>{/if}
     {/snippet}
     {#snippet labelsCell(row: TermRow)}
       <ul>
@@ -350,9 +351,9 @@
       inputmode="numeric"
     />
     <div class="flex justify-end gap-2">
-      <button type="button" class="btn" onclick={() => (editing = undefined)}
-        >{t('admin.vocabularies.cancel')}</button
-      >
+      <button type="button" class="btn" onclick={() => (editing = undefined)}>
+        {t('admin.vocabularies.cancel')}
+      </button>
       <SubmitButton {busy}>{t('admin.vocabularies.saveTerm')}</SubmitButton>
     </div>
   </form>

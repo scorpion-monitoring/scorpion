@@ -23,9 +23,9 @@
     <ul class="flex flex-col gap-2">
       {#each open as link (link.path)}
         <li>
-          <a class="btn btn-outline btn-sm w-full justify-start" href={href(link.path)}
-            >{t(link.label)}</a
-          >
+          <a class="btn btn-outline btn-sm w-full justify-start" href={href(link.path)}>
+            {t(link.label)}
+          </a>
         </li>
       {/each}
       <li>

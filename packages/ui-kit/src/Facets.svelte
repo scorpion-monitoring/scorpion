@@ -64,9 +64,9 @@
             />
             <span>{option.label}</span>
             {#if option.count !== undefined}
-              <span class="text-sm opacity-70"
-                >{t('kit.facets.count', { count: option.count })}</span
-              >
+              <span class="text-sm opacity-70">
+                {t('kit.facets.count', { count: option.count })}
+              </span>
             {/if}
           </label>
         {/each}

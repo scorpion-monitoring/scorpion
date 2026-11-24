@@ -23,6 +23,6 @@
   "devDependencies": {
     "@scorpion/testing": "workspace:*",
     "@scorpion/ui-kit": "workspace:*",
-    "fast-check": "4.10.2"
+    "fast-check": "4.10.3"
   }
 }

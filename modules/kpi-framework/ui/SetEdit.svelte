@@ -366,9 +366,9 @@
                   <tr>
                     <th scope="col">{t('kpi.set.rows.indicator')}</th>
                     <th scope="col">{t('kpi.set.rows.necessity')}</th>
-                    <th scope="col"
-                      ><span class="sr-only">{t('kpi.set.rows.remove', { name: '' })}</span></th
-                    >
+                    <th scope="col">
+                      <span class="sr-only">{t('kpi.set.rows.remove', { name: '' })}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

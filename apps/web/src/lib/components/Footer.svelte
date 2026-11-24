@@ -17,9 +17,9 @@
         {t('app.footer.poweredBy')}
         <a class="link" href={SOFTWARE.url} rel="noopener noreferrer">{SOFTWARE.name}</a>
         {SOFTWARE.version} ·
-        <a class="link" href={SOFTWARE.licenceUrl} rel="noopener noreferrer"
-          >{t('app.footer.licence', { licence: SOFTWARE.licence })}</a
-        >
+        <a class="link" href={SOFTWARE.licenceUrl} rel="noopener noreferrer">
+          {t('app.footer.licence', { licence: SOFTWARE.licence })}
+        </a>
       </p>
     </div>
     <nav aria-label={t('app.footer.legal')}>
@@ -29,9 +29,9 @@
         {/each}
         {#if branding.imprintUrl}
           <li>
-            <a class="link" href={branding.imprintUrl} rel="noopener noreferrer"
-              >{t('legal.imprintExternal')}</a
-            >
+            <a class="link" href={branding.imprintUrl} rel="noopener noreferrer">
+              {t('legal.imprintExternal')}
+            </a>
           </li>
         {/if}
         {#if branding.contactEmail}

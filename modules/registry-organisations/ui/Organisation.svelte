@@ -120,20 +120,20 @@
   {#if isAdmin || isManager}
     <p class="flex flex-wrap gap-2">
       {#if isAdmin}
-        <a class="btn btn-sm" href={href(`/admin/organisations/${organisation.id}`)}
-          >{t('organisation.edit')}</a
-        >
-        <a class="btn btn-sm" href={href(`/admin/memberships?organisation=${organisation.id}`)}
-          >{t('organisation.requests.admin')}</a
-        >
+        <a class="btn btn-sm" href={href(`/admin/organisations/${organisation.id}`)}>
+          {t('organisation.edit')}
+        </a>
+        <a class="btn btn-sm" href={href(`/admin/memberships?organisation=${organisation.id}`)}>
+          {t('organisation.requests.admin')}
+        </a>
       {:else}
         <!-- A manager's requests and edit form are on their own page; the API said so in `editableFields`. -->
-        <a class="btn btn-sm" href={href('/account/organisations')}
-          >{t('organisation.requests.manager')}</a
-        >
-        <a class="btn btn-sm" href={href('/account/organisations')}
-          >{t('organisation.edit.manager')}</a
-        >
+        <a class="btn btn-sm" href={href('/account/organisations')}>
+          {t('organisation.requests.manager')}
+        </a>
+        <a class="btn btn-sm" href={href('/account/organisations')}>
+          {t('organisation.edit.manager')}
+        </a>
       {/if}
     </p>
   {/if}
@@ -146,17 +146,17 @@
     {#if organisation.website}
       <dt class="font-medium">{t('organisation.website')}</dt>
       <dd>
-        <a class="link" href={organisation.website} rel="noopener noreferrer"
-          >{organisation.website}</a
-        >
+        <a class="link" href={organisation.website} rel="noopener noreferrer">
+          {organisation.website}
+        </a>
       </dd>
     {/if}
     {#if organisation.rorId}
       <dt class="font-medium">{t('organisation.rorId')}</dt>
       <dd>
-        <a class="link" href={rorLink(organisation.rorId)} rel="noopener noreferrer"
-          >{organisation.rorId}</a
-        >
+        <a class="link" href={rorLink(organisation.rorId)} rel="noopener noreferrer">
+          {organisation.rorId}
+        </a>
       </dd>
     {/if}
     {#if organisation.sameAs.length > 0}
@@ -174,8 +174,8 @@
       <dd>
         <a class="link" href={`mailto:${organisation.contactEmail}`}>{organisation.contactEmail}</a>
         {#if organisation.contactType}<span class="opacity-70">
-            ({organisation.contactType})</span
-          >{/if}
+            ({organisation.contactType})
+          </span>{/if}
       </dd>
     {/if}
     <dt class="font-medium">{t('organisation.members')}</dt>

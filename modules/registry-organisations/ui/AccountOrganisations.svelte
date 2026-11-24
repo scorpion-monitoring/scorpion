@@ -114,9 +114,9 @@
       <ul class="flex list-none flex-col gap-2">
         {#each data.own as row (row.id)}
           <li class="flex flex-wrap items-center gap-3">
-            <a class="link font-medium" href={href(`/organisations/${row.organisation.id}`)}
-              >{row.organisation.abbreviation}</a
-            >
+            <a class="link font-medium" href={href(`/organisations/${row.organisation.id}`)}>
+              {row.organisation.abbreviation}
+            </a>
             <span>{row.organisation.name}</span>
             <StateBadge state={row.state} role={row.role} />
             <span class="text-sm opacity-70"><Time iso={row.requestedAt} /></span>
@@ -168,9 +168,9 @@
         }}
       >
         <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium" for="find-search"
-            >{t('admin.organisations.search')}</label
-          >
+          <label class="text-sm font-medium" for="find-search">
+            {t('admin.organisations.search')}
+          </label>
           <input
             id="find-search"
             type="search"
@@ -199,9 +199,9 @@
     </div>
 
     {#snippet abbreviationCell(row: Found)}
-      <a class="link link-hover font-medium" href={href(`/organisations/${row.id}`)}
-        >{row.abbreviation}</a
-      >
+      <a class="link link-hover font-medium" href={href(`/organisations/${row.id}`)}>
+        {row.abbreviation}
+      </a>
     {/snippet}
     {#snippet typeCell(row: Found)}
       <span class="badge badge-outline">{typeLabel(row.type)}</span>

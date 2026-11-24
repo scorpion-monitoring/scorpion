@@ -45,8 +45,9 @@
                   {t('analytics.na')}
                 {:else}
                   {formatNumber(row.average, locale())}
-                  {#if unit(row.unit)}<span class="text-base-content/70">{unit(row.unit)}</span
-                    >{/if}
+                  {#if unit(row.unit)}<span class="text-base-content/70">
+                      {unit(row.unit)}
+                    </span>{/if}
                 {/if}
               </td>
             </tr>

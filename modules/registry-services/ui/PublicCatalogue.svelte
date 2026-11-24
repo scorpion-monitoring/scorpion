@@ -78,15 +78,15 @@
               alt={t('services.icon.alt', { name: row.name })}
             />
           {/if}
-          <a class="link link-hover font-medium" href={href(`/catalog/services/${row.slug}`)}
-            >{row.name}</a
-          >
+          <a class="link link-hover font-medium" href={href(`/catalog/services/${row.slug}`)}>
+            {row.name}
+          </a>
         </div>
       {/snippet}
       {#snippet providerCell(row: Row)}
-        <a class="link link-hover" href={href(`/catalog/organisations/${row.provider.id}`)}
-          >{row.provider.name}</a
-        >
+        <a class="link link-hover" href={href(`/catalog/organisations/${row.provider.id}`)}>
+          {row.provider.name}
+        </a>
       {/snippet}
       {#snippet consortiaCell(row: Row)}
         {#if row.consortia.length > 0}

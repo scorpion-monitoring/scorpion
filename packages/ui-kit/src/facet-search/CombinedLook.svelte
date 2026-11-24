@@ -292,8 +292,9 @@
         : undefined}
     >
       <span class="grow">{definition.label}</span>
-      {#if count > 0}<span class="badge badge-sm badge-primary" aria-hidden="true">{count}</span
-        >{/if}
+      {#if count > 0}<span class="badge badge-sm badge-primary" aria-hidden="true">
+          {count}
+        </span>{/if}
       <span aria-hidden="true">›</span>
     </div>
   {/each}
@@ -319,8 +320,10 @@
             data-chip-control
             class="truncate"
             aria-label={view.t('kit.facetSearch.openChip', { chip: chip.name })}
-            onclick={() => void enter(definition.id)}>{chip.short}</button
+            onclick={() => void enter(definition.id)}
           >
+            {chip.short}
+          </button>
           <button
             type="button"
             tabindex="-1"
@@ -330,8 +333,10 @@
             onclick={() => {
               view.clear(definition.id, true);
               input?.focus();
-            }}><span aria-hidden="true">×</span></button
+            }}
           >
+            <span aria-hidden="true">×</span>
+          </button>
         </span>
       {/each}
       {#if folded}
@@ -344,8 +349,10 @@
           onclick={() => {
             unfolded = true;
             input?.focus();
-          }}>+{chips.length - 1}</button
+          }}
         >
+          +{chips.length - 1}
+        </button>
       {/if}
       <input
         bind:this={input}
@@ -382,8 +389,10 @@
             view.clearAll();
             close();
             input?.focus();
-          }}><span aria-hidden="true">✕</span></button
+          }}
         >
+          <span aria-hidden="true">✕</span>
+        </button>
       {/if}
     </div>
 
@@ -400,8 +409,11 @@
             class="btn btn-ghost btn-sm w-full justify-start"
             aria-label={view.t('kit.facetSearch.backFrom', { facet: shown.label })}
             onmousedown={(event) => event.preventDefault()}
-            onclick={back}><span aria-hidden="true">‹</span> {shown.label}</button
+            onclick={back}
           >
+            <span aria-hidden="true">‹</span>
+            {shown.label}
+          </button>
           <Panel
             bind:this={panel}
             bind:activeId={panelActive}
@@ -474,8 +486,10 @@
           onclick={() => {
             input?.focus();
             void enter(definition.id);
-          }}>{definition.label} <span aria-hidden="true">▾</span></button
+          }}
         >
+          {definition.label} <span aria-hidden="true">▾</span>
+        </button>
       {/each}
     </div>
   {/if}
