@@ -25,6 +25,8 @@ export interface DashboardGridExports {
   focusTile: (id: string) => Promise<boolean>;
   /** Says something in the grid's polite live region. */
   announce: (text: string) => void;
+  /** Opens the settings dialog of a tile, in view mode too; `false` when the tile has no settings. */
+  openSettings: (id: string) => boolean;
 }
 
 export type DashboardGridComponent = Component<DashboardGridProps, DashboardGridExports>;

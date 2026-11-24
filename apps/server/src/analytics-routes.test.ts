@@ -311,6 +311,32 @@ describe('GET /ui/navigation: the widgets of kpi.analytics (M11 sprint 4)', () =
     expect(theirs.widgets.filter((widget) => widget.id.startsWith('kpi.analytics.'))).toEqual([]);
     expect(JSON.stringify(theirs)).not.toContain('cumulative');
   });
+
+  it('puts the KPI cards, the trends and the volatility (M13c) on the default dashboard of a new person, none overlapping, all not yet set up', async () => {
+    const fresh = await started.signedIn('m13c-default-dashboard');
+    const view = (await started.get('/ui/dashboard', as(fresh))).body as {
+      isDefault: boolean;
+      items: { widget: string; x: number; y: number; w: number; h: number; config: object }[];
+    };
+    expect(view.isDefault).toBe(true);
+    const kpi = view.items.filter((item) => item.widget.startsWith('kpi.analytics.'));
+    expect(kpi.map((item) => item.widget).sort()).toEqual([
+      'kpi.analytics.actions',
+      'kpi.analytics.cards',
+      'kpi.analytics.trends',
+      'kpi.analytics.volatility',
+    ]);
+    const volatility = kpi.find((item) => item.widget === 'kpi.analytics.volatility')!;
+    expect(volatility).toMatchObject({ x: 4, y: 8, w: 4, h: 4 });
+    // `service` absent: the tile shows the person's own defaults.
+    expect('service' in volatility.config).toBe(false);
+    for (const [i, a] of view.items.entries())
+      for (const b of view.items.slice(i + 1))
+        expect(
+          a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h,
+          `${a.widget} and ${b.widget} overlap`,
+        ).toBe(false);
+  });
 });
 
 describe('both reads', () => {

@@ -10,6 +10,7 @@
     "./icons": "./src/icons.ts",
     "./url": "./src/url.ts",
     "./dashboard-layout": "./src/dashboard-layout.ts",
+    "./dashboard-file": "./src/dashboard-file.ts",
     "./theme-colors": "./src/theme-colors.ts"
   },
   "scripts": {

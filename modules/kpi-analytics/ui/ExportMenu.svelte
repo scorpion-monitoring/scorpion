@@ -2,8 +2,8 @@
   // The "Export" menu of a widget (M11 sprint 5): CSV and XLSX of what the widget shows (its service, range and category). A choice is one request
   // through the typed client; the file is saved through a blob URL, as the import template download is, under the name the server gave. The
   // menu is a button with a list of buttons, closed by Escape and after a choice; progress and failure are said in a status line.
-  import { getShell } from '@scorpion/ui-kit';
-  import { fileNameOf, saveBlob } from './download.ts';
+  import { getShell, saveBlob } from '@scorpion/ui-kit';
+  import { fileNameOf } from './download.ts';
 
   let {
     service,

@@ -50,6 +50,7 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | M12a | Polish: eight maintainer fixes, a slice of the backlog, the faceted search redesign and admin-editable theme colours ([m12a-plan.md](m12a-plan.md)) | 3 KPIs | S | M12 | none |
 | M13 | Legacy data migration tool | 3 KPIs | M | M12 | none |
 | M13b | `matomo`: usage statistics of the instance with Matomo ([matomo-plan.md](matomo-plan.md), ADR-0054) | 3 KPIs | S | M13 | none |
+| M13c | Dashboard: export and import as a file, widget settings without edit mode, KPI trends, cards and volatility in the default ([m13c-plan.md](m13c-plan.md), ADR-0055) | 3 KPIs | S | M13b | none |
 | **G3** | **Gate 3: migration dry run clean, KPI profile live** | | | M9–M13 | |
 | M14 | `maturity` | 4 Parity | M | G3 | 7 |
 | M15 | `onboarding` | 4 Parity | M | M14 | 8 |

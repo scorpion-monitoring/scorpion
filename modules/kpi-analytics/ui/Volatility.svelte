@@ -8,7 +8,7 @@
   import type { Body } from './types.ts';
   import WidgetFrame from './WidgetFrame.svelte';
 
-  let { config, editing, setConfig }: UiWidgetProps = $props();
+  let { config, editing, setConfig, openSettings, label }: UiWidgetProps = $props();
   const { t, locale } = getShell();
   const explainId = $props.id();
   let explained = $state(false);
@@ -26,7 +26,15 @@
           : '';
 </script>
 
-<WidgetFrame title={t('analytics.volatility.title')} {config} {editing} {setConfig} needs="number">
+<WidgetFrame
+  title={t('analytics.volatility.title')}
+  {config}
+  {editing}
+  {setConfig}
+  {openSettings}
+  {label}
+  needs="number"
+>
   {#snippet body({ rows }: Body)}
     <div>
       <button

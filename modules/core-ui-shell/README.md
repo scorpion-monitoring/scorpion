@@ -14,18 +14,18 @@ modules are theirs (the sign-in, registration, recovery and profile pages and th
 | id             | `core.ui-shell`                                                                                                                                                                                                                                                                              |
 | table prefix   | none: the module has no table                                                                                                                                                                                                                                                                |
 | dependencies   | `core.authz` (to decide what a caller may see), `core.settings` (the branding every page shows, and the preference that holds the dashboard). The package also lists `@scorpion/ui-kit` as a development dependency, for its pages, and `fast-check` for the tests of the dashboard document |
-| routes         | internal API: `GET /ui/navigation` (public), `GET /ui/about` ([the About page](#the-about-page)), `GET /ui/dashboard` and `PUT /ui/dashboard` ([the dashboard](#the-dashboard))                                                                                                              |
+| routes         | internal API: `GET /ui/navigation` (public), `GET /ui/about` ([the About page](#the-about-page)), `GET /ui/dashboard`, `PUT /ui/dashboard` and `POST /ui/dashboard/import` ([the dashboard](#the-dashboard), [export and import](#export-and-import-m13c))                                   |
 | jobs, CLI      | none                                                                                                                                                                                                                                                                                         |
 | events         | emits and subscribes to none (a save emits `settings.preference.changed@1`, which `core.settings` owns)                                                                                                                                                                                      |
 | registries     | declares `ui.routes`, `ui.nav`, `ui.widget` and `ui.theme`; contributes its own pages, two links and the two themes, the user preference `core.ui-shell.dashboard` (`settings.userPreference`) and the two dashboard permissions to the role `user` (`authz.defaultRole`)                    |
 | ui             | package export `./ui`: the browser half of its pages (`ui/index.ts`), imported by the web app only                                                                                                                                                                                           |
-| public service | `ctx.deps['core.ui-shell']`: `navigation(actor)`, `about(actor)` and `dashboard.get(actor)`, `dashboard.save(actor, items)`. No other module calls it; the entry types are in `public.ts`                                                                                                    |
+| public service | `ctx.deps['core.ui-shell']`: `navigation(actor)`, `about(actor)` and `dashboard.get(actor)`, `dashboard.save(actor, items)`, `dashboard.importFile(actor, file)`. No other module calls it; the entry types are in `public.ts`                                                               |
 
 | Permission                      | Allows                                                                                 | Held by     |
 | ------------------------------- | -------------------------------------------------------------------------------------- | ----------- |
 | `core.ui-shell.about.read`      | See the profile, version and modules of this instance (`GET /ui/about`, page `/about`) | User, Admin |
 | `core.ui-shell.dashboard.read`  | Read your own dashboard (`GET /ui/dashboard`)                                          | User, Admin |
-| `core.ui-shell.dashboard.write` | Arrange and save your own dashboard (`PUT /ui/dashboard`)                              | User, Admin |
+| `core.ui-shell.dashboard.write` | Arrange and save your own dashboard (`PUT /ui/dashboard`, `POST /ui/dashboard/import`) | User, Admin |
 
 Both are plain (no resource): the owner is always the caller, and the route and the service check them. A save stores through the preference service as the
 caller, so it also needs `core.settings.preference.write`. `GET /ui/navigation` needs none and stays public. A profile that lists the module gets the web
@@ -183,13 +183,15 @@ caller may see, only on entries that have them.
 
 **What the browser half receives.** A tile's component is rendered with `UiWidgetProps` (`@scorpion/contracts`):
 
-| Prop        | Meaning                                                                                                                              |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `instance`  | The tile's instance id (4 to 12 lower-case letters and digits), unique on the dashboard                                              |
-| `config`    | The tile's settings as the server repaired them (`{}` for a widget with no `configSchema`)                                           |
-| `editing`   | The dashboard is being edited: a widget may show its settings, and must not start anything the person did not ask for                |
-| `setConfig` | `setConfig(next)` replaces the settings; the dashboard saves them with the layout (the same one save a second after the last change) |
-| `size`      | `{ w, h }` in grid units, which a chart may use to decide how much to draw                                                           |
+| Prop           | Meaning                                                                                                                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instance`     | The tile's instance id (4 to 12 lower-case letters and digits), unique on the dashboard                                                                                                                   |
+| `config`       | The tile's settings as the server repaired them (`{}` for a widget with no `configSchema`)                                                                                                                |
+| `editing`      | The dashboard is being edited: a widget may show its settings, and must not start anything the person did not ask for                                                                                     |
+| `setConfig`    | `setConfig(next)` replaces the settings; the dashboard saves them with the layout (the same one save a second after the last change)                                                                      |
+| `size`         | `{ w, h }` in grid units, which a chart may use to decide how much to draw                                                                                                                                |
+| `openSettings` | Given to a widget with a `configSchema` only: opens the tile's settings dialog. A widget may draw it as its own gear while the dashboard is **not** edited (M13c); in edit mode the edit bar has the gear |
+| `label`        | The tile's name on the dashboard (`Trends (2)` when there are two of a widget), for the accessible name of the widget's own gear                                                                          |
 
 A widget that ignores the props (the three cards that exist) works unchanged, and so does the bell in the header, which gets none.
 **A tile that draws nothing is removed from view.** The grid watches the body of each tile: a widget that renders no element (the membership card at zero
@@ -217,7 +219,7 @@ person may see, and a read never writes (opening the page sends no `PUT`).
   ("Trends moved to row 2, column 7"; "cannot move further in that direction") and focus stays on the button that was pressed. The section reserves space under
   the grid so the button never covers what it edits.
 - **The menu** has one button per widget the caller may add (icon and `label` of the entry; one already on the dashboard that is a `singleton`, and any widget when
-  there are already 20 tiles, is disabled and says why), then "Reset to default" and "Done". **Escape** closes it and puts focus on the FAB button; so does a press
+  there are already 20 tiles, is disabled and says why), then "Export dashboard", "Import dashboard" (see [export and import](#export-and-import-m13c)), "Reset to default" and "Done". **Escape** closes it and puts focus on the FAB button; so does a press
   outside it (without moving focus); **Enter** or **Space** on the button toggles it. Adding a widget places it at its default size at the left edge below the lowest
   tile, closes the menu, focuses the new tile's grip and announces where it went. Adding sends nothing by itself; the widget reads its own data, as on arrival.
 - **"Reset to default" shows the default dashboard and saves it** (one `PUT`, like any change; the maintainer chose this after sprint 2). It is the server's `defaultDashboard` function run in the browser over the entries
@@ -234,7 +236,8 @@ person may see, and a read never writes (opening the page sends no `PUT`).
 - **What a load left out** (`dropped`, `reset`) is shown above the grid ("2 widgets are no longer available and are not shown", "Your saved dashboard could not be read,
   so the default dashboard is shown") until the next successful save has written the repaired document.
 - **Instance ids** of new tiles come from `crypto.getRandomValues` (never `Math.random`), 8 characters of lower-case letters and digits, redrawn on a collision.
-- **Settings of a tile (M11 sprint 4).** A widget whose entry has a `configSchema` gets a gear in edit mode. It opens `WidgetSettings` of `packages/ui-kit` in the grid's dialog: the form is drawn from
+- **Settings of a tile (M11 sprint 4).** A widget whose entry has a `configSchema` gets a gear in edit mode (and, since M13c, may draw its own gear in view mode through `openSettings`; the widgets of `kpi.analytics` do).
+  A change made in view mode is saved like any other change; opening the page still writes nothing. It opens `WidgetSettings` of `packages/ui-kit` in the grid's dialog: the form is drawn from
   the JSON Schema `GET /ui/navigation` lists (service picker, range, thematic category, toggles; see the ui-kit README), checks the draft with that schema, and gives the new `config` to the tile,
   which is saved with the layout. A widget with no schema has no gear.
 - **The read store.** `Dashboard.svelte` makes one `createAnalyticsReads(api)` store when it mounts and provides it with `setAnalyticsReads`: the widgets of the page read through it, so widgets over the same
@@ -292,3 +295,21 @@ plain permission again, reads with `getUserPreference` and writes with `setUserP
 Tests: `service/dashboard/document.test.ts` (table-driven repairs and `fast-check` properties with a fixed seed: any input parses without throwing and gives a valid,
 packed, at most 8 KiB document; `parse(serialise(x))` equals `x`; parsing is idempotent), `registries.test.ts` (every start-stopping case) and
 `apps/server/src/ui-dashboard-routes.test.ts` (the service and both routes over real Postgres, through the whole pipeline).
+
+## Export and import (M13c)
+
+A person saves their dashboard to a file and imports it again, on their own account or another's ([ADR-0055](../../docs/adr/0055-dashboard-export-file.md)).
+
+- **The file** (`@scorpion/contracts/dashboard-file`): `{ "format": "scorpion.dashboard", "version": 1, "items": [{ id, widget, x, y, w, h, config }] }`, indented,
+  named `dashboard-<YYYY-MM-DD>.json`. Nothing personal: no instance, user or time inside. `version` is the version of the stored document, so the document's
+  `migrate` steps read old files.
+- **Export** is done in the browser from the tiles the page holds (with changes not saved yet). No request.
+- **Import**: the page reads the chosen file (at most 64 KiB; not JSON, not a dashboard file and a newer version are named before anything is sent), asks
+  "This replaces your dashboard…" with **Export current dashboard**, **Cancel** and **Replace**, saves what is waiting, then sends the file to
+  **`POST /ui/dashboard/import`** (permission `core.ui-shell.dashboard.write`, audited without the body, default rate bucket, own data only: no user id).
+- **`dashboard.importFile(actor, file)`** refuses the file with a 422 (`Invalid` naming `format`, `version` or `items`) when it is no dashboard file, was made by
+  a newer build or has more than 20 tiles; the stored dashboard is then unchanged. Otherwise it is **lenient, unlike `PUT`**: the file is repaired for the
+  importer exactly as a read repairs a stored document (`parseDashboard`): widgets this profile lacks or the importer may not see are left out and listed in
+  `dropped`, sizes and settings are repaired, overlaps packed. The result replaces the importer's document; the page says how many widgets were left out.
+- **Service ids in the settings are kept.** On the same instance the import is exact; a service the importer cannot see (or one of another instance) shows the
+  widget's "settings are no longer valid" state, which the gear fixes.

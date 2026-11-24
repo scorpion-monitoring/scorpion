@@ -71,6 +71,14 @@ export interface UiWidgetProps {
   setConfig: (next: Record<string, unknown>) => void;
   /** The tile's size in grid units, which a chart may use to choose how much to draw. */
   size: { w: number; h: number };
+  /**
+   * Opens the tile's settings dialog (the dashboard's, drawn from the `configSchema`). Given only to a widget that has
+   * settings; a widget may offer it as its own gear while the dashboard is not being edited (M13c). In edit mode the
+   * tile's edit bar has the gear already.
+   */
+  openSettings?: () => void;
+  /** The tile's name on the dashboard (`Trends (2)` when there are two), for the accessible name of a widget's own gear. */
+  label?: string;
 }
 
 /**

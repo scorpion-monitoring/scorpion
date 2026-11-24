@@ -134,7 +134,7 @@ directory imports Snapgrid or dnd-kit (ESLint `no-restricted-imports` and `dashb
   grid and by no other. The pure rules are exported normally (`moveTile`, `resizeTile`, `placeNew`, `stackedOrder`, `visibleLayout`, `newInstanceId`, ... in `src/dashboard-grid/layout.ts`).
 - **Props.** `tiles: GridTile[]` (`{ id, x, y, w, h, minW?, maxW?, minH?, maxH? }`; the page owns them), `editing`, `label(id)` (the name for people and screen readers),
   `tile` (a snippet that draws a tile's body), `onchange(tiles, { kind: 'move' | 'resize' | 'remove', id })`, and optionally `hasSettings(id)`, `ondrawn(count)` (how many tiles draw something now) and `settings` (a snippet: the shell of a
-  widget's settings dialog, with a gear on the tile). The instance exposes `focusTile(id)` and `announce(text)`.
+  widget's settings dialog, with a gear on the tile). The instance exposes `focusTile(id)`, `announce(text)` and `openSettings(id)` (M13c: opens a tile's settings dialog from outside the edit bar, such as a widget's own gear in view mode). The dialog stays mounted, so closing it by Escape or by the form's Apply or Cancel gives focus back to whatever opened it.
 - **The five wrappers the prototype proved necessary** (each has a test in `e2e/components/dashboard-grid.spec.ts`): the **move grip** is a real `<button aria-label="Move …">` that carries
   `attachHandle` (dnd-kit then puts its role, tab stop and keyboard sensor on the grip and not on the tile, which would be `nested-interactive`; in view mode a hidden handle takes
   them); the **resize handle** is ours, 24 px, `aria-hidden`, `tabindex="-1"`, `role="presentation"` set before attachment (Snapgrid has no keyboard resize, so the buttons are the only
@@ -167,3 +167,8 @@ directory imports Snapgrid or dnd-kit (ESLint `no-restricted-imports` and `dashb
 - **`Chart`** gained (additively) `ChartSeries.secondary` (a second y axis on the right, `chartOption` tests), a tooltip drawn **inside the SVG** (`renderMode: 'richText'`; the HTML tooltip needs `style`
   attributes the page's policy refuses) in the colours of the theme, `size="fill"` (the height of the box it is in), reading by keyboard (the arrow keys, Home, End and Escape step through the categories, the tooltip
   follows and a live region says the values: `nextCategory`, `describeCategory`) and a focusable table region when the table is wider than its box.
+
+## `saveBlob` (M13c)
+
+`saveBlob(blob, name)` hands the person a file the page made (a click on a link to a blob URL, freed at once). The Export menu of the KPI widgets and the
+dashboard's "Export dashboard" use it. Browser only.

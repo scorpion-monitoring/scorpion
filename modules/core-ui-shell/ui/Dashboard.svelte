@@ -7,12 +7,19 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { unwrap } from '@scorpion/contracts/client';
   import {
+    dashboardFileName,
+    readDashboardFile,
+    type DashboardFile,
+  } from '@scorpion/contracts/dashboard-file';
+  import {
     Alert,
+    ConfirmDialog,
     createAnalyticsReads,
     getShell,
     Icon,
     loadDashboardGrid,
     placeNew,
+    saveBlob,
     setAnalyticsReads,
     WidgetSettings,
     type DashboardGridComponent,
@@ -24,12 +31,15 @@
     canAdd,
     createAutosave,
     defaultItems,
+    exportText,
+    importProblemOf,
     newItem,
     placeable,
     problemOf,
     toTiles,
     type DashboardView,
     type Entry,
+    type ImportProblem,
     type Item,
     type SaveProblem,
     type SaveState,
@@ -217,6 +227,71 @@
     grid?.announce(t('dashboard.resetDone'));
   }
 
+  // ---- export and import (M13c) --------------------------------------------------------------------------------
+  // The export is the tiles this page holds (with edits not saved yet), written by the browser. The import sends the
+  // file to the server, which leaves out what this person cannot place and stores the rest; nothing is decided here.
+  let fileInput = $state<HTMLInputElement>();
+  let chosen = $state<DashboardFile>();
+  let importing = $state(false);
+  let importProblem = $state<ImportProblem>();
+  let importDropped = $state(0);
+
+  async function exportDashboard() {
+    open = false;
+    saveBlob(
+      new Blob([exportText($state.snapshot(items))], { type: 'application/json' }),
+      dashboardFileName(new Date()),
+    );
+    await tick();
+    trigger?.focus();
+    grid?.announce(t('dashboard.export.done'));
+  }
+
+  function chooseFile() {
+    open = false;
+    importProblem = undefined;
+    fileInput?.click();
+  }
+
+  async function onFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const picked = input.files?.[0];
+    input.value = '';
+    if (!picked) return;
+    const read = readDashboardFile(await picked.text());
+    if (!read.ok) {
+      importProblem = read.reason;
+      return;
+    }
+    chosen = read.file;
+  }
+
+  async function confirmImport() {
+    const file = chosen;
+    if (!file) return;
+    importing = true;
+    try {
+      // What is waiting is saved first, so it cannot overwrite the import a second later.
+      await saver.flush();
+      const view = await unwrap(api.POST('/ui/dashboard/import', { body: file }));
+      items = view.items;
+      notice = { dropped: 0, reset: false };
+      problem = undefined;
+      saveState = 'idle';
+      importDropped = view.dropped.length;
+      importProblem = undefined;
+      chosen = undefined;
+      await tick();
+      trigger?.focus();
+      grid?.announce(t('dashboard.import.done'));
+    } catch (error) {
+      importProblem = importProblemOf(error);
+      chosen = undefined;
+    } finally {
+      importing = false;
+    }
+  }
+
   async function done() {
     editing = false;
     open = false;
@@ -243,6 +318,8 @@
       notice.dropped > 0 ||
       missing.length > 0 ||
       loadFailed ||
+      importProblem !== undefined ||
+      importDropped > 0 ||
       (problem !== undefined && saveState === 'failed'),
   );
 
@@ -293,6 +370,11 @@
   {:else if notice.dropped > 0}
     <Alert kind="warning">{t('dashboard.notice.dropped', { count: notice.dropped })}</Alert>
   {/if}
+  {#if importProblem !== undefined}
+    <Alert kind="error">{t(`dashboard.import.error.${importProblem}`)}</Alert>
+  {:else if importDropped > 0}
+    <Alert kind="warning">{t('dashboard.import.dropped', { count: importDropped })}</Alert>
+  {/if}
   {#if missing.length > 0}
     <Alert kind="warning">{t('dashboard.notice.missing', { count: missing.length })}</Alert>
   {/if}
@@ -332,6 +414,11 @@
                 editing,
                 setConfig: (next) => setConfigOf(item.id, next),
                 size: { w: item.w, h: item.h },
+                label: nameOf(item.id),
+                openSettings:
+                  schemaOf(item.id) === undefined
+                    ? undefined
+                    : () => void grid?.openSettings(item.id),
               }}
               onmissing={() => reportMissing(item.widget)}
             />
@@ -391,6 +478,14 @@
     {:else}
       <p class="bg-base-100 rounded p-2 text-sm">{t('dashboard.nothingToAdd')}</p>
     {/each}
+    <button type="button" class="btn btn-neutral btn-sm" onclick={exportDashboard}>
+      <Icon name="download" size={16} />
+      {t('dashboard.export')}
+    </button>
+    <button type="button" class="btn btn-neutral btn-sm" onclick={chooseFile}>
+      <Icon name="upload" size={16} />
+      {t('dashboard.import')}
+    </button>
     <button type="button" class="btn btn-neutral btn-sm" onclick={reset}>
       <Icon name="refresh" size={16} />
       {t('dashboard.reset')}
@@ -401,6 +496,36 @@
     </button>
   </div>
 </div>
+
+<!-- The file picker of the import: opened by the menu's button, never shown itself. -->
+<input
+  bind:this={fileInput}
+  type="file"
+  accept="application/json,.json"
+  class="hidden"
+  tabindex="-1"
+  aria-hidden="true"
+  onchange={onFile}
+/>
+
+<ConfirmDialog
+  open={chosen !== undefined}
+  title={t('dashboard.import.title')}
+  message={t('dashboard.import.confirm', { count: chosen?.items.length ?? 0 })}
+  confirmLabel={t('dashboard.import.replace')}
+  tone="primary"
+  busy={importing}
+  onconfirm={() => void confirmImport()}
+  oncancel={() => (chosen = undefined)}
+>
+  <p class="text-sm">{t('dashboard.import.keep')}</p>
+  <div>
+    <button type="button" class="btn btn-sm" disabled={importing} onclick={exportDashboard}>
+      <Icon name="download" size={16} />
+      {t('dashboard.import.exportFirst')}
+    </button>
+  </div>
+</ConfirmDialog>
 
 <style>
   /* daisyUI's FAB shows its buttons while focus is inside it and has no way to close with the focus kept on the
