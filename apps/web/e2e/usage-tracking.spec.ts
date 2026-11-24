@@ -173,8 +173,12 @@ test.describe('usage statistics with Matomo', () => {
   }) => {
     const origin = new URL(baseURL!).origin;
     const { hits } = await stubMatomo(page);
+    // Each page sends its hit after it has loaded the tracker; opening the next page before that would cancel it, so the
+    // test waits for each one (a person who leaves a page that fast is not counted by Matomo either).
     await page.goto(`${at('/reset-password')}#token=SECRET-TOKEN-0123456789`);
+    await expect.poll(() => hits.length).toBe(1);
     await page.goto(`${at('/verify-email')}?source=mail#token=OTHER-SECRET-TOKEN`);
+    await expect.poll(() => hits.length).toBe(2);
     await page.goto(at('/no/such/page'));
     await expect.poll(() => hits.length).toBe(3);
     expect(hits.map((hit) => hit.url)).toEqual([
