@@ -72,6 +72,7 @@
     navigating: () => false,
     replaceUrl: () => {},
     withReauth: (action) => action(),
+    onNavigated: () => () => {},
     takeIntent: () => undefined,
     toaster: createToaster({ durationMs: 3000 }),
     Widgets: (() => {}) as never,

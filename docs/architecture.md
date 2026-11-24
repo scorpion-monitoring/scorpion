@@ -185,6 +185,7 @@ The plugins follow the module map in FEATURES.md §2, with one change: `registry
 | `announcements` | announcement, announcement\_read | `announcement.published` | none | Markdown (sanitised), audience by role or organisation, expiry |
 | `backup` | backup\_run | `backup.completed` | none | pg\_dump or JSON export, envelope-encrypted, S3 or filesystem target, retention, restore CLI |
 | `public-api` | none | none | none | Mounts the `v1` routes of every active module, aggregates OpenAPI, serves Swagger UI publicly, applies per-token rate limits and CORS allow-list |
+| `matomo` | none | none | none | Usage statistics of the instance with the operator's Matomo: one public widget sends each page view by pattern, never by address; the page CSP allows the Matomo origin only while tracking is on (ADR-0054) |
 
 ## Data architecture
 
@@ -290,6 +291,7 @@ A deployment profile is a small file (`profiles/<name>.ts`) that lists the modul
 | announcements | ● | ○ | ○ | ○ |
 | backup | ● | ● | ● | ● |
 | public-api | ● | ● | ○ | ● |
+| matomo | ● (off until turned on) |  |  |  |
 
 A KPI-only profile needs `registry.services` because KPIs attach to services. It can hide the catalogue UI through a setting.
 
@@ -324,7 +326,7 @@ scorpion/
     core-identity/  core-authz/  core-settings/  core-notifications/  core-audit/  core-ui-shell/
     registry-organisations/  registry-services/
     kpi-framework/  kpi-ingestion/  kpi-analytics/  kpi-impact/
-    maturity/  onboarding/  bibliometrics/  network-graph/  announcements/  backup/  public-api/
+    maturity/  onboarding/  bibliometrics/  network-graph/  announcements/  backup/  public-api/  matomo/
   profiles/
     full.ts  core-only.ts  registry.ts
   tools/

@@ -26,6 +26,7 @@
     "@scorpion/kpi-framework": "workspace:*",
     "@scorpion/kpi-impact": "workspace:*",
     "@scorpion/kpi-ingestion": "workspace:*",
+    "@scorpion/matomo": "workspace:*",
     "@scorpion/public-api": "workspace:*",
     "@scorpion/registry-organisations": "workspace:*",
     "@scorpion/registry-services": "workspace:*",
