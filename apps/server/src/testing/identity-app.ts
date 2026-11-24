@@ -29,6 +29,8 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
+import matomoModule from '@scorpion/matomo/module';
+import matomoPackage from '@scorpion/matomo/package.json' with { type: 'json' };
 import publicApiModule from '@scorpion/public-api/module';
 import publicApiPackage from '@scorpion/public-api/package.json' with { type: 'json' };
 import organisationsModule from '@scorpion/registry-organisations/module';
@@ -139,6 +141,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   services?: boolean;
   /** true: the profile has public-api (the CORS allow-list, the runtime spec); default: it has not. */
   publicApi?: boolean;
+  /** true: the profile has matomo (the usage tracker's route and widget, ADR-0054); default: it has not. */
+  matomo?: boolean;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
@@ -230,6 +234,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
             ...(options.kpi && options.ingestion && options.analytics ? ['kpi.analytics'] : []),
             ...(options.impact ? ['kpi.impact'] : []),
             ...(options.publicApi ? ['public-api'] : []),
+            ...(options.matomo ? ['matomo'] : []),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -290,6 +295,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           ...(options.publicApi
             ? [{ manifest: publicApiModule, packageJson: publicApiPackage }]
             : []),
+          ...(options.matomo ? [{ manifest: matomoModule, packageJson: matomoPackage }] : []),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
@@ -316,6 +322,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           'kpi.analytics': '@scorpion/kpi-analytics',
           'kpi.impact': '@scorpion/kpi-impact',
           'public-api': '@scorpion/public-api',
+          matomo: '@scorpion/matomo',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,
