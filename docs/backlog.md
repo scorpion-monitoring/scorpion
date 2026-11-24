@@ -1184,3 +1184,11 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **A dry run that checks everything on an empty target** would need the services to read inside the caller's transaction (see "Found differently", sprint 1).
 - **Open claims for administrators (ADR-0053).** An administrator view of the migrated accounts still waiting for their owner (open, expired), a way to extend a claim, and a way to attach an identity by hand when the provider sends another address or username than the legacy data. Today the operator reads `migrate-legacy users` and an unmatched owner is stuck until then.
 - **Forget expired claims.** An expired row in `identity_account_claim` never matches and stays; the hourly cleanup could delete it (or the account, if it was never claimed) after a retention period.
+
+## M13b usage statistics follow-ups
+
+- **Spike against a real Matomo.** The end-to-end tests use a stub. Check with the operator's Matomo (or a local container) that the hits arrive as the module README says, and whether the config id of a cookieless visitor changes daily in the Matomo version in use; then state it in the README's "Unique users" table instead of the expected behaviour.
+- **Consent mode.** `requireConsent` and a banner, if an instance's data protection officer asks for one (decision 3 of the [M13b plan](matomo-plan.md) said no while cookieless numbers are enough).
+- **Same-origin proxy.** The module serves `matomo.js` and forwards hits with `token_auth` and `cip` from the secrets store: the CSP stays `'self'`, blockers cannot block it, and the address can be shortened before it leaves (ADR-0054, option 2).
+- **Matomo events.** Exports, searches and wizard steps as events, through a small client-side port other modules can call without naming Matomo.
+- **Tracker settings form.** The secret `matomo.user-id-key` is set with the CLI or the secrets screen; the settings form of the module could say whether it is set, next to `pseudonymousUserId`.

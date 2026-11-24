@@ -123,6 +123,9 @@ importers:
       '@scorpion/kpi-ingestion':
         specifier: workspace:*
         version: link:../../modules/kpi-ingestion
+      '@scorpion/matomo':
+        specifier: workspace:*
+        version: link:../../modules/matomo
       '@scorpion/public-api':
         specifier: workspace:*
         version: link:../../modules/public-api
@@ -212,6 +215,9 @@ importers:
       '@scorpion/kpi-ingestion':
         specifier: workspace:*
         version: link:../../modules/kpi-ingestion
+      '@scorpion/matomo':
+        specifier: workspace:*
+        version: link:../../modules/matomo
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../../modules/registry-organisations
@@ -769,6 +775,31 @@ importers:
       pg:
         specifier: ^8.23.1
         version: 8.23.1
+
+  modules/matomo:
+    dependencies:
+      '@scorpion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
+      '@scorpion/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@scorpion/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
 
   modules/public-api:
     dependencies:

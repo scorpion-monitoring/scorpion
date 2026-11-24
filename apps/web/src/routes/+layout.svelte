@@ -1,7 +1,13 @@
 <script lang="ts">
   import '../app.css';
   import { navigating, page } from '$app/state';
-  import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
+  import {
+    afterNavigate,
+    beforeNavigate,
+    goto,
+    invalidateAll,
+    replaceState,
+  } from '$app/navigation';
   import { onMount } from 'svelte';
   import { createApiClient } from '@scorpion/contracts/client';
   import { isLocalPath, stripBase, url } from '@scorpion/contracts';
@@ -16,12 +22,14 @@
     Toasts,
     uiKitMessages,
     type Intent,
+    type Shell,
   } from '@scorpion/ui-kit';
   import AccountMenu from '#lib/components/AccountMenu.svelte';
   import Footer from '#lib/components/Footer.svelte';
   import Icon from '#lib/components/Icon.svelte';
   import Sidebar from '#lib/components/Sidebar.svelte';
   import Widget from '#lib/components/Widget.svelte';
+  import { shownPage } from '#lib/shown-page.ts';
   import Widgets from '#lib/components/Widgets.svelte';
   import ThemeToggle from '#lib/components/ThemeToggle.svelte';
   import { builtInFavicon, builtInLogos } from '#lib/builtin-logos.ts';
@@ -108,6 +116,19 @@
     return () => window.removeEventListener('beforeunload', warn);
   });
 
+  // The widgets that follow the pages (Shell.onNavigated, ADR-0054). Each hears the page on screen when it starts and
+  // after every navigation.
+  type NavigatedListener = Parameters<Shell['onNavigated']>[0];
+  // Not state: nothing is drawn from it.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const navigatedListeners = new Set<NavigatedListener>();
+  const currentPage = () =>
+    shownPage(basePath, { data: page.data, status: page.status, pathname: page.url.pathname });
+  afterNavigate(() => {
+    const shown = currentPage();
+    for (const listener of navigatedListeners) listener(shown);
+  });
+
   // What the person asked for before they left for the provider: kept here until the page asks for it.
   let returnedIntent: Intent | undefined;
 
@@ -135,6 +156,11 @@
     guardLeave: (isDirty) => {
       guards.add(isDirty);
       return () => void guards.delete(isDirty);
+    },
+    onNavigated: (listener) => {
+      navigatedListeners.add(listener);
+      listener(currentPage());
+      return () => void navigatedListeners.delete(listener);
     },
     takeIntent: (id) => {
       if (returnedIntent?.id !== id) return undefined;
@@ -252,5 +278,7 @@
   </div>
 </div>
 
+<!-- Widgets with nothing to show that run on every page (the usage tracker, ADR-0054). Outside the bootstrap check: they decide themselves. -->
+<Widgets slot="page-end" />
 <ReauthDialog controller={reauth} />
 <Toasts {toaster} />

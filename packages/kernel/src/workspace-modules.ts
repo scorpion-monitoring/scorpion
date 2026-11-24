@@ -12,6 +12,7 @@ export const WORKSPACE_MODULES = {
   'kpi.framework': '@scorpion/kpi-framework',
   'kpi.impact': '@scorpion/kpi-impact',
   'kpi.ingestion': '@scorpion/kpi-ingestion',
+  matomo: '@scorpion/matomo',
   'public-api': '@scorpion/public-api',
   'registry.organisations': '@scorpion/registry-organisations',
   'registry.services': '@scorpion/registry-services',
