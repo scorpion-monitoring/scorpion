@@ -191,7 +191,7 @@ interface Queryable {
 /** The number of rows of a table that match `where` (a fixed SQL text with `$n` parameters). */
 export async function countRows(
   pool: Queryable,
-  table: 'biblio_publication' | 'biblio_doi_metadata' | 'audit_event',
+  table: 'biblio_publication' | 'biblio_doi_metadata',
   where = 'true',
   values: unknown[] = [],
 ): Promise<number> {

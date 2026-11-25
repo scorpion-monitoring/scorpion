@@ -240,14 +240,11 @@ describe('removing a publication', () => {
     await w.biblio.publications.remove(w.people.member, w.svc.id, row.id);
     expect(await countRows(w.pool, 'biblio_publication', 'id = $1', [row.id])).toBe(0);
     expect(await countRows(w.pool, 'biblio_doi_metadata', 'doi = $1', [row.doi])).toBe(1);
-    expect(
-      await countRows(
-        w.pool,
-        'audit_event',
-        `action = 'bibliometrics.publication.removed' and subject_id = $1`,
-        [row.id],
-      ),
-    ).toBe(1);
+    const audit = await w.pool.query(
+      `select 1 from audit_event where action = 'bibliometrics.publication.removed' and subject_id = $1`,
+      [row.id],
+    );
+    expect(audit.rows).toHaveLength(1);
   });
 
   it('answers 404 for a publication of another service and removes nothing [ASVS-8.2.2]', async () => {
