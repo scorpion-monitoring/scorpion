@@ -1199,3 +1199,82 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **An administrator's default dashboard.** Today the default comes from the widgets' `grid.default`; an administrator may want to set one for the instance.
 - **Service ids between instances.** An imported tile keeps the service id of the file; on another instance it shows "settings are no longer valid". Mapping by slug on import would make files portable.
 - **Adding a file's tiles** to the current dashboard instead of replacing it (decision 1 said replace; adding needs new instance ids and runs into singletons and the 20-tile cap).
+
+## Push agent and connectors (brainstorm, 2026-11-24)
+
+The pull adapters (Matomo, Plausible, GitHub) are planned as `ingestion.adapter` contributions of `kpi.ingestion` and are not scheduled yet
+([implementation.md §10](implementation.md#10-after-g4-backlog-not-planned); [FEATURES §6](FEATURES.md#6-appendix-pluggability-matrix)). This entry adds a self-hosted **push** path next to them: a provider
+runs `scorpion-agent` in its own network and sends measurements through `POST /api/v1/measurements`. Providers choose push when they will
+not hand a source's credentials to a central instance, or when institutional policy forbids it. Pushing is the provider's responsibility:
+the agent exits non-zero on failure, and Scorpion shows no agent health. Nothing here belongs to a milestone yet; it needs a plan and the
+ADRs below first.
+
+**Shape agreed in the brainstorm**
+
+- **One engine, two hosts.** Connectors and a binding engine are one shared package. The pull host is a thin `ingestion.adapter` (pg-boss,
+  the `secrets` store, `upsertBatch()`); the push host is a one-shot `scorpion-agent run` scheduled by cron or a systemd timer, no daemon.
+  The typed client is an internal detail of the agent, not a product of its own. No transpiled multi-language client: other languages use
+  an `exec` source (any program that prints measurements as JSON lines to stdout).
+- **Connector tiers.** Bundled (pull and push, maintained here, reviewed and tested to the repository's rules); community (push only,
+  published as packages against a versioned `connector-sdk` with a test kit that replays recorded responses); `exec` (push only, any
+  language). A community connector can be promoted to bundled; demand for a push → pull switch is the signal.
+- **Agent configuration** is one local YAML file per provider with `sources` (connector, connection, credentials) and `indicators` (one
+  binding per indicator of a service). Credentials only as `${env:…}` or `${file:…}`; a literal value in a field the schema marks secret is
+  refused. `scorpion-agent check` validates the file, the source credentials, the token (scope, expiry warning at 30 days) and that every
+  bound indicator is in the service's effective set; `run --dry-run` prints what would be sent. `scorpion-agent init --service <slug>`
+  writes a skeleton from the effective indicator set and the administrator's suggestions.
+- **One config schema per connector** (Zod), used by the agent's YAML loader and by the pull form (SchemaForm). Switching is push → pull
+  only: Scorpion imports an agent job and asks for the credential again. Bundled connectors only. Pull → push export is not built.
+- **Bindings per (service, indicator).** The administrator's suggestion lives on the indicator (a short list across connectors, next to
+  RIMO `kpi.measured-by`) and `init` copies it once; the provider adapts it to how the source is set up. A binding may combine sources with
+  `sum`, `min` or `max` (no `avg`, no expressions: use `exec`). All or nothing per binding and period: if one part fails, that indicator is
+  skipped for that period and the run exits non-zero. An indicator marked `additive: false` (unique users) warns when summed. This is not
+  the `aggregate` vocabulary of ADR-0043, which aggregates over time.
+- **A bound indicator is owned by the agent.** `check` warns when existing values of a bound indicator came from another `source`.
+- **Catch-up, no backfill.** Each run fills the missing values of the last _N_ complete periods (default 3, at most 12) and leaves filled
+  periods alone. History comes in once through the CSV/XLSX adapters.
+- **Cumulative metrics** (GitHub release-asset downloads, container pulls) are stored as counter readings in Scorpion and the monthly value
+  is the difference of consecutive readings, so the agent stays stateless and the pull host behaves the same. A difference that spans a gap
+  is not attributed: the months of the gap stay empty.
+
+**ADR stubs** (numbers assigned when written)
+
+- **ADR: connector contract and binding engine.** Decide the contract `{ configSchema, fetch, describe, metric kinds }`: `fetch(config,
+credentials, period)` returns values or an error per metric (an error is not a zero); `describe(selector)` returns human-readable text
+  without URLs or secrets; each metric is `periodic` or `cumulative`. Decide where the engine package lives (this repository or a separate
+  `scorpion-connectors` repository), how `connector-sdk` is versioned (its own semver, independent of the product version, major bumps rare),
+  the tiers and the promotion rule, the `exec` line format, and the YAML schema of the agent. Options to record: per-language generated
+  clients, a transpiled client (Fable-style), a CLI with a shared engine (chosen).
+- **ADR: service accounts.** A non-human actor owned by a provider, managed by its provider managers. It holds PATs with the existing
+  mechanics (prefix, hash, scopes) and a required expiry (at most 12 months; mails to the provider managers 30 and 7 days before, to the
+  instance administrators when the provider has no active manager). It has an editable service list; adding a service is an audited action
+  and only services of the owning provider are allowed; a deleted service or one moved to another provider drops off automatically. No
+  roles: a fixed allow-list of scopes (measurement read and write, the reads `check` needs); never an identity or authz scope; no web
+  sign-in. `ctx.authz.require` intersects the account's service list with the resource. A write for a service outside the list answers 403
+  with its own problem type. Personal PATs stay as they are. ASVS scope: V6, V7, V8 (`core.identity`, `core.authz`). Prerequisite for
+  shipping the agent, so that providers are not taught to put personal tokens on servers.
+- **ADR: notes and recipes on measurements.** Notes: written by a person about one value (service, indicator, period), plain text with a
+  length limit, in their own table so that an upsert never removes them; editable and deletable by the author and the provider managers,
+  each change in `core.audit`; visibility `internal` (default: the provider's members and managers, and holders of a permission such as
+  `kpi.ingestion.note.read-internal`) or `shared` (every signed-in user and v1), with a confirmation when made shared. v1 carries shared
+  notes only, as an additive change. Recipes: generated by the engine from the binding and `describe()` (connector and agent versions
+  included), linked to the run, so a series' method history is derived from `run_id` and needs no "valid from" date. Every write path gets
+  one: form and file submissions record "entered manually" or "imported from file", and a provider may write one by hand for a manual
+  indicator. Recipes are visible wherever the values are. Decide whether `runId` becomes required in `upsertBatch()` or a row without a
+  run means "entered manually".
+- **ADR: counter readings.** Storage of raw cumulative readings per (service, source metric, time), the derivation of monthly values from
+  consecutive readings, the gap rule above, how a counter reset (a deleted release, a recreated repository) is detected and reported, and
+  how a binding that sums a periodic and a cumulative source behaves.
+
+**Next step:** a throwaway spike before the ADRs. Implement the contract and the engine with the two hardest cases, two Matomo instances
+summed (Scorpion's own visits) and GitHub release-asset downloads as counter readings, and run them in a minimal agent and a minimal pull
+wrapper. If the contract holds, write the ADRs and a plan.
+
+**Parked**
+
+- A small Python helper for `exec` sources (a measurement type and `emit()`), if contributors turn out to be mostly Python users.
+- Recipe and note markers on the analytics trend graph.
+- Re-submitting the last filled period to pick up late corrections at the source.
+- Notes on a series (from a period on) written by people, beyond the generated recipes.
+- Generated API clients for other languages from the v1 OpenAPI document (nearly free; a recipe in the docs would do).
+- A template repository or `npm create scorpion-connector` for contributors.
