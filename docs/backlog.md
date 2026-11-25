@@ -1200,6 +1200,11 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **Service ids between instances.** An imported tile keeps the service id of the file; on another instance it shows "settings are no longer valid". Mapping by slug on import would make files portable.
 - **Adding a file's tiles** to the current dashboard instead of replacing it (decision 1 said replace; adding needs new instance ids and runs into singletons and the 20-tile cap).
 
+## M16 sprint 1 follow-ups
+
+- **`matomo`'s route is in neither repo-wide route guard.** `GET /api/internal/matomo/tracker` (M13b) is not loaded by the walker of `defect-01.privilege-escalation.test.ts` nor by `authorization-doc.test.ts`, so `docs/security/authorization.md` does not list it although the page claims every route of the live registry (ASVS 8.1.1). Load `matomo: true` in both and regenerate the table (a `docs/security/**` change: V8 note, the other chapters `asvs-no-impact`). `bibliometrics` is in both since M16 sprint 1.
+- **A `not-found` DOI is asked again only when it is added anew.** The weekly job of sprint 2 retries `failed` metadata only; a DOI registered after it was first added stays `not-found` until someone adds it again (removing and adding the publication). If that turns out to happen, the job could retry `not-found` rows older than some months.
+
 ## Push agent and connectors (brainstorm, 2026-11-24)
 
 The pull adapters (Matomo, Plausible, GitHub) are planned as `ingestion.adapter` contributions of `kpi.ingestion` and are not scheduled yet
