@@ -19,6 +19,7 @@ import { ids, type AuditActor, type Db, type ModuleContext } from '@scorpion/ker
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { doiMetadata, publication } from '../db/schema.ts';
+import type { CitationService, ServiceCitations } from './citations.ts';
 import { PERMISSION_READ, PERMISSION_WRITE, RESOURCE_SERVICE } from './permissions.ts';
 
 /** Publications per page when the caller gives no size (FEATURES §3.12), and the most one page holds. */
@@ -49,11 +50,17 @@ export interface Publication {
   addedAt: Date;
   /** `null` until the DOI has been looked up (lookups are off, see the setting `enabled`). */
   metadata: PublicationMetadata | null;
+  /** The latest count of the citation source; `null` while it is unknown (never asked, not found, failed). Never a made-up 0. */
+  citedByCount: number | null;
+  /** When `citedByCount` was taken; `null` with it. */
+  citationsAsOf: Date | null;
 }
 
 export interface PublicationPage {
   totalCount: number;
   items: Publication[];
+  /** The citations of the whole service (every page), and over how many publications they are taken. */
+  citations: ServiceCitations;
 }
 
 export interface PublicationsService {
@@ -82,6 +89,8 @@ export interface PublicationsDeps {
   resolver: DoiResolver;
   /** The setting `enabled`: off, no DOI is looked up. */
   lookupsEnabled: () => Promise<boolean>;
+  /** The citation counts the list shows. */
+  citations: Pick<CitationService, 'latest' | 'serviceTotal'>;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -170,31 +179,30 @@ function metadataRow(doi: string, result: DoiResult): typeof doiMetadata.$inferI
   };
 }
 
-export function createPublicationsService(
-  ctx: Pick<ModuleContext, 'db' | 'log' | 'audit'>,
-  deps: PublicationsDeps,
-): PublicationsService {
+/** The cache of DOI metadata: read a row, or look a DOI up and store the answer. Shared by `add` and the weekly retry. */
+export interface MetadataStore {
+  stored(doi: string): Promise<MetadataRow | null>;
+  /** Looks the DOI up and stores the answer. A lookup that throws counts as failed; this never throws. */
+  resolveAndStore(doi: string, options?: { signal?: AbortSignal }): Promise<MetadataRow | null>;
+}
+
+export function createMetadataStore(
+  ctx: Pick<ModuleContext, 'db' | 'log'>,
+  resolver: DoiResolver,
+): MetadataStore {
   const db: Db = ctx.db;
-
-  async function serviceMustExist(serviceId: string): Promise<void> {
-    if (!uuidPattern.test(serviceId))
-      throw new Invalid('The request is not valid.', [
-        problem('serviceId', 'must be the id of a service', 'path'),
-      ]);
-    if (!(await deps.services.existsAsSystem(serviceId.toLowerCase())))
-      throw new NotFound('There is no such service.');
-  }
-
   async function storedMetadata(doi: string): Promise<MetadataRow | null> {
     const [row] = await db.select().from(doiMetadata).where(eq(doiMetadata.doi, doi));
     return row ?? null;
   }
 
-  /** Looks the DOI up and stores the answer. A lookup that throws counts as failed; nothing here fails the add. */
-  async function resolveAndStore(doi: string): Promise<MetadataRow | null> {
+  async function resolveAndStore(
+    doi: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<MetadataRow | null> {
     let result: DoiResult;
     try {
-      result = await deps.resolver.resolve(doi);
+      result = await resolver.resolve(doi, options);
     } catch {
       result = { status: 'failed', reason: 'network' };
     }
@@ -219,6 +227,26 @@ export function createPublicationsService(
       return storedMetadata(doi);
     }
   }
+
+  return { stored: storedMetadata, resolveAndStore };
+}
+
+export function createPublicationsService(
+  ctx: Pick<ModuleContext, 'db' | 'log' | 'audit'>,
+  deps: PublicationsDeps,
+): PublicationsService {
+  const db: Db = ctx.db;
+
+  async function serviceMustExist(serviceId: string): Promise<void> {
+    if (!uuidPattern.test(serviceId))
+      throw new Invalid('The request is not valid.', [
+        problem('serviceId', 'must be the id of a service', 'path'),
+      ]);
+    if (!(await deps.services.existsAsSystem(serviceId.toLowerCase())))
+      throw new NotFound('There is no such service.');
+  }
+
+  const metadata = createMetadataStore(ctx, deps.resolver);
 
   return {
     async add(actor, serviceId, rawDoi) {
@@ -263,10 +291,17 @@ export function createPublicationsService(
         throw error;
       }
 
-      let metadata = await storedMetadata(doi);
-      if (metadata?.status !== 'ok' && (await deps.lookupsEnabled()))
-        metadata = await resolveAndStore(doi);
-      return { ...row, metadata: metadataOut(metadata) };
+      let stored = await metadata.stored(doi);
+      if (stored?.status !== 'ok' && (await deps.lookupsEnabled()))
+        stored = await metadata.resolveAndStore(doi);
+      // Another service may list the DOI already, and its count is the DOI's.
+      const known = (await deps.citations.latest([doi])).counts.get(doi);
+      return {
+        ...row,
+        metadata: metadataOut(stored),
+        citedByCount: known?.citedByCount ?? null,
+        citationsAsOf: known?.takenAt ?? null,
+      };
     },
 
     async list(actor, serviceId, page) {
@@ -283,9 +318,19 @@ export function createPublicationsService(
         .orderBy(sql`${doiMetadata.issued} desc nulls last`, asc(publication.id))
         .limit(page.pageSize)
         .offset(page.page * page.pageSize);
+      const { counts } = await deps.citations.latest(rows.map((r) => r.publication.doi));
       return {
         totalCount: total?.n ?? 0,
-        items: rows.map((r) => ({ ...r.publication, metadata: metadataOut(r.metadata) })),
+        items: rows.map((r) => {
+          const known = counts.get(r.publication.doi);
+          return {
+            ...r.publication,
+            metadata: metadataOut(r.metadata),
+            citedByCount: known?.citedByCount ?? null,
+            citationsAsOf: known?.takenAt ?? null,
+          };
+        }),
+        citations: await deps.citations.serviceTotal(service),
       };
     },
 

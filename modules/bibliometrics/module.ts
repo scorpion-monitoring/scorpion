@@ -1,15 +1,53 @@
 import type { AuthzService } from '@scorpion/core-authz/public';
-import { createDoiResolver, createStubDoiResolver, type DoiResolver } from '@scorpion/integrations';
-import { defineModule } from '@scorpion/kernel';
+import type { SettingsService } from '@scorpion/core-settings/public';
+import {
+  createDoiResolver,
+  createOpenAlex,
+  createStubDoiResolver,
+  createStubOpenAlex,
+  type DoiResolver,
+  type OpenAlex,
+} from '@scorpion/integrations';
+import { defineModule, type JobResult } from '@scorpion/kernel';
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { registerRoutes } from './routes.ts';
+import {
+  CITATIONS_UPDATED_EVENT,
+  createCitationService,
+  REFRESH_JOB,
+  type CitationService,
+} from './service/citations.ts';
 import { createDemoSeed, demoResolver, type BibliometricsDemoDeps } from './service/demo-seed.ts';
 import { PERMISSION_READ, PERMISSION_WRITE, RESOURCE_SERVICE } from './service/permissions.ts';
 import { writePolicy } from './service/policy.ts';
-import { createPublicationsService, type PublicationsService } from './service/publications.ts';
+import { citationsUpdatedSchema } from './service/events.ts';
+import { refreshJobDataSchema, runRefreshJob } from './service/job.ts';
+import {
+  createMetadataStore,
+  createPublicationsService,
+  type PublicationsService,
+} from './service/publications.ts';
+import {
+  CITATION_SOURCE_REGISTRY,
+  citationSourceEntrySchema,
+  indexSources,
+  OPENALEX_KEY_SECRET,
+  openAlexSource,
+  type CitationSourceEntry,
+  type OpenAlexSourceDeps,
+} from './service/sources.ts';
 import { settingsSchema, type BibliometricsSettings } from './settings-schema.ts';
 
 export { settingsSchema, type BibliometricsSettings } from './settings-schema.ts';
+export { citationsUpdatedSchema } from './service/events.ts';
+export type {
+  CitationService,
+  History,
+  HistoryPoint,
+  RefreshReport,
+  ServiceCitations,
+} from './service/citations.ts';
+export type { CitationSourceEntry, SourceCounts } from './service/sources.ts';
 export type {
   Publication,
   PublicationMetadata,
@@ -24,14 +62,23 @@ export const MODULE_ID = 'bibliometrics';
 export interface BibliometricsService {
   /** Add, list and remove the publications of a service. */
   publications: PublicationsService;
+  /** The citation refresh, "check now" and the history of a publication. */
+  citations: CitationService;
 }
 
 // The service types of the dependencies shape `ctx.deps`.
-export type BibliometricsDependencies = [AuthzService, ServicesPublic];
+export type BibliometricsDependencies = [AuthzService, SettingsService, ServicesPublic];
 
 export interface BibliometricsOptions {
   /** The DOI resolver. Default: the real one, or the stub (which knows no DOI) under `NODE_ENV=test`. */
   resolver?: DoiResolver;
+  /**
+   * The OpenAlex adapter for a key (or none). Default: the real one, or the stub (which knows no DOI) under
+   * `NODE_ENV=test`.
+   */
+  openAlex?: (apiKey: string | undefined) => OpenAlex;
+  /** "Now", for the 10-minute rule and the snapshot times. Default: the system clock. */
+  clock?: () => Date;
 }
 
 /** Builds the manifest. The default export is the one a profile uses. */
@@ -40,6 +87,8 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
   // closures (the pattern of kpi.ingestion).
   let isProviderMember: ServicesPublic['isProviderMemberAsSystem'] | undefined;
   let demoParts: BibliometricsDemoDeps | undefined;
+  let citations: CitationService | undefined;
+  let openAlexParts: OpenAlexSourceDeps | undefined;
   const need = <T>(value: T | undefined): T => {
     if (value === undefined) throw new Error('bibliometrics: asked before start');
     return value;
@@ -47,7 +96,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
 
   return defineModule<
     BibliometricsService,
-    'core.authz' | 'registry.services',
+    'core.authz' | 'core.settings' | 'registry.services',
     never,
     BibliometricsSettings
   >({
@@ -69,18 +118,40 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
       },
     },
 
-    // Edited with core.settings.write in the settings form; the OpenAlex key (sprint 2) with core.settings.secret.write.
+    // Edited with core.settings.write in the settings form; the optional OpenAlex key (the secret
+    // `bibliometrics.openalex-api-key`) with core.settings.secret.write or `pnpm scorpion set-secret`.
     settings: settingsSchema,
 
     schema: () => import('./db/schema.ts'),
     migrations: new URL('./migrations', import.meta.url),
 
-    // The citation event and the registry `biblio.citationSource` come with sprint 2.
-    events: { emits: {} },
+    // Where citation counts come from; another module adds a source by contributing an entry. Nothing here branches on an id.
+    registries: { [CITATION_SOURCE_REGISTRY]: citationSourceEntrySchema },
+
+    events: {
+      // One per run of a source: ids and counts only. Nothing listens yet.
+      emits: { [CITATIONS_UPDATED_EVENT]: citationsUpdatedSchema },
+    },
+
+    jobs: [
+      {
+        // Weekly, Monday 04:00 UTC, for every service; "check now" queues it for one. One slice of at most 2,000 DOIs per
+        // run, then the next slice is queued. The job page's "run now" starts a scheduled run.
+        name: REFRESH_JOB,
+        schedule: '0 4 * * 1',
+        data: refreshJobDataSchema,
+        retry: { limit: 2, delaySeconds: 900 },
+        timeoutSeconds: 1800,
+        handler: (job, ctx): Promise<JobResult> =>
+          runRefreshJob(job, need(citations), (data) => ctx.jobs.enqueue(REFRESH_JOB, data)),
+      },
+    ],
 
     contributes: {
       // Every signed-in person reads the publications of every service, as services are readable.
       'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ] }],
+      // OpenAlex, the one built-in citation source.
+      [CITATION_SOURCE_REGISTRY]: [openAlexSource(() => need(openAlexParts))],
       // Approved members of the service's provider may change its publications; asked of registry.services at every call.
       'authz.resourcePolicy': [
         writePolicy({
@@ -94,30 +165,61 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
 
     services: (ctx) => {
       const services = ctx.deps['registry.services'];
+      const settingsService = ctx.deps['core.settings'];
       isProviderMember = services.isProviderMemberAsSystem;
+      const testing = process.env.NODE_ENV === 'test';
+      openAlexParts = {
+        client:
+          options.openAlex ??
+          (testing ? () => createStubOpenAlex() : (apiKey) => createOpenAlex({ apiKey })),
+        // Trusted read of the secrets store; the key goes only into the Authorization header.
+        apiKey: () => settingsService.getSecret(OPENALEX_KEY_SECRET),
+      };
       const common = { authz: ctx.deps['core.authz'], services };
       const resolver =
-        options.resolver ??
-        (process.env.NODE_ENV === 'test' ? createStubDoiResolver() : createDoiResolver());
+        options.resolver ?? (testing ? createStubDoiResolver() : createDoiResolver());
+      // Two sources with one id stop the start.
+      const sources = indexSources(ctx.registry(CITATION_SOURCE_REGISTRY) as CitationSourceEntry[]);
+      citations = createCitationService(ctx, {
+        ...common,
+        sources: () => sources,
+        settings: () => ctx.settings.get(),
+        metadata: createMetadataStore(ctx, resolver),
+        enqueue: (data) => ctx.jobs.enqueue(REFRESH_JOB, data),
+        ...(options.clock ? { clock: options.clock } : {}),
+      });
       const publications = createPublicationsService(ctx, {
         ...common,
         resolver,
         lookupsEnabled: async () => (await ctx.settings.get()).enabled,
+        citations,
       });
       demoParts = {
         services,
+        // The seed's citations: its one source answers from the seed's table, and its clock is the snapshot's date.
+        citations: (source, now) =>
+          createCitationService(ctx, {
+            ...common,
+            sources: () => [source],
+            settings: async () => ({ ...(await ctx.settings.get()), enabled: true }),
+            metadata: createMetadataStore(ctx, demoResolver()),
+            enqueue: () => Promise.resolve(),
+            clock: () => now,
+          }),
         // The seed's own service: its resolver answers from the seed's table, so the seed never reaches the network.
         publications: createPublicationsService(ctx, {
           ...common,
           resolver: demoResolver(),
           lookupsEnabled: () => Promise.resolve(true),
+          citations,
         }),
       };
-      return { publications };
+      return { publications, citations };
     },
 
     routes: (r) => {
-      registerRoutes(r, r.service<BibliometricsService>().publications);
+      const service = r.service<BibliometricsService>();
+      registerRoutes(r, service.publications, service.citations);
     },
   });
 }

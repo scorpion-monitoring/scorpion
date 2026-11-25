@@ -1,5 +1,6 @@
-// The demo seed (ADR-0046): three fictional publications on two demo services, with their metadata, through the service as
-// the demo administrator, and not one request: neither the module's resolver nor `fetch` is called.
+// The demo seed (ADR-0046): three fictional publications on two demo services, with their metadata and two citation
+// snapshots each, through the services as the demo administrator, and not one request: neither the module's resolver, nor
+// its OpenAlex adapter, nor `fetch` is called.
 import type { DemoSeedContext } from '@scorpion/kernel';
 import { DEMO_SERVICE_SLUGS } from '@scorpion/registry-services/public';
 import { makeOrganisation, makeService } from '@scorpion/testing';
@@ -23,7 +24,14 @@ describe('the demo seed', () => {
 
   it('stores the publications with their metadata, makes no request, and changes nothing on a second run', async () => {
     const calls: string[] = [];
+    const openAlexAsked: string[] = [];
     const s = await h.start({
+      openAlex: () => ({
+        citedByCount(dois) {
+          openAlexAsked.push(...dois);
+          return Promise.resolve({ counts: new Map(), notFound: [], failed: [] });
+        },
+      }),
       resolver: {
         resolve(doi) {
           calls.push(doi);
@@ -45,13 +53,16 @@ describe('the demo seed', () => {
     expect(await s.manifest.demoSeed!(undefined as never, demo)).toEqual({
       created: 3,
       unchanged: 0,
+      snapshots: 6,
     });
     expect(await s.manifest.demoSeed!(undefined as never, demo)).toEqual({
       created: 0,
       unchanged: 3,
+      snapshots: 0,
     });
 
     expect(calls).toEqual([]);
+    expect(openAlexAsked).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(await countRows(s.pool, 'biblio_publication')).toBe(3);
     expect(await countRows(s.pool, 'biblio_doi_metadata', `status = 'ok'`)).toBe(3);
@@ -60,6 +71,26 @@ describe('the demo seed', () => {
     );
     expect(rows).toEqual(
       DEMO_PUBLICATIONS.map((item) => ({ doi: item.doi, title: item.metadata.title })),
+    );
+
+    // Two snapshots a week apart per publication: the history has two points, the list the latest.
+    expect(await countRows(s.pool, 'biblio_citation_snapshot')).toBe(6);
+    const first = DEMO_PUBLICATIONS[0]!;
+    const service = (
+      await s.pool.query<{ service_id: string; id: string }>(
+        'select service_id, id from biblio_publication where doi = $1',
+        [first.doi],
+      )
+    ).rows[0]!;
+    const admin = demo.actors.get('admin')!;
+    const history = await s.biblio.citations.history(admin, service.service_id, service.id);
+    expect(history.points.map((point) => point.citedByCount)).toEqual([...first.citations]);
+    const page = await s.biblio.publications.list(admin, service.service_id, {
+      page: 0,
+      pageSize: 5,
+    });
+    expect(page.items.find((item) => item.doi === first.doi)?.citedByCount).toBe(
+      first.citations[1],
     );
   });
 

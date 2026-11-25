@@ -3,6 +3,8 @@
 //
 // No pg enum. `service_id` is a plain column, not a foreign key: this module holds no reference into registry.services'
 // tables (the service asks `registry.services/public` whether a service exists, as kpi.ingestion does).
+// `biblio_citation_run` and `biblio_citation_snapshot` hold the citation counts over time; snapshots belong to the DOI, not to
+// a service, so a DOI that two services list is asked once.
 // `biblio_doi_metadata` is a cache of the DOI resolver shared by every service that lists the DOI; it has no foreign key to
 // `biblio_publication` and outlives its rows.
 import { sql } from 'drizzle-orm';
@@ -10,6 +12,7 @@ import {
   check,
   date,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -98,5 +101,65 @@ export const doiMetadata = pgTable(
       'biblio_doi_metadata_type_check',
       sql`${table.type} is null or char_length(${table.type}) between 1 and 64`,
     ),
+  ],
+);
+
+/**
+ * One refresh of one citation source (`source`, the id of a `biblio.citationSource` entry), for one slice of the weekly job
+ * or one "check now". A manual run names its service (`service_id`, which the 10-minute rule reads); a scheduled run names
+ * none. `finished_at` is null while the run waits for the job. `error` is a fixed text, never a key or a URL.
+ */
+export const citationRun = pgTable(
+  'biblio_citation_run',
+  {
+    id: uuid().primaryKey(), // UUIDv7
+    trigger: text().notNull(),
+    source: text().notNull(),
+    serviceId: uuid('service_id'),
+    startedAt: timestamptz('started_at').notNull().defaultNow(),
+    finishedAt: timestamptz('finished_at'),
+    asked: integer().notNull().default(0),
+    found: integer().notNull().default(0),
+    failed: integer().notNull().default(0),
+    error: text(),
+  },
+  (table) => [
+    index('biblio_citation_run_service_idx').on(table.serviceId, table.startedAt),
+    check('biblio_citation_run_trigger_check', sql`${table.trigger} in ('schedule', 'manual')`),
+    check('biblio_citation_run_source_check', sql`${table.source} ~ '^[a-z][a-z0-9-]{0,31}$'`),
+    check(
+      'biblio_citation_run_counts_check',
+      sql`${table.asked} >= 0 and ${table.found} >= 0 and ${table.failed} >= 0 and ${table.found} + ${table.failed} <= ${table.asked}`,
+    ),
+    check(
+      'biblio_citation_run_error_check',
+      sql`${table.error} is null or char_length(${table.error}) between 1 and 500`,
+    ),
+  ],
+);
+
+/**
+ * The count a source gave for a DOI in a run. Only a DOI the source knows has a row: an unknown count is the absence of a
+ * row, never a zero. The history of a publication is the snapshots of its DOI in time order.
+ */
+export const citationSnapshot = pgTable(
+  'biblio_citation_snapshot',
+  {
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => citationRun.id, { onDelete: 'cascade' }),
+    doi: text().notNull(),
+    source: text().notNull(),
+    citedByCount: integer('cited_by_count').notNull(),
+    takenAt: timestamptz('taken_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('biblio_citation_snapshot_run_doi_key').on(table.runId, table.doi),
+    index('biblio_citation_snapshot_doi_idx').on(table.doi, table.source, table.takenAt),
+    check(
+      'biblio_citation_snapshot_doi_check',
+      sql`char_length(${table.doi}) between 4 and 256 and ${table.doi} = lower(${table.doi})`,
+    ),
+    check('biblio_citation_snapshot_count_check', sql`${table.citedByCount} >= 0`),
   ],
 );

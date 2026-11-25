@@ -331,7 +331,12 @@ describe('listing publications', () => {
       page: 5,
       pageSize: DEFAULT_PAGE_SIZE,
     });
-    expect(beyond).toEqual({ totalCount: 7, items: [] });
+    expect(beyond).toEqual({
+      totalCount: 7,
+      items: [],
+      // The total is the service's, on every page; nothing was counted, so it is unknown, not 0.
+      citations: { source: 'openalex', total: null, found: 0, of: 7 },
+    });
   });
 
   it('gives the issued date at its precision', async () => {

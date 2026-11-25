@@ -14,6 +14,13 @@ import {
 } from '@scorpion/contracts';
 import { DOI_MAX_INPUT_LENGTH } from '@scorpion/integrations';
 import type { RouteRegistrar } from '@scorpion/kernel';
+import {
+  HISTORY_MAX_POINTS,
+  MANUAL_COOLDOWN_SECONDS,
+  type CitationService,
+  type History,
+  type ServiceCitations,
+} from './service/citations.ts';
 import { PERMISSION_READ } from './service/permissions.ts';
 import {
   DEFAULT_PAGE_SIZE,
@@ -56,16 +63,79 @@ export const publicationSchema = z.object({
   metadata: publicationMetadataSchema
     .nullable()
     .describe('`null` until the DOI is looked up (lookups are turned off).'),
+  citedByCount: z
+    .number()
+    .int()
+    .min(0)
+    .nullable()
+    .describe(
+      'The latest citation count of the citation source. `null` while it is unknown: not asked yet, not found by the source, or the request failed. Never a 0 that was not counted.',
+    ),
+  citationsAsOf: z.iso
+    .datetime()
+    .nullable()
+    .describe('When `citedByCount` was taken; `null` with it.'),
+});
+
+export const serviceCitationsSchema = z
+  .object({
+    source: z
+      .string()
+      .nullable()
+      .describe('The id of the citation source the counts come from (`openalex`).'),
+    total: z
+      .number()
+      .int()
+      .min(0)
+      .nullable()
+      .describe('The sum of the known counts of the service; `null` when no publication has one.'),
+    found: z.number().int().min(0).describe('How many publications have a count.'),
+    of: z.number().int().min(0).describe('How many publications the service lists.'),
+  })
+  .describe('The citations of the whole service (all pages): "312 citations, 4 of 5 found".');
+
+export const publicationListSchema = listEnvelope(publicationSchema).extend({
+  citations: serviceCitationsSchema,
+});
+
+export const historyPointSchema = z.object({
+  source: z.string().describe('The id of the citation source.'),
+  day: z.iso.date().describe('The UTC day of the count.'),
+  citedByCount: z.number().int().min(0),
+  takenAt: z.iso.datetime(),
+});
+
+export const publicationHistorySchema = z.object({
+  publicationId: z.uuid(),
+  doi: z.string(),
+  points: z
+    .array(historyPointSchema)
+    .max(HISTORY_MAX_POINTS)
+    .describe(
+      `Oldest first; at most one point per source and day (the latest count of that day), the last ${HISTORY_MAX_POINTS}. A week with no count (not found, failed) has no point.`,
+    ),
+});
+
+export const refreshAcceptedSchema = z.object({
+  runIds: z
+    .array(z.uuid())
+    .describe(
+      'One run per citation source that is on (usually one, OpenAlex). The counts arrive when the job has run.',
+    ),
 });
 
 const serviceParam = z.object({ serviceId: z.uuid().describe('The id of the service.') });
+
+const publicationParams = serviceParam.extend({
+  publicationId: z.uuid().describe('The id of the publication.'),
+});
 
 export const listPublicationsRoute = createRoute({
   method: 'get',
   path: BASE,
   permission: PERMISSION_READ,
   summary: 'The publications of a service',
-  description: `The publications of a service with their metadata, newest first (by the date they were issued; unknown dates last), then by id. ${DEFAULT_PAGE_SIZE} per page by default, at most ${MAX_PAGE_SIZE}; pages count from 0.`,
+  description: `The publications of a service with their metadata and citation counts, and the citation total of the service, newest first (by the date they were issued; unknown dates last), then by id. ${DEFAULT_PAGE_SIZE} per page by default, at most ${MAX_PAGE_SIZE}; pages count from 0.`,
   request: {
     params: serviceParam,
     query: paginationQuery({ defaultPageSize: DEFAULT_PAGE_SIZE, maxPageSize: MAX_PAGE_SIZE }),
@@ -73,7 +143,7 @@ export const listPublicationsRoute = createRoute({
   responses: {
     200: {
       description: 'One page of publications.',
-      content: { 'application/json': { schema: listEnvelope(publicationSchema) } },
+      content: { 'application/json': { schema: publicationListSchema } },
     },
     404: { description: 'No such service.' },
   },
@@ -124,11 +194,47 @@ export const removePublicationRoute = createRoute({
   description:
     'Removes a publication of this service by its id. A publication of another service is a 404 and is not touched. Needs `bibliometrics.publication.write` on the service.',
   request: {
-    params: serviceParam.extend({ publicationId: z.uuid().describe('The id of the publication.') }),
+    params: publicationParams,
   },
   responses: {
     204: { description: 'The publication is removed.' },
     404: { description: 'No such service, or the service has no such publication.' },
+  },
+});
+
+export const publicationHistoryRoute = createRoute({
+  method: 'get',
+  path: `${BASE}/{publicationId}/history`,
+  permission: PERMISSION_READ,
+  summary: 'The citation history of a publication',
+  description: `The citation counts of a publication of this service over time: at most one per source and day (the latest), the last ${HISTORY_MAX_POINTS}, oldest first. A publication of another service is a 404.`,
+  request: { params: publicationParams },
+  responses: {
+    200: {
+      description: 'The history.',
+      content: { 'application/json': { schema: publicationHistorySchema } },
+    },
+    404: { description: 'No such service, or the service has no such publication.' },
+  },
+});
+
+export const refreshCitationsRoute = createRoute({
+  method: 'post',
+  path: '/bibliometrics/services/{serviceId}/citations/refresh',
+  // Delegated (ADR-0034), as the add: the service checks `bibliometrics.publication.write` on the service.
+  permission: PERMISSION_READ,
+  rateLimit: 'strict',
+  summary: 'Check the citations of a service now',
+  description: `Queues a citation refresh of this service's publications and answers at once with the runs. Refused for ${MANUAL_COOLDOWN_SECONDS / 60} minutes after the last one of the service (429 with \`Retry-After\`), so the instance's daily budget at the citation source is not spent by hand. Needs \`bibliometrics.publication.write\` on the service: Admin, or a member of its provider.`,
+  request: { params: serviceParam },
+  responses: {
+    202: {
+      description: 'The refresh is queued.',
+      content: { 'application/json': { schema: refreshAcceptedSchema } },
+    },
+    404: { description: 'No such service.' },
+    409: { description: 'Citation lookups are turned off on this instance.' },
+    429: { description: 'The citations of this service were checked less than ten minutes ago.' },
   },
 });
 
@@ -149,18 +255,47 @@ export function publicationOut(item: Publication): z.output<typeof publicationSc
       type: item.metadata.type,
       resolvedAt: item.metadata.resolvedAt.toISOString(),
     },
+    citedByCount: item.citedByCount,
+    citationsAsOf: item.citationsAsOf?.toISOString() ?? null,
+  };
+}
+
+function citationsOut(value: ServiceCitations): z.output<typeof serviceCitationsSchema> {
+  return { source: value.source, total: value.total, found: value.found, of: value.of };
+}
+
+function historyOut(value: History): z.output<typeof publicationHistorySchema> {
+  return {
+    publicationId: value.publicationId,
+    doi: value.doi,
+    points: value.points.map((point) => ({
+      source: point.source,
+      day: point.day,
+      citedByCount: point.citedByCount,
+      takenAt: point.takenAt.toISOString(),
+    })),
   };
 }
 
 const noStore = (c: Context) => c.header('cache-control', 'no-store');
 
-export function registerRoutes(r: RouteRegistrar, publications: PublicationsService) {
+export function registerRoutes(
+  r: RouteRegistrar,
+  publications: PublicationsService,
+  citations: CitationService,
+) {
   r.internal(listPublicationsRoute, (async (c) => {
     const { serviceId } = c.req.valid('param');
     const query = c.req.valid('query');
     const page = await publications.list(c.get('actor'), serviceId, query);
     noStore(c);
-    return c.json(paginate(query, page.totalCount, page.items.map(publicationOut)), 200);
+    return c.json(
+      {
+        ...paginate(query, page.totalCount, page.items.map(publicationOut)),
+        citations: citationsOut(page.citations),
+      },
+      200,
+    );
   }) satisfies RouteHandler<typeof listPublicationsRoute, AppEnv>);
 
   r.internal(addPublicationRoute, (async (c) => {
@@ -177,4 +312,18 @@ export function registerRoutes(r: RouteRegistrar, publications: PublicationsServ
     noStore(c);
     return c.body(null, 204);
   }) satisfies RouteHandler<typeof removePublicationRoute, AppEnv>);
+
+  r.internal(publicationHistoryRoute, (async (c) => {
+    const { serviceId, publicationId } = c.req.valid('param');
+    const history = await citations.history(c.get('actor'), serviceId, publicationId);
+    noStore(c);
+    return c.json(historyOut(history), 200);
+  }) satisfies RouteHandler<typeof publicationHistoryRoute, AppEnv>);
+
+  r.internal(refreshCitationsRoute, (async (c) => {
+    const { serviceId } = c.req.valid('param');
+    const accepted = await citations.requestRefresh(c.get('actor'), serviceId);
+    noStore(c);
+    return c.json({ runIds: accepted.runIds }, 202);
+  }) satisfies RouteHandler<typeof refreshCitationsRoute, AppEnv>);
 }

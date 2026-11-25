@@ -281,6 +281,9 @@ importers:
       '@scorpion/core-authz':
         specifier: workspace:*
         version: link:../core-authz
+      '@scorpion/core-settings':
+        specifier: workspace:*
+        version: link:../core-settings
       '@scorpion/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -309,9 +312,6 @@ importers:
       '@scorpion/core-notifications':
         specifier: workspace:*
         version: link:../core-notifications
-      '@scorpion/core-settings':
-        specifier: workspace:*
-        version: link:../core-settings
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations

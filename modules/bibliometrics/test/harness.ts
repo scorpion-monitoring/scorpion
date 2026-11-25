@@ -14,8 +14,20 @@ import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
 import { createSettingsModule } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
-import { createStubDoiResolver, type DoiResolver } from '@scorpion/integrations';
-import { createKernel, createLogger, loadConfig, type Kernel } from '@scorpion/kernel';
+import { Writable } from 'node:stream';
+import {
+  createStubDoiResolver,
+  createStubOpenAlex,
+  type DoiResolver,
+  type OpenAlex,
+} from '@scorpion/integrations';
+import {
+  createKernel,
+  createLogger,
+  loadConfig,
+  type Kernel,
+  type ModuleManifest,
+} from '@scorpion/kernel';
 import { createOrganisationsModule } from '@scorpion/registry-organisations/module';
 import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
@@ -24,6 +36,7 @@ import {
   makeMembership,
   makeOrganisation,
   makeRoleAssignment,
+  makeSecret,
   makeSecretsKey,
   makeService,
   makeSetting,
@@ -36,11 +49,27 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createBibliometricsModule, type BibliometricsService } from '../module.ts';
 import packageJson from '../package.json' with { type: 'json' };
 
+/** A module that sits next to bibliometrics in a test profile (a second citation source). */
+export interface FixtureModule {
+  manifest: ModuleManifest<never, never>;
+  /** Its `package.json`: the loader derives `dependsOn` from it, as for a real module. */
+  packageJson: Record<string, unknown>;
+}
+
 export interface BiblioStartOptions {
   /** Default: a stub that knows no DOI (every lookup is `not-found`). */
   resolver?: DoiResolver;
+  /** The OpenAlex adapter for a key. Default: a stub that knows no DOI. */
+  openAlex?: (apiKey: string | undefined) => OpenAlex;
+  /** "Now" of the module. Default: the system clock. */
+  clock?: () => Date;
   /** Stored settings of the module, written before it starts. */
   settings?: Record<string, unknown>;
+  /** Secrets (name → value), stored encrypted before the module starts. */
+  secrets?: Record<string, string>;
+  extra?: FixtureModule[];
+  /** Collects every log line the kernel writes (trace level). */
+  logLines?: string[];
 }
 
 export interface BiblioStarted {
@@ -83,14 +112,21 @@ export function useBibliometrics() {
     async start(options: BiblioStartOptions = {}): Promise<BiblioStarted> {
       const manifest = createBibliometricsModule({
         resolver: options.resolver ?? createStubDoiResolver(),
+        openAlex: options.openAlex ?? (() => createStubOpenAlex()),
+        ...(options.clock ? { clock: options.clock } : {}),
       });
+      const extra = options.extra ?? [];
+      const secretsKey = makeSecretsKey();
       const kernel = createKernel({
-        profile: { name: 'biblio-test', modules: [...MODULES] as never },
+        profile: {
+          name: 'biblio-test',
+          modules: [...MODULES, ...extra.map((module) => module.manifest.id)] as never,
+        },
         sources: [
           { manifest: authzModule, packageJson: authzPackage },
           {
             manifest: createSettingsModule({
-              env: { SECRETS_KEY: makeSecretsKey() },
+              env: { SECRETS_KEY: secretsKey },
               cacheTtlMs: 0,
             }),
             packageJson: settingsPackage,
@@ -105,6 +141,10 @@ export function useBibliometrics() {
           { manifest: createOrganisationsModule(), packageJson: organisationsPackage },
           { manifest: servicesModule, packageJson: servicesPackage },
           { manifest, packageJson },
+          ...extra.map((module) => ({
+            manifest: module.manifest as never,
+            packageJson: module.packageJson as never,
+          })),
         ],
         modulePackages: {
           'core.authz': '@scorpion/core-authz',
@@ -119,14 +159,29 @@ export function useBibliometrics() {
           'registry.organisations': '@scorpion/registry-organisations',
           'registry.services': '@scorpion/registry-services',
           bibliometrics: '@scorpion/bibliometrics',
+          ...Object.fromEntries(
+            extra.map((module) => [module.manifest.id, String(module.packageJson.name)]),
+          ),
         },
         config: loadConfig({ DATABASE_URL: await server.createDatabase(), PROFILE: 'biblio-test' }),
-        log: createLogger({ level: 'silent' }),
+        log: options.logLines
+          ? createLogger({
+              level: 'trace',
+              destination: new Writable({
+                write(chunk: Buffer, _encoding, callback) {
+                  options.logLines!.push(chunk.toString());
+                  callback();
+                },
+              }),
+            })
+          : createLogger({ level: 'silent' }),
       });
       open.push(kernel);
-      if (options.settings) {
+      if (options.settings || options.secrets) {
         await kernel.migrate();
-        await makeSetting(kernel.pool, 'bibliometrics', options.settings);
+        if (options.settings) await makeSetting(kernel.pool, 'bibliometrics', options.settings);
+        for (const [name, value] of Object.entries(options.secrets ?? {}))
+          await makeSecret(kernel.pool, { name, value, key: secretsKey });
       }
       await kernel.start();
       return {
@@ -191,7 +246,11 @@ interface Queryable {
 /** The number of rows of a table that match `where` (a fixed SQL text with `$n` parameters). */
 export async function countRows(
   pool: Queryable,
-  table: 'biblio_publication' | 'biblio_doi_metadata',
+  table:
+    | 'biblio_publication'
+    | 'biblio_doi_metadata'
+    | 'biblio_citation_run'
+    | 'biblio_citation_snapshot',
   where = 'true',
   values: unknown[] = [],
 ): Promise<number> {
