@@ -27,14 +27,16 @@ import module11 from '@scorpion/kpi-analytics/module';
 import package11 from '@scorpion/kpi-analytics/package.json' with { type: 'json' };
 import module12 from '@scorpion/kpi-impact/module';
 import package12 from '@scorpion/kpi-impact/package.json' with { type: 'json' };
-import module13 from '@scorpion/public-api/module';
-import package13 from '@scorpion/public-api/package.json' with { type: 'json' };
-import module14 from '@scorpion/matomo/module';
-import package14 from '@scorpion/matomo/package.json' with { type: 'json' };
+import module13 from '@scorpion/bibliometrics/module';
+import package13 from '@scorpion/bibliometrics/package.json' with { type: 'json' };
+import module14 from '@scorpion/public-api/module';
+import package14 from '@scorpion/public-api/package.json' with { type: 'json' };
+import module15 from '@scorpion/matomo/module';
+import package15 from '@scorpion/matomo/package.json' with { type: 'json' };
 
 export const profileName = "full";
 
-export const moduleIds = ["core.authz","core.settings","core.blob","core.notifications","core.identity","core.audit","core.ui-shell","registry.organisations","registry.services","kpi.framework","kpi.ingestion","kpi.analytics","kpi.impact","public-api","matomo"] as const;
+export const moduleIds = ["core.authz","core.settings","core.blob","core.notifications","core.identity","core.audit","core.ui-shell","registry.organisations","registry.services","kpi.framework","kpi.ingestion","kpi.analytics","kpi.impact","bibliometrics","public-api","matomo"] as const;
 
 export const sources: ModuleSource[] = [
   { manifest: module0, packageJson: package0 },
@@ -52,4 +54,5 @@ export const sources: ModuleSource[] = [
   { manifest: module12, packageJson: package12 },
   { manifest: module13, packageJson: package13 },
   { manifest: module14, packageJson: package14 },
+  { manifest: module15, packageJson: package15 },
 ];

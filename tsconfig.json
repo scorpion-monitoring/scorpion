@@ -8,6 +8,9 @@
       "path": "./packages/kernel"
     },
     {
+      "path": "./modules/bibliometrics"
+    },
+    {
       "path": "./modules/core-audit"
     },
     {

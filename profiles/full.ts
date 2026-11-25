@@ -25,6 +25,7 @@ export default defineProfile({
     'kpi.ingestion',
     'kpi.analytics',
     'kpi.impact',
+    'bibliometrics',
     'public-api',
     'matomo',
   ],

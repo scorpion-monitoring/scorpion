@@ -14789,6 +14789,334 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bibliometrics/services/{serviceId}/publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The publications of a service
+         * @description The publications of a service with their metadata, newest first (by the date they were issued; unknown dates last), then by id. 5 per page by default, at most 50; pages count from 0.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page number, counted from 0. */
+                    page?: string;
+                    /** @description Items per page, 1 to 50. */
+                    pageSize?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of publications. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            metadata: {
+                                currentPage: number;
+                                pageSize: number;
+                                totalCount: number;
+                                totalPages: number;
+                            };
+                            result: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                serviceId: string;
+                                /** @description Normalised: lower case, without a `https://doi.org/` or `doi:` prefix. */
+                                doi: string;
+                                /** Format: uuid */
+                                addedBy: string | null;
+                                /** Format: date-time */
+                                addedAt: string;
+                                /** @description `null` until the DOI is looked up (lookups are turned off). */
+                                metadata: {
+                                    /**
+                                     * @description `ok`: the registration agency answered. `not-found`: doi.org does not know the DOI. `failed`: the lookup did not work and is tried again later.
+                                     * @enum {string}
+                                     */
+                                    status: "ok" | "not-found" | "failed";
+                                    /** @description At most 1000 characters; set when `status` is `ok`. */
+                                    title: string | null;
+                                    /** @description Display names, at most 100. */
+                                    authors: string[];
+                                    /** @description `2020`, `2020-09` or `2020-09-16`: as precise as the agency knows it. */
+                                    issued: string | null;
+                                    /** @description The journal, or the repository (such as Zenodo). */
+                                    container: string | null;
+                                    /** @description The CSL type: `journal-article`, `software`, `dataset`, ... */
+                                    type: string | null;
+                                    /** Format: date-time */
+                                    resolvedAt: string;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Add a publication to a service
+         * @description Adds a publication by DOI (`10.1234/abc`, also with a `https://doi.org/` or `doi:` prefix) and looks up its title, authors and date before answering. A failed lookup keeps the publication with `failed` metadata. Needs `bibliometrics.publication.write` on the service: Admin, or a member of its provider.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The DOI, with or without a `https://doi.org/` or `doi:` prefix. */
+                        doi: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The publication. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            serviceId: string;
+                            /** @description Normalised: lower case, without a `https://doi.org/` or `doi:` prefix. */
+                            doi: string;
+                            /** Format: uuid */
+                            addedBy: string | null;
+                            /** Format: date-time */
+                            addedAt: string;
+                            /** @description `null` until the DOI is looked up (lookups are turned off). */
+                            metadata: {
+                                /**
+                                 * @description `ok`: the registration agency answered. `not-found`: doi.org does not know the DOI. `failed`: the lookup did not work and is tried again later.
+                                 * @enum {string}
+                                 */
+                                status: "ok" | "not-found" | "failed";
+                                /** @description At most 1000 characters; set when `status` is `ok`. */
+                                title: string | null;
+                                /** @description Display names, at most 100. */
+                                authors: string[];
+                                /** @description `2020`, `2020-09` or `2020-09-16`: as precise as the agency knows it. */
+                                issued: string | null;
+                                /** @description The journal, or the repository (such as Zenodo). */
+                                container: string | null;
+                                /** @description The CSL type: `journal-article`, `software`, `dataset`, ... */
+                                type: string | null;
+                                /** Format: date-time */
+                                resolvedAt: string;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The service lists this DOI already. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bibliometrics/services/{serviceId}/publications/{publicationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a publication of a service
+         * @description Removes a publication of this service by its id. A publication of another service is a 404 and is not touched. Needs `bibliometrics.publication.write` on the service.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    serviceId: string;
+                    /** @description The id of the publication. */
+                    publicationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The publication is removed. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service, or the service has no such publication. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/matomo/tracker": {
         parameters: {
             query?: never;
