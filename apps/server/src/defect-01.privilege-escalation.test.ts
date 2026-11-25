@@ -9,7 +9,13 @@
 //  2. The scenarios: what a plain User, an anonymous caller, a user without roles and a token
 //     with a broader scope than its owner's permissions can and cannot do.
 import { randomUUID } from 'node:crypto';
-import { makeInboxItem, makeOrganisation, makeRole, makeService } from '@scorpion/testing';
+import {
+  makeInboxItem,
+  makeOrganisation,
+  makePublication,
+  makeRole,
+  makeService,
+} from '@scorpion/testing';
 import { describe, expect, it } from 'vitest';
 import { ALL_USER_SCOPES, PASSWORD, useIdentityApp, type Reply } from './testing/identity-app.ts';
 
@@ -1643,5 +1649,100 @@ describe('defect 1: the analytics routes', () => {
       (await s.kernel.pool.query("select 1 from kernel_outbox where name like 'measurement.%'"))
         .rows,
     ).toEqual([]);
+  });
+});
+
+describe('defect 1: the publication routes', () => {
+  // Every route of bibliometrics (M16, ADR-0056). The read is plain and held by the role `user`; the add and the remove are
+  // delegated (ADR-0034): they name the plain read and the service checks the scoped `bibliometrics.publication.write`, so a
+  // plain User gets 403 from the service.
+  const PUBLICATION_SAMPLES: Record<
+    string,
+    {
+      plainMay: boolean;
+      sample: (
+        service: string,
+        publication: string,
+      ) => { method: string; path: string; body?: unknown };
+    }
+  > = {
+    'GET /bibliometrics/services/{serviceId}/publications': {
+      plainMay: true,
+      sample: (service) => ({
+        method: 'GET',
+        path: `/bibliometrics/services/${service}/publications`,
+      }),
+    },
+    'POST /bibliometrics/services/{serviceId}/publications': {
+      plainMay: false,
+      sample: (service) => ({
+        method: 'POST',
+        path: `/bibliometrics/services/${service}/publications`,
+        body: { doi: '10.5555/defect-01' },
+      }),
+    },
+    'DELETE /bibliometrics/services/{serviceId}/publications/{publicationId}': {
+      plainMay: false,
+      sample: (service, publication) => ({
+        method: 'DELETE',
+        path: `/bibliometrics/services/${service}/publications/${publication}`,
+      }),
+    },
+  };
+  const startBiblio = () => app.start({ tokenCacheTtlMs: 0, bibliometrics: true });
+  const callRow = (
+    s: Awaited<ReturnType<typeof startBiblio>>,
+    key: string,
+    service: string,
+    publication: string,
+    auth: { cookie?: string; csrf?: string } = {},
+  ) => {
+    const sample = PUBLICATION_SAMPLES[key]!.sample(service, publication);
+    return s.call(sample.method, sample.path, { ...auth, body: sample.body });
+  };
+
+  it('has a decision for every route of bibliometrics, and for nothing else (the walker) [ASVS-8.2.1]', async () => {
+    const { kernel } = await startBiblio();
+    const live = kernel.routes
+      .filter((entry) => entry.module === 'bibliometrics')
+      .map((entry) => {
+        expect(entry.route.public, `${entry.route.path} is not public`).toBeFalsy();
+        expect(entry.route.permission, `${entry.route.path} names a permission`).toBeTruthy();
+        return `${entry.route.method.toUpperCase()} ${entry.route.path}`;
+      })
+      .sort();
+    expect(live).toEqual(Object.keys(PUBLICATION_SAMPLES).sort());
+  });
+
+  it('answers 401 to an anonymous caller and 403 to a user without roles, with ids that exist nowhere [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await startBiblio();
+    const roleless = await s.signedIn('norole-biblio', { roles: [] });
+    for (const key of Object.keys(PUBLICATION_SAMPLES)) {
+      const anonymous = await callRow(s, key, FOREIGN, FOREIGN);
+      expect(anonymous.status, `${key}: anonymous`).toBe(401);
+      expect(problem(anonymous), key).toContain('application/problem+json');
+      const nobody = await callRow(s, key, FOREIGN, FOREIGN, session(roleless));
+      expect(nobody.status, `${key}: a user without roles`).toBe(403);
+      expect(problem(nobody), key).toContain('application/problem+json');
+    }
+  });
+
+  it('lets a plain User read the publications of every service and answers 403 to their add and remove, changing nothing [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+    const s = await startBiblio();
+    const plain = await s.signedIn('plain-biblio');
+    const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
+    const service = await makeService(s.kernel.pool, { provider: provider.id });
+    const kept = await makePublication(s.kernel.pool, { serviceId: service.id });
+    for (const key of Object.keys(PUBLICATION_SAMPLES)) {
+      const reply = await callRow(s, key, service.id, kept.id, session(plain));
+      if (PUBLICATION_SAMPLES[key]!.plainMay)
+        expect(reply.status, `${key}: a plain User reads`).toBe(200);
+      else {
+        expect(reply.status, `${key}: a plain User does not write`).toBe(403);
+        expect(problem(reply), key).toContain('application/problem+json');
+      }
+    }
+    const { rows } = await s.kernel.pool.query<{ id: string }>('select id from biblio_publication');
+    expect(rows).toEqual([{ id: kept.id }]);
   });
 });
