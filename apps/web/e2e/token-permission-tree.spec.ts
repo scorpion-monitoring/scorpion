@@ -24,7 +24,10 @@ test.describe('the permission tree of a new token', () => {
     // The parents are partly ticked, not ticked, and say 1 of N.
     await expect(core).toHaveJSProperty('indeterminate', true);
     await expect(core).not.toBeChecked();
-    await expect(tree.getByTestId('perm-count').first()).toContainText(/^1 of \d+$/);
+    // The count of the `core` group (other groups, such as `bibliometrics`, may come before it).
+    await expect(tree.locator('#perm-info-core').getByTestId('perm-count')).toContainText(
+      /^1 of \d+$/,
+    );
   });
 
   test('selects every permission below a group and clears them again', async ({ page, at }) => {
