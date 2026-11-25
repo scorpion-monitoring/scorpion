@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "count": 2,
+    "db_response_time_ms": 16,
+    "page": 1,
+    "per_page": 100,
+    "groups_count": null,
+    "cost_usd": 0.0001
+  },
+  "results": [
+    {
+      "doi": "https://doi.org/10.1038/s41586-020-2649-2",
+      "cited_by_count": 35378
+    },
+    {
+      "doi": "https://doi.org/10.5281/zenodo.4724125",
+      "cited_by_count": 672
+    }
+  ],
+  "group_by": []
+}
