@@ -720,7 +720,7 @@ Postgres unless a row says "through the pipeline". Medians of 5 runs (3 for 24 0
   template's link, and the parse limit is a decision of the plan's §2 that a trailing run of blank rows, which a spreadsheet can export, would make hit a file that is fine). The fix is two small changes with tests: `requestProblemOf` reads a `rows` message that names months or measurements
   into `tooManyMonths` and `tooManyValues`, with a sentence in en and de that names 120 and 25 000 (a shared constant, checked against the server's in `ui.test.ts`); and, once blank trailing rows are shown not to count, `MAX_DATA_ROWS` becomes 120 and its sentence follows. The time to a clear message is the preview, 22 ms (CSV).
 - **The reminder cannot be run on demand.** The plan and the sprint's brief rely on a "run now" button on the M4 job page; the page lists job runs only (`GET /system/job-runs`) and requeues dead event deliveries. A platform feature, `POST /system/jobs/{name}/run` with the permission of the job page and a button, would give every
-  job a manual trigger, and the sent table already makes the reminder safe to run twice. Until then an operator cannot send the reminder for a month the job missed (see the next entry).
+  job a manual trigger, and the sent table already makes the reminder safe to run twice. Until then an operator cannot send the reminder for a month the job missed (see the next entry). The weekly citation refresh of `bibliometrics` (M16 sprint 2, `bibliometrics.citations.refresh`) has the same gap: its runs show on the job page, but an operator cannot start one there (a member's "check now" covers one service).
   would also remind a provider on the 20th for a value that became missing later, and it would mail a member who joined late; it is a behaviour for the maintainer to choose, not a silent change.
 - **`listProviderIdsAsSystem` is a third additive read** beyond the two of the plan's §13 (nothing enumerated the providers), and `kpi.ingestion` now depends on `core.identity`, `core.settings`, `core.notifications` and `registry.organisations`. If the maintainer prefers one read that answers the reminder's whole question (`{ provider, service,
 name }` triples), it replaces `listProviderIdsAsSystem` and the per-provider `listByOrganisationAsSystem` calls.
@@ -1204,6 +1204,20 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 
 - **`matomo`'s route is in neither repo-wide route guard.** `GET /api/internal/matomo/tracker` (M13b) is not loaded by the walker of `defect-01.privilege-escalation.test.ts` nor by `authorization-doc.test.ts`, so `docs/security/authorization.md` does not list it although the page claims every route of the live registry (ASVS 8.1.1). Load `matomo: true` in both and regenerate the table (a `docs/security/**` change: V8 note, the other chapters `asvs-no-impact`). `bibliometrics` is in both since M16 sprint 1.
 - **A `not-found` DOI is asked again only when it is added anew.** The weekly job of sprint 2 retries `failed` metadata only; a DOI registered after it was first added stays `not-found` until someone adds it again (removing and adding the publication). If that turns out to happen, the job could retry `not-found` rows older than some months.
+
+## M16 sprint 2 follow-ups
+
+- **A DOI with `|` or `,` in it is never asked of OpenAlex.** OpenAlex splits the values of an OR filter on `|` and filters on `,` after
+  decoding, so such a DOI cannot share a batch; the adapter reports it as failed (`unsupported-doi`), so it stays unknown, never zero.
+  OpenAlex's single-work lookup (`/works/doi:<doi>`, free of budget) could ask for these one at a time.
+- **Retracted and withdrawn works are "not found".** OpenAlex leaves pulled works out of every list query unless `include_pulled=true` is
+  sent. Whether a publication that was retracted should keep showing a count is a decision for the maintainer.
+- **The weekly run does not count toward the 10-minute rule.** "Check now" is refused for ten minutes after the last _manual_ refresh of
+  the service only; counting a scheduled run too needs the services of a run, which the run row does not hold.
+- **A "check now" that the worker never runs stays waiting.** Its run rows keep `finished_at` empty; nothing shows or cleans them. The page
+  of sprint 3 could say "queued", and a clean-up could close runs older than a day.
+- **No retention of snapshots.** One row per DOI and source a week (about 52 a year). The history read shows the last 520 days; older
+  snapshots are kept. A retention rule (or monthly thinning after ten years) can follow when an instance needs it.
 
 ## Push agent and connectors (brainstorm, 2026-11-24)
 
