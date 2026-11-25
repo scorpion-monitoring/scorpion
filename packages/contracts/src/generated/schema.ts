@@ -14798,7 +14798,7 @@ export interface paths {
         };
         /**
          * The publications of a service
-         * @description The publications of a service with their metadata, newest first (by the date they were issued; unknown dates last), then by id. 5 per page by default, at most 50; pages count from 0.
+         * @description The publications of a service with their metadata and citation counts, and the citation total of the service, newest first (by the date they were issued; unknown dates last), then by id. 5 per page by default, at most 50; pages count from 0.
          */
         get: {
             parameters: {
@@ -14861,7 +14861,25 @@ export interface paths {
                                     /** Format: date-time */
                                     resolvedAt: string;
                                 } | null;
+                                /** @description The latest citation count of the citation source. `null` while it is unknown: not asked yet, not found by the source, or the request failed. Never a 0 that was not counted. */
+                                citedByCount: number | null;
+                                /**
+                                 * Format: date-time
+                                 * @description When `citedByCount` was taken; `null` with it.
+                                 */
+                                citationsAsOf: string | null;
                             }[];
+                            /** @description The citations of the whole service (all pages): "312 citations, 4 of 5 found". */
+                            citations: {
+                                /** @description The id of the citation source the counts come from (`openalex`). */
+                                source: string | null;
+                                /** @description The sum of the known counts of the service; `null` when no publication has one. */
+                                total: number | null;
+                                /** @description How many publications have a count. */
+                                found: number;
+                                /** @description How many publications the service lists. */
+                                of: number;
+                            };
                         };
                     };
                 };
@@ -14971,6 +14989,13 @@ export interface paths {
                                 /** Format: date-time */
                                 resolvedAt: string;
                             } | null;
+                            /** @description The latest citation count of the citation source. `null` while it is unknown: not asked yet, not found by the source, or the request failed. Never a 0 that was not counted. */
+                            citedByCount: number | null;
+                            /**
+                             * Format: date-time
+                             * @description When `citedByCount` was taken; `null` with it.
+                             */
+                            citationsAsOf: string | null;
                         };
                     };
                 };
@@ -15112,6 +15137,212 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bibliometrics/services/{serviceId}/publications/{publicationId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The citation history of a publication
+         * @description The citation counts of a publication of this service over time: at most one per source and day (the latest), the last 520, oldest first. A publication of another service is a 404.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    serviceId: string;
+                    /** @description The id of the publication. */
+                    publicationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The history. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            publicationId: string;
+                            doi: string;
+                            /** @description Oldest first; at most one point per source and day (the latest count of that day), the last 520. A week with no count (not found, failed) has no point. */
+                            points: {
+                                /** @description The id of the citation source. */
+                                source: string;
+                                /**
+                                 * Format: date
+                                 * @description The UTC day of the count.
+                                 */
+                                day: string;
+                                citedByCount: number;
+                                /** Format: date-time */
+                                takenAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service, or the service has no such publication. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bibliometrics/services/{serviceId}/citations/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check the citations of a service now
+         * @description Queues a citation refresh of this service's publications and answers at once with the runs. Refused for 10 minutes after the last one of the service (429 with `Retry-After`), so the instance's daily budget at the citation source is not spent by hand. Needs `bibliometrics.publication.write` on the service: Admin, or a member of its provider.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The refresh is queued. */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description One run per citation source that is on (usually one, OpenAlex). The counts arrive when the job has run. */
+                            runIds: string[];
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Citation lookups are turned off on this instance. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description The citations of this service were checked less than ten minutes ago. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
