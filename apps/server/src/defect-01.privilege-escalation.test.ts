@@ -1653,9 +1653,9 @@ describe('defect 1: the analytics routes', () => {
 });
 
 describe('defect 1: the publication routes', () => {
-  // Every route of bibliometrics (M16, ADR-0056). The read is plain and held by the role `user`; the add and the remove are
-  // delegated (ADR-0034): they name the plain read and the service checks the scoped `bibliometrics.publication.write`, so a
-  // plain User gets 403 from the service.
+  // Every route of bibliometrics (M16, ADR-0056). The reads (the list, the history) are plain and held by the role `user`;
+  // the add, the remove and "check now" are delegated (ADR-0034): they name the plain read and the service checks the
+  // scoped `bibliometrics.publication.write`, so a plain User gets 403 from the service.
   const PUBLICATION_SAMPLES: Record<
     string,
     {
@@ -1686,6 +1686,20 @@ describe('defect 1: the publication routes', () => {
       sample: (service, publication) => ({
         method: 'DELETE',
         path: `/bibliometrics/services/${service}/publications/${publication}`,
+      }),
+    },
+    'GET /bibliometrics/services/{serviceId}/publications/{publicationId}/history': {
+      plainMay: true,
+      sample: (service, publication) => ({
+        method: 'GET',
+        path: `/bibliometrics/services/${service}/publications/${publication}/history`,
+      }),
+    },
+    'POST /bibliometrics/services/{serviceId}/citations/refresh': {
+      plainMay: false,
+      sample: (service) => ({
+        method: 'POST',
+        path: `/bibliometrics/services/${service}/citations/refresh`,
       }),
     },
   };
@@ -1727,7 +1741,7 @@ describe('defect 1: the publication routes', () => {
     }
   });
 
-  it('lets a plain User read the publications of every service and answers 403 to their add and remove, changing nothing [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
+  it('lets a plain User read the publications and their history on every service and answers 403 to their add, remove and check now, changing nothing [ASVS-8.2.1] [ASVS-8.3.1]', async () => {
     const s = await startBiblio();
     const plain = await s.signedIn('plain-biblio');
     const provider = await makeOrganisation(s.kernel.pool, { type: 'provider' });
@@ -1744,5 +1758,7 @@ describe('defect 1: the publication routes', () => {
     }
     const { rows } = await s.kernel.pool.query<{ id: string }>('select id from biblio_publication');
     expect(rows).toEqual([{ id: kept.id }]);
+    // A refused "check now" queued nothing.
+    expect((await s.kernel.pool.query('select 1 from biblio_citation_run')).rows).toEqual([]);
   });
 });

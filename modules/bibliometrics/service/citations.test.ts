@@ -491,7 +491,7 @@ describe('the job', () => {
 });
 
 describe('the history', () => {
-  it('is 404 for a publication of another service, and keeps at most 520 points', async () => {
+  it('is 404 for a publication of another service, and keeps at most 520 points [ASVS-8.2.2]', async () => {
     const w = await world(await h.start());
     const theirs = await makePublication(w.pool, { serviceId: w.elsewhereSvc.id });
     await expect(
@@ -522,7 +522,7 @@ describe('the history', () => {
 });
 
 describe('the OpenAlex key', () => {
-  it('goes to OpenAlex in the header and never into a log line or the run [ASVS-8.3.1]', async () => {
+  it('goes to OpenAlex in the header and never into a log line or the run', async () => {
     const key = `oa-test-key-${crypto.randomUUID()}`;
     const doi = uniqueDoi('key');
     const sent: { url: string; auth: string | undefined }[] = [];

@@ -1,10 +1,16 @@
-// The contract test of the publication routes of bibliometrics (M16 sprint 1, ADR-0056) through the whole pipeline: every
+// The contract test of the routes of bibliometrics (M16 sprints 1 and 2, ADR-0056) through the whole pipeline: every
 // answer matches the schema its route declares, every status is one the route documents, errors are problem details, the
-// list uses the envelope with 0-based pages, and nothing is cached. Real Postgres, the real authoriser, a stub DOI resolver.
+// list uses the envelope with 0-based pages, and nothing is cached. Real Postgres, the real authoriser, a stub DOI resolver
+// and the stub OpenAlex adapter (NODE_ENV=test).
 import {
   addPublicationRoute,
   listPublicationsRoute,
+  publicationHistoryRoute,
+  publicationHistorySchema,
+  publicationListSchema,
   publicationSchema,
+  refreshAcceptedSchema,
+  refreshCitationsRoute,
   removePublicationRoute,
 } from '@scorpion/bibliometrics/public';
 import { listEnvelope, PROBLEM_CONTENT_TYPE, problemSchema } from '@scorpion/contracts';
@@ -64,6 +70,17 @@ function documented(route: { responses: Record<string | number, unknown> }, repl
 
 describe(`GET ${listPublicationsRoute.path}`, () => {
   const envelope = listEnvelope(publicationSchema);
+
+  it('carries the citation total of the service, null while nothing is counted, and null counts per row', async () => {
+    const provider = await makeOrganisation(started.kernel.pool, { type: 'provider' });
+    const fresh = await makeService(started.kernel.pool, { provider: provider.id });
+    await makePublication(started.kernel.pool, { serviceId: fresh.id, metadata: {} });
+    const reply = await started.get(base(fresh.id), session(people.stranger));
+    documented(listPublicationsRoute, reply);
+    const body = publicationListSchema.parse(reply.body);
+    expect(body.citations).toEqual({ source: 'openalex', total: null, found: 0, of: 1 });
+    expect(body.result[0]).toMatchObject({ citedByCount: null, citationsAsOf: null });
+  });
 
   it('answers the envelope with 0-based pages, 5 per page by default, never cached', async () => {
     for (let i = 0; i < 6; i++)
@@ -201,6 +218,98 @@ describe(`DELETE ${removePublicationRoute.path}`, () => {
   ] as const)('answers %s with %i', async (_label, status, who, path) => {
     const reply = await started.call('DELETE', path(), who ? session(people[who]) : {});
     documented(removePublicationRoute, reply);
+    expect(reply.status).toBe(status);
+  });
+});
+
+describe(`GET ${publicationHistoryRoute.path}`, () => {
+  const history = (serviceId: string, publicationId: string) =>
+    `${base(serviceId)}/${publicationId}/history`;
+
+  it('answers the points of a publication, oldest first, never cached', async () => {
+    const pool = started.kernel.pool;
+    const row = await makePublication(pool, { serviceId: svc.id, metadata: {} });
+    await pool.query(
+      `with runs as (
+         insert into biblio_citation_run (id, trigger, source)
+         select gen_random_uuid(), 'schedule', 'openalex' from generate_series(1, 2) returning id
+       ), numbered as (select id, row_number() over () as n from runs)
+       insert into biblio_citation_snapshot (run_id, doi, source, cited_by_count, taken_at)
+       select id, $1, 'openalex', 10 + n, now() - make_interval(days => (2 - n)::int * 7) from numbered`,
+      [row.doi],
+    );
+    const reply = await started.get(history(svc.id, row.id), session(people.stranger));
+    documented(publicationHistoryRoute, reply);
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
+    const body = publicationHistorySchema.parse(reply.body);
+    expect(body).toMatchObject({ publicationId: row.id, doi: row.doi });
+    expect(body.points.map((point) => point.citedByCount)).toEqual([11, 12]);
+  });
+
+  const historyCases: [string, number, 'stranger' | undefined, () => Promise<string>][] = [
+    ['anonymous', 401, undefined, () => Promise.resolve(history(svc.id, crypto.randomUUID()))],
+    [
+      'a publication of another service',
+      404,
+      'stranger',
+      async () =>
+        history(
+          svc.id,
+          (await makePublication(started.kernel.pool, { serviceId: otherSvc.id })).id,
+        ),
+    ],
+    [
+      'an unknown service',
+      404,
+      'stranger',
+      () => Promise.resolve(history(crypto.randomUUID(), crypto.randomUUID())),
+    ],
+    [
+      'a publication id that is no uuid',
+      422,
+      'stranger',
+      () => Promise.resolve(history(svc.id, 'nope')),
+    ],
+  ];
+  it.each(historyCases)('answers %s with %i', async (_label, status, who, path) => {
+    const reply = await started.get(await path(), who ? session(people[who]) : {});
+    documented(publicationHistoryRoute, reply);
+    expect(reply.status).toBe(status);
+  });
+});
+
+describe(`POST ${refreshCitationsRoute.path}`, () => {
+  const refresh = (serviceId: string) => `/bibliometrics/services/${serviceId}/citations/refresh`;
+
+  it('is rate limited with the strict bucket', () => {
+    expect(refreshCitationsRoute.rateLimit).toBe('strict');
+  });
+
+  it('answers 202 with the run ids, never cached, then 429 with Retry-After within ten minutes [ASVS-8.2.1]', async () => {
+    const reply = await started.post(refresh(svc.id), session(people.member));
+    documented(refreshCitationsRoute, reply);
+    expect(reply.status).toBe(202);
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
+    expect(refreshAcceptedSchema.parse(reply.body).runIds).toHaveLength(1);
+
+    const again = await started.post(refresh(svc.id), session(people.admin));
+    documented(refreshCitationsRoute, again);
+    expect(again.status).toBe(429);
+    const wait = Number(again.res.headers.get('retry-after'));
+    expect(wait).toBeGreaterThan(0);
+    expect(wait).toBeLessThanOrEqual(600);
+  });
+
+  const refreshCases: [string, number, 'stranger' | 'admin' | undefined, () => string][] = [
+    ['anonymous', 401, undefined, () => otherSvc.id],
+    ['a signed-in non-member', 403, 'stranger', () => otherSvc.id],
+    ['an unknown service', 404, 'admin', () => crypto.randomUUID()],
+    ['a service id that is no uuid', 422, 'admin', () => 'not-a-uuid'],
+  ];
+  it.each(refreshCases)('answers %s with %i', async (_label, status, who, serviceId) => {
+    const reply = await started.post(refresh(serviceId()), who ? session(people[who]) : {});
+    documented(refreshCitationsRoute, reply);
     expect(reply.status).toBe(status);
   });
 });
