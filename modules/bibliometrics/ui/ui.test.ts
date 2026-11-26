@@ -14,11 +14,15 @@ describe('the ui of bibliometrics', () => {
     expect(messages.en?.['admin.settings.module.bibliometrics']).toBe('Publications and citations');
   });
 
-  it('asks for the indicator picker on kpi.indicatorId, by the name the entry contributes it under', async () => {
+  it('asks for the indicator picker on both KPI settings, by the name the entry contributes it under', async () => {
     const json = (await import('@scorpion/contracts')).z.toJSONSchema(settingsSchema, {
       io: 'input',
-    }) as unknown as { properties: { kpi: { properties: { indicatorId: { widget?: string } } } } };
-    expect(json.properties.kpi.properties.indicatorId.widget).toBe('bibliometrics-indicator');
+    }) as unknown as {
+      properties: { kpi: { properties: Record<string, { widget?: string }> } };
+    };
+    const fields = json.properties.kpi.properties;
+    expect(Object.keys(fields)).toEqual(['citationsIndicatorId', 'publicationsIndicatorId']);
+    for (const field of Object.values(fields)) expect(field.widget).toBe('bibliometrics-indicator');
     // The entry with the Svelte components is compiled by the web app; its name is a constant there.
     const source = (await import('node:fs')).readFileSync(
       new URL('./index.ts', import.meta.url),

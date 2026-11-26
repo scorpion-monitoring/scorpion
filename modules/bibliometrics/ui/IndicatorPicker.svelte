@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The field `kpi.indicatorId` of the settings of bibliometrics (widget `bibliometrics-indicator`, ADR-0057): a choice of the
-  // numeric indicators in the thematic category Bibliographic, or none (no KPI). It only offers what the server accepts; the server
+  // The fields `kpi.citationsIndicatorId` and `kpi.publicationsIndicatorId` of the settings of bibliometrics (widget
+  // `bibliometrics-indicator`, ADR-0057): a choice of the numeric indicators in the thematic category Bibliographic, or none (no KPI). It only offers what the server accepts; the server
   // refuses anything else with a 422 that shows here. Two reads when the settings page opens: the indicators of the category and the
   // value types (which of them are numeric).
   import { unwrap } from '@scorpion/contracts/client';

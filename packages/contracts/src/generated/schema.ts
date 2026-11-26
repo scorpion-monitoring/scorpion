@@ -14868,6 +14868,10 @@ export interface paths {
                                  * @description When `citedByCount` was taken; `null` with it.
                                  */
                                 citationsAsOf: string | null;
+                                /** @description The month (`2020-09`) or day (`2020-09-16`) a member of the provider gave; it wins over `metadata.issued`. `null` until one is given. */
+                                issued: string | null;
+                                /** @description Whether the date that counts (`issued`, else `metadata.issued`) names a month. The Publications KPI needs one for every publication. */
+                                monthKnown: boolean;
                             }[];
                             /** @description The citations of the whole service (all pages): "312 citations, 4 of 5 found". */
                             citations: {
@@ -14882,6 +14886,8 @@ export interface paths {
                                 /** @description How many publications the service lists. */
                                 of: number;
                             };
+                            /** @description How many publications of the service (all pages) have no date precise to the month; a member of the provider is asked to give it. */
+                            undated: number;
                             /** @description Whether the caller may add and remove publications of this service and check its citations now (`bibliometrics.publication.write` on the service). */
                             canEdit: boolean;
                         };
@@ -15000,6 +15006,10 @@ export interface paths {
                              * @description When `citedByCount` was taken; `null` with it.
                              */
                             citationsAsOf: string | null;
+                            /** @description The month (`2020-09`) or day (`2020-09-16`) a member of the provider gave; it wins over `metadata.issued`. `null` until one is given. */
+                            issued: string | null;
+                            /** @description Whether the date that counts (`issued`, else `metadata.issued`) names a month. The Publications KPI needs one for every publication. */
+                            monthKnown: boolean;
                         };
                     };
                 };
@@ -15143,7 +15153,127 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Give the date a publication was issued
+         * @description Sets the month (`2020-09`) or day (`2020-09-16`) a publication of this service was issued, which then wins over the date of the registration agency, or takes it back with `null`. Not before 1900 and not after the current month. Needs `bibliometrics.publication.write` on the service: Admin, or a member of its provider.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The id of the service. */
+                    serviceId: string;
+                    /** @description The id of the publication. */
+                    publicationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description `2020-09`, `2020-09-16`, or `null` to use the agency date again. */
+                        issued: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description The publication. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            serviceId: string;
+                            /** @description Normalised: lower case, without a `https://doi.org/` or `doi:` prefix. */
+                            doi: string;
+                            /** Format: uuid */
+                            addedBy: string | null;
+                            /** Format: date-time */
+                            addedAt: string;
+                            /** @description `null` until the DOI is looked up (lookups are turned off). */
+                            metadata: {
+                                /**
+                                 * @description `ok`: the registration agency answered. `not-found`: doi.org does not know the DOI. `failed`: the lookup did not work and is tried again later.
+                                 * @enum {string}
+                                 */
+                                status: "ok" | "not-found" | "failed";
+                                /** @description At most 1000 characters; set when `status` is `ok`. */
+                                title: string | null;
+                                /** @description Display names, at most 100. */
+                                authors: string[];
+                                /** @description `2020`, `2020-09` or `2020-09-16`: as precise as the agency knows it. */
+                                issued: string | null;
+                                /** @description The journal, or the repository (such as Zenodo). */
+                                container: string | null;
+                                /** @description The CSL type: `journal-article`, `software`, `dataset`, ... */
+                                type: string | null;
+                                /** Format: date-time */
+                                resolvedAt: string;
+                            } | null;
+                            /** @description The latest citation count of the citation source. `null` while it is unknown: not asked yet, not found by the source, or the request failed. Never a 0 that was not counted. */
+                            citedByCount: number | null;
+                            /**
+                             * Format: date-time
+                             * @description When `citedByCount` was taken; `null` with it.
+                             */
+                            citationsAsOf: string | null;
+                            /** @description The month (`2020-09`) or day (`2020-09-16`) a member of the provider gave; it wins over `metadata.issued`. `null` until one is given. */
+                            issued: string | null;
+                            /** @description Whether the date that counts (`issued`, else `metadata.issued`) names a month. The Publications KPI needs one for every publication. */
+                            monthKnown: boolean;
+                        };
+                    };
+                };
+                /** @description Not authenticated. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Not allowed. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description No such service, or the service has no such publication. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The input is not valid. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Unexpected error. */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/bibliometrics/services/{serviceId}/publications/{publicationId}/history": {

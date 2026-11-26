@@ -1,0 +1,3 @@
+ALTER TABLE "biblio_publication" ADD COLUMN "issued" date;--> statement-breakpoint
+ALTER TABLE "biblio_publication" ADD COLUMN "issued_precision" text;--> statement-breakpoint
+ALTER TABLE "biblio_publication" ADD CONSTRAINT "biblio_publication_issued_check" CHECK (("biblio_publication"."issued" is null and "biblio_publication"."issued_precision" is null) or ("biblio_publication"."issued_precision" = 'day' and "biblio_publication"."issued" is not null) or ("biblio_publication"."issued_precision" = 'month' and extract(day from "biblio_publication"."issued") = 1));

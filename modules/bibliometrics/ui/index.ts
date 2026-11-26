@@ -6,7 +6,7 @@ import ServicePublications from './ServicePublications.svelte';
 
 export { default, messages, widgets } from './pages.ts';
 
-/** The widget name the setting `kpi.indicatorId` asks for (`settings-schema.ts`). */
+/** The widget name the two KPI indicator settings ask for (`settings-schema.ts`). */
 export const INDICATOR_WIDGET = 'bibliometrics-indicator';
 
 /**

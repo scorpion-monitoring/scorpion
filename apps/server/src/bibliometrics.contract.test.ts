@@ -4,6 +4,7 @@
 // and the stub OpenAlex adapter (NODE_ENV=test).
 import {
   addPublicationRoute,
+  datePublicationRoute,
   listPublicationsRoute,
   publicationHistoryRoute,
   publicationHistorySchema,
@@ -232,6 +233,62 @@ describe(`DELETE ${removePublicationRoute.path}`, () => {
   ] as const)('answers %s with %i', async (_label, status, who, path) => {
     const reply = await started.call('DELETE', path(), who ? session(people[who]) : {});
     documented(removePublicationRoute, reply);
+    expect(reply.status).toBe(status);
+  });
+});
+
+describe(`PATCH ${datePublicationRoute.path}`, () => {
+  it('answers 200 with the publication and its date, and takes the date back with null', async () => {
+    const row = await makePublication(started.kernel.pool, { serviceId: svc.id });
+    const path = `${base(svc.id)}/${row.id}`;
+    const reply = await started.call('PATCH', path, {
+      ...session(people.member),
+      body: { issued: '2020-09' },
+    });
+    documented(datePublicationRoute, reply);
+    expect(reply.status).toBe(200);
+    expect(reply.res.headers.get('cache-control')).toBe('no-store');
+    expect(publicationSchema.parse(reply.body)).toMatchObject({
+      id: row.id,
+      issued: '2020-09',
+      monthKnown: true,
+    });
+    const back = await started.call('PATCH', path, {
+      ...session(people.member),
+      body: { issued: null },
+    });
+    expect(publicationSchema.parse(back.body)).toMatchObject({ issued: null, monthKnown: false });
+  });
+
+  it('answers 404 for a publication of another service, and leaves it [ASVS-8.2.2]', async () => {
+    const theirs = await makePublication(started.kernel.pool, { serviceId: otherSvc.id });
+    const reply = await started.call('PATCH', `${base(svc.id)}/${theirs.id}`, {
+      ...session(people.admin),
+      body: { issued: '2020-09' },
+    });
+    documented(datePublicationRoute, reply);
+    expect(reply.status).toBe(404);
+    const { rows } = await started.kernel.pool.query(
+      'select issued from biblio_publication where id = $1',
+      [theirs.id],
+    );
+    expect(rows).toEqual([{ issued: null }]);
+  });
+
+  it.each([
+    ['anonymous', 401, undefined, { issued: '2020-09' }],
+    ['a signed-in non-member', 403, 'stranger', { issued: '2020-09' }],
+    ['a date that is not a month or a day', 422, 'admin', { issued: 'September' }],
+    ['a month after this one', 422, 'admin', { issued: '2999-01' }],
+    ['an unknown field', 422, 'admin', { issued: '2020-09', note: 'x' }],
+    ['no body field', 422, 'admin', {}],
+  ] as const)('answers %s with %i', async (_label, status, who, body) => {
+    const row = await makePublication(started.kernel.pool, { serviceId: svc.id });
+    const reply = await started.call('PATCH', `${base(svc.id)}/${row.id}`, {
+      ...(who ? session(people[who]) : {}),
+      body,
+    });
+    documented(datePublicationRoute, reply);
     expect(reply.status).toBe(status);
   });
 });

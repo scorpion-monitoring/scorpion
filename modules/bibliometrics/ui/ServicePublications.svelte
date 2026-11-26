@@ -188,6 +188,51 @@
     );
   let open = $state<Record<string, History | 'loading' | 'failed'>>({});
 
+  // ----- the month of a publication ----------------------------------------------------------------------
+  // The Publications KPI needs the month each publication was issued; where the agency gives only a year (or nothing), a member of the
+  // provider gives it here. The server keeps it and checks it (not after this month, not before 1900).
+  let dating = $state<string>();
+  let datingValue = $state('');
+  let datingErrors = $state<string[]>([]);
+  let datingBusy = $state(false);
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  function startDating(row: Row) {
+    dating = row.id;
+    datingErrors = [];
+    datingValue = (row.issued ?? row.metadata?.issued ?? '').slice(0, 7);
+    if (datingValue.length !== 7) datingValue = '';
+  }
+
+  async function saveDate(row: Row, issued: string | null) {
+    datingBusy = true;
+    datingErrors = [];
+    try {
+      await unwrap(
+        api.PATCH('/bibliometrics/services/{serviceId}/publications/{publicationId}', {
+          params: { path: { serviceId: service.id, publicationId: row.id } },
+          body: { issued },
+        }),
+      );
+      toaster.success(t('biblio.date.saved', { title: titleOf(row) }));
+      dating = undefined;
+      reload();
+    } catch (error) {
+      const failure = failureOf(error);
+      datingErrors =
+        failure.status === 422
+          ? [...(failure.fields.issued ?? [t('biblio.date.invalid')])]
+          : [
+              failureMessage(failure, t, {
+                403: t('biblio.forbidden'),
+                404: t('biblio.gone'),
+              }),
+            ];
+    } finally {
+      datingBusy = false;
+    }
+  }
+
   async function toggleHistory(row: Row) {
     if (open[row.id] !== undefined) {
       open = Object.fromEntries(Object.entries(open).filter(([id]) => id !== row.id));
@@ -230,6 +275,13 @@
     </p>
 
     {#if removeFailed}<Alert kind="error">{removeFailed}</Alert>{/if}
+    {#if loaded.canEdit && loaded.undated > 0}
+      <Alert kind="warning">
+        <span data-testid="publications-undated">
+          {t('biblio.undated', { count: loaded.undated })}
+        </span>
+      </Alert>
+    {/if}
 
     {#if loaded.result.length === 0}
       <p class="text-sm opacity-70">{t('biblio.section.empty')}</p>
@@ -242,7 +294,7 @@
           {@const authors = authorLine(row.metadata?.authors ?? [], (first) =>
             t('biblio.authors.etAl', { first }),
           )}
-          {@const issued = issuedText(row.metadata?.issued, locale())}
+          {@const issued = issuedText(row.issued ?? row.metadata?.issued, locale())}
           {@const history = open[row.id]}
           <li
             class="border-base-300 flex flex-col gap-1 rounded-box border p-3"
@@ -276,6 +328,11 @@
                 </span>
                 {#if row.metadata?.title}
                   <span class="text-sm opacity-70">{t('biblio.doi', { doi: row.doi })}</span>
+                {/if}
+                {#if row.issued}
+                  <span class="text-sm opacity-70">{t('biblio.date.given')}</span>
+                {:else if !row.monthKnown && loaded.canEdit}
+                  <span class="text-sm font-medium">{t('biblio.date.missing')}</span>
                 {/if}
               </div>
               <div class="flex flex-col items-end gap-1 text-sm" data-testid="publication-count">
@@ -313,6 +370,18 @@
               {#if loaded.canEdit}
                 <button
                   type="button"
+                  class="btn btn-ghost btn-xs"
+                  aria-expanded={dating === row.id}
+                  aria-controls="date-{row.id}"
+                  aria-label={row.monthKnown
+                    ? t('biblio.date.change', { title: titleOf(row) })
+                    : t('biblio.date.set', { title: titleOf(row) })}
+                  onclick={() => (dating === row.id ? (dating = undefined) : startDating(row))}
+                >
+                  {row.monthKnown ? t('biblio.date.changeShort') : t('biblio.date.setShort')}
+                </button>
+                <button
+                  type="button"
                   class="btn btn-ghost btn-xs text-error"
                   aria-label={t('biblio.remove', { title: titleOf(row) })}
                   onclick={() => (removing = row)}
@@ -321,6 +390,49 @@
                 </button>
               {/if}
             </div>
+            {#if dating === row.id}
+              <form
+                id="date-{row.id}"
+                class="flex flex-wrap items-end gap-2"
+                onsubmit={(event) => {
+                  event.preventDefault();
+                  void saveDate(row, datingValue === '' ? null : datingValue);
+                }}
+              >
+                <div class="w-56">
+                  <TextField
+                    label={t('biblio.date.label', { title: titleOf(row) })}
+                    type="month"
+                    autocomplete="off"
+                    min="1900-01"
+                    max={currentMonth}
+                    placeholder="2020-09"
+                    bind:value={datingValue}
+                    errors={datingErrors}
+                  />
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" disabled={datingBusy}>
+                  {t('biblio.date.save')}
+                </button>
+                {#if row.issued}
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    disabled={datingBusy}
+                    onclick={() => void saveDate(row, null)}
+                  >
+                    {t('biblio.date.reset')}
+                  </button>
+                {/if}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  onclick={() => (dating = undefined)}
+                >
+                  {t('biblio.date.cancel')}
+                </button>
+              </form>
+            {/if}
             {#if history !== undefined}
               <div id="history-{row.id}">
                 {#if history === 'loading'}

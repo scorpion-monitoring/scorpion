@@ -51,6 +51,22 @@ export const messages: UiMessages = {
     'biblio.forbidden': 'You may not change the publications of this service.',
     'biblio.gone': 'This publication or service no longer exists.',
 
+    'biblio.undated.one':
+      '1 publication has no month of publication. Give it with “Set the month”, so it counts in the Publications KPI.',
+    'biblio.undated.other':
+      '{count} publications have no month of publication. Give it with “Set the month”, so they count in the Publications KPI.',
+    'biblio.date.given': 'Date given by the provider',
+    'biblio.date.missing': 'Month of publication not known',
+    'biblio.date.set': 'Set the month {title} was published',
+    'biblio.date.setShort': 'Set the month',
+    'biblio.date.change': 'Change the date of {title}',
+    'biblio.date.changeShort': 'Change the date',
+    'biblio.date.label': 'Month of publication of {title}',
+    'biblio.date.save': 'Save the month',
+    'biblio.date.reset': 'Use the date from doi.org',
+    'biblio.date.cancel': 'Cancel',
+    'biblio.date.saved': 'The date of {title} was saved.',
+    'biblio.date.invalid': 'Enter a month like 2020-09, not after this month.',
     'biblio.check.submit': 'Check citations now',
     'biblio.check.queued':
       'The check is queued. The counts appear here when it has run; reload the page in a minute.',
@@ -112,6 +128,22 @@ export const messages: UiMessages = {
     'biblio.forbidden': 'Sie dürfen die Publikationen dieses Dienstes nicht ändern.',
     'biblio.gone': 'Diese Publikation oder dieser Dienst existiert nicht mehr.',
 
+    'biblio.undated.one':
+      '1 Publikation hat keinen Erscheinungsmonat. Geben Sie ihn mit „Monat angeben“ an, damit sie im Publikations-KPI zählt.',
+    'biblio.undated.other':
+      '{count} Publikationen haben keinen Erscheinungsmonat. Geben Sie ihn mit „Monat angeben“ an, damit sie im Publikations-KPI zählen.',
+    'biblio.date.given': 'Datum vom Anbieter angegeben',
+    'biblio.date.missing': 'Erscheinungsmonat nicht bekannt',
+    'biblio.date.set': 'Erscheinungsmonat von {title} angeben',
+    'biblio.date.setShort': 'Monat angeben',
+    'biblio.date.change': 'Datum von {title} ändern',
+    'biblio.date.changeShort': 'Datum ändern',
+    'biblio.date.label': 'Erscheinungsmonat von {title}',
+    'biblio.date.save': 'Monat speichern',
+    'biblio.date.reset': 'Datum von doi.org verwenden',
+    'biblio.date.cancel': 'Abbrechen',
+    'biblio.date.saved': 'Das Datum von {title} wurde gespeichert.',
+    'biblio.date.invalid': 'Geben Sie einen Monat wie 2020-09 an, nicht nach dem aktuellen Monat.',
     'biblio.check.submit': 'Zitationen jetzt prüfen',
     'biblio.check.queued':
       'Die Prüfung ist eingereiht. Die Zahlen erscheinen hier, sobald sie gelaufen ist; laden Sie die Seite in einer Minute neu.',

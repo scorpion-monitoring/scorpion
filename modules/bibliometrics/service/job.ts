@@ -54,11 +54,15 @@ export async function runRefreshJob(
     metadataRetried: report.metadataRetried,
     metadataOk: report.metadataOk,
     nextSlice: report.next !== undefined,
-    // The Bibliographic KPI: `off` with the setting empty.
-    kpi: report.kpi,
-    kpiWritten: report.kpiWritten,
-    kpiSkippedNotInSet: report.kpiSkippedNotInSet,
-    kpiSkippedIncomplete: report.kpiSkippedIncomplete,
+    // The two Bibliographic KPIs: `off` with their setting empty.
+    citationsKpi: report.citationsKpi,
+    citationsWritten: report.citationsWritten,
+    citationsSkippedNotInSet: report.citationsSkippedNotInSet,
+    citationsSkippedIncomplete: report.citationsSkippedIncomplete,
+    publicationsKpi: report.publicationsKpi,
+    publicationsWritten: report.publicationsWritten,
+    publicationsSkippedNotInSet: report.publicationsSkippedNotInSet,
+    publicationsSkippedUndated: report.publicationsSkippedUndated,
     kpiFailed: report.kpiFailed,
   };
 }

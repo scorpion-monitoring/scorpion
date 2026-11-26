@@ -3,14 +3,26 @@
 // documents it and ignores it (sprint 2, plan §1), so the instance sends no address.
 import { z } from '@scorpion/contracts';
 
-const kpi = z.strictObject({
-  indicatorId: z.uuid().optional().meta({
-    title: 'Bibliographic KPI',
-    description:
-      'The numeric indicator, in the category Bibliographic, that every citation refresh fills with the citation total of a service as the value of the current month, for the services whose KPIs include it. Empty: no KPI is written.',
+const indicator = (title: string, description: string, order: number) =>
+  z.uuid().optional().meta({
+    title,
+    description,
+    order,
     // The picker of `ui/IndicatorPicker.svelte`; the server checks the choice too (`settings.check`, ADR-0057).
     widget: 'bibliometrics-indicator',
-  }),
+  });
+
+const kpi = z.strictObject({
+  citationsIndicatorId: indicator(
+    'Citations KPI',
+    'A numeric indicator in the category Bibliographic that every citation refresh fills with the new citations of the month: the citation total of the service minus what the indicator holds for earlier months (the whole total the first time), so the months add up to the total. Empty: not written.',
+    1,
+  ),
+  publicationsIndicatorId: indicator(
+    'Publications KPI',
+    'A numeric indicator in the category Bibliographic that every citation refresh fills with the number of publications issued in each month, from the first publication to now. A service with a publication whose month is not known is skipped until a member of its provider gives it. Empty: not written.',
+    2,
+  ),
 });
 
 export const settingsSchema = z.strictObject({

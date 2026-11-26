@@ -12,7 +12,7 @@ import {
   uniqueAbbreviation,
 } from './support/members.ts';
 
-// M16 sprint 3: the section "Publications" of the service page and the Bibliographic KPI setting, with the stub adapters of the
+// M16 sprint 3: the section "Publications" of the service page and the two Bibliographic KPI settings, with the stub adapters of the
 // server (`NODE_ENV=test`: doi.org knows no DOI, OpenAlex knows none). A member adds a publication, meets the duplicate and the bad
 // DOI at the field, checks the citations now and is refused the second time, and removes one after a confirmation; a person of
 // another provider reads without a control that writes; the metadata, the counts and the history come from rows the test writes
@@ -288,6 +288,8 @@ test.describe('the publications of a service', () => {
     await expect(section(page).getByRole('button', { name: 'Check citations now' })).toHaveCount(0);
     await expect(section(page).getByRole('button', { name: `Remove ${doi}` })).toHaveCount(0);
     await expect(section(page).getByTestId('publication-controls')).toHaveCount(0);
+    await expect(section(page).getByRole('button', { name: /^Set the month / })).toHaveCount(0);
+    await expect(section(page).getByTestId('publications-undated')).toHaveCount(0);
     // The server refuses what the page does not offer.
     const theirs = await apiAs(playwright, baseURL, at, w.stranger);
     const tried = await theirs.send(
@@ -295,6 +297,15 @@ test.describe('the publications of a service', () => {
       `/bibliometrics/services/${w.service.id}/citations/refresh`,
     );
     expect(tried.status).toBe(403);
+    const listed = await theirs.get<{ result: { id: string }[] }>(
+      `/bibliometrics/services/${w.service.id}/publications`,
+    );
+    const dated = await theirs.send(
+      'PATCH',
+      `/bibliometrics/services/${w.service.id}/publications/${listed.result[0]!.id}`,
+      { issued: '2020-09' },
+    );
+    expect(dated.status).toBe(403);
     const added = await theirs.send(
       'POST',
       `/bibliometrics/services/${w.service.id}/publications`,
@@ -304,6 +315,64 @@ test.describe('the publications of a service', () => {
     );
     expect(added.status).toBe(403);
     await theirs.dispose();
+    await opened.close();
+    await w.api.dispose();
+  });
+
+  test('a member gives the month of a publication whose agency date is only a year, and the notice goes', async ({
+    browser,
+    playwright,
+    baseURL,
+    at,
+    basePath,
+  }) => {
+    test.slow();
+    const w = await world(playwright, baseURL, at);
+    const doi = newDoi(w.tag);
+    await addThroughApi(w.api, w.service.id, doi);
+    const title = `A paper of a year ${w.tag}`;
+    await describeDoi(
+      basePath,
+      doi,
+      {
+        title,
+        authors: ['Ada Lovelace'],
+        issued: '2021-01-01',
+        precision: 'year',
+        container: 'Zenodo',
+      },
+      [],
+    );
+    const opened = await pageAs(browser, baseURL, at, w.member);
+    const page = opened.page;
+    await page.goto(at(`/services/${w.service.slug}`));
+    await expect(section(page).getByTestId('publications-undated')).toHaveText(
+      /^1 publication has no month of publication\./,
+    );
+    const row = section(page).getByTestId('publication').filter({ hasText: title });
+    await expect(row.getByText('Month of publication not known')).toBeVisible();
+    const open = row.getByRole('button', { name: `Set the month ${title} was published` });
+    await expect(open).toHaveAttribute('aria-expanded', 'false');
+    await open.click();
+    await expect(open).toHaveAttribute('aria-expanded', 'true');
+    const field = row.getByLabel(`Month of publication of ${title}`);
+    // A month after this one is not sent: the field's own bound refuses it (the server's 422 is in the contract test).
+    await field.fill('2999-01');
+    await row.getByRole('button', { name: 'Save the month' }).click();
+    expect(await field.evaluate((input: HTMLInputElement) => input.validity.rangeOverflow)).toBe(
+      true,
+    );
+    await expect(row.getByText('Month of publication not known')).toBeVisible();
+    await field.fill('2021-09');
+    await row.getByRole('button', { name: 'Save the month' }).click();
+    await expect(toast(page).getByText(`The date of ${title} was saved.`)).toBeVisible();
+    await expect(section(page).getByTestId('publications-undated')).toHaveCount(0);
+    await expect(row.getByText('September 2021')).toBeVisible();
+    await expect(row.getByText('Date given by the provider')).toBeVisible();
+    // Back to the agency's year: the notice returns.
+    await row.getByRole('button', { name: `Change the date of ${title}` }).click();
+    await row.getByRole('button', { name: 'Use the date from doi.org' }).click();
+    await expect(section(page).getByTestId('publications-undated')).toBeVisible();
     await opened.close();
     await w.api.dispose();
   });
@@ -405,6 +474,12 @@ for (const scheme of ['light', 'dark'] as const) {
       ).toBeVisible();
       await clean('an open history');
 
+      await section(page)
+        .getByRole('button', { name: `Set the month ${title} was published` })
+        .click();
+      await expect(section(page).getByLabel(`Month of publication of ${title}`)).toBeVisible();
+      await clean('the date of a publication being changed');
+
       // By keyboard: the remove button opens the dialog, Escape closes it.
       await section(page)
         .getByRole('button', { name: `Remove ${title}` })
@@ -421,8 +496,8 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
-test.describe('the Bibliographic KPI setting', () => {
-  test('offers only numeric indicators in Bibliographic, saves one, and the server refuses another with a 422 at the field', async ({
+test.describe('the Bibliographic KPI settings', () => {
+  test('offer only numeric indicators in Bibliographic, save both, and the server refuses another with a 422 at the field', async ({
     page,
     playwright,
     baseURL,
@@ -440,6 +515,7 @@ test.describe('the Bibliographic KPI setting', () => {
       valueType: 'integer',
       thematic: 'Bibliographic',
     });
+    const papers = await indicator('Papers', { valueType: 'integer', thematic: 'Bibliographic' });
     const visits = await indicator('Visits', { valueType: 'integer', thematic: 'Usage' });
     const remark = await indicator('Remark', {
       valueType: 'text',
@@ -449,40 +525,55 @@ test.describe('the Bibliographic KPI setting', () => {
     const before = await api.get<{ version: number; values: Record<string, unknown> }>(
       '/settings/bibliometrics',
     );
+    type Kpi = { citationsIndicatorId?: string; publicationsIndicatorId?: string };
     try {
-      // The server: another indicator is a 422 naming the field, whatever sends it.
-      for (const wrong of [visits.id, remark.id]) {
+      // The server: another indicator, or one for both, is a 422 naming the field, whatever sends it.
+      const refusals: [Kpi, string][] = [
+        [{ citationsIndicatorId: visits.id }, 'values.kpi.citationsIndicatorId'],
+        [{ publicationsIndicatorId: remark.id }, 'values.kpi.publicationsIndicatorId'],
+        [
+          { citationsIndicatorId: citations.id, publicationsIndicatorId: citations.id },
+          'values.kpi.publicationsIndicatorId',
+        ],
+      ];
+      for (const [kpi, path] of refusals) {
         const refused = await api.send('PUT', '/settings/bibliometrics', {
           version: before.version,
-          values: { kpi: { indicatorId: wrong } },
+          values: { kpi },
         });
         expect(refused.status, JSON.stringify(refused.body)).toBe(422);
-        expect(JSON.stringify(refused.body)).toContain('values.kpi.indicatorId');
+        expect(JSON.stringify(refused.body)).toContain(path);
       }
 
-      // The page: the picker offers the numeric Bibliographic one and not the others.
+      // The page: each picker offers the numeric Bibliographic ones and not the others.
       await signInThroughPage(page, at, admin);
       await page.goto(at('/admin/settings/bibliometrics'));
       await expect(
         page.getByRole('heading', { name: 'Publications and citations', level: 1 }),
       ).toBeVisible();
-      const picker = page.getByLabel('Bibliographic KPI');
-      await expect(picker).toBeEnabled();
-      await expect(picker.locator('option', { hasText: citations.name })).toHaveCount(1);
-      await expect(picker.locator('option', { hasText: visits.name })).toHaveCount(0);
-      await expect(picker.locator('option', { hasText: remark.name })).toHaveCount(0);
-      await picker.selectOption({ label: citations.name });
+      for (const label of ['Citations KPI', 'Publications KPI']) {
+        const picker = page.getByLabel(label);
+        await expect(picker).toBeEnabled();
+        await expect(picker.locator('option', { hasText: citations.name })).toHaveCount(1);
+        await expect(picker.locator('option', { hasText: papers.name })).toHaveCount(1);
+        await expect(picker.locator('option', { hasText: visits.name })).toHaveCount(0);
+        await expect(picker.locator('option', { hasText: remark.name })).toHaveCount(0);
+      }
+      await page.getByLabel('Citations KPI').selectOption({ label: citations.name });
+      await page.getByLabel('Publications KPI').selectOption({ label: papers.name });
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(toast(page).getByText('The settings were saved.')).toBeVisible();
-      const after = await api.get<{ values: { kpi: { indicatorId?: string } } }>(
-        '/settings/bibliometrics',
-      );
-      expect(after.values.kpi.indicatorId).toBe(citations.id);
+      const after = await api.get<{ values: { kpi: Kpi } }>('/settings/bibliometrics');
+      expect(after.values.kpi).toEqual({
+        citationsIndicatorId: citations.id,
+        publicationsIndicatorId: papers.id,
+      });
       await page.reload();
-      await expect(page.getByLabel('Bibliographic KPI')).toHaveValue(citations.id);
-      expect(await violations(page), 'the settings page with the picker').toEqual([]);
+      await expect(page.getByLabel('Citations KPI')).toHaveValue(citations.id);
+      await expect(page.getByLabel('Publications KPI')).toHaveValue(papers.id);
+      expect(await violations(page), 'the settings page with the pickers').toEqual([]);
     } finally {
-      // The stack is shared: the KPI goes back off.
+      // The stack is shared: the KPIs go back off.
       const current = await api.get<{ version: number }>('/settings/bibliometrics');
       await api.send('PUT', '/settings/bibliometrics', {
         version: current.version,

@@ -146,8 +146,8 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
     jobs: [
       {
         // Weekly, Monday 04:00 UTC, for every service; "check now" queues it for one. One slice of at most 2,000 DOIs per
-        // run, then the next slice is queued. With `kpi.indicatorId` set, each slice also writes the citation totals of the
-        // services it finishes as their Bibliographic KPI (the report's `kpi*` counts). The job page lists the runs.
+        // run, then the next slice is queued. With a KPI indicator set, each slice also writes the services it finishes: the month's
+        // new citations and the publications per month (the report's `citations*` and `publications*` counts). The job page lists the runs.
         name: REFRESH_JOB,
         schedule: '0 4 * * 1',
         data: refreshJobDataSchema,
@@ -163,7 +163,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
       'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ] }],
       // OpenAlex, the one built-in citation source.
       [CITATION_SOURCE_REGISTRY]: [openAlexSource(() => need(openAlexParts))],
-      // `kpi.indicatorId` must name a numeric indicator in the category Bibliographic: a 422 on save, not only the picker (ADR-0057).
+      // The two KPI indicators must be numeric and in the category Bibliographic: a 422 on save, not only the picker (ADR-0057).
       'settings.check': [{ module: MODULE_ID, check: kpiSettingCheck(() => need(kpiParts)) }],
       // Approved members of the service's provider may change its publications; asked of registry.services at every call.
       'authz.resourcePolicy': [
@@ -196,6 +196,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
       kpiParts = {
         kpi: ctx.deps['kpi.framework'],
         measurements: ctx.deps['kpi.ingestion'].measurements,
+        reads: ctx.deps['kpi.ingestion'].reads,
       };
       const resolver =
         options.resolver ?? (testing ? createStubDoiResolver() : createDoiResolver());
@@ -215,6 +216,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
         resolver,
         lookupsEnabled: async () => (await ctx.settings.get()).enabled,
         citations,
+        ...(options.clock ? { clock: options.clock } : {}),
       });
       demoParts = {
         services,
