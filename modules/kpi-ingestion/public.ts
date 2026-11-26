@@ -87,6 +87,9 @@ export {
   type ProblemCode,
   type TableProblem,
 } from './service/table.ts';
+// `MeasurementsService.upsertBatchAsSystem` is for TRUSTED MODULE CODE ONLY (ADR-0056 decision 7): `upsertBatch` without the scoped
+// permission check, for a job with no person behind it (the citation refresh of bibliometrics). Never call it with input from a request,
+// and never give it a route; like `SettingsService.getSecret`, it trusts its caller.
 export {
   MAX_BATCH_MONTHS,
   MAX_BATCH_ROWS,

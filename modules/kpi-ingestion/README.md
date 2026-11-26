@@ -61,8 +61,8 @@ ctx.deps['kpi.ingestion'].measurements.upsertBatch(actor, serviceId, rows, { sou
 // → { inserted, updated, unchanged, rejected, rows: [{ index, verdict: 'insert' | 'update' | 'unchanged' | 'reject', problems? }] }
 ```
 
-The only code that writes `kpii_measurement` (a walker in `module.test.ts` fails on another writer); the form, CSV, XLSX, the routes and the migration
-tool call it. Order of the answers: **401, 403, 404, 422**.
+The only code that writes `kpii_measurement` (a walker in `module.test.ts` fails on another writer), together with its trusted sibling
+`upsertBatchAsSystem` below, which shares every step but the permission; the form, CSV, XLSX, the routes and the migration tool call it. Order of the answers: **401, 403, 404, 422**.
 
 | Step                 | What                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,6 +81,21 @@ A measurement of an indicator that the service has since dropped **stays**; the 
 `kpi.framework` (`kpisInPeriod`) tells which KPIs a month had.
 
 An unknown run is a 422 on `runId`; an indicator deleted after its set was read is a 409. Neither is a 500.
+
+### `upsertBatchAsSystem` (trusted module code only)
+
+```ts
+ctx.deps['kpi.ingestion'].measurements.upsertBatchAsSystem(serviceId, rows, { source })
+```
+
+The sibling of `upsertBatch` for a job of another module that has no person behind it (ADR-0056 decision 7). Its one caller is the
+weekly citation refresh of `bibliometrics` (source `bibliometrics`), and a test there proves that nothing else in that module calls it. It
+**skips only the permission step** of the table above: the service must exist (404), every row is checked the same way against the
+service's effective KPI set now, its value type, bounds and the calendar (one 422 naming every bad path), the write is the same upsert on
+`(service_id, indicator_id, period)` (defect 6: a second run in a month replaces the value, it never adds a row), and the same
+`measurement.recorded@1` is emitted with `actorId: null`. `created_by` and `updated_by` are `null`; `source` tells its values from form,
+file and API submissions. It has **no route**: never call it with input from a request. A trusted write was preferred to a service
+account because this write never leaves the server process (ADR-0056).
 
 ## Permissions
 
