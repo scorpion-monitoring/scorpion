@@ -31,6 +31,7 @@ export {
   MAX_STORED_VALUES,
   type CoverageMonth,
   type GridRow,
+  type IndicatorTotal,
   type MeasurementRead,
   type MonthGrid,
   type ReadsService,

@@ -80,6 +80,18 @@ export interface StoredValue extends SeriesPoint {
   source: string;
 }
 
+/** What `totalsAsSystem` says of one indicator: the sum of its numeric values, how many there are, and its first and last month. */
+export interface IndicatorTotal {
+  indicatorId: string;
+  /** The sum of the numbers (a duration in seconds); text values are not counted. */
+  sum: number;
+  /** How many numeric values went into `sum`. */
+  count: number;
+  /** The last day of the first and of the last month with a numeric value, `YYYY-MM-DD`. */
+  firstPeriod: string;
+  lastPeriod: string;
+}
+
 /** The most values one call of `storedValuesAsSystem` returns: 120 months of 200 indicators. */
 export const MAX_STORED_VALUES = MAX_SERIES_MONTHS * MAX_SERIES_INDICATORS;
 
@@ -177,6 +189,18 @@ export interface ReadsService {
     fromPeriod: string,
     toPeriod: string,
   ): Promise<StoredValue[]>;
+  /**
+   * The sum, the count and the first and last month of the numeric values of some indicators of one service, over **every** month
+   * before `beforePeriod` (`YYYY-MM` or `YYYY-MM-DD`; that month itself is left out), whatever wrote them. An indicator with no value
+   * there is left out. It is how `bibliometrics` writes a month's new citations so that the months add up to the total (M16 sprint 3):
+   * one aggregate instead of a walk through the series 120 months at a time. A trusted read like `seriesAsSystem`: no permission, no
+   * route; a bad period, an id that is not an id or more than `MAX_SERIES_INDICATORS` ids is an `Invalid` naming the parameter.
+   */
+  totalsAsSystem(
+    serviceId: string,
+    indicatorIds: readonly string[],
+    beforePeriod: string,
+  ): Promise<IndicatorTotal[]>;
 }
 
 export interface ReadsDeps {
@@ -513,6 +537,43 @@ export function createReadsService(ctx: ModuleContext, deps: ReadsDeps): ReadsSe
         period: row.period,
         ...present(types.get(row.indicatorId), row),
         source: row.source,
+      }));
+    },
+
+    async totalsAsSystem(serviceId, indicatorIds, beforePeriod) {
+      // The checks of the series, with the month before as its whole range (one month is always within the bound).
+      const { to: before, wanted } = checkSeriesQuery(
+        serviceId,
+        indicatorIds,
+        beforePeriod,
+        beforePeriod,
+      );
+      if (wanted.length === 0) return [];
+      const rows = await db
+        .select({
+          indicatorId: measurement.indicatorId,
+          sum: sql<string>`sum(${measurement.valueNumeric})::text`,
+          count: sql<number>`count(${measurement.valueNumeric})::int`,
+          firstPeriod: sql<string>`to_char(min(${measurement.period}), 'YYYY-MM-DD')`,
+          lastPeriod: sql<string>`to_char(max(${measurement.period}), 'YYYY-MM-DD')`,
+        })
+        .from(measurement)
+        .where(
+          and(
+            eq(measurement.serviceId, serviceId),
+            inArray(measurement.indicatorId, wanted),
+            sql`${measurement.period} < ${before}`,
+            sql`${measurement.valueNumeric} is not null`,
+          ),
+        )
+        .groupBy(measurement.indicatorId)
+        .orderBy(asc(measurement.indicatorId));
+      return rows.map((row) => ({
+        indicatorId: row.indicatorId,
+        sum: Number(row.sum),
+        count: Number(row.count),
+        firstPeriod: row.firstPeriod,
+        lastPeriod: row.lastPeriod,
       }));
     },
 

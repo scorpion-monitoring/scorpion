@@ -164,3 +164,58 @@ describe('upsertBatchAsSystem', () => {
     expect(await count(w.pool, 'kpii_measurement')).toBe(before);
   });
 });
+
+describe('reads.totalsAsSystem', () => {
+  it('sums every numeric value before the month, of the indicators asked, whatever wrote them', async () => {
+    const w = await world();
+    await w.submit([
+      w.row(w.ind.downloads, '2025-11', 10),
+      w.row(w.ind.downloads, '2026-04', 5),
+      w.row(w.ind.ratio, '2026-05', 2.5),
+      w.row(w.ind.note, '2026-05', 'text is not counted'),
+    ]);
+    await w.ingestion.measurements.upsertBatchAsSystem(
+      w.svc.id,
+      [w.row(w.ind.downloads, '2026-06', 100)],
+      { source: 'bibliometrics' },
+    );
+    const totals = await w.ingestion.reads.totalsAsSystem(
+      w.svc.id,
+      [w.ind.downloads.id, w.ind.ratio.id, w.ind.note.id, w.ind.share.id],
+      '2026-06',
+    );
+    expect(totals).toEqual(
+      [
+        {
+          indicatorId: w.ind.downloads.id,
+          sum: 15,
+          count: 2,
+          firstPeriod: '2025-11-30',
+          lastPeriod: '2026-04-30',
+        },
+        {
+          indicatorId: w.ind.ratio.id,
+          sum: 2.5,
+          count: 1,
+          firstPeriod: '2026-05-31',
+          lastPeriod: '2026-05-31',
+        },
+      ].sort((a, b) => a.indicatorId.localeCompare(b.indicatorId)),
+    );
+    // The month itself counts once it is before the bound.
+    const next = await w.ingestion.reads.totalsAsSystem(w.svc.id, [w.ind.downloads.id], '2026-07');
+    expect(next[0]).toMatchObject({ sum: 115, count: 3, lastPeriod: '2026-06-30' });
+    // Another service's values are not counted.
+    expect(
+      await w.ingestion.reads.totalsAsSystem(w.elsewhereSvc.id, [w.ind.downloads.id], '2026-07'),
+    ).toEqual([]);
+  });
+
+  it('answers a bad period or id with a 422 naming the parameter, never a 500', async () => {
+    const w = await world();
+    const bad = await rejection(w.ingestion.reads.totalsAsSystem(w.svc.id, ['not-an-id'], 'June'));
+    expect(bad.status).toBe(422);
+    expect(paths(bad)).toEqual(['fromPeriod', 'indicatorIds', 'toPeriod']);
+    expect(await w.ingestion.reads.totalsAsSystem(w.svc.id, [], '2026-06')).toEqual([]);
+  });
+});
