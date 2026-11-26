@@ -7,6 +7,7 @@
   import FieldShell from './FieldShell.svelte';
   import type { WidgetProps } from './kit-types.ts';
   import SchemaField from './SchemaField.svelte';
+  import { contributedWidget } from './wizard-extensions.ts';
   import {
     childPointer,
     describeField,
@@ -45,7 +46,11 @@
   );
   const required = $derived(node.required);
   const idBase = $props.id();
-  const Widget = $derived(node.widget ? widgets[node.widget] : undefined);
+  // The page's own widgets first, then the field widgets modules contribute (`wizardExtensions.widgets`, ADR-0057): a module's
+  // setting can ask for its own picker on the generic settings page. An unknown name draws the field as its type says.
+  const Widget = $derived(
+    node.widget ? (widgets[node.widget] ?? contributedWidget(node.widget)) : undefined,
+  );
 
   const record = $derived((value ?? {}) as Record<string, unknown>);
 
