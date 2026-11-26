@@ -191,6 +191,9 @@ importers:
       '@scalar/sveltekit':
         specifier: 0.3.40
         version: 0.3.40(@sveltejs/kit@3.4.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.59.1(@typescript-eslint/types@8.73.0))(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(svelte@5.59.1(@typescript-eslint/types@8.73.0))(typescript@6.0.3)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(svelte@5.59.1(@typescript-eslint/types@8.73.0))
+      '@scorpion/bibliometrics':
+        specifier: workspace:*
+        version: link:../../modules/bibliometrics
       '@scorpion/core-audit':
         specifier: workspace:*
         version: link:../../modules/core-audit
@@ -290,6 +293,12 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/kpi-framework':
+        specifier: workspace:*
+        version: link:../kpi-framework
+      '@scorpion/kpi-ingestion':
+        specifier: workspace:*
+        version: link:../kpi-ingestion
       '@scorpion/registry-services':
         specifier: workspace:*
         version: link:../registry-services
@@ -312,12 +321,18 @@ importers:
       '@scorpion/core-notifications':
         specifier: workspace:*
         version: link:../core-notifications
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
 
   modules/core-audit:
     dependencies:

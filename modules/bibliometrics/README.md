@@ -4,8 +4,12 @@ The publications of a service, by DOI, and their citation counts over time. Deci
 [ADR-0056](../../docs/adr/0056-bibliometrics-publications-citations-and-the-trusted-kpi-write.md); plan:
 [M16](../../docs/m16-sprint-plan.md).
 
-Status: M16 sprint 2. The internal API, the weekly citation refresh and "check now" exist; the service page shows nothing
-yet, and no KPI is written yet (both sprint 3).
+Status: M16 done (sprint 3). The service page has a section "Publications"; the weekly citation refresh can fill two
+Bibliographic KPIs, new citations and publications per month ([below](#the-bibliographic-kpis)).
+
+Dependencies: `core.authz`, `core.settings`, `registry.services`, `kpi.framework` (the indicator of the KPI) and
+`kpi.ingestion` (its trusted write); `core.ui-shell` is an optional peer (the `ui` entry runs in its web app). Nothing
+depends on `bibliometrics`.
 
 The manifest (`module.ts`) is the reference for the permissions, the settings and their meaning
 (`pnpm scorpion docs:export`). This file says what the manifest cannot.
@@ -28,15 +32,16 @@ Publications are visible to signed-in people only. They are not on the public ca
 
 All under `/api/internal/bibliometrics/services/{serviceId}`, answered with `Cache-Control: no-store`:
 
-| Route                                       | Answers                                                                                                                                            |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /publications`                         | The list envelope, 0-based pages, 5 per page by default and at most 50, plus `citations` (the service total); 404 for an unknown service           |
-| `POST /publications` `{ doi }`              | 201 with the publication; 409 if the service lists the DOI already; 422 naming `doi`                                                               |
-| `DELETE /publications/{publicationId}`      | 204; 404 for a publication of another service, which is not touched                                                                                |
-| `GET /publications/{publicationId}/history` | The citation counts over time: one point per source and day (the latest of the day), the last 520, oldest first; 404 for another service's         |
-| `POST /citations/refresh` ("check now")     | 202 with `runIds` (one per citation source that is on); 409 while lookups are off; 429 with `Retry-After` within ten minutes (rate limit `strict`) |
+| Route                                              | Answers                                                                                                                                            |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /publications`                                | The list envelope, 0-based pages, 5 per page by default and at most 50, plus `citations` (the service total); 404 for an unknown service           |
+| `POST /publications` `{ doi }`                     | 201 with the publication; 409 if the service lists the DOI already; 422 naming `doi`                                                               |
+| `DELETE /publications/{publicationId}`             | 204; 404 for a publication of another service, which is not touched                                                                                |
+| `PATCH /publications/{publicationId}` `{ issued }` | 200 with the publication; the month or day a provider gives ([below](#the-month-of-a-publication)); 404 for another service's; 422 naming `issued` |
+| `GET /publications/{publicationId}/history`        | The citation counts over time: one point per source and day (the latest of the day), the last 520, oldest first; 404 for another service's         |
+| `POST /citations/refresh` ("check now")            | 202 with `runIds` (one per citation source that is on); 409 while lookups are off; 429 with `Retry-After` within ten minutes (rate limit `strict`) |
 
-The list is ordered by the date the work was issued, newest first, with unknown dates last, then by id. Dates are as
+The list is ordered by the date the work was issued (the one a provider gave, else the agency's), newest first, with unknown dates last, then by id. Dates are as
 precise as the registration agency knows them: `2020`, `2020-09` or `2020-09-16`.
 
 ## The DOI and its metadata
@@ -68,7 +73,8 @@ citation counts of all DOIs the instance lists. Each DOI is asked once, however 
 source is OpenAlex (`https://api.openalex.org/works`, 100 DOIs per request, at most three attempts, 5 seconds each).
 One run of the job handles at most 2,000 DOIs and queues the next part. It also looks up again the title of every DOI
 whose lookup failed, or that was added while lookups were off. A DOI that doi.org did not know (`not-found`) is not
-asked again; adding it anew asks again. "Run now" on the admin job page starts the weekly run at once.
+asked again; adding it anew asks again. The admin job page (`/admin/system`) lists the runs with their counts; it has no
+"run now" (a platform trigger is in the backlog), so between two Mondays only "check now" of one service starts a refresh.
 
 What a run stored is kept as history: one snapshot per DOI and source, with its date. Running twice on one day is harmless:
 the history keeps the latest count of each day.
@@ -118,10 +124,65 @@ snapshots are stored under its `id`. The list and the total show the first entry
 `bibliometrics.citations.updated@1` is emitted when a run of a source finishes: `runId`, `serviceIds` (at most 2,000),
 `found`, `failed`. Ids and counts only, never a DOI, a title or a URL. Nothing listens yet.
 
+## The Bibliographic KPIs
+
+Two indicators, each off by default, both written so that the **Trend widget**, which adds the months up, shows totals.
+To turn them on:
+
+1. Create (or choose) indicators in **Administration → Indicators** with a **numeric** value type (a whole number fits)
+   and the thematic category **Bibliographic**: one for citations, one for publications. The citations indicator must
+   allow **negative** values (no minimum of 0, see below).
+2. Add them to the KPI sets of the services that should report them (or as extras of a service).
+3. Choose them in **Administration → Settings → Publications and citations**: **Citations KPI** and **Publications
+   KPI**. The pickers offer only numeric indicators in `Bibliographic`, and the server refuses any other, and the same
+   indicator for both, with a 422 on `kpi.citationsIndicatorId` or `kpi.publicationsIndicatorId`, whatever sends it (a
+   contribution to `core.settings`' registry `settings.check`, ADR-0057). Only an id that changed is checked, so an
+   indicator that changed category later does not stop an administrator from saving the other settings.
+
+From then on every refresh (the Monday run and "check now") writes, with source `bibliometrics`, through
+`kpi.ingestion`'s trusted `upsertBatchAsSystem` (ADR-0056 decision 7 as amended):
+
+- **Citations: the month's new citations.** The service's citation total now (of the source the list shows,
+  OpenAlex) minus the sum of what the indicator holds for the service's **earlier** months (`totalsAsSystem` of
+  kpi.ingestion, whatever wrote them). With nothing there, the whole total goes in as its start. A second run in the
+  month replaces the month's value. A removed publication or a count OpenAlex lowered gives a **negative** month, so
+  the months always add up to the total; an indicator with a minimum of 0 refuses that value (`kpiFailed`). The total
+  is taken only when **every** publication has a count from **this** refresh; a partial total is not written.
+- **Publications: the number issued per month**, from the month of the first publication to the current month, 0 for
+  a month with none (so a removed publication drops out of its month at the next refresh). The month of a publication
+  is the one a member of the provider gave on the page, else the agency's date at month or day precision. A date
+  after the current month counts in the current month, one before 1900 in January 1900. **A service with a
+  publication of no known month is skipped** until a member gives it: the section shows how many lack one and offers
+  "Set the month" (nothing is guessed from a year).
+
+A service is **skipped**, and counted in the job's report, when:
+
+| Report count                  | Why                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `citationsSkippedNotInSet`    | its effective KPI set does not hold the citations indicator (never an error)                           |
+| `citationsSkippedIncomplete`  | one of its publications has no count from this refresh (not found, failed, or asked by an earlier run) |
+| `publicationsSkippedNotInSet` | its effective KPI set does not hold the publications indicator                                         |
+| `publicationsSkippedUndated`  | one of its publications has no month: the provider is asked for it on the page                         |
+| `kpiFailed`                   | `kpi.ingestion` refused a value (a bound of the indicator, a set changed meanwhile); logged            |
+
+`citationsWritten` and `publicationsWritten` count the services written; `citationsKpi` and `publicationsKpi` are `off`
+with the setting empty and `unusable` when the chosen indicator was deleted or is no longer numeric and Bibliographic
+(nothing is written; the log says so). A service whose DOIs cross two slices of the weekly run is decided by the slice
+that holds its last DOI. A service whose last publication was removed is in no slice, so its values stay as they were.
+
+## The month of a publication
+
+`PATCH /publications/{publicationId}` `{ issued: "2020-09" | "2020-09-16" | null }` (the scoped write, as the add) stores
+the month or day a member of the provider gives; it wins over the agency's date in the list, its order and the
+Publications KPI, and `null` takes it back. Not before 1900 and not after the current month (422 naming `issued`).
+The list answers it as `issued`, says per row whether a month is known (`monthKnown`) and counts the service's
+publications without one (`undated`).
+
 ## Audit
 
-Adding and removing a publication write `bibliometrics.publication.added` and `bibliometrics.publication.removed` to the
-audit trail, with the service id and the DOI, in the same transaction as the change. Without `core.audit` in the profile
+Adding and removing a publication and giving its date write `bibliometrics.publication.added`,
+`bibliometrics.publication.removed` and `bibliometrics.publication.dated` to the audit trail, with the service id and the
+DOI (and the date given), in the same transaction as the change. Without `core.audit` in the profile
 nothing is written and the change still happens.
 
 ## Demo data

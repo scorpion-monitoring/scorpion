@@ -61,8 +61,8 @@ ctx.deps['kpi.ingestion'].measurements.upsertBatch(actor, serviceId, rows, { sou
 // → { inserted, updated, unchanged, rejected, rows: [{ index, verdict: 'insert' | 'update' | 'unchanged' | 'reject', problems? }] }
 ```
 
-The only code that writes `kpii_measurement` (a walker in `module.test.ts` fails on another writer); the form, CSV, XLSX, the routes and the migration
-tool call it. Order of the answers: **401, 403, 404, 422**.
+The only code that writes `kpii_measurement` (a walker in `module.test.ts` fails on another writer), together with its trusted sibling
+`upsertBatchAsSystem` below, which shares every step but the permission; the form, CSV, XLSX, the routes and the migration tool call it. Order of the answers: **401, 403, 404, 422**.
 
 | Step                 | What                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,6 +81,21 @@ A measurement of an indicator that the service has since dropped **stays**; the 
 `kpi.framework` (`kpisInPeriod`) tells which KPIs a month had.
 
 An unknown run is a 422 on `runId`; an indicator deleted after its set was read is a 409. Neither is a 500.
+
+### `upsertBatchAsSystem` (trusted module code only)
+
+```ts
+ctx.deps['kpi.ingestion'].measurements.upsertBatchAsSystem(serviceId, rows, { source });
+```
+
+The sibling of `upsertBatch` for a job of another module that has no person behind it (ADR-0056 decision 7). Its one caller is the
+weekly citation refresh of `bibliometrics` (source `bibliometrics`), and a test there proves that nothing else in that module calls it. It
+**skips only the permission step** of the table above: the service must exist (404), every row is checked the same way against the
+service's effective KPI set now, its value type, bounds and the calendar (one 422 naming every bad path), the write is the same upsert on
+`(service_id, indicator_id, period)` (defect 6: a second run in a month replaces the value, it never adds a row), and the same
+`measurement.recorded@1` is emitted with `actorId: null`. `created_by` and `updated_by` are `null`; `source` tells its values from form,
+file and API submissions. It has **no route**: never call it with input from a request. A trusted write was preferred to a service
+account because this write never leaves the server process (ADR-0056).
 
 ## Permissions
 
@@ -124,6 +139,8 @@ added. `value` is the **canonical text** the legacy API returned (the value type
 `reads.measuredIndicatorsAsSystem(serviceId, fromPeriod, toPeriod)` is its companion: the ids of the indicators that have a value in the window (sorted by id, at most 200, the same bounds and 422), which is how a caller learns of an indicator the service has since dropped. Also trusted, also no route.
 
 **A trusted read with the source, for the legacy migration's `compare` (M13 sprint 3).** `reads.storedValuesAsSystem(serviceId, fromPeriod, toPeriod)` returns every value stored for the service in the window, of every indicator, as `{ indicatorId, period, valueNumber | null, value, source }`, by month, then indicator id. `source` is the adapter or tool that wrote the value last (`form`, `csv`, `api`, `legacy-migration`, …), never a person, run or file name; `compare` uses it to tell a value the migration wrote from one a person entered after it. The same bounds and 422 as `seriesAsSystem` (at most 120 months), at most `MAX_STORED_VALUES` values per call; trusted, no permission, no route. Tested in `service/reads.test.ts`.
+
+**A trusted total, for `bibliometrics` (M16 sprint 3).** `reads.totalsAsSystem(serviceId, indicatorIds, beforePeriod)` returns, per indicator that has numeric values in **every month before** `beforePeriod` (that month left out), `{ indicatorId, sum, count, firstPeriod, lastPeriod }`, whatever source wrote the values. `bibliometrics` writes a month's new citations as the total minus this sum, so the months add up to the total, and starts its monthly publication counts at `firstPeriod`. One aggregate, not a walk through the series. The same checks and 422 as `seriesAsSystem` for the period and the ids; trusted, no permission, no route. Tested in `service/as-system.test.ts`.
 
 The routes are thin: Zod parses, one service call (`reads.list`, `reads.grid`, `reads.coverage`, `measurements.upsertByName`), the row is mapped
 field by field. The write route sets `maxBodyBytes` to 3 MiB: 500 items of the legacy shape are about 60 kB, but a text value may be 4 000 characters, so the

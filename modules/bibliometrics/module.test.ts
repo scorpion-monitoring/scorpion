@@ -59,7 +59,7 @@ describe('the manifest', () => {
     expect(() => indexSources([entry, entry] as never)).toThrow(/id "x"/);
   });
 
-  it('depends on core.authz, core.settings, registry.services and the integrations only', () => {
+  it('depends on core.authz, core.settings, registry.services, kpi.framework, kpi.ingestion and the integrations only', () => {
     expect(
       Object.keys(packageJson.dependencies).filter((name) => name.startsWith('@scorpion/')),
     ).toEqual([
@@ -68,8 +68,17 @@ describe('the manifest', () => {
       '@scorpion/core-settings',
       '@scorpion/integrations',
       '@scorpion/kernel',
+      '@scorpion/kpi-framework',
+      '@scorpion/kpi-ingestion',
       '@scorpion/registry-services',
     ]);
+  });
+
+  it('has core.ui-shell as an optional peer only (its ui entry runs in the shell; a profile without the shell still starts)', () => {
+    expect(packageJson.peerDependencies).toEqual({ '@scorpion/core-ui-shell': 'workspace:*' });
+    expect(packageJson.peerDependenciesMeta).toEqual({
+      '@scorpion/core-ui-shell': { optional: true },
+    });
   });
 });
 

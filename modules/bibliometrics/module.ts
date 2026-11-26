@@ -9,6 +9,8 @@ import {
   type OpenAlex,
 } from '@scorpion/integrations';
 import { defineModule, type JobResult } from '@scorpion/kernel';
+import type { KpiFrameworkPublic } from '@scorpion/kpi-framework/public';
+import type { KpiIngestionPublic } from '@scorpion/kpi-ingestion/public';
 import type { ServicesPublic } from '@scorpion/registry-services/public';
 import { registerRoutes } from './routes.ts';
 import {
@@ -22,6 +24,7 @@ import { PERMISSION_READ, PERMISSION_WRITE, RESOURCE_SERVICE } from './service/p
 import { writePolicy } from './service/policy.ts';
 import { citationsUpdatedSchema } from './service/events.ts';
 import { refreshJobDataSchema, runRefreshJob } from './service/job.ts';
+import { kpiSettingCheck, type KpiWriteDeps } from './service/kpi-write.ts';
 import {
   createMetadataStore,
   createPublicationsService,
@@ -67,7 +70,13 @@ export interface BibliometricsService {
 }
 
 // The service types of the dependencies shape `ctx.deps`.
-export type BibliometricsDependencies = [AuthzService, SettingsService, ServicesPublic];
+export type BibliometricsDependencies = [
+  AuthzService,
+  SettingsService,
+  ServicesPublic,
+  KpiFrameworkPublic,
+  KpiIngestionPublic,
+];
 
 export interface BibliometricsOptions {
   /** The DOI resolver. Default: the real one, or the stub (which knows no DOI) under `NODE_ENV=test`. */
@@ -89,6 +98,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
   let demoParts: BibliometricsDemoDeps | undefined;
   let citations: CitationService | undefined;
   let openAlexParts: OpenAlexSourceDeps | undefined;
+  let kpiParts: KpiWriteDeps | undefined;
   const need = <T>(value: T | undefined): T => {
     if (value === undefined) throw new Error('bibliometrics: asked before start');
     return value;
@@ -96,7 +106,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
 
   return defineModule<
     BibliometricsService,
-    'core.authz' | 'core.settings' | 'registry.services',
+    'core.authz' | 'core.settings' | 'registry.services' | 'kpi.framework' | 'kpi.ingestion',
     never,
     BibliometricsSettings
   >({
@@ -136,7 +146,8 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
     jobs: [
       {
         // Weekly, Monday 04:00 UTC, for every service; "check now" queues it for one. One slice of at most 2,000 DOIs per
-        // run, then the next slice is queued. The job page's "run now" starts a scheduled run.
+        // run, then the next slice is queued. With a KPI indicator set, each slice also writes the services it finishes: the month's
+        // new citations and the publications per month (the report's `citations*` and `publications*` counts). The job page lists the runs.
         name: REFRESH_JOB,
         schedule: '0 4 * * 1',
         data: refreshJobDataSchema,
@@ -152,6 +163,8 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
       'authz.defaultRole': [{ role: 'user', permissions: [PERMISSION_READ] }],
       // OpenAlex, the one built-in citation source.
       [CITATION_SOURCE_REGISTRY]: [openAlexSource(() => need(openAlexParts))],
+      // The two KPI indicators must be numeric and in the category Bibliographic: a 422 on save, not only the picker (ADR-0057).
+      'settings.check': [{ module: MODULE_ID, check: kpiSettingCheck(() => need(kpiParts)) }],
       // Approved members of the service's provider may change its publications; asked of registry.services at every call.
       'authz.resourcePolicy': [
         writePolicy({
@@ -159,6 +172,9 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
         }),
       ],
     },
+
+    // The texts; the section of the service page and the settings picker come with `./ui/index.ts` (the shell forwards them).
+    ui: () => import('./ui/pages.ts'),
 
     // `scorpion seed --demo`: three fictional publications on two demo services, no network call (ADR-0046).
     demoSeed: (ctx, demo) => createDemoSeed(() => need(demoParts))(ctx, demo),
@@ -176,6 +192,12 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
         apiKey: () => settingsService.getSecret(OPENALEX_KEY_SECRET),
       };
       const common = { authz: ctx.deps['core.authz'], services };
+      // The Bibliographic KPI: trusted reads of kpi.framework and the trusted write of kpi.ingestion, called by the refresh only.
+      kpiParts = {
+        kpi: ctx.deps['kpi.framework'],
+        measurements: ctx.deps['kpi.ingestion'].measurements,
+        reads: ctx.deps['kpi.ingestion'].reads,
+      };
       const resolver =
         options.resolver ?? (testing ? createStubDoiResolver() : createDoiResolver());
       // Two sources with one id stop the start.
@@ -186,6 +208,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
         settings: () => ctx.settings.get(),
         metadata: createMetadataStore(ctx, resolver),
         enqueue: (data) => ctx.jobs.enqueue(REFRESH_JOB, data),
+        kpi: kpiParts,
         ...(options.clock ? { clock: options.clock } : {}),
       });
       const publications = createPublicationsService(ctx, {
@@ -193,6 +216,7 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
         resolver,
         lookupsEnabled: async () => (await ctx.settings.get()).enabled,
         citations,
+        ...(options.clock ? { clock: options.clock } : {}),
       });
       demoParts = {
         services,

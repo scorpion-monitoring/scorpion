@@ -1,7 +1,8 @@
-// What kpi.framework adds to the services wizard and the service page, rendered on the server with the stand-in of the shell
-// (`ShellHarness.svelte`): the shell forwards the `wizardExtensions` export of a module's `ui` entry (once), the real
-// widget of the `kpi-set` field draws the sets the schema sent, and the section of the service page is drawn after the
-// record. The data the section fetches and every click are in `e2e/kpi-framework.spec.ts`.
+// What kpi.framework and bibliometrics add to the services wizard and the service page, rendered on the server with the stand-in
+// of the shell (`ShellHarness.svelte`): the shell forwards the `wizardExtensions` export of a module's `ui` entry (once), the real
+// widget of the `kpi-set` field draws the sets the schema sent, and each module's section of the service page is drawn after the
+// record, the KPIs before the publications (profile order). The data the sections fetch and every click are in
+// `e2e/kpi-framework.spec.ts` and `e2e/bibliometrics.spec.ts`.
 import type { Component } from 'svelte';
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -23,6 +24,12 @@ const kpiEntry = (await mod('kpi-framework/ui/index.ts')) as {
   };
 };
 const { messages: kpiMessages } = (await mod('kpi-framework/ui/messages.ts')) as {
+  messages: Record<string, Record<string, string>>;
+};
+const biblioEntry = (await mod('bibliometrics/ui/index.ts')) as {
+  wizardExtensions: { widgets: Record<string, unknown>; sections: Record<string, unknown> };
+};
+const { messages: biblioMessages } = (await mod('bibliometrics/ui/messages.ts')) as {
   messages: Record<string, Record<string, string>>;
 };
 const NewService = ((await mod('registry-services/ui/NewService.svelte')) as { default: Component })
@@ -48,8 +55,8 @@ const { kpiSetStep, kpiSetFieldType } = (await mod('kpi-framework/service/contri
 };
 
 const messages = {
-  en: { ...serviceMessages.en, ...kpiMessages.en },
-  de: { ...serviceMessages.de, ...kpiMessages.de },
+  en: { ...serviceMessages.en, ...kpiMessages.en, ...biblioMessages.en },
+  de: { ...serviceMessages.de, ...kpiMessages.de, ...biblioMessages.de },
 };
 const SET_A = '0197a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a0a';
 const SET_B = '0197a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a0b';
@@ -67,6 +74,14 @@ const kpiModule = {
   wizardExtensions: kpiEntry.wizardExtensions as never,
 };
 
+const biblioModule = {
+  package: '@scorpion/bibliometrics',
+  routes: [],
+  messages: {},
+  widgets: {},
+  wizardExtensions: biblioEntry.wizardExtensions as never,
+};
+
 describe('the fourth export of a ui entry', () => {
   it('is the widget of the field type, no condition for the step, and one section', () => {
     expect(Object.keys(kpiEntry.wizardExtensions.widgets)).toEqual(['kpi-set']);
@@ -74,9 +89,20 @@ describe('the fourth export of a ui entry', () => {
     expect(Object.keys(kpiEntry.wizardExtensions.sections)).toEqual(['kpis']);
   });
 
-  it('is in the generated table of the web app for the module that has it, and only for it', () => {
+  it('is the section of the publications and the widget of the indicator picker for bibliometrics', () => {
+    expect(Object.keys(biblioEntry.wizardExtensions.sections)).toEqual(['publications']);
+    expect(Object.keys(biblioEntry.wizardExtensions.widgets)).toEqual(['bibliometrics-indicator']);
+  });
+
+  it('is in the generated table of the web app for kpi-framework and bibliometrics, each with its own section, in profile order', () => {
     const withExtensions = uiModules.filter((module) => module.wizardExtensions !== undefined);
-    expect(withExtensions.map((module) => module.package)).toEqual(['@scorpion/kpi-framework']);
+    expect(withExtensions.map((module) => module.package)).toEqual([
+      '@scorpion/kpi-framework',
+      '@scorpion/bibliometrics',
+    ]);
+    expect(
+      withExtensions.map((module) => Object.keys(module.wizardExtensions!.sections ?? {})),
+    ).toEqual([['kpis'], ['publications']]);
     expect(wizardExtensionsOf({})).toBeUndefined();
     expect(wizardExtensionsOf({ wizardExtensions: { widgets: {} } })).toEqual({ widgets: {} });
   });
@@ -207,6 +233,40 @@ describe('the section of the service page', () => {
 
   it('is not drawn by a page of a profile without it', () => {
     expect(draw()).not.toContain('service-kpis');
+    expect(draw()).not.toContain('service-publications');
+  });
+
+  it('draws the publications after the KPIs when the shell forwards both, in the order of the generated table', () => {
+    forwardWizardExtensions(
+      uiModules
+        .filter((module) => module.wizardExtensions !== undefined)
+        .map((module) =>
+          module.package === '@scorpion/kpi-framework'
+            ? kpiModule
+            : module.package === '@scorpion/bibliometrics'
+              ? biblioModule
+              : module,
+        ),
+    );
+    const html = draw();
+    const record = html.indexOf('Blast Tool');
+    const kpis = html.indexOf('data-testid="service-kpis"');
+    const publications = html.indexOf('data-testid="service-publications"');
+    expect(record).toBeGreaterThanOrEqual(0);
+    expect(kpis).toBeGreaterThan(record);
+    expect(publications).toBeGreaterThan(kpis);
+    expect(html).toContain('>Publications<');
+    // It fills in on the client; the server draws the state before the answer and no control that writes.
+    expect(html).toContain('Loading the publications');
+    expect(html).not.toContain('Add publication');
+    expect(html).not.toContain('Check citations now');
+  });
+
+  it('draws the publications section alone in a profile without kpi.framework, in German too', () => {
+    forwardWizardExtensions([biblioModule]);
+    expect(draw()).toContain('data-testid="service-publications"');
+    expect(draw()).not.toContain('service-kpis');
+    expect(draw('de')).toContain('Publikationen werden geladen');
   });
 
   it('has its words in German', () => {

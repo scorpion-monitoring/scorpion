@@ -13,6 +13,7 @@ import { citationRun, citationSnapshot, doiMetadata, publication } from '../db/s
 import type { BibliometricsSettings } from '../settings-schema.ts';
 import { PERMISSION_READ, PERMISSION_WRITE, RESOURCE_SERVICE } from './permissions.ts';
 import type { MetadataStore } from './publications.ts';
+import { kpiOff, writeKpi, type KpiReport, type KpiWriteDeps } from './kpi-write.ts';
 import { SOURCE_BATCH_SIZE, type CitationSourceEntry, type SourceCounts } from './sources.ts';
 
 export const REFRESH_JOB = 'bibliometrics.citations.refresh';
@@ -43,11 +44,16 @@ export interface RefreshOptions {
   after?: string | undefined;
   /** Runs created by `requestRefresh`, waiting for this job; filled instead of new ones. */
   runIds?: readonly string[] | undefined;
+  /** When the first slice of this refresh began; a later slice carries it, so the KPI counts only this refresh's counts. */
+  since?: Date | undefined;
   signal?: AbortSignal | undefined;
 }
 
-/** What one slice did: counts only, for the job-run history. `next` is the DOI the next slice starts after. */
-export interface RefreshReport {
+/**
+ * What one slice did: counts only, for the job-run history. `next` is the DOI the next slice starts after, `since` when the
+ * refresh began (for the next slice). The `kpi*` counts are the Bibliographic KPI's (sprint 3).
+ */
+export interface RefreshReport extends KpiReport {
   /** `disabled` when the setting `enabled` is off: nothing was asked. */
   skipped?: 'disabled';
   dois: number;
@@ -61,6 +67,7 @@ export interface RefreshReport {
   metadataOk: number;
   runIds: string[];
   next?: string;
+  since: Date;
 }
 
 export interface HistoryPoint {
@@ -87,6 +94,8 @@ export interface CitationCount {
 export interface ServiceCitations {
   /** The id of the source the counts come from, `null` when no source exists. */
   source: string | null;
+  /** Its label (`OpenAlex`) from the registry entry, for "not found in OpenAlex"; `null` with `source`. */
+  sourceLabel: string | null;
   /** `null` when no publication has a count: unknown is not zero. */
   total: number | null;
   found: number;
@@ -125,6 +134,8 @@ export interface CitationDeps {
   metadata: MetadataStore;
   /** Queues the job for a manual refresh. */
   enqueue: (data: RefreshJobData) => Promise<unknown>;
+  /** The Bibliographic KPI: kpi.framework's trusted reads and kpi.ingestion's trusted write. Absent: no KPI (the demo seed). */
+  kpi?: KpiWriteDeps;
   clock?: () => Date;
 }
 
@@ -134,6 +145,8 @@ export interface RefreshJobData {
   serviceIds?: string[];
   runIds?: string[];
   after?: string;
+  /** ISO time the refresh began; set on the slices after the first. */
+  since?: string;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -181,11 +194,12 @@ export function createCitationService(
   }
 
   /** The source the list and the total show: the first that is on, else the first there is. */
-  async function primarySource(): Promise<string | null> {
+  async function primaryEntry(): Promise<CitationSourceEntry | undefined> {
     const all = deps.sources();
     const settings = await deps.settings();
-    return (enabledSources(settings)[0] ?? all[0])?.id ?? null;
+    return enabledSources(settings)[0] ?? all[0];
   }
+  const primarySource = async () => (await primaryEntry())?.id ?? null;
 
   /** The slice: distinct DOIs after `after`, in DOI order, with the services that list each; at most 2,000 of both. */
   async function slice(options: RefreshOptions) {
@@ -355,9 +369,12 @@ export function createCitationService(
 
   return {
     async refresh(trigger, options = {}) {
+      const since = options.since ?? clock();
       const settings = await deps.settings();
       const sources = enabledSources(settings);
       const report: RefreshReport = {
+        ...kpiOff(),
+        since,
         dois: 0,
         services: 0,
         sources: sources.length,
@@ -409,6 +426,21 @@ export function createCitationService(
         report.notFound += counts.notFound;
         report.failed += counts.failed;
       }
+
+      // The KPI after the counts of every source are stored; only here (a test checks that nothing else writes it).
+      if (deps.kpi && sources.length > 0)
+        Object.assign(
+          report,
+          await writeKpi(db, deps.kpi, {
+            settings,
+            source: sources[0]!.id,
+            serviceIds: part.serviceIds,
+            lastDoi: part.next,
+            since,
+            now: clock(),
+            log: ctx.log,
+          }),
+        );
 
       const metadata = await retryMetadata(part.dois, options.signal);
       report.metadataRetried = metadata.retried;
@@ -527,7 +559,8 @@ export function createCitationService(
     },
 
     async serviceTotal(serviceId) {
-      const source = await primarySource();
+      const entry = await primaryEntry();
+      const source = entry?.id ?? null;
       const service = serviceId.toLowerCase();
       const { rows } = await db.execute<{ of: number; found: number; total: string | null }>(sql`
         select count(*)::int as of, count(latest.count)::int as found, sum(latest.count)::text as total
@@ -544,6 +577,7 @@ export function createCitationService(
       const found = Number(row?.found ?? 0);
       return {
         source,
+        sourceLabel: entry?.label ?? null,
         total: found === 0 || row?.total == null ? null : Number(row.total),
         found,
         of: Number(row?.of ?? 0),

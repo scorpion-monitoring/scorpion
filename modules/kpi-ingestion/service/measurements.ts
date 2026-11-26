@@ -1,5 +1,6 @@
 // The measurements of a service and the one way to write them (ADR-0041 Decision 1, defect 6). `upsertBatch` is called by
-// the form, the CSV and XLSX adapters, the internal routes, `POST /api/v1/measurements` and the migration tool; nothing
+// the form, the CSV and XLSX adapters, the internal routes, `POST /api/v1/measurements` and the migration tool; its trusted
+// sibling `upsertBatchAsSystem` (ADR-0056 decision 7) by the citation refresh of `bibliometrics` only; nothing
 // else writes `kpii_measurement` (a walker in `measurement-writers.test.ts` checks it). A batch is all or nothing: one bad
 // row refuses the whole batch with one 422 that names every bad path, and a good batch is one statement per chunk
 // (`insert … on conflict (service, indicator, period) do update … where the value differs`), so the same month twice is an
@@ -79,6 +80,19 @@ export interface MeasurementsService {
     serviceId: string,
     rows: readonly MeasurementInput[],
     options: UpsertOptions,
+  ): Promise<UpsertResult>;
+
+  /**
+   * **Trusted module code only** (ADR-0056 decision 7): `upsertBatch` without the scoped permission check, for a job of another
+   * module that has no person behind it (the weekly citation refresh of `bibliometrics`). Everything else is `upsertBatch`'s: the
+   * service must exist (404), every row is checked against the service's effective KPI set now, its value type and bounds, and the
+   * calendar (422 naming the path); the write is the same `on conflict (service, indicator, period)` upsert (defect 6); and the
+   * same `measurement.recorded@1` is emitted, with `actorId: null`. No route calls it; never expose it to a request.
+   */
+  upsertBatchAsSystem(
+    serviceId: string,
+    rows: readonly MeasurementInput[],
+    options: Pick<UpsertOptions, 'source'>,
   ): Promise<UpsertResult>;
 
   /**
@@ -180,7 +194,9 @@ export function createMeasurementsService(
   deps: MeasurementsDeps,
 ): MeasurementsService {
   const db: Db = ctx.db;
-  const actorId = (actor: Actor): string | null => (actor.kind === 'user' ? actor.userId : null);
+  /** Who wrote: the person, or `null` for an anonymous actor and for trusted module code (`upsertBatchAsSystem`). */
+  const actorId = (actor: Actor | null): string | null =>
+    actor?.kind === 'user' ? actor.userId : null;
 
   /** Every row of the batch against the KPIs of the service, its value types and the calendar. */
   async function check(serviceId: string, rows: readonly unknown[], naming: Naming) {
@@ -339,7 +355,7 @@ export function createMeasurementsService(
 
   /** The batch itself, after `guard`: its shape, every row, then the write (or the verdicts of a dry run). */
   async function run(
-    actor: Actor,
+    actor: Actor | null,
     serviceId: string,
     rows: readonly unknown[],
     options: UpsertOptions,
@@ -465,6 +481,18 @@ export function createMeasurementsService(
     async upsertBatch(actor, serviceId, rows, options) {
       await guard(actor, serviceId);
       return run(actor, serviceId, rows, options, BY_ID);
+    },
+
+    async upsertBatchAsSystem(serviceId, rows, options) {
+      // The checks of `guard` without the permission: the caller is trusted module code, not a request.
+      if (typeof serviceId !== 'string' || !uuidPattern.test(serviceId))
+        throw new Invalid('The request is not valid.', [
+          problem('service', 'must be the id of a service'),
+        ]);
+      if (!(await deps.services.existsAsSystem(serviceId)))
+        throw new NotFound('There is no such service.');
+      // Only `source` is taken: a trusted write has no run and is never a dry run.
+      return run(null, serviceId, rows, { source: options?.source }, BY_ID);
     },
 
     async upsertByName(actor, service, items) {

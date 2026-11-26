@@ -286,6 +286,135 @@ describe('removing a publication', () => {
   });
 });
 
+describe('giving the date of a publication', () => {
+  const issuedOf = async (
+    pool: { query: (t: string, v: unknown[]) => Promise<{ rows: unknown[] }> },
+    id: string,
+  ) =>
+    (
+      await pool.query(
+        `select to_char(issued, 'YYYY-MM-DD') as issued, issued_precision as precision from biblio_publication where id = $1`,
+        [id],
+      )
+    ).rows[0] as { issued: string | null; precision: string | null };
+
+  it('stores a month or a day that wins over the agency date, takes it back with null, with an audit entry', async () => {
+    const w = await world(await h.start({ clock: () => new Date('2026-06-15T12:00:00Z') }));
+    const row = await makePublication(w.pool, {
+      serviceId: w.svc.id,
+      metadata: { issued: '2020-01-01', issuedPrecision: 'year' },
+    });
+    const month = await w.biblio.publications.setIssued(
+      w.people.member,
+      w.svc.id,
+      row.id,
+      '2020-09',
+    );
+    expect(month).toMatchObject({ issued: '2020-09', monthKnown: true });
+    expect(month.metadata?.issued).toBe('2020');
+    expect(await issuedOf(w.pool, row.id)).toEqual({ issued: '2020-09-01', precision: 'month' });
+    const day = await w.biblio.publications.setIssued(
+      w.people.manager,
+      w.svc.id,
+      row.id,
+      '2026-06-15',
+    );
+    expect(day).toMatchObject({ issued: '2026-06-15', monthKnown: true });
+    const back = await w.biblio.publications.setIssued(w.people.admin, w.svc.id, row.id, null);
+    expect(back).toMatchObject({ issued: null, monthKnown: false });
+    const audit = await w.pool.query(
+      `select payload from audit_event where action = 'bibliometrics.publication.dated' and subject_id = $1 order by id`,
+      [row.id],
+    );
+    expect(
+      audit.rows.map((r) => (r as { payload: { issued: string | null } }).payload.issued),
+    ).toEqual(['2020-09', '2026-06-15', null]);
+  });
+
+  it('sorts the list by the date that counts, and counts the publications whose month is not known', async () => {
+    const w = await world(await h.start());
+    const agency = await makePublication(w.pool, {
+      serviceId: w.svc.id,
+      metadata: { issued: '2022-05-01', issuedPrecision: 'month' },
+    });
+    const given = await makePublication(w.pool, {
+      serviceId: w.svc.id,
+      issued: '2024-02-01',
+      issuedPrecision: 'month',
+      metadata: { issued: '2019-01-01', issuedPrecision: 'year' },
+    });
+    const yearOnly = await makePublication(w.pool, {
+      serviceId: w.svc.id,
+      metadata: { issued: '2023-01-01', issuedPrecision: 'year' },
+    });
+    const none = await makePublication(w.pool, { serviceId: w.svc.id });
+    const page = await w.biblio.publications.list(w.people.plain, w.svc.id, {
+      page: 0,
+      pageSize: 5,
+    });
+    expect(page.items.map((item) => item.id)).toEqual([given.id, yearOnly.id, agency.id, none.id]);
+    expect(page.items.map((item) => item.monthKnown)).toEqual([true, false, true, false]);
+    expect(page.undated).toBe(2);
+  });
+
+  it('answers 422 naming issued for another form, a day that does not exist, before 1900 or after this month', async () => {
+    const w = await world(await h.start({ clock: () => new Date('2026-06-15T12:00:00Z') }));
+    const row = await makePublication(w.pool, { serviceId: w.svc.id });
+    for (const issued of [
+      '2020',
+      '2020-13',
+      '2021-02-29',
+      '1899-12',
+      '2026-07',
+      'June 2020',
+      202009,
+      '2020-09-1',
+    ])
+      await expect(
+        w.biblio.publications.setIssued(w.people.member, w.svc.id, row.id, issued),
+        String(issued),
+      ).rejects.toMatchObject({
+        status: 422,
+        errors: [expect.objectContaining({ path: 'issued' })],
+      });
+    expect(await issuedOf(w.pool, row.id)).toEqual({ issued: null, precision: null });
+  });
+
+  it('answers 404 for a publication of another service and changes nothing [ASVS-8.2.2]', async () => {
+    const w = await world(await h.start());
+    const theirs = await makePublication(w.pool, { serviceId: w.elsewhereSvc.id });
+    await expect(
+      w.biblio.publications.setIssued(w.people.admin, w.svc.id, theirs.id, '2020-01'),
+    ).rejects.toBeInstanceOf(NotFound);
+    expect(await issuedOf(w.pool, theirs.id)).toEqual({ issued: null, precision: null });
+  });
+
+  it('refuses a non-member (403) and an anonymous caller (401), and changes nothing [ASVS-8.2.1]', async () => {
+    const w = await world(await h.start());
+    const row = await makePublication(w.pool, { serviceId: w.svc.id });
+    await expect(
+      w.biblio.publications.setIssued(anonymous, w.svc.id, row.id, '2020-01'),
+    ).rejects.toBeInstanceOf(Unauthorized);
+    for (const who of ['plain', 'elsewhere', 'left', 'requested'] as const)
+      await expect(
+        w.biblio.publications.setIssued(w.people[who], w.svc.id, row.id, '2020-01'),
+        who,
+      ).rejects.toBeInstanceOf(Forbidden);
+    expect(await issuedOf(w.pool, row.id)).toEqual({ issued: null, precision: null });
+  });
+
+  it('rolls back: when the audit entry cannot be written, the date is not stored', async () => {
+    const w = await world(await h.start());
+    const row = await makePublication(w.pool, { serviceId: w.svc.id });
+    const undo = await breakAudit(w.pool);
+    await expect(
+      w.biblio.publications.setIssued(w.people.admin, w.svc.id, row.id, '2020-01'),
+    ).rejects.toThrow();
+    await undo();
+    expect(await issuedOf(w.pool, row.id)).toEqual({ issued: null, precision: null });
+  });
+});
+
 describe('listing publications', () => {
   it('sorts by issued date descending, unknown dates last, then by id, 5 per page by default', async () => {
     const w = await world(await h.start());
@@ -335,7 +464,11 @@ describe('listing publications', () => {
       totalCount: 7,
       items: [],
       // The total is the service's, on every page; nothing was counted, so it is unknown, not 0.
-      citations: { source: 'openalex', total: null, found: 0, of: 7 },
+      citations: { source: 'openalex', sourceLabel: 'OpenAlex', total: null, found: 0, of: 7 },
+      // Three of the seven have no date precise to the month (2, 4 and 6).
+      undated: 3,
+      // A plain user may read, not change.
+      canEdit: false,
     });
   });
 
@@ -354,6 +487,20 @@ describe('listing publications', () => {
       pageSize: 5,
     });
     expect(page.items.map((item) => item.metadata?.issued)).toEqual(['2019', '2018-07']);
+  });
+
+  it('says whether the caller may change the publications (canEdit), by the scoped write on this service', async () => {
+    const w = await world(await h.start());
+    const canEdit = async (who: Actor, serviceId = w.svc.id) =>
+      (await w.biblio.publications.list(who, serviceId, { page: 0, pageSize: 5 })).canEdit;
+    expect(await canEdit(w.people.admin)).toBe(true);
+    expect(await canEdit(w.people.manager)).toBe(true);
+    expect(await canEdit(w.people.member)).toBe(true);
+    for (const who of [w.people.requested, w.people.left, w.people.elsewhere, w.people.plain])
+      expect(await canEdit(who)).toBe(false);
+    // A member of this provider reads another provider's service without the controls.
+    expect(await canEdit(w.people.member, w.elsewhereSvc.id)).toBe(false);
+    expect(await canEdit(w.people.elsewhere, w.elsewhereSvc.id)).toBe(true);
   });
 
   it('answers 401 for an anonymous caller and 404 for an unknown service', async () => {

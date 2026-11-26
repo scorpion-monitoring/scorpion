@@ -36,6 +36,12 @@ export const publication = pgTable(
     /** A user id, kept as written. */
     addedBy: uuid('added_by'),
     addedAt: timestamptz('added_at').notNull().defaultNow(),
+    /**
+     * The date a provider member gave (M16 sprint 3), which wins over the agency's: the first day of its month (`month`) or the day
+     * itself (`day`). Both null until someone sets it. The Publications KPI needs a date precise to the month for every publication.
+     */
+    issued: date({ mode: 'string' }),
+    issuedPrecision: text('issued_precision'),
   },
   (table) => [
     uniqueIndex('biblio_publication_service_doi_key').on(table.serviceId, table.doi),
@@ -43,6 +49,10 @@ export const publication = pgTable(
     check(
       'biblio_publication_doi_check',
       sql`char_length(${table.doi}) between 4 and 256 and ${table.doi} = lower(${table.doi}) and ${table.doi} like '10.%/%'`,
+    ),
+    check(
+      'biblio_publication_issued_check',
+      sql`(${table.issued} is null and ${table.issuedPrecision} is null) or (${table.issuedPrecision} = 'day' and ${table.issued} is not null) or (${table.issuedPrecision} = 'month' and extract(day from ${table.issued}) = 1)`,
     ),
   ],
 );

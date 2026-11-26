@@ -22,7 +22,13 @@ import {
 } from './service/preferences.ts';
 import { createBrandingService, type BrandingService } from './service/branding.ts';
 import { createSecretsService, type Cipher, type SecretsInternals } from './service/secrets.ts';
-import { createSettingsService, type SettingsInternals } from './service/settings.ts';
+import {
+  createSettingsService,
+  indexSettingsChecks,
+  SETTINGS_CHECK_REGISTRY,
+  settingsCheckEntrySchema,
+  type SettingsInternals,
+} from './service/settings.ts';
 import { themeColorCheck } from './service/theme-colors.ts';
 import {
   createVocabularyService,
@@ -154,6 +160,8 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
     registries: {
       [USER_PREFERENCE_REGISTRY]: userPreferenceEntrySchema,
       [VOCABULARY_REGISTRY]: vocabularyEntrySchema,
+      // A rule a module's settings must keep that needs another module's data; asked on every save of that module (M16 sprint 3).
+      [SETTINGS_CHECK_REGISTRY]: settingsCheckEntrySchema,
     },
     contributes: {
       // Preferences and reading vocabularies are self-service: the role `user` holds them.
@@ -173,7 +181,11 @@ export function createSettingsModule(options: SettingsModuleOptions = {}) {
       const settings = createSettingsService(
         ctx,
         { authz },
-        { ...options, check: themeColorCheck },
+        {
+          ...options,
+          check: themeColorCheck,
+          checks: indexSettingsChecks(ctx.registry(SETTINGS_CHECK_REGISTRY)),
+        },
       );
       const secrets = createSecretsService(ctx, { authz, keys: ring, cipher: options.cipher });
       const vocabularies = createVocabularyService(ctx, { authz });

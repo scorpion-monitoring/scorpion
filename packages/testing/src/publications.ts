@@ -14,6 +14,9 @@ export interface MakePublication {
   doi?: string;
   addedBy?: string | null;
   addedAt?: Date;
+  /** The date a provider member gave: the first day of the month with `month`, or a day with `day`. Both or neither. */
+  issued?: string | null;
+  issuedPrecision?: 'month' | 'day' | null;
   /** Also stores the DOI's metadata (`makeDoiMetadata`), unless it is `null` (the default: no metadata row). */
   metadata?: Omit<MakeDoiMetadata, 'doi'> | null;
 }
@@ -24,6 +27,8 @@ export interface PublicationRow {
   doi: string;
   added_by: string | null;
   added_at: Date;
+  issued: string | null;
+  issued_precision: string | null;
 }
 
 export async function makePublication(
@@ -32,10 +37,18 @@ export async function makePublication(
 ): Promise<PublicationRow> {
   const doi = input.doi ?? `10.5555/factory-${++counter}-${Math.random().toString(36).slice(2, 8)}`;
   const { rows } = await db.query<PublicationRow>(
-    `insert into biblio_publication (id, service_id, doi, added_by, added_at)
-     values ($1, $2, $3, $4, coalesce($5, now()))
+    `insert into biblio_publication (id, service_id, doi, added_by, added_at, issued, issued_precision)
+     values ($1, $2, $3, $4, coalesce($5, now()), $6, $7)
      returning *`,
-    [input.id ?? randomUUID(), input.serviceId, doi, input.addedBy ?? null, input.addedAt ?? null],
+    [
+      input.id ?? randomUUID(),
+      input.serviceId,
+      doi,
+      input.addedBy ?? null,
+      input.addedAt ?? null,
+      input.issued ?? null,
+      input.issuedPrecision ?? null,
+    ],
   );
   if (input.metadata) await makeDoiMetadata(db, { ...input.metadata, doi });
   return rows[0]!;

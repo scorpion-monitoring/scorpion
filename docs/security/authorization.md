@@ -60,6 +60,7 @@ the same file answers 401 and 403 on every non-public route.
 | `DELETE /bibliometrics/services/{serviceId}/publications/{publicationId}`      | bibliometrics          | `bibliometrics.publication.read`             | default    | no             |
 | `GET /bibliometrics/services/{serviceId}/publications`                         | bibliometrics          | `bibliometrics.publication.read`             | default    | no             |
 | `GET /bibliometrics/services/{serviceId}/publications/{publicationId}/history` | bibliometrics          | `bibliometrics.publication.read`             | default    | no             |
+| `PATCH /bibliometrics/services/{serviceId}/publications/{publicationId}`       | bibliometrics          | `bibliometrics.publication.read`             | default    | no             |
 | `POST /bibliometrics/services/{serviceId}/citations/refresh`                   | bibliometrics          | `bibliometrics.publication.read`             | strict     | no             |
 | `POST /bibliometrics/services/{serviceId}/publications`                        | bibliometrics          | `bibliometrics.publication.read`             | default    | no             |
 | `GET /audit`                                                                   | core.audit             | `core.audit.read`                            | default    | no             |
@@ -260,14 +261,16 @@ proves the service answer for the delegated ones. No route names a scoped permis
 resource, which would turn a manager away.
 
 **Delegated routes of `bibliometrics` (M16, [ADR-0056](../adr/0056-bibliometrics-publications-citations-and-the-trusted-kpi-write.md)).**
-`POST /bibliometrics/services/{serviceId}/publications`, `DELETE /bibliometrics/services/{serviceId}/publications/{publicationId}` and
+`POST /bibliometrics/services/{serviceId}/publications`, `DELETE /bibliometrics/services/{serviceId}/publications/{publicationId}`,
+`PATCH /bibliometrics/services/{serviceId}/publications/{publicationId}` (the date a provider gives, M16 sprint 3) and
 `POST /bibliometrics/services/{serviceId}/citations/refresh` ("check now", M16 sprint 2) name the plain `bibliometrics.publication.read` that every signed-in person holds, and the **service** asks the scoped `bibliometrics.publication.write` on
 that service, which Admin holds and the module's policy grants to the approved members (managers included) of the service's provider, read at
-every call. The scoped check comes before the service is looked up, so a non-member gets 403 for an unknown service too. The remove deletes by
-id **and** service, so a publication of another service is a 404 and is not touched. "Check now" also has the `strict` rate limit and a
+every call. The scoped check comes before the service is looked up, so a non-member gets 403 for an unknown service too. The remove and the
+date write by id **and** service, so a publication of another service is a 404 and is not touched. "Check now" also has the `strict` rate limit and a
 10-minute rule per service in the service (429 with `Retry-After`), because it spends the instance's daily budget at OpenAlex. The history
 (`GET …/publications/{publicationId}/history`) is a read like the list, and answers 404 for a publication of another service. The matrix of
-`defect-01.privilege-escalation.test.ts` expects 403 for a plain User on the three writes and checks that a refused "check now" records no run.
+`defect-01.privilege-escalation.test.ts` expects 403 for a plain User on the four writes and checks that a refused "check now" records no run
+and a refused date changes nothing.
 
 Public routes, and why each is open: sign-in, registration, password reset, address confirmation and the OIDC start and callback are how
 anonymous people become signed-in ones, and carry the `strict` rate limit; `POST /bootstrap/first-admin` needs the first-run token that
@@ -720,15 +723,19 @@ anonymous or public. **Writing** needs the scoped `bibliometrics.publication.wri
 from doi.org and the registration agency, never from the caller, and its fields are bounded by the adapter. Citation counts
 (`biblio_citation_snapshot`, per DOI and source) and the runs that fetched them (`biblio_citation_run`) are written only by the citation refresh,
 which the weekly job runs and "check now" queues; no route takes a count from a caller. The optional OpenAlex key is a secret of `core.settings`
-(`bibliometrics.openalex-api-key`), read by trusted code only and sent only in the `Authorization` header of the request to OpenAlex.
+(`bibliometrics.openalex-api-key`), read by trusted code only and sent only in the `Authorization` header of the request to OpenAlex. The two
+optional Bibliographic KPIs are written by the citation refresh alone, through `kpi.ingestion`'s trusted `upsertBatchAsSystem` (no route, no
+caller's input; ADR-0056 decision 7), into the indicators an administrator chose in the module's settings (`core.settings.write`, checked by
+`settings.check`, ADR-0057).
 
 | Field                                           | Read                                                                                               | Write                                                                        |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `id`, `service_id`, `doi`, `added_at`           | holders of `publication.read`                                                                      | `PublicationsService.add`, the DOI normalised and checked before any request |
 | `added_by`                                      | holders of `publication.read` (`addedBy`, a user id)                                               | `add`, from the actor                                                        |
+| the date a provider gave (`issued`)             | holders of `publication.read`                                                                      | `PublicationsService.setIssued` (the scoped write), not after this month     |
 | the metadata (title, authors, date, ...)        | holders of `publication.read`                                                                      | the DOI resolver only, after the add commits                                 |
 | the failure `reason` of a lookup                | **nobody through an API**                                                                          | the DOI resolver (a fixed code, never a URL)                                 |
-| the audit entries `bibliometrics.publication.*` | holders of `core.audit.read`                                                                       | `add` and `remove`, in the same transaction as the change                    |
+| the audit entries `bibliometrics.publication.*` | holders of `core.audit.read`                                                                       | `add`, `remove` and `setIssued`, in the same transaction as the change       |
 | the citation counts and their dates             | holders of `publication.read` (the list and the history)                                           | the citation refresh only, from the citation sources                         |
 | a run (`asked`, `found`, `failed`, `error`)     | **nobody through an API** (the job-run history shows the job's counts to `core.audit.system.read`) | the citation refresh; `error` is a fixed text, never a URL or a key          |
 | the OpenAlex key                                | **nobody**                                                                                         | `core.settings.secret.write`, or `scorpion set-secret`                       |

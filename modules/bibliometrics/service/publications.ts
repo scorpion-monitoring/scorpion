@@ -54,6 +54,10 @@ export interface Publication {
   citedByCount: number | null;
   /** When `citedByCount` was taken; `null` with it. */
   citationsAsOf: Date | null;
+  /** The date a provider member gave (`2020-09` or `2020-09-16`), which wins over the agency's; `null` until one is given. */
+  issued: string | null;
+  /** Whether the date that counts (the provider's, else the agency's) names a month: the Publications KPI needs it. */
+  monthKnown: boolean;
 }
 
 export interface PublicationPage {
@@ -61,6 +65,13 @@ export interface PublicationPage {
   items: Publication[];
   /** The citations of the whole service (every page), and over how many publications they are taken. */
   citations: ServiceCitations;
+  /** How many publications of the service (all pages) have no date precise to the month: the provider is asked for them. */
+  undated: number;
+  /**
+   * Whether the caller holds `bibliometrics.publication.write` on this service (add, remove, "check now"). The page shows its
+   * controls only then; the write itself checks again.
+   */
+  canEdit: boolean;
 }
 
 export interface PublicationsService {
@@ -81,16 +92,29 @@ export interface PublicationsService {
    * stays: other services may list the DOI.
    */
   remove(actor: Actor, serviceId: string, publicationId: string): Promise<void>;
+  /**
+   * Gives the month (`2020-09`) or day (`2020-09-16`) a publication of the service was issued, which then wins over the agency's
+   * date, or takes it back (`null`). The same scoped write and order of answers as `remove`; 422 naming `issued` for another form, a
+   * month before 1900 or after the current month. Written with its audit entry in one transaction.
+   */
+  setIssued(
+    actor: Actor,
+    serviceId: string,
+    publicationId: string,
+    issued: unknown,
+  ): Promise<Publication>;
 }
 
 export interface PublicationsDeps {
-  authz: Pick<AuthzService, 'require'>;
+  authz: Pick<AuthzService, 'require' | 'can'>;
   services: Pick<ServicesPublic, 'existsAsSystem'>;
   resolver: DoiResolver;
   /** The setting `enabled`: off, no DOI is looked up. */
   lookupsEnabled: () => Promise<boolean>;
   /** The citation counts the list shows. */
   citations: Pick<CitationService, 'latest' | 'serviceTotal'>;
+  /** "Now", for the current month a given date may not pass. Default: the system clock. */
+  clock?: () => Date;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -129,6 +153,70 @@ function issuedOf(row: Pick<MetadataRow, 'issued' | 'issuedPrecision'>): string 
   if (row.issuedPrecision === 'year') return row.issued.slice(0, 4);
   if (row.issuedPrecision === 'month') return row.issued.slice(0, 7);
   return row.issued;
+}
+
+type PublicationRow = typeof publication.$inferSelect;
+
+/** The date a provider gave, at its precision. */
+const givenIssued = (row: Pick<PublicationRow, 'issued' | 'issuedPrecision'>) =>
+  row.issued === null
+    ? null
+    : row.issuedPrecision === 'month'
+      ? row.issued.slice(0, 7)
+      : row.issued;
+
+/** Whether the date that counts names a month: the provider's, else the agency's at month or day precision. */
+const monthKnownOf = (
+  row: Pick<PublicationRow, 'issued'>,
+  meta: Pick<MetadataRow, 'issued' | 'issuedPrecision'> | null,
+) =>
+  row.issued !== null ||
+  (meta?.issued != null && (meta.issuedPrecision === 'month' || meta.issuedPrecision === 'day'));
+
+/** A publication as the service answers it. */
+function publicationOf(
+  row: PublicationRow,
+  meta: MetadataRow | null,
+  known: { citedByCount: number; takenAt: Date } | undefined,
+): Publication {
+  return {
+    id: row.id,
+    serviceId: row.serviceId,
+    doi: row.doi,
+    addedBy: row.addedBy,
+    addedAt: row.addedAt,
+    metadata: metadataOut(meta),
+    citedByCount: known?.citedByCount ?? null,
+    citationsAsOf: known?.takenAt ?? null,
+    issued: givenIssued(row),
+    monthKnown: monthKnownOf(row, meta),
+  };
+}
+
+/** `2020-09` or `2020-09-16` → the stored date and precision; a problem for anything else, before 1900 or after this month. */
+export function parseGivenIssued(
+  input: unknown,
+  now: Date,
+):
+  | { ok: true; issued: string | null; precision: 'month' | 'day' | null }
+  | { ok: false; problem: string } {
+  if (input === null) return { ok: true, issued: null, precision: null };
+  const match = typeof input === 'string' ? /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(input) : null;
+  if (!match) return { ok: false, problem: 'must be a month (2020-09) or a day (2020-09-16)' };
+  const [year, month] = [Number(match[1]), Number(match[2])];
+  const day = match[3] === undefined ? undefined : Number(match[3]);
+  if (month < 1 || month > 12)
+    return { ok: false, problem: 'must be a month (2020-09) or a day (2020-09-16)' };
+  if (day !== undefined && (day < 1 || day > new Date(Date.UTC(year, month, 0)).getUTCDate()))
+    return { ok: false, problem: 'is not a day of that month' };
+  if (year < 1900) return { ok: false, problem: 'must not be before 1900' };
+  const current = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  if (year * 12 + (month - 1) > current)
+    return { ok: false, problem: 'must not be after the current month' };
+  const mm = String(month).padStart(2, '0');
+  return day === undefined
+    ? { ok: true, issued: `${year}-${mm}-01`, precision: 'month' }
+    : { ok: true, issued: `${year}-${mm}-${String(day).padStart(2, '0')}`, precision: 'day' };
 }
 
 function metadataOut(row: MetadataRow | null): PublicationMetadata | null {
@@ -247,6 +335,23 @@ export function createPublicationsService(
   }
 
   const metadata = createMetadataStore(ctx, deps.resolver);
+  const clock = deps.clock ?? (() => new Date());
+
+  /** The publications of the service with no date precise to the month (neither the provider's nor the agency's). */
+  async function countUndated(service: string): Promise<number> {
+    const [row] = await db
+      .select({ n: count() })
+      .from(publication)
+      .leftJoin(doiMetadata, eq(doiMetadata.doi, publication.doi))
+      .where(
+        and(
+          eq(publication.serviceId, service),
+          sql`${publication.issued} is null`,
+          sql`(${doiMetadata.issued} is null or ${doiMetadata.issuedPrecision} not in ('month', 'day'))`,
+        ),
+      );
+    return row?.n ?? 0;
+  }
 
   return {
     async add(actor, serviceId, rawDoi) {
@@ -296,12 +401,10 @@ export function createPublicationsService(
         stored = await metadata.resolveAndStore(doi);
       // Another service may list the DOI already, and its count is the DOI's.
       const known = (await deps.citations.latest([doi])).counts.get(doi);
-      return {
-        ...row,
-        metadata: metadataOut(stored),
-        citedByCount: known?.citedByCount ?? null,
-        citationsAsOf: known?.takenAt ?? null,
-      };
+      const meta = stored
+        ? await db.select().from(doiMetadata).where(eq(doiMetadata.doi, doi))
+        : [];
+      return publicationOf(row, meta[0] ?? null, known);
     },
 
     async list(actor, serviceId, page) {
@@ -315,22 +418,25 @@ export function createPublicationsService(
         .from(publication)
         .leftJoin(doiMetadata, eq(doiMetadata.doi, publication.doi))
         .where(where)
-        .orderBy(sql`${doiMetadata.issued} desc nulls last`, asc(publication.id))
+        // By the date that counts: the provider's, else the agency's.
+        .orderBy(
+          sql`coalesce(${publication.issued}, ${doiMetadata.issued}) desc nulls last`,
+          asc(publication.id),
+        )
         .limit(page.pageSize)
         .offset(page.page * page.pageSize);
       const { counts } = await deps.citations.latest(rows.map((r) => r.publication.doi));
       return {
         totalCount: total?.n ?? 0,
-        items: rows.map((r) => {
-          const known = counts.get(r.publication.doi);
-          return {
-            ...r.publication,
-            metadata: metadataOut(r.metadata),
-            citedByCount: known?.citedByCount ?? null,
-            citationsAsOf: known?.takenAt ?? null,
-          };
-        }),
+        items: rows.map((r) =>
+          publicationOf(r.publication, r.metadata, counts.get(r.publication.doi)),
+        ),
+        undated: await countUndated(service),
         citations: await deps.citations.serviceTotal(service),
+        canEdit: await deps.authz.can(actor, PERMISSION_WRITE, {
+          type: RESOURCE_SERVICE,
+          id: service,
+        }),
       };
     },
 
@@ -361,6 +467,43 @@ export function createPublicationsService(
           payload: { serviceId: service, doi: removed.doi },
         });
       });
+    },
+
+    async setIssued(actor, serviceId, publicationId, issued) {
+      await deps.authz.require(actor, PERMISSION_WRITE, { type: RESOURCE_SERVICE, id: serviceId });
+      await serviceMustExist(serviceId);
+      const service = serviceId.toLowerCase();
+      if (!uuidPattern.test(publicationId))
+        throw new Invalid('The request is not valid.', [
+          problem('publicationId', 'must be the id of a publication', 'path'),
+        ]);
+      const parsed = parseGivenIssued(issued, clock());
+      if (!parsed.ok)
+        throw new Invalid('The request is not valid.', [problem('issued', parsed.problem)]);
+      const row = await db.tx(async (tx) => {
+        const [updated] = await tx
+          .update(publication)
+          .set({ issued: parsed.issued, issuedPrecision: parsed.precision })
+          .where(
+            and(
+              eq(publication.id, publicationId.toLowerCase()),
+              eq(publication.serviceId, service),
+            ),
+          )
+          .returning();
+        if (!updated) throw new NotFound('This service has no such publication.');
+        await ctx.audit({
+          action: 'bibliometrics.publication.dated',
+          outcome: 'ok',
+          actor: auditActor(actor),
+          subject: { type: 'bibliometrics.publication', id: updated.id },
+          payload: { serviceId: service, doi: updated.doi, issued: givenIssued(updated) },
+        });
+        return updated;
+      });
+      const [meta] = await db.select().from(doiMetadata).where(eq(doiMetadata.doi, row.doi));
+      const known = (await deps.citations.latest([row.doi])).counts.get(row.doi);
+      return publicationOf(row, meta ?? null, known);
     },
   };
 }

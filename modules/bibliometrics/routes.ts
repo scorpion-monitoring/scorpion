@@ -75,6 +75,18 @@ export const publicationSchema = z.object({
     .datetime()
     .nullable()
     .describe('When `citedByCount` was taken; `null` with it.'),
+  issued: z
+    .string()
+    .regex(/^\d{4}-\d{2}(?:-\d{2})?$/)
+    .nullable()
+    .describe(
+      'The month (`2020-09`) or day (`2020-09-16`) a member of the provider gave; it wins over `metadata.issued`. `null` until one is given.',
+    ),
+  monthKnown: z
+    .boolean()
+    .describe(
+      'Whether the date that counts (`issued`, else `metadata.issued`) names a month. The Publications KPI needs one for every publication.',
+    ),
 });
 
 export const serviceCitationsSchema = z
@@ -83,6 +95,10 @@ export const serviceCitationsSchema = z
       .string()
       .nullable()
       .describe('The id of the citation source the counts come from (`openalex`).'),
+    sourceLabel: z
+      .string()
+      .nullable()
+      .describe('The name of that source (`OpenAlex`), for "not found in OpenAlex".'),
     total: z
       .number()
       .int()
@@ -96,6 +112,18 @@ export const serviceCitationsSchema = z
 
 export const publicationListSchema = listEnvelope(publicationSchema).extend({
   citations: serviceCitationsSchema,
+  undated: z
+    .number()
+    .int()
+    .min(0)
+    .describe(
+      'How many publications of the service (all pages) have no date precise to the month; a member of the provider is asked to give it.',
+    ),
+  canEdit: z
+    .boolean()
+    .describe(
+      'Whether the caller may add and remove publications of this service and check its citations now (`bibliometrics.publication.write` on the service).',
+    ),
 });
 
 export const historyPointSchema = z.object({
@@ -202,6 +230,41 @@ export const removePublicationRoute = createRoute({
   },
 });
 
+export const datePublicationRoute = createRoute({
+  method: 'patch',
+  path: `${BASE}/{publicationId}`,
+  // Delegated (ADR-0034), as the add: the service checks `bibliometrics.publication.write` on the service.
+  permission: PERMISSION_READ,
+  rateLimit: 'default',
+  summary: 'Give the date a publication was issued',
+  description:
+    'Sets the month (`2020-09`) or day (`2020-09-16`) a publication of this service was issued, which then wins over the date of the registration agency, or takes it back with `null`. Not before 1900 and not after the current month. Needs `bibliometrics.publication.write` on the service: Admin, or a member of its provider.',
+  request: {
+    params: publicationParams,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: z.strictObject({
+            issued: z
+              .string()
+              .max(10)
+              .nullable()
+              .describe('`2020-09`, `2020-09-16`, or `null` to use the agency date again.'),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The publication.',
+      content: { 'application/json': { schema: publicationSchema } },
+    },
+    404: { description: 'No such service, or the service has no such publication.' },
+  },
+});
+
 export const publicationHistoryRoute = createRoute({
   method: 'get',
   path: `${BASE}/{publicationId}/history`,
@@ -257,11 +320,19 @@ export function publicationOut(item: Publication): z.output<typeof publicationSc
     },
     citedByCount: item.citedByCount,
     citationsAsOf: item.citationsAsOf?.toISOString() ?? null,
+    issued: item.issued,
+    monthKnown: item.monthKnown,
   };
 }
 
 function citationsOut(value: ServiceCitations): z.output<typeof serviceCitationsSchema> {
-  return { source: value.source, total: value.total, found: value.found, of: value.of };
+  return {
+    source: value.source,
+    sourceLabel: value.sourceLabel,
+    total: value.total,
+    found: value.found,
+    of: value.of,
+  };
 }
 
 function historyOut(value: History): z.output<typeof publicationHistorySchema> {
@@ -293,6 +364,8 @@ export function registerRoutes(
       {
         ...paginate(query, page.totalCount, page.items.map(publicationOut)),
         citations: citationsOut(page.citations),
+        undated: page.undated,
+        canEdit: page.canEdit,
       },
       200,
     );
@@ -312,6 +385,14 @@ export function registerRoutes(
     noStore(c);
     return c.body(null, 204);
   }) satisfies RouteHandler<typeof removePublicationRoute, AppEnv>);
+
+  r.internal(datePublicationRoute, (async (c) => {
+    const { serviceId, publicationId } = c.req.valid('param');
+    const { issued } = c.req.valid('json');
+    const dated = await publications.setIssued(c.get('actor'), serviceId, publicationId, issued);
+    noStore(c);
+    return c.json(publicationOut(dated), 200);
+  }) satisfies RouteHandler<typeof datePublicationRoute, AppEnv>);
 
   r.internal(publicationHistoryRoute, (async (c) => {
     const { serviceId, publicationId } = c.req.valid('param');

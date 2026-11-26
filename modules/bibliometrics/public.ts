@@ -6,6 +6,7 @@ export { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './service/publications.ts';
 export { DEMO_PUBLICATIONS } from './service/demo-seed.ts';
 export {
   addPublicationRoute,
+  datePublicationRoute,
   historyPointSchema,
   listPublicationsRoute,
   publicationHistoryRoute,
