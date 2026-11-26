@@ -96,6 +96,11 @@ export const serviceCitationsSchema = z
 
 export const publicationListSchema = listEnvelope(publicationSchema).extend({
   citations: serviceCitationsSchema,
+  canEdit: z
+    .boolean()
+    .describe(
+      'Whether the caller may add and remove publications of this service and check its citations now (`bibliometrics.publication.write` on the service).',
+    ),
 });
 
 export const historyPointSchema = z.object({
@@ -293,6 +298,7 @@ export function registerRoutes(
       {
         ...paginate(query, page.totalCount, page.items.map(publicationOut)),
         citations: citationsOut(page.citations),
+        canEdit: page.canEdit,
       },
       200,
     );

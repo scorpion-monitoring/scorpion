@@ -1,5 +1,5 @@
-// Starts bibliometrics over real Postgres with the modules it depends on (core.authz, registry.services and what they need)
-// and core.audit, so the audit entries of the service are real rows. The DOI resolver is a stub given per start; the
+// Starts bibliometrics over real Postgres with the modules it depends on (core.authz, registry.services, kpi.framework,
+// kpi.ingestion and what they need) and core.audit, so the audit entries of the service are real rows. The DOI resolver is a stub given per start; the
 // network is never reached. `world()` builds a service of one provider and the people the policy has to tell apart.
 import type { UserActor } from '@scorpion/contracts';
 import { createAuditModule } from '@scorpion/core-audit/module';
@@ -28,6 +28,10 @@ import {
   type Kernel,
   type ModuleManifest,
 } from '@scorpion/kernel';
+import { createKpiFrameworkModule } from '@scorpion/kpi-framework/module';
+import kpiFrameworkPackage from '@scorpion/kpi-framework/package.json' with { type: 'json' };
+import { createKpiIngestionModule } from '@scorpion/kpi-ingestion/module';
+import kpiIngestionPackage from '@scorpion/kpi-ingestion/package.json' with { type: 'json' };
 import { createOrganisationsModule } from '@scorpion/registry-organisations/module';
 import organisationsPackage from '@scorpion/registry-organisations/package.json' with { type: 'json' };
 import servicesModule from '@scorpion/registry-services/module';
@@ -61,7 +65,7 @@ export interface BiblioStartOptions {
   resolver?: DoiResolver;
   /** The OpenAlex adapter for a key. Default: a stub that knows no DOI. */
   openAlex?: (apiKey: string | undefined) => OpenAlex;
-  /** "Now" of the module. Default: the system clock. */
+  /** "Now" of the module, and of kpi.ingestion (the month a value may not pass). Default: the system clock. */
   clock?: () => Date;
   /** Stored settings of the module, written before it starts. */
   settings?: Record<string, unknown>;
@@ -91,6 +95,8 @@ const MODULES = [
   'core.audit',
   'registry.organisations',
   'registry.services',
+  'kpi.framework',
+  'kpi.ingestion',
   'bibliometrics',
 ] as const;
 
@@ -140,6 +146,11 @@ export function useBibliometrics() {
           { manifest: createAuditModule(), packageJson: auditPackage },
           { manifest: createOrganisationsModule(), packageJson: organisationsPackage },
           { manifest: servicesModule, packageJson: servicesPackage },
+          { manifest: createKpiFrameworkModule(), packageJson: kpiFrameworkPackage },
+          {
+            manifest: createKpiIngestionModule(options.clock ? { clock: options.clock } : {}),
+            packageJson: kpiIngestionPackage,
+          },
           { manifest, packageJson },
           ...extra.map((module) => ({
             manifest: module.manifest as never,
@@ -156,6 +167,7 @@ export function useBibliometrics() {
           // Optional peers of modules in this profile: known, so their absence is not a mistake.
           'core.ui-shell': '@scorpion/core-ui-shell',
           'kpi.framework': '@scorpion/kpi-framework',
+          'kpi.ingestion': '@scorpion/kpi-ingestion',
           'registry.organisations': '@scorpion/registry-organisations',
           'registry.services': '@scorpion/registry-services',
           bibliometrics: '@scorpion/bibliometrics',

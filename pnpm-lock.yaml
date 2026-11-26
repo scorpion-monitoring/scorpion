@@ -290,6 +290,12 @@ importers:
       '@scorpion/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@scorpion/kpi-framework':
+        specifier: workspace:*
+        version: link:../kpi-framework
+      '@scorpion/kpi-ingestion':
+        specifier: workspace:*
+        version: link:../kpi-ingestion
       '@scorpion/registry-services':
         specifier: workspace:*
         version: link:../registry-services
@@ -312,12 +318,18 @@ importers:
       '@scorpion/core-notifications':
         specifier: workspace:*
         version: link:../core-notifications
+      '@scorpion/core-ui-shell':
+        specifier: workspace:*
+        version: link:../core-ui-shell
       '@scorpion/registry-organisations':
         specifier: workspace:*
         version: link:../registry-organisations
       '@scorpion/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@scorpion/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
 
   modules/core-audit:
     dependencies:

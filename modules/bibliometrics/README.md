@@ -4,8 +4,12 @@ The publications of a service, by DOI, and their citation counts over time. Deci
 [ADR-0056](../../docs/adr/0056-bibliometrics-publications-citations-and-the-trusted-kpi-write.md); plan:
 [M16](../../docs/m16-sprint-plan.md).
 
-Status: M16 sprint 2. The internal API, the weekly citation refresh and "check now" exist; the service page shows nothing
-yet, and no KPI is written yet (both sprint 3).
+Status: M16 done (sprint 3). The service page has a section "Publications"; the weekly citation refresh can fill a
+Bibliographic KPI ([below](#the-bibliographic-kpi)).
+
+Dependencies: `core.authz`, `core.settings`, `registry.services`, `kpi.framework` (the indicator of the KPI) and
+`kpi.ingestion` (its trusted write); `core.ui-shell` is an optional peer (the `ui` entry runs in its web app). Nothing
+depends on `bibliometrics`.
 
 The manifest (`module.ts`) is the reference for the permissions, the settings and their meaning
 (`pnpm scorpion docs:export`). This file says what the manifest cannot.
@@ -68,7 +72,8 @@ citation counts of all DOIs the instance lists. Each DOI is asked once, however 
 source is OpenAlex (`https://api.openalex.org/works`, 100 DOIs per request, at most three attempts, 5 seconds each).
 One run of the job handles at most 2,000 DOIs and queues the next part. It also looks up again the title of every DOI
 whose lookup failed, or that was added while lookups were off. A DOI that doi.org did not know (`not-found`) is not
-asked again; adding it anew asks again. "Run now" on the admin job page starts the weekly run at once.
+asked again; adding it anew asks again. The admin job page (`/admin/system`) lists the runs with their counts; it has no
+"run now" (a platform trigger is in the backlog), so between two Mondays only "check now" of one service starts a refresh.
 
 What a run stored is kept as history: one snapshot per DOI and source, with its date. Running twice on one day is harmless:
 the history keeps the latest count of each day.
@@ -117,6 +122,34 @@ snapshots are stored under its `id`. The list and the total show the first entry
 
 `bibliometrics.citations.updated@1` is emitted when a run of a source finishes: `runId`, `serviceIds` (at most 2,000),
 `found`, `failed`. Ids and counts only, never a DOI, a title or a URL. Nothing listens yet.
+
+## The Bibliographic KPI
+
+Off by default. To turn it on:
+
+1. Create (or choose) an indicator in **Administration → Indicators** with a **numeric** value type (a whole number fits
+   a citation count) and the thematic category **Bibliographic**.
+2. Add it to the KPI sets of the services that should report it (or as an extra of a service).
+3. Choose it in **Administration → Settings → Publications and citations → Bibliographic KPI**. The picker offers only
+   numeric indicators in `Bibliographic`, and the server refuses any other with a 422 on `kpi.indicatorId`, whatever
+   sends it (a contribution to `core.settings`' registry `settings.check`, ADR-0057).
+
+From then on every refresh (the Monday run and "check now") writes, for each service it covers, the citation total as
+the value of the **current month**, with source `bibliometrics`, through `kpi.ingestion`'s trusted
+`upsertBatchAsSystem` (ADR-0056 decision 7). A second run in the month replaces the value; earlier months are never
+written. A service is **skipped**, and counted in the job's report, when:
+
+| Report count           | Why                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `kpiSkippedNotInSet`   | its effective KPI set does not hold the indicator (never an error)                                                                   |
+| `kpiSkippedIncomplete` | one of its publications has no count from this refresh (not found, failed, or asked by an earlier run): a partial total is not a drop |
+| `kpiFailed`            | `kpi.ingestion` refused the value (a bound of the indicator, a set changed meanwhile); logged with the service id                    |
+
+`kpiWritten` counts the values written; `kpi` is `off` with the setting empty and `unusable` when the chosen indicator was
+deleted or is no longer numeric and Bibliographic (nothing is written; the log says so). An indicator that changed
+category later does not stop an administrator from saving the other settings: only a changed `kpi.indicatorId` is
+checked. The total is that of the source the list shows (OpenAlex), and a service whose DOIs cross two slices of the
+weekly run is decided by the slice that holds its last DOI.
 
 ## Audit
 

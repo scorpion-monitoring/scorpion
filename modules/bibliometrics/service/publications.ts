@@ -61,6 +61,11 @@ export interface PublicationPage {
   items: Publication[];
   /** The citations of the whole service (every page), and over how many publications they are taken. */
   citations: ServiceCitations;
+  /**
+   * Whether the caller holds `bibliometrics.publication.write` on this service (add, remove, "check now"). The page shows its
+   * controls only then; the write itself checks again.
+   */
+  canEdit: boolean;
 }
 
 export interface PublicationsService {
@@ -84,7 +89,7 @@ export interface PublicationsService {
 }
 
 export interface PublicationsDeps {
-  authz: Pick<AuthzService, 'require'>;
+  authz: Pick<AuthzService, 'require' | 'can'>;
   services: Pick<ServicesPublic, 'existsAsSystem'>;
   resolver: DoiResolver;
   /** The setting `enabled`: off, no DOI is looked up. */
@@ -331,6 +336,10 @@ export function createPublicationsService(
           };
         }),
         citations: await deps.citations.serviceTotal(service),
+        canEdit: await deps.authz.can(actor, PERMISSION_WRITE, {
+          type: RESOURCE_SERVICE,
+          id: service,
+        }),
       };
     },
 

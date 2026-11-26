@@ -445,7 +445,12 @@ describe('the job', () => {
       notFound: SLICE_SIZE,
       nextSlice: true,
     });
-    expect(first.queued).toEqual([{ trigger: 'schedule', after: '10.5555/slice-02000' }]);
+    // The second slice carries when the refresh began, so the KPI counts only this refresh's counts.
+    expect(first.queued).toEqual([
+      { trigger: 'schedule', after: '10.5555/slice-02000', since: expect.any(String) },
+    ]);
+    const since = (first.queued[0] as { since: string }).since;
+    expect(new Date(since).toISOString()).toBe(since);
     const second = await runJob(w, first.queued[0]);
     expect(second.report).toMatchObject({ dois: 1, asked: 1, nextSlice: false });
     expect(second.queued).toEqual([]);

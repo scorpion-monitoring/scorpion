@@ -336,6 +336,8 @@ describe('listing publications', () => {
       items: [],
       // The total is the service's, on every page; nothing was counted, so it is unknown, not 0.
       citations: { source: 'openalex', total: null, found: 0, of: 7 },
+      // A plain user may read, not change.
+      canEdit: false,
     });
   });
 
@@ -354,6 +356,20 @@ describe('listing publications', () => {
       pageSize: 5,
     });
     expect(page.items.map((item) => item.metadata?.issued)).toEqual(['2019', '2018-07']);
+  });
+
+  it('says whether the caller may change the publications (canEdit), by the scoped write on this service', async () => {
+    const w = await world(await h.start());
+    const canEdit = async (who: Actor, serviceId = w.svc.id) =>
+      (await w.biblio.publications.list(who, serviceId, { page: 0, pageSize: 5 })).canEdit;
+    expect(await canEdit(w.people.admin)).toBe(true);
+    expect(await canEdit(w.people.manager)).toBe(true);
+    expect(await canEdit(w.people.member)).toBe(true);
+    for (const who of [w.people.requested, w.people.left, w.people.elsewhere, w.people.plain])
+      expect(await canEdit(who)).toBe(false);
+    // A member of this provider reads another provider's service without the controls.
+    expect(await canEdit(w.people.member, w.elsewhereSvc.id)).toBe(false);
+    expect(await canEdit(w.people.elsewhere, w.elsewhereSvc.id)).toBe(true);
   });
 
   it('answers 401 for an anonymous caller and 404 for an unknown service', async () => {

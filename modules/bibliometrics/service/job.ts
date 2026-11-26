@@ -14,6 +14,8 @@ export const refreshJobDataSchema = z.strictObject({
   runIds: z.array(z.uuid()).max(10).optional(),
   /** The slice starts after this DOI. */
   after: z.string().min(1).max(256).optional(),
+  /** When the refresh's first slice began (set on the later slices): the KPI counts only this refresh's counts. */
+  since: z.iso.datetime().optional(),
 });
 
 export async function runRefreshJob(
@@ -29,6 +31,7 @@ export async function runRefreshJob(
     serviceIds: data.serviceIds,
     after: data.after,
     runIds: data.runIds,
+    since: data.since === undefined ? undefined : new Date(data.since),
     signal: job.signal,
   });
   if (report.next !== undefined)
@@ -36,6 +39,7 @@ export async function runRefreshJob(
       trigger: data.trigger,
       ...(data.serviceIds ? { serviceIds: data.serviceIds } : {}),
       after: report.next,
+      since: report.since.toISOString(),
     });
   // Counts only, for the job-run history.
   return {
@@ -50,5 +54,11 @@ export async function runRefreshJob(
     metadataRetried: report.metadataRetried,
     metadataOk: report.metadataOk,
     nextSlice: report.next !== undefined,
+    // The Bibliographic KPI: `off` with the setting empty.
+    kpi: report.kpi,
+    kpiWritten: report.kpiWritten,
+    kpiSkippedNotInSet: report.kpiSkippedNotInSet,
+    kpiSkippedIncomplete: report.kpiSkippedIncomplete,
+    kpiFailed: report.kpiFailed,
   };
 }
