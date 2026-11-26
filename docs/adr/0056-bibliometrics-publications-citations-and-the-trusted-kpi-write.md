@@ -65,6 +65,23 @@ write path of measurements, `upsertBatch()`, checks the caller's scoped permissi
    clean up. The module listens to no event; if services become deletable, a listener that removes the publications of a
    deleted service is added then.
 
+## Amended in sprint 3 (2026-11-26, the maintainer)
+
+Decisions 5 and 7 and plan §4 said the KPI is the service's citation **total**, for the current month only, with no
+earlier month written. The maintainer changed this before the release, because the Trend widget **adds the months up**:
+
+- **Two indicators**, each chosen by id in a setting: `kpi.citationsIndicatorId` and `kpi.publicationsIndicatorId` (both
+  numeric and in `Bibliographic`, not the same one; checked through `settings.check`, ADR-0057).
+- **Citations: the month's new citations** = the total now minus the sum of the indicator's values in the service's
+  earlier months, read through a new trusted aggregate of kpi.ingestion (`reads.totalsAsSystem`, no route). With
+  nothing there, the whole total is the start. A negative month is written as it is, so the months always add up to
+  the total. Decision 5 stands: the total is used only when every publication was found in this refresh.
+- **Publications: the number issued per month**, every month from the first publication (or the first month the
+  indicator holds) to the current one, 0 where none was issued; earlier months **are** written now. The month comes from
+  the date a provider member gave, else the agency's at month or day precision. Nothing is guessed: a service with a
+  publication of no known month is skipped until a member gives it on the page, through a new delegated route
+  `PATCH …/publications/{publicationId}` with the scoped write (stored on `biblio_publication`, audited).
+
 ## Consequences
 
 - A DOI resolved once serves every service that lists it, and its metadata outlives the publication rows. Adding a
@@ -72,7 +89,7 @@ write path of measurements, `upsertBatch()`, checks the caller's scoped permissi
   person gets a DOI registered since its last lookup. The weekly job retries only `failed`.
 - An instance that turns the module's `enabled` setting off makes no outbound request; publications added meanwhile have no
   metadata until the weekly job of sprint 2 resolves them.
-- The trusted write is a second way into `kpii_measurement` without a permission check. It is not routed, it is documented
+- The trusted write is a second way into the measurements without a permission check. It is not routed, it is documented
   as trusted, and a test in `bibliometrics` checks that only the refresh calls it; `measurement.source` tells its values
   from form and file submissions.
 - `bibliometrics` is the first module to write `ctx.audit` entries from its service inside the domain transaction. It needs

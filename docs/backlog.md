@@ -1225,8 +1225,9 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
   another module; nothing in `bibliometrics` changes. Crossref's CSL record already carries `is-referenced-by-count`.
 - **A public v1 route `GET /api/v1/publications?service=`.** Additive, when a client asks for it (decision 8). It needs the public
   catalogue decision below first.
-- **Backfilling earlier months of the Bibliographic KPI** from OpenAlex `counts_by_year`. The counts are yearly, so it needs a rule for
-  spreading a year over months; until then only the current month is written.
+- **Backfilling earlier months of the citations KPI** from OpenAlex `counts_by_year`. The counts are yearly, so it needs a rule for
+  spreading a year over months; until then the first month written holds the whole total (the publications KPI is written for every
+  month already, from the publication dates).
 - **Importing publications in bulk:** a list of DOIs, a BibTeX file or an ORCID import (each through `PublicationsService.add`).
 - **Publications on the public catalogue page** (decision 3), and with them the Schema.org `citation` of the public profile through
   `service.profileContributor` (decision 7). The profile is public and must not show what the page hides.
@@ -1241,6 +1242,11 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **"Check now" says "queued" and nothing more.** The page does not poll the run; a person reloads to see the counts. A read of the
   service's waiting runs (or a notification when the run finishes) could replace the reload. Runs the worker never ran still stay open
   (sprint 2 entry above).
+- **A service whose last publication is removed keeps its KPI values.** It is in no slice of the refresh, so neither its new citations
+  (a negative month) nor its publication counts (zeros) are written. A refresh could also visit the services that have values of the
+  indicators and no publications.
+- **Dates "in press".** A publication the agency dates after the current month counts in the current month of the publications KPI and is
+  not moved when that month comes; a member can give its month once it is out.
 - **The source of the KPI total is the first citation source that is on.** With a second source contributed, an administrator may want
   to choose it, or the larger of the two; a setting `kpi.source` can follow then.
 - **A `settings.check` runs inside the save's transaction** and reads the other module on its own connection (ADR-0057). Fine for
