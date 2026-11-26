@@ -15,7 +15,6 @@
     getShell,
     type ServiceSectionProps,
   } from '@scorpion/ui-kit';
-  import { tick } from 'svelte';
   import { authorLine, dayText, doiHref, historySpec, issuedText, waitMinutes } from './format.ts';
 
   let { service }: ServiceSectionProps = $props();
@@ -36,6 +35,9 @@
 
   let page = $state(0);
   let loaded = $state<Loaded>();
+  // After a removal the row's button is gone with the next answer: the focus then goes to the heading of the section, after the
+  // dialog has handed it back to that button.
+  let focusHeadingAfterLoad = false;
   let loadFailed = $state(false);
   let attempt = $state(0);
 
@@ -48,7 +50,12 @@
     loadFailed = false;
     read(serviceId, wanted).then(
       (answer) => {
-        if (current) loaded = answer;
+        if (!current) return;
+        loaded = answer;
+        if (focusHeadingAfterLoad) {
+          focusHeadingAfterLoad = false;
+          setTimeout(() => heading?.focus(), 0);
+        }
       },
       () => {
         if (current) loadFailed = true;
@@ -125,8 +132,9 @@
       );
       toaster.success(t('biblio.remove.done', { title: titleOf(row) }));
       // The last row of a page that empties goes back one page.
+      focusHeadingAfterLoad = true;
       if (loaded && loaded.result.length === 1 && page > 0) page -= 1;
-      reload();
+      else reload();
     } catch (error) {
       removeFailed = failureMessage(failureOf(error), t, {
         403: t('biblio.forbidden'),
@@ -135,9 +143,6 @@
     } finally {
       removeBusy = false;
       removing = undefined;
-      // The row's button is gone: the focus goes to the heading of the section.
-      await tick();
-      heading?.focus();
     }
   }
 
