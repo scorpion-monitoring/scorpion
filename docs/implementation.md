@@ -54,12 +54,14 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | **G3** | **Gate 3: migration dry run clean, KPI profile live** | | | M9–M13 | |
 | M14 | `maturity` | 4 Parity | M | G3 | 7 |
 | M15 | `onboarding` | 4 Parity | M | M14 | 8 |
-| M16 | `bibliometrics` | 4 Parity | M | G3 | none |
+| M16 | `bibliometrics` ([m16-sprint-plan.md](m16-sprint-plan.md)) | 4 Parity | M | G3 | none |
 | M17 | `network-graph` + `announcements` | 4 Parity | M | G3 | none |
 | M18 | `backup` + hardening + release | 4 Parity | M | M14–M17 | none |
 | **G4** | **Gate 4: `full` profile live, old app retired** | | | all | |
 
 M14/M15, M16 and M17 do not depend on each other, so they can run in parallel if more than one developer is available.
+
+**Order after Gate 3 (decided 2026-11-25):** M16 → M14 → M15 → M17 → M18. M16 goes first because it builds only on modules that are already released (`registry.services`, `kpi.framework`, `kpi.ingestion`); M14 and M15 stay a pair, since onboarding needs a published maturity version. The milestone numbers stay as they are; the versions follow the order (M16 is `0.19.0`).
 
 ---
 
@@ -358,6 +360,8 @@ The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxD
 
 **Status (2026-11-18): passed.** The rehearsal ran on the dev server with the `full` profile: the dry run had no unexplained drop, `compare` was clean, a second run kept everything, and the maintainer found the dashboards of three services equal to the old app ([m13-sprint-plan.md](m13-sprint-plan.md) §14).
 
+**Done.** The migration tool has since been used for the production cut-over to the de.NBI instance (on 2026-11-23), so Gate 3's evidence is no longer only a rehearsal: it ran on real data in production.
+
 ---
 
 ## 6. Phase 4: Full parity
@@ -376,7 +380,7 @@ The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxD
 - Review screen (Reviewer/Admin, linked in the sidebar): radar per domain, fields for slug, provider and category. **Approve** creates the service through the registry's service API in one transaction and notifies the applicant. **Decline** needs a reason and notifies the applicant (defect 8).
 - `onboarding.postProcessor` registry with webhook and email built in (Jira and GitHub issue can be added later as plugins).
 
-### M16: `bibliometrics` (M)
+### M16: `bibliometrics` (M, three sprints, [m16-sprint-plan.md](m16-sprint-plan.md); taken before M14)
 
 - `publication` (unique DOI per service, remove supported) and `citation_snapshot`.
 - DOI resolver adapter (CSL-JSON, cached permanently), `doi.org/` prefix stripping.
@@ -399,7 +403,7 @@ The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxD
 
 ### Gate 4: full profile live
 
-- Production cut-over (M13 plan, decision 11: here, not after Gate 3): old app set to read-only, final fetch and migration run, `compare` clean, DNS/proxy switch; the old app stays read-only for 30 days, then is retired (runbook: `tools/migrate-legacy/README.md`).
+- Production cut-over (**done for de.NBI**, see Gate 3; M13 plan, decision 11: here, not after Gate 3): old app set to read-only, final fetch and migration run, `compare` clean, DNS/proxy switch; the old app stays read-only for 30 days, then is retired (runbook: `tools/migrate-legacy/README.md`).
 - All tests from FEATURES §4.11 and all defect regression tests pass on the release tag.
 - One real backup restore rehearsed successfully.
 - The ASVS chapter assessments are re-confirmed against the `v1.0.0` release commit (`assessed_commit` updated, second pass recorded).

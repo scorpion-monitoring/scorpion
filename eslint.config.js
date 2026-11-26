@@ -131,6 +131,7 @@ export default defineConfig(
             'modules/registry-organisations/test/harness.ts',
             'modules/registry-services/test/harness.ts',
             'modules/core-settings/test/harness.ts',
+            'modules/bibliometrics/test/harness.ts',
           ],
         },
       ],

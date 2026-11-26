@@ -1,0 +1,213 @@
+{
+  "id": "c3e1c043-34f7-4e9f-812d-aafec1594287",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.biblio_doi_metadata": {
+      "name": "biblio_doi_metadata",
+      "schema": "",
+      "columns": {
+        "doi": {
+          "name": "doi",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authors": {
+          "name": "authors",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "issued": {
+          "name": "issued",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issued_precision": {
+          "name": "issued_precision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "container": {
+          "name": "container",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "biblio_doi_metadata_doi_check": {
+          "name": "biblio_doi_metadata_doi_check",
+          "value": "char_length(\"biblio_doi_metadata\".\"doi\") between 4 and 256 and \"biblio_doi_metadata\".\"doi\" = lower(\"biblio_doi_metadata\".\"doi\")"
+        },
+        "biblio_doi_metadata_status_check": {
+          "name": "biblio_doi_metadata_status_check",
+          "value": "\"biblio_doi_metadata\".\"status\" in ('ok', 'not-found', 'failed')"
+        },
+        "biblio_doi_metadata_title_check": {
+          "name": "biblio_doi_metadata_title_check",
+          "value": "(\"biblio_doi_metadata\".\"status\" = 'ok') = (\"biblio_doi_metadata\".\"title\" is not null) and (\"biblio_doi_metadata\".\"title\" is null or char_length(\"biblio_doi_metadata\".\"title\") between 1 and 1000)"
+        },
+        "biblio_doi_metadata_reason_check": {
+          "name": "biblio_doi_metadata_reason_check",
+          "value": "(\"biblio_doi_metadata\".\"status\" = 'failed') = (\"biblio_doi_metadata\".\"reason\" is not null) and (\"biblio_doi_metadata\".\"reason\" is null or char_length(\"biblio_doi_metadata\".\"reason\") between 1 and 64)"
+        },
+        "biblio_doi_metadata_authors_check": {
+          "name": "biblio_doi_metadata_authors_check",
+          "value": "jsonb_typeof(\"biblio_doi_metadata\".\"authors\") = 'array' and jsonb_array_length(\"biblio_doi_metadata\".\"authors\") <= 100"
+        },
+        "biblio_doi_metadata_issued_check": {
+          "name": "biblio_doi_metadata_issued_check",
+          "value": "(\"biblio_doi_metadata\".\"issued\" is null) = (\"biblio_doi_metadata\".\"issued_precision\" is null) and (\"biblio_doi_metadata\".\"issued_precision\" is null or \"biblio_doi_metadata\".\"issued_precision\" in ('year', 'month', 'day'))"
+        },
+        "biblio_doi_metadata_container_check": {
+          "name": "biblio_doi_metadata_container_check",
+          "value": "\"biblio_doi_metadata\".\"container\" is null or char_length(\"biblio_doi_metadata\".\"container\") between 1 and 500"
+        },
+        "biblio_doi_metadata_type_check": {
+          "name": "biblio_doi_metadata_type_check",
+          "value": "\"biblio_doi_metadata\".\"type\" is null or char_length(\"biblio_doi_metadata\".\"type\") between 1 and 64"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.biblio_publication": {
+      "name": "biblio_publication",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doi": {
+          "name": "doi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "biblio_publication_service_doi_key": {
+          "name": "biblio_publication_service_doi_key",
+          "columns": [
+            {
+              "expression": "service_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "doi",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "biblio_publication_doi_idx": {
+          "name": "biblio_publication_doi_idx",
+          "columns": [
+            {
+              "expression": "doi",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "biblio_publication_doi_check": {
+          "name": "biblio_publication_doi_check",
+          "value": "char_length(\"biblio_publication\".\"doi\") between 4 and 256 and \"biblio_publication\".\"doi\" = lower(\"biblio_publication\".\"doi\") and \"biblio_publication\".\"doi\" like '10.%/%'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

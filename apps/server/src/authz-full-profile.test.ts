@@ -91,6 +91,7 @@ describe('profile full with core.authz', () => {
       'kpi.ingestion',
       'kpi.analytics',
       'kpi.impact',
+      'bibliometrics',
       'public-api',
       'matomo',
     ]);

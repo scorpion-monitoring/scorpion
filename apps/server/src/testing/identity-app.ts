@@ -29,6 +29,11 @@ import {
   type SettingsModuleOptions,
 } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
+import {
+  createBibliometricsModule,
+  type BibliometricsOptions,
+} from '@scorpion/bibliometrics/module';
+import bibliometricsPackage from '@scorpion/bibliometrics/package.json' with { type: 'json' };
 import matomoModule from '@scorpion/matomo/module';
 import matomoPackage from '@scorpion/matomo/package.json' with { type: 'json' };
 import publicApiModule from '@scorpion/public-api/module';
@@ -143,6 +148,8 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   publicApi?: boolean;
   /** true: the profile has matomo (the usage tracker's route and widget, ADR-0054); default: it has not. */
   matomo?: boolean;
+  /** Loads bibliometrics (needs the registry modules, which are on by default); an object passes the module's options (its DOI resolver). */
+  bibliometrics?: boolean | BibliometricsOptions;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
 }
@@ -235,6 +242,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
             ...(options.impact ? ['kpi.impact'] : []),
             ...(options.publicApi ? ['public-api'] : []),
             ...(options.matomo ? ['matomo'] : []),
+            ...(options.bibliometrics ? ['bibliometrics'] : []),
             ...(options.extraModules ?? []).map((extra) => extra.id),
           ] as never,
         },
@@ -296,6 +304,16 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
             ? [{ manifest: publicApiModule, packageJson: publicApiPackage }]
             : []),
           ...(options.matomo ? [{ manifest: matomoModule, packageJson: matomoPackage }] : []),
+          ...(options.bibliometrics
+            ? [
+                {
+                  manifest: createBibliometricsModule(
+                    typeof options.bibliometrics === 'object' ? options.bibliometrics : {},
+                  ),
+                  packageJson: bibliometricsPackage,
+                },
+              ]
+            : []),
           ...(options.extraModules ?? []).map((extra) => ({
             manifest: extra.manifest,
             packageJson: {
@@ -323,6 +341,7 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
           'kpi.impact': '@scorpion/kpi-impact',
           'public-api': '@scorpion/public-api',
           matomo: '@scorpion/matomo',
+          bibliometrics: '@scorpion/bibliometrics',
           ...Object.fromEntries(
             (options.extraModules ?? []).map((extra) => [
               extra.id,

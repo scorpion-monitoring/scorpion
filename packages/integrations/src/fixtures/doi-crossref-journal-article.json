@@ -1,0 +1,24 @@
+{
+  "type": "journal-article",
+  "title": "Array programming with NumPy",
+  "author": [
+    {
+      "family": "Harris",
+      "given": "Charles R."
+    },
+    {
+      "family": "Millman",
+      "given": "K. Jarrod"
+    },
+    {
+      "family": "van der Walt",
+      "given": "Stéfan J."
+    }
+  ],
+  "issued": {
+    "date-parts": [[2020, 9, 16]]
+  },
+  "container-title": "Nature",
+  "publisher": "Springer Science and Business Media LLC",
+  "DOI": "10.1038/s41586-020-2649-2"
+}

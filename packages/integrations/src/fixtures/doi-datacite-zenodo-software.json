@@ -1,0 +1,14 @@
+{
+  "type": "software",
+  "title": "TensorFlow",
+  "author": [
+    {
+      "family": "TensorFlow Developers"
+    }
+  ],
+  "issued": {
+    "date-parts": [[2026, 11, 17]]
+  },
+  "publisher": "Zenodo",
+  "DOI": "10.5281/ZENODO.4724125"
+}

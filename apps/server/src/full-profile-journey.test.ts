@@ -136,6 +136,7 @@ describe('a fresh full-profile instance, end to end, on the real authoriser', ()
       'kpi.ingestion',
       'kpi.analytics',
       'kpi.impact',
+      'bibliometrics',
       'public-api',
       'matomo',
     ]);

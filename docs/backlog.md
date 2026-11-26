@@ -720,7 +720,7 @@ Postgres unless a row says "through the pipeline". Medians of 5 runs (3 for 24 0
   template's link, and the parse limit is a decision of the plan's §2 that a trailing run of blank rows, which a spreadsheet can export, would make hit a file that is fine). The fix is two small changes with tests: `requestProblemOf` reads a `rows` message that names months or measurements
   into `tooManyMonths` and `tooManyValues`, with a sentence in en and de that names 120 and 25 000 (a shared constant, checked against the server's in `ui.test.ts`); and, once blank trailing rows are shown not to count, `MAX_DATA_ROWS` becomes 120 and its sentence follows. The time to a clear message is the preview, 22 ms (CSV).
 - **The reminder cannot be run on demand.** The plan and the sprint's brief rely on a "run now" button on the M4 job page; the page lists job runs only (`GET /system/job-runs`) and requeues dead event deliveries. A platform feature, `POST /system/jobs/{name}/run` with the permission of the job page and a button, would give every
-  job a manual trigger, and the sent table already makes the reminder safe to run twice. Until then an operator cannot send the reminder for a month the job missed (see the next entry).
+  job a manual trigger, and the sent table already makes the reminder safe to run twice. Until then an operator cannot send the reminder for a month the job missed (see the next entry). The weekly citation refresh of `bibliometrics` (M16 sprint 2, `bibliometrics.citations.refresh`) has the same gap: its runs show on the job page, but an operator cannot start one there (a member's "check now" covers one service).
   would also remind a provider on the 20th for a value that became missing later, and it would mail a member who joined late; it is a behaviour for the maintainer to choose, not a silent change.
 - **`listProviderIdsAsSystem` is a third additive read** beyond the two of the plan's §13 (nothing enumerated the providers), and `kpi.ingestion` now depends on `core.identity`, `core.settings`, `core.notifications` and `registry.organisations`. If the maintainer prefers one read that answers the reminder's whole question (`{ provider, service,
 name }` triples), it replaces `listProviderIdsAsSystem` and the per-provider `listByOrganisationAsSystem` calls.
@@ -1199,3 +1199,101 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **An administrator's default dashboard.** Today the default comes from the widgets' `grid.default`; an administrator may want to set one for the instance.
 - **Service ids between instances.** An imported tile keeps the service id of the file; on another instance it shows "settings are no longer valid". Mapping by slug on import would make files portable.
 - **Adding a file's tiles** to the current dashboard instead of replacing it (decision 1 said replace; adding needs new instance ids and runs into singletons and the 20-tile cap).
+
+## M16 sprint 1 follow-ups
+
+- **`matomo`'s route is in neither repo-wide route guard.** `GET /api/internal/matomo/tracker` (M13b) is not loaded by the walker of `defect-01.privilege-escalation.test.ts` nor by `authorization-doc.test.ts`, so `docs/security/authorization.md` does not list it although the page claims every route of the live registry (ASVS 8.1.1). Load `matomo: true` in both and regenerate the table (a `docs/security/**` change: V8 note, the other chapters `asvs-no-impact`). `bibliometrics` is in both since M16 sprint 1.
+- **A `not-found` DOI is asked again only when it is added anew.** The weekly job of sprint 2 retries `failed` metadata only; a DOI registered after it was first added stays `not-found` until someone adds it again (removing and adding the publication). If that turns out to happen, the job could retry `not-found` rows older than some months.
+
+## M16 sprint 2 follow-ups
+
+- **A DOI with `|` or `,` in it is never asked of OpenAlex.** OpenAlex splits the values of an OR filter on `|` and filters on `,` after
+  decoding, so such a DOI cannot share a batch; the adapter reports it as failed (`unsupported-doi`), so it stays unknown, never zero.
+  OpenAlex's single-work lookup (`/works/doi:<doi>`, free of budget) could ask for these one at a time.
+- **Retracted and withdrawn works are "not found".** OpenAlex leaves pulled works out of every list query unless `include_pulled=true` is
+  sent. Whether a publication that was retracted should keep showing a count is a decision for the maintainer.
+- **The weekly run does not count toward the 10-minute rule.** "Check now" is refused for ten minutes after the last _manual_ refresh of
+  the service only; counting a scheduled run too needs the services of a run, which the run row does not hold.
+- **A "check now" that the worker never runs stays waiting.** Its run rows keep `finished_at` empty; nothing shows or cleans them. The page
+  of sprint 3 could say "queued", and a clean-up could close runs older than a day.
+- **No retention of snapshots.** One row per DOI and source a week (about 52 a year). The history read shows the last 520 days; older
+  snapshots are kept. A retention rule (or monthly thinning after ten years) can follow when an instance needs it.
+
+## Push agent and connectors (brainstorm, 2026-11-24)
+
+The pull adapters (Matomo, Plausible, GitHub) are planned as `ingestion.adapter` contributions of `kpi.ingestion` and are not scheduled yet
+([implementation.md §10](implementation.md#10-after-g4-backlog-not-planned); [FEATURES §6](FEATURES.md#6-appendix-pluggability-matrix)). This entry adds a self-hosted **push** path next to them: a provider
+runs `scorpion-agent` in its own network and sends measurements through `POST /api/v1/measurements`. Providers choose push when they will
+not hand a source's credentials to a central instance, or when institutional policy forbids it. Pushing is the provider's responsibility:
+the agent exits non-zero on failure, and Scorpion shows no agent health. Nothing here belongs to a milestone yet; it needs a plan and the
+ADRs below first.
+
+**Shape agreed in the brainstorm**
+
+- **One engine, two hosts.** Connectors and a binding engine are one shared package. The pull host is a thin `ingestion.adapter` (pg-boss,
+  the `secrets` store, `upsertBatch()`); the push host is a one-shot `scorpion-agent run` scheduled by cron or a systemd timer, no daemon.
+  The typed client is an internal detail of the agent, not a product of its own. No transpiled multi-language client: other languages use
+  an `exec` source (any program that prints measurements as JSON lines to stdout).
+- **Connector tiers.** Bundled (pull and push, maintained here, reviewed and tested to the repository's rules); community (push only,
+  published as packages against a versioned `connector-sdk` with a test kit that replays recorded responses); `exec` (push only, any
+  language). A community connector can be promoted to bundled; demand for a push → pull switch is the signal.
+- **Agent configuration** is one local YAML file per provider with `sources` (connector, connection, credentials) and `indicators` (one
+  binding per indicator of a service). Credentials only as `${env:…}` or `${file:…}`; a literal value in a field the schema marks secret is
+  refused. `scorpion-agent check` validates the file, the source credentials, the token (scope, expiry warning at 30 days) and that every
+  bound indicator is in the service's effective set; `run --dry-run` prints what would be sent. `scorpion-agent init --service <slug>`
+  writes a skeleton from the effective indicator set and the administrator's suggestions.
+- **One config schema per connector** (Zod), used by the agent's YAML loader and by the pull form (SchemaForm). Switching is push → pull
+  only: Scorpion imports an agent job and asks for the credential again. Bundled connectors only. Pull → push export is not built.
+- **Bindings per (service, indicator).** The administrator's suggestion lives on the indicator (a short list across connectors, next to
+  RIMO `kpi.measured-by`) and `init` copies it once; the provider adapts it to how the source is set up. A binding may combine sources with
+  `sum`, `min` or `max` (no `avg`, no expressions: use `exec`). All or nothing per binding and period: if one part fails, that indicator is
+  skipped for that period and the run exits non-zero. An indicator marked `additive: false` (unique users) warns when summed. This is not
+  the `aggregate` vocabulary of ADR-0043, which aggregates over time.
+- **A bound indicator is owned by the agent.** `check` warns when existing values of a bound indicator came from another `source`.
+- **Catch-up, no backfill.** Each run fills the missing values of the last _N_ complete periods (default 3, at most 12) and leaves filled
+  periods alone. History comes in once through the CSV/XLSX adapters.
+- **Cumulative metrics** (GitHub release-asset downloads, container pulls) are stored as counter readings in Scorpion and the monthly value
+  is the difference of consecutive readings, so the agent stays stateless and the pull host behaves the same. A difference that spans a gap
+  is not attributed: the months of the gap stay empty.
+
+**ADR stubs** (numbers assigned when written)
+
+- **ADR: connector contract and binding engine.** Decide the contract `{ configSchema, fetch, describe, metric kinds }`: `fetch(config,
+credentials, period)` returns values or an error per metric (an error is not a zero); `describe(selector)` returns human-readable text
+  without URLs or secrets; each metric is `periodic` or `cumulative`. Decide where the engine package lives (this repository or a separate
+  `scorpion-connectors` repository), how `connector-sdk` is versioned (its own semver, independent of the product version, major bumps rare),
+  the tiers and the promotion rule, the `exec` line format, and the YAML schema of the agent. Options to record: per-language generated
+  clients, a transpiled client (Fable-style), a CLI with a shared engine (chosen).
+- **ADR: service accounts.** A non-human actor owned by a provider, managed by its provider managers. It holds PATs with the existing
+  mechanics (prefix, hash, scopes) and a required expiry (at most 12 months; mails to the provider managers 30 and 7 days before, to the
+  instance administrators when the provider has no active manager). It has an editable service list; adding a service is an audited action
+  and only services of the owning provider are allowed; a deleted service or one moved to another provider drops off automatically. No
+  roles: a fixed allow-list of scopes (measurement read and write, the reads `check` needs); never an identity or authz scope; no web
+  sign-in. `ctx.authz.require` intersects the account's service list with the resource. A write for a service outside the list answers 403
+  with its own problem type. Personal PATs stay as they are. ASVS scope: V6, V7, V8 (`core.identity`, `core.authz`). Prerequisite for
+  shipping the agent, so that providers are not taught to put personal tokens on servers.
+- **ADR: notes and recipes on measurements.** Notes: written by a person about one value (service, indicator, period), plain text with a
+  length limit, in their own table so that an upsert never removes them; editable and deletable by the author and the provider managers,
+  each change in `core.audit`; visibility `internal` (default: the provider's members and managers, and holders of a permission such as
+  `kpi.ingestion.note.read-internal`) or `shared` (every signed-in user and v1), with a confirmation when made shared. v1 carries shared
+  notes only, as an additive change. Recipes: generated by the engine from the binding and `describe()` (connector and agent versions
+  included), linked to the run, so a series' method history is derived from `run_id` and needs no "valid from" date. Every write path gets
+  one: form and file submissions record "entered manually" or "imported from file", and a provider may write one by hand for a manual
+  indicator. Recipes are visible wherever the values are. Decide whether `runId` becomes required in `upsertBatch()` or a row without a
+  run means "entered manually".
+- **ADR: counter readings.** Storage of raw cumulative readings per (service, source metric, time), the derivation of monthly values from
+  consecutive readings, the gap rule above, how a counter reset (a deleted release, a recreated repository) is detected and reported, and
+  how a binding that sums a periodic and a cumulative source behaves.
+
+**Next step:** a throwaway spike before the ADRs. Implement the contract and the engine with the two hardest cases, two Matomo instances
+summed (Scorpion's own visits) and GitHub release-asset downloads as counter readings, and run them in a minimal agent and a minimal pull
+wrapper. If the contract holds, write the ADRs and a plan.
+
+**Parked**
+
+- A small Python helper for `exec` sources (a measurement type and `emit()`), if contributors turn out to be mostly Python users.
+- Recipe and note markers on the analytics trend graph.
+- Re-submitting the last filled period to pick up late corrections at the source.
+- Notes on a series (from a period on) written by people, beyond the generated recipes.
+- Generated API clients for other languages from the v1 OpenAPI document (nearly free; a recipe in the docs would do).
+- A template repository or `npm create scorpion-connector` for contributors.

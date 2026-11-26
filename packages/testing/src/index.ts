@@ -39,6 +39,13 @@ export {
 } from './kpi.ts';
 export { makeMeasurement, type MakeMeasurement, type MeasurementRow } from './measurements.ts';
 export {
+  makeDoiMetadata,
+  makePublication,
+  type MakeDoiMetadata,
+  type MakePublication,
+  type PublicationRow,
+} from './publications.ts';
+export {
   makePreference,
   makeSecret,
   makeVocabulary,
