@@ -8,6 +8,12 @@
 // the caller; they are for trusted code (ADR 0015).
 import type { Actor } from '@scorpion/contracts';
 
+// The registry `settings.check`: a rule of a module's settings that needs another module's data, asked on every save (M16 sprint 3).
+export {
+  SETTINGS_CHECK_REGISTRY,
+  type SettingsCheckEntry as SettingsCheckContribution,
+} from './service/settings.ts';
+
 /** The effective branding of the instance, defaults applied (ADR 0018). */
 export interface Branding {
   productName: string;

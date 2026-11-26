@@ -105,15 +105,72 @@ export function fieldProblems(error: z.ZodError, prefix = ''): FieldProblem[] {
  */
 export type SettingsCheck = (moduleId: string, values: unknown, before: unknown) => FieldProblem[];
 
+/** The registry through which a module adds a rule its settings must keep that needs data its schema cannot see (M16 sprint 3). */
+export const SETTINGS_CHECK_REGISTRY = 'settings.check';
+
+const fn = <T>() =>
+  z.custom<T>((value) => typeof value === 'function', { message: 'expected a function' });
+
+/**
+ * An entry of `settings.check`: the rule of one module's settings that needs another module's data (the indicator of `bibliometrics` must
+ * be a numeric indicator of `kpi.framework`). `check` gets the values about to be stored and those stored before, and answers problems
+ * with paths **inside** the values (`kpi.indicatorId`); core.settings puts them under `values.` and refuses the save with one 422. It is
+ * asked on every save of that module, from the form or from code, inside the transaction of the save, so a refusal writes nothing. It
+ * should ask only about what changed, so a later change of the other module's data never keeps an administrator from saving.
+ */
+export const settingsCheckEntrySchema = z.strictObject({
+  module: z.string().min(1).max(64),
+  check:
+    fn<
+      (values: unknown, before: unknown) => Promise<readonly Omit<FieldProblem, 'in'>[]>
+    >(),
+});
+export type SettingsCheckEntry = z.output<typeof settingsCheckEntrySchema>;
+
+/** The contributed checks of the registry by module id; an entry that does not fit stops the start. */
+export function indexSettingsChecks(entries: readonly unknown[]): Map<string, SettingsCheckEntry[]> {
+  const byModule = new Map<string, SettingsCheckEntry[]>();
+  for (const raw of entries) {
+    const entry = settingsCheckEntrySchema.parse(raw);
+    byModule.set(entry.module, [...(byModule.get(entry.module) ?? []), entry]);
+  }
+  return byModule;
+}
+
 export function createSettingsService(
   ctx: ModuleContext,
   deps: { authz: Pick<AuthzService, 'require'> },
-  options: { cacheTtlMs?: number; now?: () => number; check?: SettingsCheck } = {},
+  options: {
+    cacheTtlMs?: number;
+    now?: () => number;
+    check?: SettingsCheck;
+    /** The contributions to `settings.check`, by module id. */
+    checks?: ReadonlyMap<string, readonly SettingsCheckEntry[]>;
+  } = {},
 ): SettingsInternals {
   const check: SettingsCheck = options.check ?? (() => []);
-  /** Refuses values that break a rule of `check`. Called inside the transaction, so a refusal writes nothing. */
-  const enforce = (moduleId: string, values: unknown, before: unknown) => {
-    const problems = check(moduleId, values, before);
+  const contributed = options.checks ?? new Map<string, readonly SettingsCheckEntry[]>();
+  /**
+   * Refuses values that break a rule of `check` or of a module's contributed check. Called inside the transaction, so a refusal
+   * writes nothing. A contributed check that throws refuses the save with a 422 on `values` (never a 500, never its message).
+   */
+  const enforce = async (moduleId: string, values: unknown, before: unknown) => {
+    const problems = [...check(moduleId, values, before)];
+    for (const entry of contributed.get(moduleId) ?? []) {
+      let found: readonly Omit<FieldProblem, 'in'>[];
+      try {
+        found = await entry.check(values, before);
+      } catch (error) {
+        ctx.log.warn({ module: moduleId, err: error }, 'core.settings: a settings check failed');
+        found = [{ path: '', message: 'Could not be checked; try again.' }];
+      }
+      for (const problem of found)
+        problems.push({
+          in: 'body',
+          path: problem.path ? `values.${problem.path}` : 'values',
+          message: problem.message,
+        });
+    }
     if (problems.length > 0) throw new Invalid('The settings are not valid.', problems);
   };
   const ttl = options.cacheTtlMs ?? SETTINGS_CACHE_TTL_MS;
@@ -207,7 +264,7 @@ export function createSettingsService(
         );
       }
       const seeded = await ctx.db.tx(async (tx) => {
-        enforce(moduleId, values, undefined);
+        await enforce(moduleId, values, undefined);
         const inserted = await tx
           .insert(setting)
           .values({ moduleId, value: values, version: 1, updatedBy: null })
@@ -242,7 +299,7 @@ export function createSettingsService(
         if (current && key in stored) return false;
         const version = (current?.version ?? 0) + 1;
         const merged = { ...stored, [key]: value };
-        enforce(moduleId, merged, current?.value);
+        await enforce(moduleId, merged, current?.value);
         if (current) {
           await tx
             .update(setting)
@@ -293,7 +350,7 @@ export function createSettingsService(
         }
         const keys = changedKeys(current?.value, input.values);
         if (current && keys.length === 0) return { keys, version: current.version };
-        enforce(moduleId, input.values, current?.value);
+        await enforce(moduleId, input.values, current?.value);
         const version = (current?.version ?? 0) + 1;
         if (current) {
           await tx

@@ -19,7 +19,7 @@ Status: M3 sprint 4 (complete): settings, preferences, secrets, [vocabularies](#
 | CLI            | `set-secret <name>`, `rotate-secrets [--batch-size <n>]` ([below](#cli))                                                                                                                                                                                                                                                                                                                                                                                       |
 | env            | `SECRETS_KEY` (required, secret) and `SECRETS_KEY_NEXT` (secret, only while rotating), declared in the manifest's `env` so that `scorpion docs:export` lists them ([ADR-0047](../../docs/adr/0047-docs-export.md))                                                                                                                                                                                                                                             |
 | events         | emits `settings.changed@1`, `settings.secret.changed@1`, `settings.preference.changed@1`, `settings.vocabulary.changed@1` ([below](#events))                                                                                                                                                                                                                                                                                                                   |
-| registries     | declares `settings.userPreference` and `vocabulary`; contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                                                                                                                                                                                                                                                    |
+| registries     | declares `settings.userPreference`, `vocabulary` and `settings.check` ([below](#a-check-that-needs-another-modules-data)); contributes `kernel.settingsStore` (the one entry that backs `ctx.settings`, [ADR-0017](../../docs/adr/0017-settings-port.md)) and `authz.defaultRole`                                                                                                                                                                                                                                                    |
 | public service | `ctx.deps['core.settings']`, for trusted code (no permission check): `getSecret(name)` ([below](#reading-a-secret-from-code)), `getBranding()` ([below](#branding)), `getUserPreference(userId, key)` and `setUserPreference(actor, key, value)` ([below](#user-preferences)), `seedSettings(moduleId, values)` and `seedSettingKey(moduleId, key, value)` ([below](#seeding-settings-from-code)), `listTerms()` and `validateTerm()` ([below](#vocabularies)) |
 
 ### Permissions
@@ -54,6 +54,8 @@ profile `ctx.settings` yields the schema's defaults.
 - **Optimistic versioning.** `GET` returns `version` (0 before the first save). `PUT` must send the version it read; a
   stale one is `409` and nothing is written. Two writers with the same version: exactly one wins. A save that changes
   nothing writes nothing and emits nothing.
+- **A rule that needs another module's data** is a contribution to the registry `settings.check` (M16 sprint 3); see
+  [below](#a-check-that-needs-another-modules-data).
 - **A save replaces the whole stored object.** The admin form reads the effective values (defaults applied) and sends
   them back; what is sent is what is stored.
 - **Describing a field for the admin form (M5 sprint 3).** `GET /settings/{module}/schema` is `z.toJSONSchema(schema, { io: 'input' })`, and the form (`SchemaForm`, see the
@@ -106,6 +108,24 @@ All are internal (`/api/internal`). Settings and secrets are Admin's; no respons
 | `GET /legal/{page}`                    | public                           | `terms`, `privacy` or `imprint`, rendered and sanitised. `404` when no text was written                   |
 
 The two public routes need no login (FEATURES 3.2) and are rate limited.
+
+### A check that needs another module's data
+
+A schema cannot see other modules: `bibliometrics` must refuse an indicator id that is not a numeric indicator of the
+category `Bibliographic` of `kpi.framework`. Such a module contributes an entry to the registry **`settings.check`**:
+
+```ts
+contributes: {
+  'settings.check': [{ module: 'bibliometrics', check: async (values, before) => [{ path: 'kpi.indicatorId', message: '...' }] }],
+}
+```
+
+`check` gets the values about to be stored and those stored before, and answers problems with paths inside the values;
+they come back as one `422` on `values.<path>`, so the admin form shows them at the field. It runs on every save of that
+module (the form, `seedSettings`, `seedSettingKey`) inside the transaction, so a refusal writes nothing; a check that
+throws refuses the save with `values` and the log, never a 500. It should ask only about keys that changed, so that a
+later change of the other module's data never keeps an administrator from saving another setting (the rule of the theme
+colours too). A malformed entry stops the start.
 
 ## Secrets
 
