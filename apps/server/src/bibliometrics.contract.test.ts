@@ -78,8 +78,22 @@ describe(`GET ${listPublicationsRoute.path}`, () => {
     const reply = await started.get(base(fresh.id), session(people.stranger));
     documented(listPublicationsRoute, reply);
     const body = publicationListSchema.parse(reply.body);
-    expect(body.citations).toEqual({ source: 'openalex', total: null, found: 0, of: 1 });
+    expect(body.citations).toEqual({
+      source: 'openalex',
+      sourceLabel: 'OpenAlex',
+      total: null,
+      found: 0,
+      of: 1,
+    });
+    // A signed-in person of another provider reads, and is told the page has no controls for them.
+    expect(body.canEdit).toBe(false);
     expect(body.result[0]).toMatchObject({ citedByCount: null, citationsAsOf: null });
+  });
+
+  it('tells a member of the provider that the page may show the controls that write', async () => {
+    const reply = await started.get(base(svc.id), session(people.member));
+    documented(listPublicationsRoute, reply);
+    expect(publicationListSchema.parse(reply.body).canEdit).toBe(true);
   });
 
   it('answers the envelope with 0-based pages, 5 per page by default, never cached', async () => {

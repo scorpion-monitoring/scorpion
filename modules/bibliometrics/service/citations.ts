@@ -94,6 +94,8 @@ export interface CitationCount {
 export interface ServiceCitations {
   /** The id of the source the counts come from, `null` when no source exists. */
   source: string | null;
+  /** Its label (`OpenAlex`) from the registry entry, for "not found in OpenAlex"; `null` with `source`. */
+  sourceLabel: string | null;
   /** `null` when no publication has a count: unknown is not zero. */
   total: number | null;
   found: number;
@@ -192,11 +194,12 @@ export function createCitationService(
   }
 
   /** The source the list and the total show: the first that is on, else the first there is. */
-  async function primarySource(): Promise<string | null> {
+  async function primaryEntry(): Promise<CitationSourceEntry | undefined> {
     const all = deps.sources();
     const settings = await deps.settings();
-    return (enabledSources(settings)[0] ?? all[0])?.id ?? null;
+    return enabledSources(settings)[0] ?? all[0];
   }
+  const primarySource = async () => (await primaryEntry())?.id ?? null;
 
   /** The slice: distinct DOIs after `after`, in DOI order, with the services that list each; at most 2,000 of both. */
   async function slice(options: RefreshOptions) {
@@ -556,7 +559,8 @@ export function createCitationService(
     },
 
     async serviceTotal(serviceId) {
-      const source = await primarySource();
+      const entry = await primaryEntry();
+      const source = entry?.id ?? null;
       const service = serviceId.toLowerCase();
       const { rows } = await db.execute<{ of: number; found: number; total: string | null }>(sql`
         select count(*)::int as of, count(latest.count)::int as found, sum(latest.count)::text as total
@@ -573,6 +577,7 @@ export function createCitationService(
       const found = Number(row?.found ?? 0);
       return {
         source,
+        sourceLabel: entry?.label ?? null,
         total: found === 0 || row?.total == null ? null : Number(row.total),
         found,
         of: Number(row?.of ?? 0),

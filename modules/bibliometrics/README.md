@@ -139,11 +139,11 @@ the value of the **current month**, with source `bibliometrics`, through `kpi.in
 `upsertBatchAsSystem` (ADR-0056 decision 7). A second run in the month replaces the value; earlier months are never
 written. A service is **skipped**, and counted in the job's report, when:
 
-| Report count           | Why                                                                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `kpiSkippedNotInSet`   | its effective KPI set does not hold the indicator (never an error)                                                                   |
+| Report count           | Why                                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `kpiSkippedNotInSet`   | its effective KPI set does not hold the indicator (never an error)                                                                    |
 | `kpiSkippedIncomplete` | one of its publications has no count from this refresh (not found, failed, or asked by an earlier run): a partial total is not a drop |
-| `kpiFailed`            | `kpi.ingestion` refused the value (a bound of the indicator, a set changed meanwhile); logged with the service id                    |
+| `kpiFailed`            | `kpi.ingestion` refused the value (a bound of the indicator, a set changed meanwhile); logged with the service id                     |
 
 `kpiWritten` counts the values written; `kpi` is `off` with the setting empty and `unusable` when the chosen indicator was
 deleted or is no longer numeric and Bibliographic (nothing is written; the log says so). An indicator that changed

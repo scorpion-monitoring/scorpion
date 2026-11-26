@@ -26,12 +26,16 @@ function checkedModule() {
         'settings.check': [
           {
             module: 'fix.checked',
-            async check(values: unknown, before: unknown) {
+            check(values: unknown, before: unknown) {
               asked.push({ values, before });
               const code = (values as { code?: string }).code;
-              if (code === (before as { code?: string } | undefined)?.code) return [];
-              if (code === 'boom') throw new Error('the other module is down at https://x/?key=k');
-              return code === 'taken' ? [{ path: 'code', message: 'Is taken elsewhere.' }] : [];
+              if (code === (before as { code?: string } | undefined)?.code)
+                return Promise.resolve([]);
+              if (code === 'boom')
+                return Promise.reject(new Error('the other module is down at https://x/?key=k'));
+              return Promise.resolve(
+                code === 'taken' ? [{ path: 'code', message: 'Is taken elsewhere.' }] : [],
+              );
             },
           },
         ],
@@ -101,17 +105,19 @@ describe('settings.check', () => {
     await expect(settings.settings.seed('fix.checked', { code: 'taken' })).rejects.toMatchObject({
       status: 422,
     });
-    await expect(
-      settings.settings.seedKey('fix.checked', 'code', 'taken'),
-    ).rejects.toMatchObject({ status: 422 });
+    await expect(settings.settings.seedKey('fix.checked', 'code', 'taken')).rejects.toMatchObject({
+      status: 422,
+    });
     expect(await settings.settings.seedKey('fix.checked', 'code', 'free')).toBe('seeded');
   });
 
   it('refuses a malformed entry at start', () => {
     expect(() => indexSettingsChecks([{ module: 'x', check: 'not a function' }])).toThrow();
-    expect(() => indexSettingsChecks([{ module: 'x', check: async () => [], extra: 1 }])).toThrow();
-    expect([...indexSettingsChecks([{ module: 'x', check: async () => [] }]).keys()]).toEqual([
-      'x',
-    ]);
+    expect(() =>
+      indexSettingsChecks([{ module: 'x', check: () => Promise.resolve([]), extra: 1 }]),
+    ).toThrow();
+    expect([
+      ...indexSettingsChecks([{ module: 'x', check: () => Promise.resolve([]) }]).keys(),
+    ]).toEqual(['x']);
   });
 });

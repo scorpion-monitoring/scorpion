@@ -335,7 +335,7 @@ describe('listing publications', () => {
       totalCount: 7,
       items: [],
       // The total is the service's, on every page; nothing was counted, so it is unknown, not 0.
-      citations: { source: 'openalex', total: null, found: 0, of: 7 },
+      citations: { source: 'openalex', sourceLabel: 'OpenAlex', total: null, found: 0, of: 7 },
       // A plain user may read, not change.
       canEdit: false,
     });

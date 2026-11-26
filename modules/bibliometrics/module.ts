@@ -173,6 +173,9 @@ export function createBibliometricsModule(options: BibliometricsOptions = {}) {
       ],
     },
 
+    // The texts; the section of the service page and the settings picker come with `./ui/index.ts` (the shell forwards them).
+    ui: () => import('./ui/pages.ts'),
+
     // `scorpion seed --demo`: three fictional publications on two demo services, no network call (ADR-0046).
     demoSeed: (ctx, demo) => createDemoSeed(() => need(demoParts))(ctx, demo),
 

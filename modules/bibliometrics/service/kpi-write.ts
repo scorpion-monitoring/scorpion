@@ -115,8 +115,7 @@ export async function writeKpi(
     sql`, `,
   );
   // Compared in the database, in the collation the slice was cut in.
-  const finished =
-    input.lastDoi === undefined ? sql`true` : sql`max(p.doi) <= ${input.lastDoi}`;
+  const finished = input.lastDoi === undefined ? sql`true` : sql`max(p.doi) <= ${input.lastDoi}`;
   // Per service: whether this slice holds its last DOI, how many publications, how many have a count of this run, and their sum.
   const { rows } = await db.execute<{
     service_id: string;

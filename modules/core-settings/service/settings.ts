@@ -120,15 +120,14 @@ const fn = <T>() =>
  */
 export const settingsCheckEntrySchema = z.strictObject({
   module: z.string().min(1).max(64),
-  check:
-    fn<
-      (values: unknown, before: unknown) => Promise<readonly Omit<FieldProblem, 'in'>[]>
-    >(),
+  check: fn<(values: unknown, before: unknown) => Promise<readonly Omit<FieldProblem, 'in'>[]>>(),
 });
 export type SettingsCheckEntry = z.output<typeof settingsCheckEntrySchema>;
 
 /** The contributed checks of the registry by module id; an entry that does not fit stops the start. */
-export function indexSettingsChecks(entries: readonly unknown[]): Map<string, SettingsCheckEntry[]> {
+export function indexSettingsChecks(
+  entries: readonly unknown[],
+): Map<string, SettingsCheckEntry[]> {
   const byModule = new Map<string, SettingsCheckEntry[]>();
   for (const raw of entries) {
     const entry = settingsCheckEntrySchema.parse(raw);

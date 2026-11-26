@@ -30,6 +30,7 @@
     "@playwright/test": "^1.65.1",
     "@scalar/api-reference": "1.82.1",
     "@scalar/sveltekit": "0.3.40",
+    "@scorpion/bibliometrics": "workspace:*",
     "@scorpion/core-audit": "workspace:*",
     "@scorpion/core-identity": "workspace:*",
     "@scorpion/core-notifications": "workspace:*",

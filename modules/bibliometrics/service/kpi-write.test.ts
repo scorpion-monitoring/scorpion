@@ -5,11 +5,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { DomainError, type UserActor } from '@scorpion/contracts';
-import type { SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import { createStubOpenAlex, type DoiResolver } from '@scorpion/integrations';
 import { makeIndicator, makeKpiSet, makePublication, makeServiceKpis } from '@scorpion/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { uniqueDoi, useBibliometrics, world, type BiblioStarted } from '../test/harness.ts';
+import { uniqueDoi, useBibliometrics, world } from '../test/harness.ts';
 import { KPI_SOURCE } from './kpi-write.ts';
 
 const h = useBibliometrics();
@@ -64,7 +63,7 @@ async function kpiWorld(options: { clock?: () => Date } = {}) {
     indicators: [{ indicatorId: citations.id, necessity: 'optional' }],
   });
   await makeServiceKpis(w.pool, { serviceId: w.svc.id, setId: set.id, extras: [] });
-  const settings = (w.kernel.services.get('core.settings') as SettingsInternalsBundle).settings;
+  const settings = w.settingsAdmin();
   const save = async (indicatorId: string | undefined, who: UserActor = w.people.admin) => {
     const current = await settings.get(w.people.admin, 'bibliometrics');
     return settings.update(who, 'bibliometrics', {
@@ -238,7 +237,7 @@ describe('the setting kpi.indicatorId', () => {
       expect(error.status).toBe(422);
       expect(error.errors).toEqual([{ in: 'body', path: 'values.kpi.indicatorId', message }]);
     }
-    const settings = (w.kernel.services.get('core.settings') as SettingsInternalsBundle).settings;
+    const settings = w.settingsAdmin();
     expect((await settings.get(w.people.admin, 'bibliometrics')).version).toBe(0);
   });
 
@@ -248,7 +247,7 @@ describe('the setting kpi.indicatorId', () => {
     await w.pool.query(`update kpif_indicator set thematic = 'Usage' where id = $1`, [
       w.ind.citations.id,
     ]);
-    const settings = (w.kernel.services.get('core.settings') as SettingsInternalsBundle).settings;
+    const settings = w.settingsAdmin();
     const current = await settings.get(w.people.admin, 'bibliometrics');
     const saved = await settings.update(w.people.admin, 'bibliometrics', {
       version: current.version,
@@ -299,18 +298,18 @@ describe('the trusted write', () => {
           files.push(path);
       }
     };
-    for (const top of ['apps', 'modules', 'packages', 'tools'])
-      walk(join(repo, top));
+    for (const top of ['apps', 'modules', 'packages', 'tools']) walk(join(repo, top));
     const callers = files
       .filter((file) => readFileSync(file, 'utf8').includes('upsertBatchAsSystem'))
       .map((file) => relative(repo, file))
       .filter((file) => !file.startsWith('modules/kpi-ingestion/'))
       .sort();
-    expect(callers).toEqual([
-      'modules/bibliometrics/service/kpi-write.ts',
-    ]);
+    expect(callers).toEqual(['modules/bibliometrics/service/kpi-write.ts']);
     // In the module, `writeKpi` is called from `refresh` only.
-    const citations = readFileSync(join(repo, 'modules/bibliometrics/service/citations.ts'), 'utf8');
+    const citations = readFileSync(
+      join(repo, 'modules/bibliometrics/service/citations.ts'),
+      'utf8',
+    );
     expect(citations.match(/writeKpi\(/g)).toHaveLength(1);
     const refreshBody = citations.slice(
       citations.indexOf('async refresh(trigger'),

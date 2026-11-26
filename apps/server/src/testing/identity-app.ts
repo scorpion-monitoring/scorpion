@@ -148,7 +148,10 @@ export interface AppOptionsForTest extends IdentityModuleOptions {
   publicApi?: boolean;
   /** true: the profile has matomo (the usage tracker's route and widget, ADR-0054); default: it has not. */
   matomo?: boolean;
-  /** Loads bibliometrics (needs the registry modules, which are on by default); an object passes the module's options (its DOI resolver). */
+  /**
+   * Loads bibliometrics (needs the registry modules, which are on by default) with kpi.framework and kpi.ingestion, which it
+   * depends on; an object passes the module's options (its DOI resolver).
+   */
   bibliometrics?: boolean | BibliometricsOptions;
   /** Job tuning: how often workers poll and the cron schedule is checked. */
   jobs?: { pollingIntervalSeconds?: number; cronIntervalSeconds?: number };
@@ -200,7 +203,8 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
 
   return {
     async start(given: AppOptionsForTest = {}) {
-      // kpi.impact reads the evaluation, the measurements and the aggregates, so it brings the three modules it depends on.
+      // kpi.impact reads the evaluation, the measurements and the aggregates, so it brings the three modules it depends on;
+      // bibliometrics writes its KPI through kpi.ingestion (M16 sprint 3), so it brings kpi.framework and kpi.ingestion.
       const options: AppOptionsForTest = given.impact
         ? {
             ...given,
@@ -208,7 +212,9 @@ export function useIdentityApp(options: { shared?: boolean } = {}) {
             ingestion: given.ingestion ?? true,
             analytics: given.analytics ?? true,
           }
-        : given;
+        : given.bibliometrics
+          ? { ...given, kpi: true, ingestion: given.ingestion ?? true }
+          : given;
       const lines: string[] = [];
       const secretsKey = options.secretsKey ?? makeSecretsKey();
       const databaseUrl = options.databaseUrl ?? (await server.createDatabase());

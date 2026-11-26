@@ -14873,6 +14873,8 @@ export interface paths {
                             citations: {
                                 /** @description The id of the citation source the counts come from (`openalex`). */
                                 source: string | null;
+                                /** @description The name of that source (`OpenAlex`), for "not found in OpenAlex". */
+                                sourceLabel: string | null;
                                 /** @description The sum of the known counts of the service; `null` when no publication has one. */
                                 total: number | null;
                                 /** @description How many publications have a count. */
@@ -14880,6 +14882,8 @@ export interface paths {
                                 /** @description How many publications the service lists. */
                                 of: number;
                             };
+                            /** @description Whether the caller may add and remove publications of this service and check its citations now (`bibliometrics.publication.write` on the service). */
+                            canEdit: boolean;
                         };
                     };
                 };

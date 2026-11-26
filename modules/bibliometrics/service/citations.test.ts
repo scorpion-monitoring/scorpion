@@ -181,7 +181,13 @@ describe('the refresh', () => {
       pageSize: 5,
     });
     expect(before.items.map((item) => item.citedByCount)).toEqual([null, null, null]);
-    expect(before.citations).toEqual({ source: 'openalex', total: null, found: 0, of: 3 });
+    expect(before.citations).toEqual({
+      source: 'openalex',
+      sourceLabel: 'OpenAlex',
+      total: null,
+      found: 0,
+      of: 3,
+    });
 
     await w.biblio.citations.refresh('schedule');
     const after = await w.biblio.publications.list(w.people.plain, w.svc.id, {
@@ -193,7 +199,13 @@ describe('the refresh', () => {
     expect(byDoi[a]!.citationsAsOf).toBeInstanceOf(Date);
     expect(byDoi[c]!.citedByCount).toBeNull();
     expect(byDoi[c]!.citationsAsOf).toBeNull();
-    expect(after.citations).toEqual({ source: 'openalex', total: 7, found: 2, of: 3 });
+    expect(after.citations).toEqual({
+      source: 'openalex',
+      sourceLabel: 'OpenAlex',
+      total: 7,
+      found: 2,
+      of: 3,
+    });
   });
 
   it('stores nothing for the DOIs of a failed batch, records them as failed with a fixed reason, and keeps the other batch', async () => {
@@ -446,11 +458,11 @@ describe('the job', () => {
       nextSlice: true,
     });
     // The second slice carries when the refresh began, so the KPI counts only this refresh's counts.
-    expect(first.queued).toEqual([
-      { trigger: 'schedule', after: '10.5555/slice-02000', since: expect.any(String) },
-    ]);
-    const since = (first.queued[0] as { since: string }).since;
-    expect(new Date(since).toISOString()).toBe(since);
+    expect(first.queued).toHaveLength(1);
+    const queued = first.queued[0] as { trigger: string; after: string; since: string };
+    expect(Object.keys(queued).sort()).toEqual(['after', 'since', 'trigger']);
+    expect(queued).toMatchObject({ trigger: 'schedule', after: '10.5555/slice-02000' });
+    expect(new Date(queued.since).toISOString()).toBe(queued.since);
     const second = await runJob(w, first.queued[0]);
     expect(second.report).toMatchObject({ dois: 1, asked: 1, nextSlice: false });
     expect(second.queued).toEqual([]);

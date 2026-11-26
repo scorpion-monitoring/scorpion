@@ -83,6 +83,10 @@ export const serviceCitationsSchema = z
       .string()
       .nullable()
       .describe('The id of the citation source the counts come from (`openalex`).'),
+    sourceLabel: z
+      .string()
+      .nullable()
+      .describe('The name of that source (`OpenAlex`), for "not found in OpenAlex".'),
     total: z
       .number()
       .int()
@@ -266,7 +270,13 @@ export function publicationOut(item: Publication): z.output<typeof publicationSc
 }
 
 function citationsOut(value: ServiceCitations): z.output<typeof serviceCitationsSchema> {
-  return { source: value.source, total: value.total, found: value.found, of: value.of };
+  return {
+    source: value.source,
+    sourceLabel: value.sourceLabel,
+    total: value.total,
+    found: value.found,
+    of: value.of,
+  };
 }
 
 function historyOut(value: History): z.output<typeof publicationHistorySchema> {

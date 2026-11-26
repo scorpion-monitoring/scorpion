@@ -12,7 +12,7 @@ import { createIdentityModule } from '@scorpion/core-identity/module';
 import identityPackage from '@scorpion/core-identity/package.json' with { type: 'json' };
 import { createNotificationsModule } from '@scorpion/core-notifications/module';
 import notificationsPackage from '@scorpion/core-notifications/package.json' with { type: 'json' };
-import { createSettingsModule } from '@scorpion/core-settings/module';
+import { createSettingsModule, type SettingsInternalsBundle } from '@scorpion/core-settings/module';
 import settingsPackage from '@scorpion/core-settings/package.json' with { type: 'json' };
 import { Writable } from 'node:stream';
 import {
@@ -84,6 +84,8 @@ export interface BiblioStarted {
   manifest: ReturnType<typeof createBibliometricsModule>;
   /** A signed-in-looking actor for a new user who holds the given roles. */
   actor: (...roles: string[]) => Promise<UserActor>;
+  /** The settings admin of core.settings (`get`, `update`): a save through it runs the module's `settings.check`. */
+  settingsAdmin: () => SettingsInternalsBundle['settings'];
 }
 
 const MODULES = [
@@ -201,6 +203,8 @@ export function useBibliometrics() {
         pool: kernel.pool,
         biblio: kernel.services.get('bibliometrics') as BibliometricsService,
         manifest,
+        settingsAdmin: () =>
+          (kernel.services.get('core.settings') as SettingsInternalsBundle).settings,
         async actor(...roles) {
           const user = await makeUser(kernel.pool);
           for (const role of roles) await makeRoleAssignment(kernel.pool, user, role);
