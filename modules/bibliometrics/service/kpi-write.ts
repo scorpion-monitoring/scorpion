@@ -13,7 +13,7 @@ import { sql } from 'drizzle-orm';
 import { citationSnapshot, publication } from '../db/schema.ts';
 import type { BibliometricsSettings } from '../settings-schema.ts';
 
-/** The source of the values in `kpii_measurement`. */
+/** The `source` the values carry in the measurements of kpi.ingestion, which tells them from form, file and API submissions. */
 export const KPI_SOURCE = 'bibliometrics';
 /** The term of the vocabulary `thematic-category` the indicator must have (a key, never a label). */
 export const BIBLIOGRAPHIC_CATEGORY = 'Bibliographic';
