@@ -1219,6 +1219,33 @@ What the credential work left for later ([ADR-0026](adr/0026-credential-rules-th
 - **No retention of snapshots.** One row per DOI and source a week (about 52 a year). The history read shows the last 520 days; older
   snapshots are kept. A retention rule (or monthly thinning after ten years) can follow when an instance needs it.
 
+## M16 out of scope (plan §10)
+
+- **More citation sources: Crossref, Europe PMC, Dimensions** (FEATURES §6). One `biblio.citationSource` entry each, contributed by
+  another module; nothing in `bibliometrics` changes. Crossref's CSL record already carries `is-referenced-by-count`.
+- **A public v1 route `GET /api/v1/publications?service=`.** Additive, when a client asks for it (decision 8). It needs the public
+  catalogue decision below first.
+- **Backfilling earlier months of the Bibliographic KPI** from OpenAlex `counts_by_year`. The counts are yearly, so it needs a rule for
+  spreading a year over months; until then only the current month is written.
+- **Importing publications in bulk:** a list of DOIs, a BibTeX file or an ORCID import (each through `PublicationsService.add`).
+- **Publications on the public catalogue page** (decision 3), and with them the Schema.org `citation` of the public profile through
+  `service.profileContributor` (decision 7). The profile is public and must not show what the page hides.
+- **Which papers cite a publication** (OpenAlex `cites:` queries).
+- **A per-instance citation summary page:** all services ranked by citations.
+
+## M16 sprint 3 follow-ups
+
+- **No journey spec for "add a publication".** The journey ids J13 to J18 and their step titles belong to the knowledge-base catalogue,
+  which is not in this repository; the section is covered by `apps/web/e2e/bibliometrics.spec.ts`. When the catalogue names the journey,
+  add `apps/web/e2e/journeys/jNN-add-a-publication.spec.ts` with `test.step` and `docShot()`, and its line in `journeys.test.ts`.
+- **"Check now" says "queued" and nothing more.** The page does not poll the run; a person reloads to see the counts. A read of the
+  service's waiting runs (or a notification when the run finishes) could replace the reload. Runs the worker never ran still stay open
+  (sprint 2 entry above).
+- **The source of the KPI total is the first citation source that is on.** With a second source contributed, an administrator may want
+  to choose it, or the larger of the two; a setting `kpi.source` can follow then.
+- **A `settings.check` runs inside the save's transaction** and reads the other module on its own connection (ADR-0057). Fine for
+  administrator saves; a module that would check on every request must not use it.
+
 ## Push agent and connectors (brainstorm, 2026-11-24)
 
 The pull adapters (Matomo, Plausible, GitHub) are planned as `ingestion.adapter` contributions of `kpi.ingestion` and are not scheduled yet

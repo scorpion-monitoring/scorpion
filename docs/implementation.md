@@ -54,7 +54,7 @@ Terms used below come from the architecture: **kernel**, **manifest** (`defineMo
 | **G3** | **Gate 3: migration dry run clean, KPI profile live** | | | M9–M13 | |
 | M14 | `maturity` | 4 Parity | M | G3 | 7 |
 | M15 | `onboarding` | 4 Parity | M | M14 | 8 |
-| M16 | `bibliometrics` ([m16-sprint-plan.md](m16-sprint-plan.md)) | 4 Parity | M | G3 | none |
+| M16 | `bibliometrics` ([m16-sprint-plan.md](m16-sprint-plan.md)), **done** (`0.19.0`) | 4 Parity | M | G3 | none |
 | M17 | `network-graph` + `announcements` | 4 Parity | M | G3 | none |
 | M18 | `backup` + hardening + release | 4 Parity | M | M14–M17 | none |
 | **G4** | **Gate 4: `full` profile live, old app retired** | | | all | |
@@ -386,6 +386,8 @@ The legacy application in use is `ipk-bit/scorpion` (FastAPI, Neo4j 3.5, InfluxD
 - DOI resolver adapter (CSL-JSON, cached permanently), `doi.org/` prefix stripping.
 - `biblio.citationSource` registry with OpenAlex (batches of 100, backoff on 429, optional API key).
 - Weekly refresh job that stores the history. Optional setting: write the total citations as a Bibliographic KPI through `upsertBatch()`.
+
+**Done (2026-11-26, `0.19.0`).** Built in three sprints ([plan](m16-sprint-plan.md) §6 to §8, ADR-0056, ADR-0057): the module, the DOI and OpenAlex adapters, the weekly refresh with "check now", the section "Publications" of the service page, and the optional Bibliographic KPI. The KPI is written through `kpi.ingestion`'s trusted `upsertBatchAsSystem()` (a job has no actor to pass to `upsertBatch()`), and only when every publication of the service was found. Publications are for signed-in people only; the public catalogue, a public v1 route and the Schema.org `citation` are in the backlog.
 
 ### M17: `network-graph` + `announcements` (M)
 

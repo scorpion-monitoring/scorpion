@@ -85,7 +85,7 @@ An unknown run is a 422 on `runId`; an indicator deleted after its set was read 
 ### `upsertBatchAsSystem` (trusted module code only)
 
 ```ts
-ctx.deps['kpi.ingestion'].measurements.upsertBatchAsSystem(serviceId, rows, { source })
+ctx.deps['kpi.ingestion'].measurements.upsertBatchAsSystem(serviceId, rows, { source });
 ```
 
 The sibling of `upsertBatch` for a job of another module that has no person behind it (ADR-0056 decision 7). Its one caller is the
