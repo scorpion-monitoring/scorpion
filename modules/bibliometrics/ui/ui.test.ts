@@ -17,7 +17,7 @@ describe('the ui of bibliometrics', () => {
   it('asks for the indicator picker on kpi.indicatorId, by the name the entry contributes it under', async () => {
     const json = (await import('@scorpion/contracts')).z.toJSONSchema(settingsSchema, {
       io: 'input',
-    }) as { properties: { kpi: { properties: { indicatorId: { widget?: string } } } } };
+    }) as unknown as { properties: { kpi: { properties: { indicatorId: { widget?: string } } } } };
     expect(json.properties.kpi.properties.indicatorId.widget).toBe('bibliometrics-indicator');
     // The entry with the Svelte components is compiled by the web app; its name is a constant there.
     const source = (await import('node:fs')).readFileSync(

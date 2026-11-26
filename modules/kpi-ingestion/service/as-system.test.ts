@@ -114,11 +114,8 @@ describe('upsertBatchAsSystem', () => {
       ).status,
     ).toBe(404);
     expect(
-      (
-        await rejection(
-          w.ingestion.measurements.upsertBatchAsSystem('nope', row, { source: 'x' }),
-        )
-      ).status,
+      (await rejection(w.ingestion.measurements.upsertBatchAsSystem('nope', row, { source: 'x' })))
+        .status,
     ).toBe(422);
   });
 
